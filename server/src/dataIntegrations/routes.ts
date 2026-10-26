@@ -1,9 +1,10 @@
+import {weatherLocationKey} from '../../../shared/set-runtime/weather';
 import {Hono} from 'hono';
 import type {Env} from '../env';
 import {requirePrimary,type TokenClass} from '../auth';
 import {ApiError} from '../errors';
 import {encryptSecret,decryptSecret} from '../crypto';
-import {agent,weather,testConnection,parseConnection,identity,ProviderError,type Connection} from './providers';
+import {agent,weather,testConnection,parseConnection,identity,weatherLocations,weatherRequest,ProviderError,type Connection} from './providers';
 type Row={id:string;config:string;secret_enc:string|null;revision:number;status:string;error:string;tested_at:number|null;last_request_at:number;last_result:string|null;last_result_at:number|null};
 export const dataIntegrationRoutes=new Hono<{Bindings:Env;Variables:{tokenClass:TokenClass}}>();
 dataIntegrationRoutes.use('*',async(c,next)=>{requirePrimary(c.get('tokenClass'));await next();});
@@ -17,6 +18,7 @@ async function load(env:Env,id:string){const row=await env.DB.prepare('SELECT * 
 const publicRow=(r:Row)=>({connection:parseConnection(JSON.parse(r.config)),revision:r.revision,status:r.status,error:r.error,testedAt:r.tested_at,hasSecret:!!r.secret_enc});
 async function secret(env:Env,row:Row){if(!row.secret_enc)return undefined;if(!env.TOKEN_ENCRYPTION_KEY)throw new ApiError(503,'encryption_unconfigured','The workspace server must configure TOKEN_ENCRYPTION_KEY');return decryptSecret(row.secret_enc,env.TOKEN_ENCRYPTION_KEY);}
 dataIntegrationRoutes.get('/',async c=>{const rows=await c.env.DB.prepare('SELECT * FROM data_integrations ORDER BY updated_at DESC, id').all<Row>();return c.json({connections:(rows.results??[]).map(publicRow),capabilities:['data.weather@1','data.agent@1']});});
+dataIntegrationRoutes.get('/locations',async c=>c.json({locations:await weatherLocations(c.req.query('query'))}));
 dataIntegrationRoutes.post('/',async c=>{
  const body=await input(c.req);if(Object.keys(body).some(k=>!['connection','apiKey','expectedRevision'].includes(k)))throw new ApiError(400,'invalid_request','Unknown connection field');const connection=parseConnection(body.connection);
  const previous=await c.env.DB.prepare('SELECT * FROM data_integrations WHERE id = ?1').bind(connection.id).first<Row>();
@@ -40,9 +42,11 @@ dataIntegrationRoutes.post('/:id/test',async c=>{
 export async function querySavedConnection(env:Env,id:string,expectedRevision:number,inputValue?:unknown){
  const row=await load(env,id),connection:Connection=parseConnection(JSON.parse(row.config));
  if(expectedRevision!==row.revision)throw new ApiError(409,'revision_conflict','Connection settings changed. Refresh the saved connection.');
- if(connection.kind==='weather'&&row.last_result&&row.last_result_at&&Date.now()-row.last_result_at<connection.pollSeconds*1000)return {connectionId:row.id,connectionRevision:row.revision,result:JSON.parse(row.last_result),cached:true};
- await reserve(env,row,connection.kind==='weather'?connection.pollSeconds*1000:2000);
- const result=connection.kind==='weather'?await weather(connection):await agent(connection,(await secret(env,row))??'',inputValue);
+ const requestKey=connection.kind==='weather'?weatherLocationKey(weatherRequest(connection,inputValue),connection.units):'';
+ const sameWeather=connection.kind==='weather'&&!!row.last_result&&JSON.parse(row.last_result).requestKey===requestKey;
+ if(sameWeather&&row.last_result_at&&Date.now()-row.last_result_at<connection.pollSeconds*1000)return {connectionId:row.id,connectionRevision:row.revision,result:JSON.parse(row.last_result!),cached:true};
+ await reserve(env,row,connection.kind==='weather'&&sameWeather?connection.pollSeconds*1000:2000);
+ const result=connection.kind==='weather'?await weather(connection,fetch,inputValue):await agent(connection,(await secret(env,row))??'',inputValue);
  const current=await load(env,row.id);if(current.revision!==row.revision)throw new ApiError(409,'revision_conflict','Connection changed while the provider request was running.');
  if(connection.kind==='weather')await env.DB.prepare('UPDATE data_integrations SET last_result=?1,last_result_at=?2 WHERE id=?3 AND revision=?4').bind(JSON.stringify(result),Date.now(),row.id,row.revision).run();
  return {connectionId:row.id,connectionRevision:row.revision,result};

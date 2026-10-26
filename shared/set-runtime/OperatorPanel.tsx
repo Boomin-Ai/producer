@@ -1,3 +1,5 @@
+import {WeatherOperator} from './WeatherOperator';
+import type {WeatherLocation} from './weather';
 import {useState} from 'react';
 import {evaluate,type Control,type RuntimeDefinition,type Scalar} from './contract';
 import type {Snapshot,Result,Weather} from './runtime';
@@ -6,11 +8,12 @@ import {answerPages,presentationText} from './projection';
 export interface OperatorPanelProps {
  definition:RuntimeDefinition;snapshot:Snapshot;segment?:string;disabled?:boolean;
  send:(module:string,op:string,input?:Record<string,Scalar>)=>Promise<Result>;
+ searchWeatherLocations?:(query:string)=>Promise<WeatherLocation[]>;
  requestAgent?:(module:string,question:string)=>Promise<void>;
  simulateWeather?:(module:string,condition:Weather['condition'],isDay:boolean)=>Promise<Result>;
 }
 /** One renderer for package-authored operator controls; authority stays in the runtime. */
-export function OperatorPanel({definition,snapshot,segment,disabled=false,send,requestAgent,simulateWeather}:OperatorPanelProps){
+export function OperatorPanel({definition,snapshot,segment,disabled=false,send,requestAgent,simulateWeather,searchWeatherLocations}:OperatorPanelProps){
  const [busy,setBusy]=useState<Record<string,boolean>>({}),[errors,setErrors]=useState<Record<string,string>>({}),[drafts,setDrafts]=useState<Record<string,string>>({});
  const run=async(id:string,op:string,input:Record<string,Scalar>={})=>{if(disabled||busy[id])return;setBusy(v=>({...v,[id]:true}));setErrors(v=>({...v,[id]:''}));try{const result=await send(id,op,input);if(result.status==='rejected')throw Error(result.error);}catch(e){setErrors(v=>({...v,[id]:e instanceof Error?e.message:'Action failed'}));}finally{setBusy(v=>({...v,[id]:false}));}};
  return <section className="module-operator-panel" aria-label="Module controls">{definition.instances.filter(i=>i.owner==='set'||i.segment===segment).map(instance=>{
@@ -30,6 +33,7 @@ export function OperatorPanel({definition,snapshot,segment,disabled=false,send,r
   };
   return <article key={id} className="module-operator-card"><div className="module-panel-heading"><h3>{d.label}</h3><span>{instance.owner==='set'?'Set':'Segment'} · {m.execution}{m.published?' · Audience visible':''}</span></div>
    <div className="module-operator-actions">{m.execution==='running'?button('Pause','pause'):button(m.execution==='paused'?'Resume':'Start',m.execution==='paused'?'resume':'start')}{button('Reset','reset')}</div>
+   {behavior?.type==='weather'&&<WeatherOperator module={m} disabled={locked} search={searchWeatherLocations} send={(op,input)=>send(id,op,input)} refresh={requestAgent?()=>requestAgent(id,''):undefined}/>}
    {d.controls.filter(g=>g.audience==='operator').map(g=>{const controls=g.controls.filter(c=>!c.segment||c.segment===segment);return controls.length?<div key={g.id} className="module-control-group"><h4>{g.label}</h4>{controls.map(render)}</div>:null;})}
    {(behavior?.type==='vote'||behavior?.type==='submissions')&&<><p>{behavior.type==='vote'?behavior.question:behavior.prompt}</p><div className="module-operator-actions">
     {m.published?button('Remove from audience','withdraw'):button('Show to audience','publish',m.execution!=='running')}
@@ -48,7 +52,7 @@ export function OperatorPanel({definition,snapshot,segment,disabled=false,send,r
     <div className="module-operator-actions">{button('Show response','agent.show',m.agent.status!=='completed')}{button('Clear response','agent.clear',!m.agent.displayedQuestion&&!m.agent.displayedResponse)}</div>
     {m.agent.displayedResponse&&<div className="module-operator-actions">{button('Previous page','agent.page',m.agent.page===0,{page:m.agent.page-1})}<span>Page {m.agent.page+1} / {answerPages(presentationText(m.agent.displayedResponse)).length}</span>{button('Next page','agent.page',m.agent.page+1>=answerPages(presentationText(m.agent.displayedResponse)).length,{page:m.agent.page+1})}</div>}
    </>}
-   {behavior?.type==='weather'&&<>{simulateWeather&&<div className="module-control-group"><label>Simulated conditions<select disabled={locked} value={m.weather?.condition??'clear'} onChange={e=>void simulateWeather(id,e.target.value as Weather['condition'],m.weather?.isDay??true).then(r=>{if(r.status==='rejected')setErrors(v=>({...v,[id]:r.error}));})}>{['clear','cloudy','fog','rain','snow','storm'].map(c=><option key={c} value={c}>{c}</option>)}</select></label><label>Daylight<input type="checkbox" checked={m.weather?.isDay??true} disabled={locked} onChange={e=>void simulateWeather(id,m.weather?.condition??'clear',e.target.checked)}/></label></div>}<button disabled={locked||m.execution!=='running'||!requestAgent} onClick={()=>void requestAgent!(id,'').catch(e=>setErrors(v=>({...v,[id]:e instanceof Error?e.message:'Weather request failed'})))}>Refresh weather</button><p>{m.weather?`${m.weather.location} · ${m.weather.temperature}° · ${m.weather.condition}`:'Waiting for weather connection'} · {m.dataStatus}</p></>}
+   {behavior?.type==='weather'&&<>{simulateWeather&&<div className="module-control-group"><label>Simulated conditions<select disabled={locked} value={m.weather?.condition??'clear'} onChange={e=>void simulateWeather(id,e.target.value as Weather['condition'],m.weather?.isDay??true).then(r=>{if(r.status==='rejected')setErrors(v=>({...v,[id]:r.error}));})}>{['clear','cloudy','fog','rain','snow','storm'].map(c=><option key={c} value={c}>{c}</option>)}</select></label><label>Daylight<input type="checkbox" checked={m.weather?.isDay??true} disabled={locked} onChange={e=>void simulateWeather(id,m.weather?.condition??'clear',e.target.checked)}/></label></div>}</>}
    {errors[id]&&<p role="alert">{errors[id]}</p>}
   </article>;
  })}</section>;

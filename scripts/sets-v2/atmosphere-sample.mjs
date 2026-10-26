@@ -1,0 +1,6 @@
+/** Rehearsal/test data only. Live output uses the managed weather connection. */
+export function atmosphereSample({location='Atlanta, Georgia, US',condition='clear',isDay=true,units='fahrenheit',now=Date.now()}={}){
+ const hour=Math.floor(now/3600000)*3600000,day=Date.parse(new Date(now).toISOString().slice(0,10)+'T00:00:00Z');
+ const weather=['clear','cloudy','rain','rain','clear','cloudy','clear'];
+ return {observedAt:now,temperature:units==='fahrenheit'?69:21,condition,isDay,wind:15.5,precipitation:condition==='rain'?2:0,provider:'Rehearsal',location,units,forecast:{timezone:'America/New_York',utcOffsetSeconds:-14400,feelsLike:units==='fahrenheit'?68:20,humidity:42,cloudCover:28,gusts:24,windDirection:225,visibility:16000,pressure:1014,hourly:Array.from({length:48},(_,i)=>({at:hour+i*3600000,temperature:units==='fahrenheit'?Math.round(65+10*Math.sin(i/6)):Math.round(19+5*Math.sin(i/6)),rainChance:i%8*10,condition:i%8>4?'rain':'clear',isDay:i%24>=6&&i%24<19})),daily:Array.from({length:7},(_,i)=>({date:new Date(day+i*86400000).toISOString().slice(0,10),condition:weather[i],high:units==='fahrenheit'?74+i:23+i,low:units==='fahrenheit'?52+i:11+i,rainChance:[10,30,80,60,5,20,10][i],precipitation:i===2?12:0,sunrise:day+i*86400000+11*3600000,sunset:day+i*86400000+22*3600000,uv:5,wind:20+i}))}};
+}

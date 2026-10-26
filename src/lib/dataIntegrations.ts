@@ -1,3 +1,4 @@
+import type {WeatherLocation} from '../../shared/set-runtime/weather';
 import {guests as guestsIpc} from './ipc';
 import type {Connection,AgentResult,WeatherResult} from '../../server/src/dataIntegrations/providers';
 export type {Connection,AgentResult,WeatherResult};
@@ -8,9 +9,10 @@ async function call<T>(endpoint:string,method:'GET'|'POST'|'DELETE',path:string,
  return result.body as T;
 }
 export const dataIntegrations={
+ locations:(endpoint:string,query:string)=>call<{locations:WeatherLocation[]}>(endpoint,'GET','/locations?query='+encodeURIComponent(query)),
  list:(endpoint:string)=>call<{connections:SavedConnection[];capabilities:string[]}>(endpoint,'GET',''),
  save:(endpoint:string,connection:Connection,apiKey?:string,expectedRevision?:number)=>call<SavedConnection>(endpoint,'POST','',{connection,...(apiKey?{apiKey}:{}),...(expectedRevision!==undefined?{expectedRevision}:{})}),
  remove:(endpoint:string,saved:SavedConnection)=>call<{deleted:boolean}>(endpoint,'DELETE','/'+encodeURIComponent(saved.connection.id),{expectedRevision:saved.revision}),
  test:(endpoint:string,saved:SavedConnection)=>call<{ok:boolean;connectionRevision:number;sample?:WeatherResult}>(endpoint,'POST','/'+encodeURIComponent(saved.connection.id)+'/test',{}),
- query:(endpoint:string,saved:SavedConnection,input?:{question:string;mode:'answer'|'factCheck';instructions?:string})=>call<{connectionId:string;connectionRevision:number;result:AgentResult|WeatherResult}>(endpoint,'POST','/'+encodeURIComponent(saved.connection.id)+'/query',{expectedRevision:saved.revision,...(input?{input}:{})}),
+ query:(endpoint:string,saved:SavedConnection,input?:{question:string;mode:'answer'|'factCheck';instructions?:string}|{location?:WeatherLocation})=>call<{connectionId:string;connectionRevision:number;result:AgentResult|WeatherResult}>(endpoint,'POST','/'+encodeURIComponent(saved.connection.id)+'/query',{expectedRevision:saved.revision,...(input?{input}:{})}),
 };

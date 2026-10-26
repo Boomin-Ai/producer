@@ -1,3 +1,4 @@
+import {weatherPayload} from '../../../shared/set-runtime/weather';
 import {guests} from '../../lib/ipc';
 import {dataIntegrations,type SavedConnection} from '../../lib/dataIntegrations';
 import type {Command,Result,Snapshot} from '../../../shared/set-runtime/runtime';
@@ -27,8 +28,8 @@ export async function requestModuleData(session:RehearsalSession,module:string,q
  if(b.type==='agent'){const result=await session.sendModule(module,'agent.ask',{question});if(result.status==='rejected')throw Error(result.error);}
  const current=session.moduleSnapshot(),target=current.modules[module],requestId=target.agent.requestId;
  try{
-  const response=await dataIntegrations.query(endpoint,connection,b.type==='agent'?{question,mode:b.mode,instructions:b.prompt}:undefined);
-  const result=session.receiveModuleData({id:crypto.randomUUID(),setEpoch:current.setEpoch,module,epoch:target.epoch,op:b.type==='agent'?'agent.complete':'weather.update',input:b.type==='agent'?{requestId,response:(response.result as import('../../lib/dataIntegrations').AgentResult).response,citations:JSON.stringify((response.result as import('../../lib/dataIntegrations').AgentResult).citations)}:{...response.result as import('../../lib/dataIntegrations').WeatherResult}});
+  const response=await dataIntegrations.query(endpoint,connection,b.type==='agent'?{question,mode:b.mode,instructions:b.prompt}:{...(target.weatherLocation?{location:target.weatherLocation}:{})});
+  const result=session.receiveModuleData({id:crypto.randomUUID(),setEpoch:current.setEpoch,module,epoch:target.epoch,op:b.type==='agent'?'agent.complete':'weather.update',input:b.type==='agent'?{requestId,response:(response.result as import('../../lib/dataIntegrations').AgentResult).response,citations:JSON.stringify((response.result as import('../../lib/dataIntegrations').AgentResult).citations)}:{...weatherPayload(response.result as import('../../lib/dataIntegrations').WeatherResult),locationRevision:target.weatherLocationRevision??0}});
   if(result.status==='rejected')throw Error(result.error);
- }catch(e){session.receiveModuleData({id:crypto.randomUUID(),setEpoch:current.setEpoch,module,epoch:target.epoch,op:b.type==='agent'?'agent.error':'weather.error',input:{requestId,message:e instanceof Error?e.message:'Provider request failed'}});throw e;}
+ }catch(e){session.receiveModuleData({id:crypto.randomUUID(),setEpoch:current.setEpoch,module,epoch:target.epoch,op:b.type==='agent'?'agent.error':'weather.error',input:{requestId,locationRevision:target.weatherLocationRevision??0,message:e instanceof Error?e.message:'Provider request failed'}});throw e;}
 }
