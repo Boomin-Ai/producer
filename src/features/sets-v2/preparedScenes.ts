@@ -58,7 +58,11 @@ export class PreparedScenes {
     paused.assets=Object.fromEntries(Object.entries(paused.assets??{}).filter(([id,a])=>sent!.get(id)!==a.data));
     await this.send({op:'preload',outputId:spec.target.id,key:entry.key,revision,plan:paused});
     for(const [id,a]of Object.entries(paused.assets??{}))sent.set(id,a.data);
-    for(let i=0;i<600;i++){
+    // Native cold WebGL preparation permits 30s for shader compilation and
+    // the first imported paint. Keep the client deadline beyond that fence;
+    // an iteration count otherwise cancels valid cold 3D loads at ~12s.
+    const deadline=Date.now()+(Object.keys(entry.plan.scenes3d??{}).length?35000:15000);
+    while(Date.now()<deadline){
      if(abort()){await this.send({op:'cancel',outputId:spec.target.id,revision}).catch(()=>{});this.log('aborted native '+entry.key);entry.state={state:'queued'};return entry;}
      const state=await this.send({op:'status',outputId:spec.target.id});if(state.cachedKeys?.includes(entry.key)){this.log('ready '+entry.key);entry.state={state:'ready'};return entry;}await sleep(20);
     }
