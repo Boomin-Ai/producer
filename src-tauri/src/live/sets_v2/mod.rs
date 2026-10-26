@@ -981,12 +981,13 @@ impl RoomProgram {
                 > if building.resources.scenes3d.is_empty() {
                     12
                 } else {
-                    30
+                    60
                 }
             {
                 // Cold WebGL shader compilation and CEF's first imported paint
-                // can outlast media decoding. This is preparation only; cached
-                // layout changes never wait for this startup deadline.
+                // can outlast media decoding on memory-constrained hosts.
+                // This is preparation only; cached layout changes never wait
+                // for this startup deadline.
                 return Err("Media did not decode its first frame; current output retained".into());
             } else {
                 self.building = Some(building);

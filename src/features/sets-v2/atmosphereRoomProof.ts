@@ -2,7 +2,7 @@ import {preparationDebug} from './preparedScenes';
 /** Opt-in native acceptance against a separate Atmosphere dev room. */
 import {invoke} from '@tauri-apps/api/core';
 const sleep=(ms:number)=>new Promise<void>(r=>setTimeout(r,ms));
-async function until<T>(read:()=>T|Promise<T>,label:string):Promise<NonNullable<T>>{for(let i=0;i<600;i++){const v=await read();if(v)return v as NonNullable<T>;await sleep(100);}throw Error('Timed out: '+label);}
+async function until<T>(read:()=>T|Promise<T>,label:string):Promise<NonNullable<T>>{for(let i=0;i<1200;i++){const v=await read();if(v)return v as NonNullable<T>;await sleep(100);}throw Error('Timed out: '+label);}
 const button=(label:string,root:ParentNode=document)=>Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(b=>b.getClientRects().length&&!b.disabled&&(b.textContent?.trim()===label||b.getAttribute('aria-label')===label));
 export async function atmosphereRoomProof(){
  let stage='room';const progress=setInterval(()=>void (async()=>{const st=await invoke<{generation:number}>('live_set_status');await invoke('live_set_v2_report',{result:{kind:'atmosphere-progress',stage,preparation:preparationDebug(),native:await invoke('live_set_v2',{request:{op:'status',generation:st.generation}}),engine:await invoke('live_engine_status'),body:document.body.innerText.slice(-1200)}});})(),10000);

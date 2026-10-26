@@ -47,11 +47,11 @@ try{
   if(manifests.at(-1).length)throw Error('Unused artwork manifest was retained');mediaBank.dispose();
   // Cold WebGL can become ready after the former 600-poll deadline. Advance
   // a synthetic clock while yielding microtasks so this exercises the fence
-  // without a 13-second wall-clock sleep.
+  // without a 48-second wall-clock sleep.
   const originalNow=Date.now,originalTimer=window.setTimeout;let coldNow=originalNow(),polls=0,coldKey='',coldRevision=0;
   Date.now=()=>coldNow;window.setTimeout=(run,ms,...args)=>ms===20?(queueMicrotask(()=>run(...args)),0):originalTimer(run,ms,...args);
-  const cold=new PreparedScenes(async request=>{if(request.op==='preload'){coldKey=request.key;coldRevision=request.revision;}if(request.op==='status'&&coldKey){coldNow+=20;polls++;}return {preparedRevision:coldRevision,renderedRevision:0,cachedKeys:polls>=650?[coldKey]:[],ready:polls>=650,warmed:polls>=650};},()=>{},async()=>({root:{id:'root',kind:'group',bounds:{x:0,y:0,width:100,height:100},children:[]},scenes3d:{test:{}},assets:{}}));
-  try{await cold.ensure(specs[0]);if(polls<650||cold.readiness(specs[0]).state!=='ready')throw Error('Cold WebGL startup was cancelled prematurely');}finally{cold.dispose();Date.now=originalNow;window.setTimeout=originalTimer;}
+  const cold=new PreparedScenes(async request=>{if(request.op==='preload'){coldKey=request.key;coldRevision=request.revision;}if(request.op==='status'&&coldKey){coldNow+=40;polls++;}return {preparedRevision:coldRevision,renderedRevision:0,cachedKeys:polls>=1200?[coldKey]:[],ready:polls>=1200,warmed:polls>=1200};},()=>{},async()=>({root:{id:'root',kind:'group',bounds:{x:0,y:0,width:100,height:100},children:[]},scenes3d:{test:{}},assets:{}}));
+  try{await cold.ensure(specs[0]);if(polls<1200||cold.readiness(specs[0]).state!=='ready')throw Error('Cold WebGL startup was cancelled prematurely');}finally{cold.dispose();Date.now=originalNow;window.setTimeout=originalTimer;}
   bank.dispose();
   return {layouts:specs.length,loaded,repeatCompiles,edited,updates,preloads:calls.filter(c=>c==='preload').length,hasPlan:!!plan.root,churnPeak:peak,churnFinal:churnCache.size};
  });
