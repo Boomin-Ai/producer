@@ -745,6 +745,11 @@ impl Lease {
     pub fn ready(&self) -> bool {
         let Some(key) = self.bridge.fence() else {
             *self.verified.borrow_mut() = None;
+            // A hidden browser source still needs a render request to start
+            // importing its first GPU paint. Waiting for its receipt before
+            // rendering creates a cold-start dependency cycle. Warming never
+            // substitutes for the revision/session pixel fence below.
+            unsafe { super::producer_set_v2_surface_warm(self.raw.0) };
             return false;
         };
         if *self.verified.borrow() == Some(key) {

@@ -124,6 +124,7 @@ extern "C" {
     fn producer_set_v2_program_status(p: *mut ffi::obs_source_t, out: *mut NativeStatus) -> bool;
     fn producer_set_v2_program_stop_motion(p: *mut ffi::obs_source_t);
     fn producer_set_v2_program_collect(p: *mut ffi::obs_source_t) -> bool;
+    fn producer_set_v2_surface_warm(source: *mut ffi::obs_source_t) -> bool;
     fn producer_set_v2_surface_fence(
         s: *mut ffi::obs_source_t,
         y: u32,
