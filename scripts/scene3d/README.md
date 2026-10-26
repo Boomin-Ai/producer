@@ -3,7 +3,8 @@
 The managed renderer now plugs into the existing presentation/2 package, module
 runtime, editor preview, native prepare/take path and recordings. Grand Arena’s
 existing package remains intact. `docs/shows/grand-arena-3d-study.json` is a
-separate development-only design study using the normal Set controller.
+separate procedural Set included in the normal catalog since Producer 0.4.75.
+Its native GPU output capability targets Apple Silicon/macOS.
 
 See [the authoring and lifecycle contract](../../docs/shows/scene3d.md).
 
