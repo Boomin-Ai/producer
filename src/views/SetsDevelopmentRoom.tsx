@@ -1,4 +1,6 @@
-import {upgradeJustFacts} from '../features/presentation/upgradeJustFacts';
+import factsShow from '../../docs/shows/just-facts.json';
+import {parsePackage} from '../features/presentation/schema';
+import {upgradeJustFacts,upgradeJustFactsShow} from '../features/presentation/upgradeJustFacts';
 import {setActiveEndpointId} from '../lib/workspace';
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
@@ -14,6 +16,8 @@ export function SetsDevelopmentRoom() {
   const studioStarted=useRef(false);
   const studio=import.meta.env.DEV&&import.meta.env.VITE_SCENE3D_STUDIO;
   useEffect(()=>{if(room&&studio&&import.meta.env.VITE_SCENE3D_STUDIO_PROOF==="1"&&!studioStarted.current){studioStarted.current=true;void import("../features/sets-v2/studioRoomProof").then(m=>m.studioRoomProof());}},[room,studio]);
+  const factsStarted=useRef(false);
+  useEffect(()=>{if(room&&import.meta.env.DEV&&import.meta.env.VITE_JUST_FACTS_PROOF==='1'&&!factsStarted.current){factsStarted.current=true;void import('../features/sets-v2/justFactsRoomProof').then(m=>m.justFactsRoomProof());}},[room]);
   const scene3dStarted = useRef(false);
   const scene3d = import.meta.env.DEV && import.meta.env.VITE_SCENE3D_PROOF;
   useEffect(()=>{
@@ -52,22 +56,22 @@ export function SetsDevelopmentRoom() {
           await ipc.liveUpdateRoom(room.id,{config:JSON.stringify(config)});
           room={...room,config:JSON.stringify(config)};
         }
-        if(previous?.id==='just-facts'&&previous.version==='1.0.0'){
-          config.presentation={...config.presentation,package:upgradeJustFacts(previous)};
+        if(previous?.id==='just-facts'&&['1.0.0','1.0.1'].includes(previous.version)){
+          config.presentation={...config.presentation,package:parsePackage(upgradeJustFactsShow(upgradeJustFacts(previous),parsePackage(factsShow)))};
           await ipc.liveUpdateRoom(room.id,{config:JSON.stringify(config)});
           room={...room,config:JSON.stringify(config)};
         }
         for(const entry of await ipc.setLibraryList()){
           if(entry.id==='just-facts'){
             const saved=JSON.parse(await ipc.setLibraryRead(entry.file));
-            if(saved.version==='1.0.0')await ipc.setLibrarySave(JSON.stringify(upgradeJustFacts(saved)));
+            if(['1.0.0','1.0.1'].includes(saved.version))await ipc.setLibrarySave(JSON.stringify(parsePackage(upgradeJustFactsShow(upgradeJustFacts(saved),parsePackage(factsShow)))));
           }
           if(entry.id!==studio3d.id)continue;
           const saved=JSON.parse(await ipc.setLibraryRead(entry.file));
           if(saved.version==='0.1.0')await ipc.setLibrarySave(JSON.stringify(upgrade(saved)));
         }
       }
-      if(smoke){
+      if(smoke&&!new URLSearchParams(location.search).has('roomInspect')){
         const config=JSON.parse(room.config||'{}');
         if(workspace){config.server_room_id=workspace.serverRoomId;if(config.presentation)config.presentation.moduleBindings={...config.presentation.moduleBindings,...workspace.moduleBindings};}
         if(studio){config.presentation={...config.presentation,package:studio3d,moduleBindings:{}};config.sizes={...config.sizes,bottom:420};}

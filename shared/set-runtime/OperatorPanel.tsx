@@ -30,7 +30,7 @@ export function OperatorPanel({definition,snapshot,segment,disabled=false,send,r
   };
   return <article key={id} className="module-operator-card"><div className="module-panel-heading"><h3>{d.label}</h3><span>{instance.owner==='set'?'Set':'Segment'} · {m.execution}{m.published?' · Audience visible':''}</span></div>
    <div className="module-operator-actions">{m.execution==='running'?button('Pause','pause'):button(m.execution==='paused'?'Resume':'Start',m.execution==='paused'?'resume':'start')}{button('Reset','reset')}</div>
-   {d.controls.filter(g=>g.audience==='operator').map(g=><div key={g.id} className="module-control-group"><h4>{g.label}</h4>{g.controls.map(render)}</div>)}
+   {d.controls.filter(g=>g.audience==='operator').map(g=>{const controls=g.controls.filter(c=>!c.segment||c.segment===segment);return controls.length?<div key={g.id} className="module-control-group"><h4>{g.label}</h4>{controls.map(render)}</div>:null;})}
    {(behavior?.type==='vote'||behavior?.type==='submissions')&&<><p>{behavior.type==='vote'?behavior.question:behavior.prompt}</p><div className="module-operator-actions">
     {m.published?button('Remove from audience','withdraw'):button('Show to audience','publish',m.execution!=='running')}
     {m.admission==='open'?button('Close intake','close'):button('Open intake','open',!m.published||m.revealed||m.execution!=='running')}

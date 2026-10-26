@@ -194,6 +194,8 @@ pub enum Action {
         generation: u64,
         output_id: Option<String>,
         keys: Vec<String>,
+        #[serde(default)]
+        asset_ids: Vec<String>,
     },
     Take {
         generation: u64,

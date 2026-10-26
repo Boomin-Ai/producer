@@ -27,6 +27,7 @@ const debugSessions=new Set<PreparedScenes>();
 export function preparationDebug(){return [...debugSessions].map(s=>s.debug());}
 export class PreparedScenes {
  private sentAssets=new Map<string,Map<string,string>>();
+ private inventory?:SceneSpec[];private active=new Map<string,SceneSpec>();
  private outputs=new Set<string>();
  private trace:string[]=[];
  debug(){return {working:this.working,abort:this.abort,queue:this.jobs.map(j=>j.priority),trace:this.trace,entries:[...this.entries.values()].map(e=>({layout:e.spec.layout,target:e.spec.target,key:e.key,state:e.state}))};}
@@ -73,25 +74,36 @@ export class PreparedScenes {
    return await this.enqueue(100,false,async()=>{
     const status=await this.send({op:'status',outputId:spec.target.id});
     if(!status.cachedKeys?.includes(entry.key)){entry.state={state:'queued'};this.changed();throw Error('Prepared scene expired; retry loading');}
-    this.revision=Math.max(this.revision,status.preparedRevision,status.renderedRevision)+1;return run(entry,this.revision);
+    this.revision=Math.max(this.revision,status.preparedRevision,status.renderedRevision)+1;const result=await run(entry,this.revision);this.active.set(spec.target.id,spec);return result;
    });
-  }finally{pinned.pins--;}
+  }finally{pinned.pins--;await this.trim(100);}
  }
  async preload(specs:SceneSpec[],cancel:()=>boolean){for(const spec of specs){if(cancel()||this.disposed)return;try{const entry=await this.ensure(spec);if(entry.state.state==='queued'&&!cancel()){await sleep(50);await this.ensure(spec);}}catch{/* Per-layout error is exposed; later layouts keep loading. */}}}
- async retain(specs:SceneSpec[]){
-  const wanted=new Set(specs.map(spec=>this.get(spec).key));
+ async retain(specs:SceneSpec[]){this.inventory=[...specs];await this.trim();}
+ /** Keep authored designs plus the latest presented snapshot per output. Text,
+  * scores and segment changes can otherwise accumulate unbounded native scenes.
+  * In-flight takes remain pinned; native program ownership protects live frames. */
+ private async trim(priority=10){
+  if(!this.inventory||this.disposed)return;
+  const specs=[...this.inventory,...this.active.values()],wanted=new Set(specs.map(spec=>this.get(spec).key));
   for(const [key,entry]of this.entries)if(!wanted.has(key)&&!entry.promise&&!entry.pins)this.entries.delete(key);
   for(const outputId of new Set([...this.outputs,...specs.map(s=>s.target.id)])){
-   await this.enqueue(10,false,async()=>{
-    const keys=[...new Set([...specs.filter(s=>s.target.id===outputId).map(s=>this.get(s).key),...[...this.entries.values()].filter(e=>e.pins>0&&e.spec.target.id===outputId).map(e=>e.key)])];
-    await this.send({op:'retain',outputId,keys});this.sentAssets.delete(outputId);
+   await this.enqueue(priority,false,async()=>{
+    // Recompute inside the queued task: another output can finish a take while
+    // this trim waits, and its newly active scene must remain retained.
+    const current=[...(this.inventory??[]),...this.active.values()];
+    const keys=[...new Set([...current.filter(s=>s.target.id===outputId).map(s=>this.get(s).key),...[...this.entries.values()].filter(e=>e.pins>0&&e.spec.target.id===outputId).map(e=>e.key)])];
+    const retained=[...current,...[...this.entries.values()].filter(e=>e.pins>0).map(e=>e.spec)];
+    const assetIds=[...new Set(retained.filter(s=>s.target.id===outputId).flatMap(s=>Object.keys(s.projection.assets??{})))];
+    await this.send({op:'retain',outputId,keys,assetIds});
+    const sent=this.sentAssets.get(outputId);if(sent)for(const id of sent.keys())if(!assetIds.includes(id))sent.delete(id);
    }).catch(()=>{});
   }
  }
- reset(){this.sentAssets.clear();this.abort=true;for(const e of this.entries.values())e.state={state:'queued'};this.changed();}
+ reset(){this.active.clear();this.sentAssets.clear();this.abort=true;for(const e of this.entries.values())e.state={state:'queued'};this.changed();}
  invalidate(spec:SceneSpec){const entry=this.get(spec);entry.state={state:'queued'};entry.plan=undefined;this.changed();}
  retry(){for(const e of this.entries.values())if(e.state.state==='error')e.state={state:'queued'};this.changed();}
- dispose(){debugSessions.delete(this);this.disposed=true;this.abort=true;for(const job of this.jobs)job.reject(Error('Room preparation closed'));this.jobs=[];this.entries.clear();}
+ dispose(){debugSessions.delete(this);this.disposed=true;this.abort=true;for(const job of this.jobs)job.reject(Error('Room preparation closed'));this.jobs=[];this.entries.clear();this.active.clear();this.inventory=undefined;}
 }
 
 /** Inventory includes alternate layouts and both design canvases, not only phase.next. */

@@ -157,9 +157,15 @@ pub fn run() {
                 .into());
             }
             #[cfg(feature = "sets-v2-dev")]
-            if std::env::var("PRODUCER_SETS_V2_UI_PROBE").as_deref() == Ok("1") {
+            {
+                // Plain cargo staging embeds an older frontend. Always load the
+                // live frontend in this isolated development-only app, including
+                // normal reopen; inspection must preserve the configured room.
                 if let Some(window) = app.get_webview_window("main") {
-                    let url = if std::env::var("PRODUCER_SETS_V2_APPLY_PROBE").as_deref() == Ok("1")
+                    let probe = std::env::var("PRODUCER_SETS_V2_UI_PROBE").as_deref() == Ok("1");
+                    let url = if !probe {
+                        "http://localhost:1436/?roomInspect=1"
+                    } else if std::env::var("PRODUCER_SETS_V2_APPLY_PROBE").as_deref() == Ok("1")
                     {
                         "http://localhost:1436/?roomInspect=1&roomApplyCheck=1"
                     } else if std::env::var("PRODUCER_SETS_V2_INSPECT").as_deref() == Ok("1") {

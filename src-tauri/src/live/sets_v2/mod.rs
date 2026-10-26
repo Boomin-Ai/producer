@@ -623,12 +623,13 @@ impl RoomProgram {
                 self.draft_revision = revision;
                 self.draft = Some(draft);
             }
-            Action::Retain { keys, .. } => {
-                if keys.len() > 64 || keys.iter().any(|k| !contract::identity(k)) {
+            Action::Retain { keys, asset_ids, .. } => {
+                if keys.len() > 64 || keys.iter().any(|k| !contract::identity(k))
+                    || asset_ids.len() > 24 || asset_ids.iter().any(|id| !contract::identity(id)) {
                     return Err("Invalid retained scene inventory".into());
                 }
                 self.bank.retain(|key, _| keys.contains(key));
-                self.resources.clear_manifest();
+                self.resources.retain_manifest(&asset_ids);
             }
             Action::Take {
                 revision,

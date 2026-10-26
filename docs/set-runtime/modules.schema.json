@@ -454,6 +454,17 @@
                     },
                     "enabled": {
                       "$ref": "#/$defs/moduleExpression"
+                    },
+                    "segment": {
+                      "type": "string",
+                      "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                      "not": {
+                        "enum": [
+                          "constructor",
+                          "prototype",
+                          "__proto__"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -664,6 +675,21 @@
                   "maximum": 16000
                 },
                 "showView": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                  "not": {
+                    "enum": [
+                      "constructor",
+                      "prototype",
+                      "__proto__"
+                    ]
+                  }
+                },
+                "initialQuestion": {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                "researchView": {
                   "type": "string",
                   "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
                   "not": {

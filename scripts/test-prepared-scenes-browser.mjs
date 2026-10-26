@@ -23,9 +23,31 @@ try{
   let failed=false,retryCompiles=0;
   const retryBank=new PreparedScenes(async request=>{if(request.op==='preload'&&!failed){failed=true;throw Error('Missing media asset portrait');}return send(request);},()=>{},async(...args)=>{retryCompiles++;return compileRoomScene(...args);});
   await retryBank.ensure(specs[0]).catch(()=>{});if(retryBank.readiness(specs[0]).state!=='error')throw Error('Missing failed state');retryBank.retry();await retryBank.ensure(specs[0]);if(retryCompiles!==2||retryBank.readiness(specs[0]).state!=='ready')throw Error('Retry reused a failed compiled plan');retryBank.dispose();
+  const churnCache=new Map(),compiledKeys=[];let peak=0,churnRevision=0;
+  const churnSend=async request=>{if(request.op==='preload'){churnCache.set(request.key,request.outputId);churnRevision=request.revision;peak=Math.max(peak,churnCache.size);}if(request.op==='retain')for(const [key,output]of churnCache)if(output===request.outputId&&!request.keys.includes(key))churnCache.delete(key);return {preparedRevision:churnRevision,renderedRevision:churnRevision,ready:true,warmed:true,transitioning:false,queued:false,cachedKeys:[...churnCache.keys()],renderSerial:1};};
+  const churn=new PreparedScenes(churnSend,()=>{},async spec=>({root:{id:'root',kind:'group',bounds:{x:0,y:0,width:100,height:100},children:[]},assets:{}}));
+  await churn.retain(specs.slice(0,2));await churn.preload(specs.slice(0,2),()=>false);
+  for(let i=0;i<80;i++){
+   const changing=structuredClone(specs[0]);changing.projection.root.styles.background='#'+i.toString(16).padStart(6,'0');if(i%2)changing.target={...changing.target,id:'portrait',orientation:'portrait'};
+   await churn.take(changing,async entry=>{compiledKeys.push(entry.key);});
+   if(churnCache.size>4||churn.debug().entries.length>4)throw Error('Live snapshots accumulated');
+  }
+  if(peak>5)throw Error('Unbounded overlapping preparation');if(!churnCache.has(compiledKeys.at(-1)))throw Error('Active snapshot was evicted');
+  for(const spec of specs.slice(0,2))if(!churnCache.has(churn.get(spec).key))throw Error('Authored inventory was evicted');churn.dispose();
+  // A new live text snapshot must not re-upload the loaded artwork. The native
+  // retain operation discards only assets outside this explicitly bounded list.
+  const uploaded=[],manifests=[];let mediaRev=0;const mediaCache=new Set();
+  const mediaSpec=structuredClone(specs[0]);mediaSpec.projection.assets={art:{name:'art',mime:'image/png',data:'data:image/png;base64,AA=='}};
+  const mediaBank=new PreparedScenes(async request=>{if(request.op==='preload'){mediaCache.add(request.key);mediaRev=request.revision;uploaded.push(...Object.keys(request.plan.assets??{}));}if(request.op==='retain'){manifests.push(request.assetIds);for(const key of mediaCache)if(!request.keys.includes(key))mediaCache.delete(key);}return {preparedRevision:mediaRev,renderedRevision:mediaRev,ready:true,warmed:true,transitioning:false,queued:false,cachedKeys:[...mediaCache],renderSerial:1};},()=>{},async projection=>({root:{id:'root',kind:'group',bounds:{x:0,y:0,width:100,height:100},children:[]},assets:projection.assets}));
+  await mediaBank.retain([mediaSpec]);await mediaBank.preload([mediaSpec],()=>false);
+  for(let i=0;i<8;i++){const next=structuredClone(mediaSpec);next.projection.root.styles.background='#'+i;await mediaBank.take(next,async()=>{});}
+  if(uploaded.join(',')!=='art'||manifests.some(ids=>ids.join(',')!=='art'))throw Error('Loaded artwork was re-uploaded during live snapshots');
+  await mediaBank.retain([]); // The active output retains its artwork until replaced.
+  const empty=structuredClone(mediaSpec);empty.projection.assets={};empty.projection.root.styles.background='empty';await mediaBank.take(empty,async()=>{});
+  if(manifests.at(-1).length)throw Error('Unused artwork manifest was retained');mediaBank.dispose();
   bank.dispose();
-  return {layouts:specs.length,loaded,repeatCompiles,edited,updates,preloads:calls.filter(c=>c==='preload').length,hasPlan:!!plan.root};
+  return {layouts:specs.length,loaded,repeatCompiles,edited,updates,preloads:calls.filter(c=>c==='preload').length,hasPlan:!!plan.root,churnPeak:peak,churnFinal:churnCache.size};
  });
- assert.equal(result.loaded,result.layouts+1);assert.equal(result.repeatCompiles,result.loaded);assert.equal(result.edited,result.loaded+1);assert(result.updates>=result.layouts*2);assert(result.hasPlan);
- console.log('PASS: all layouts compile/prepare once, ready repeat takes skip rebuild, edited design invalidates only its scene',result);
+ assert.equal(result.loaded,result.layouts+1);assert.equal(result.repeatCompiles,result.loaded);assert.equal(result.edited,result.loaded+1);assert(result.updates>=result.layouts*2);assert(result.hasPlan);assert(result.churnPeak<=5);assert(result.churnFinal<=4);
+ console.log('PASS: all layouts compile/prepare once, ready repeat takes skip rebuild, edited design invalidates only its scene, and 80 live variants remain bounded',result);
 }finally{await browser.close();}

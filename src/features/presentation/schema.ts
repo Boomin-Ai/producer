@@ -195,6 +195,10 @@ export function parsePackage(value: unknown): PresentationPackage {
   for(const preset of Object.values(doc.set.styles??{})) for(const key of Object.keys(preset)) if(!decorative.has(key)) fail('$.set.styles',`Style presets cannot change geometry or compositing: ${key}.`);
   if (new TextEncoder().encode(JSON.stringify(doc)).length > PACKAGE_BYTES) fail('$','Set package exceeds 40 MB.');
   for(const asset of Object.values(doc.set.assets??{})){try{validateAsset(asset);}catch(e){fail('$.set.assets',String(e));}}
+  const phaseIds=new Set(doc.show?.phases.map(p=>p.id)??[]);
+  for(const definition of Object.values(doc.runtime.definitions))for(const group of definition.controls)for(const control of group.controls){
+    if(control.segment&&!phaseIds.has(control.segment))fail('$.runtime.controls','Control refers to an unknown show segment.');
+  }
   const layouts = new Set<string>();
   let expanded = 0;
   const checkBinding = (b: Binding, scope: Set<string>) => {

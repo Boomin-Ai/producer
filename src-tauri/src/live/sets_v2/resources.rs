@@ -137,9 +137,10 @@ impl Store {
         self.files.retain(|_, f| f.strong_count() > 0);
         Ok(())
     }
-    // Ready scene leases own their files/decoders independently of upload manifests.
-    pub fn clear_manifest(&mut self) {
-        self.assets.clear();
+    // Keep the loaded package's bounded image manifest across live snapshots.
+    // Ready scene leases still own their files/decoders independently.
+    pub fn retain_manifest(&mut self, ids: &[String]) {
+        self.assets.retain(|id, _| ids.contains(id));
         self.files.retain(|_, file| file.strong_count() > 0);
     }
     pub fn versions(&self, resources: &[String]) -> String {
