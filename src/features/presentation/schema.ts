@@ -1,3 +1,4 @@
+import {parseWorld,WORLD_SCHEMA,type Scene3dWorld} from './scene3d/contract.mjs';
 import {parseRuntimeDefinition,type RuntimeDefinition} from '../../../shared/set-runtime/contract';
 import {runtimeSchemaBody,runtimeSchemaDefs} from '../../../shared/set-runtime/jsonSchema';
 import {outputTypes} from '../../../shared/set-runtime/projection';
@@ -107,6 +108,8 @@ export const STYLE_KEYS = ['position', 'inset', 'left', 'top', 'right', 'bottom'
 const styles = dictionary(binding, STYLE_KEYS.length);
 const motion = object({ durationMs: number(200, 30_000), property: union(literal('opacity'), literal('transform')),
   from: scalar, to: scalar });
+const scene3dWorld:Codec<Scene3dWorld>={json:WORLD_SCHEMA,read(v,p){try{return parseWorld(v);}catch(e){return fail(p,String(e));}}};
+const scene3dLayer=object({id:string(53,'^[a-z][a-z0-9-]{0,52}$'),pass:union(literal('background'),literal('foreground')),world:scene3dWorld,cue:optional(binding),view:optional(binding),cueSequence:optional(binding)});
 const shader=object({effect:union(literal('aurora'),literal('edgeGlow'),literal('lightSweep'),literal('plasma'),literal('silk'),literal('rings'),literal('grid'),literal('stars'),literal('petals'),literal('contours'),literal('prism'),literal('borderFlare'),literal('rain'),literal('snow'),literal('clouds')),colors:array(string(7),3),speed:number(0,4),intensity:number(0,2),scale:number(.25,4),opacity:number(0,1),radius:number(0,960),quality:union(literal('low'),literal('medium')),clock:union(literal('show'),literal('segment'))});
 const animation=object({tracks:array(object({target:id,property:union(literal('x'),literal('y'),literal('width'),literal('height'),literal('opacity'),literal('scale'),literal('rotation'),literal('shader.intensity'),literal('shader.scale')),
   keyframes:array(object({atMs:number(0,60_000),value:number(-3840,3840)}),16),easing:optional(union(literal('linear'),literal('easeIn'),literal('easeOut'),literal('easeInOut'))),
@@ -114,8 +117,9 @@ const animation=object({tracks:array(object({target:id,property:union(literal('x
 export interface SlotFraming { mode:'fill'|'fit'; x:number; y:number }
 const framing = object({mode:union(literal('fill'),literal('fit')),x:number(0,1),y:number(0,1)});
 export interface PresentationNode {
-  id: string; type: 'box' | 'text' | 'slot' | 'component' | 'media' | 'shader';
+  id: string; type: 'box' | 'text' | 'slot' | 'component' | 'media' | 'shader' | 'scene3d';
   shader?:import('./shaders').ShaderEffect;
+  scene3d?:{id:string;pass:'background'|'foreground';world:Scene3dWorld;cue?:Binding;view?:Binding;cueSequence?:Binding};
   styleId?: string; styles?: Record<string, Binding>; text?: Binding; children?: PresentationNode[];
   assetId?:string;fit?:'contain'|'cover';loop?:boolean;autoplay?:boolean;
   slotId?: string; framing?:SlotFraming; appearance?: Partial<Record<keyof SourceAppearance, Binding>>; component?: string; props?: Record<string, Binding>; when?: Binding;
@@ -145,6 +149,7 @@ const node: Codec<PresentationNode> = union(
   object({ ...common, type: literal('text'), text: binding }),
   object({ ...common, type: literal('slot'), slotId: id, framing: optional(framing), appearance: optional(appearance) }),
   object({ ...common, type: literal('shader'),shader:shader }),
+  object({ ...common, type: literal('scene3d'),scene3d:scene3dLayer }),
   object({ ...common, type: literal('media'),assetId:id,fit:optional(union(literal('contain'),literal('cover'))),loop:optional(boolean),autoplay:optional(boolean) }),
   object({ ...common, type: literal('component'), component: id, props: dictionary(binding) }),
 );
@@ -190,6 +195,10 @@ export function parsePackage(value: unknown): PresentationPackage {
   for(const preset of Object.values(doc.set.styles??{})) for(const key of Object.keys(preset)) if(!decorative.has(key)) fail('$.set.styles',`Style presets cannot change geometry or compositing: ${key}.`);
   if (new TextEncoder().encode(JSON.stringify(doc)).length > PACKAGE_BYTES) fail('$','Set package exceeds 40 MB.');
   for(const asset of Object.values(doc.set.assets??{})){try{validateAsset(asset);}catch(e){fail('$.set.assets',String(e));}}
+  const phaseIds=new Set(doc.show?.phases.map(p=>p.id)??[]);
+  for(const definition of Object.values(doc.runtime.definitions))for(const group of definition.controls)for(const control of group.controls){
+    if(control.segment&&!phaseIds.has(control.segment))fail('$.runtime.controls','Control refers to an unknown show segment.');
+  }
   const layouts = new Set<string>();
   let expanded = 0;
   const checkBinding = (b: Binding, scope: Set<string>) => {
@@ -234,7 +243,7 @@ export function parsePackage(value: unknown): PresentationPackage {
   doc.set.slots.forEach(s => { if (slots.has(s.id)) fail('$.set.slots', 'Duplicate slot ID.'); slots.add(s.id); });
   const walk = (n: PresentationNode, props: Record<string, Scalar>, stack: string[], ids: Set<string>) => {
     if(n.styleId){const preset=doc.set.styles?.[n.styleId];if(!preset)fail('$.set',`Unknown style preset ${n.styleId}.`);n={...n,styles:{...preset,...n.styles}};}
-    const hasNative=(node:PresentationNode,seen=new Set<string>()):boolean=>node.type==='slot'||node.type==='shader'||!!node.children?.some(c=>hasNative(c,seen))||(node.type==='component'&&!seen.has(node.component!)&&(seen.add(node.component!),hasNative(doc.set.components[node.component!]?.root??{id:'empty',type:'box'},seen)));
+    const hasNative=(node:PresentationNode,seen=new Set<string>()):boolean=>node.type==='slot'||node.type==='shader'||node.type==='scene3d'||!!node.children?.some(c=>hasNative(c,seen))||(node.type==='component'&&!seen.has(node.component!)&&(seen.add(node.component!),hasNative(doc.set.components[node.component!]?.root??{id:'empty',type:'box'},seen)));
     if(['filter','mixBlendMode','clipPath'].some(k=>n.styles?.[k]!==undefined)&&hasNative(n))fail('$.set','Graphic compositing effects cannot wrap native video or shader layers.');
     const scope = new Set(Object.keys(props));
     if (++expanded > 600) fail('$.set', 'Expanded output exceeds 600 nodes.');
@@ -251,6 +260,14 @@ export function parsePackage(value: unknown): PresentationPackage {
     if (n.motion) { safeStyle(n.motion.property, n.motion.from); safeStyle(n.motion.property, n.motion.to); }
     if (n.type === 'text') { checkBinding(n.text!, scope); bindingType(n.text!, props); }
     if(n.type==='media'&&!doc.set.assets?.[n.assetId!])fail('$.set','Missing media asset.');
+    if(n.type==='scene3d'){
+      if(['constructor','prototype'].includes(n.scene3d!.id))fail('$.set','Invalid 3D identity.');
+      if(Number(n.styles?.width)<16||Number(n.styles?.height)<16)fail('$.set','3D surfaces require at least 16 pixels per side.');
+      for(const value of [n.scene3d!.cue,n.scene3d!.view])if(value!==undefined){checkBinding(value,scope);if(bindingType(value,props)!=='string')fail('$.set','3D cue/view bindings must resolve to text.');}
+      if(n.scene3d?.cueSequence!==undefined){checkBinding(n.scene3d.cueSequence,scope);if(bindingType(n.scene3d.cueSequence,props)!=='number')fail('$.set','3D cue sequence must be numeric.');}
+      if(n.styles?.position!=='absolute'||['left','top','width','height'].some(k=>typeof n.styles?.[k]!=='number'))fail('$.set','3D layers require numeric absolute geometry.');
+      if(Object.keys(n.styles??{}).some(k=>!['position','left','top','width','height'].includes(k)))fail('$.set','3D layers own their compositing effects.');
+    }
     if(n.type==='shader'){
       if(n.shader!.colors.length!==3||n.shader!.colors.some(c=>!/^#[0-9a-f]{6}$/i.test(c)))fail('$.set','Shader colors require three hex colors.');
       if(n.styles?.position!=='absolute'||['left','top','width','height'].some(k=>typeof n.styles?.[k]!=='number'))fail('$.set','Shader layers require numeric absolute geometry.');
@@ -279,6 +296,10 @@ export function parsePackage(value: unknown): PresentationPackage {
     if (!Number.isInteger(layout.width) || !Number.isInteger(layout.height)) fail('$.set.layouts', 'Output dimensions must be integer pixels.');
     walk(layout.root, {}, [], new Set());
     const nodes=new Map<string,PresentationNode>();const collect=(n:PresentationNode)=>{nodes.set(n.id,n);n.children?.forEach(collect);};collect(layout.root);
+    const worlds=[...nodes.values()].filter(n=>n.type==='scene3d');
+    const worldKeys=worlds.map(n=>n.scene3d!.id+'-'+n.scene3d!.pass);
+    if(new Set(worldKeys).size!==worldKeys.length)fail('$.set.layouts','Duplicate 3D pass.');
+    if(worlds.length>2||worlds.some(n=>!layout.root.children?.includes(n)))fail('$.set.layouts','Up to two 3D passes belong directly under the layout root.');
     const shaderNodes=[...nodes.values()].filter(n=>n.type==='shader');
     if(shaderNodes.length>4||shaderNodes.some(n=>!layout.root.children?.includes(n)))fail('$.set.layouts','Up to four shader layers belong directly under the layout root.');
     if(shaderNodes.length&&(layout.root.styles?.position!=='relative'||layout.root.styles?.transform!==undefined||layout.root.styles?.opacity!==undefined&&layout.root.styles.opacity!==1||layout.root.motion))fail('$.set.layouts','Shader layouts require a plain relative root.');
@@ -291,7 +312,7 @@ export function parsePackage(value: unknown): PresentationPackage {
       if(track.keyframes.length<2||track.keyframes[0].atMs!==0||track.keyframes.some((f,i)=>i>0&&f.atMs<=track.keyframes[i-1].atMs))fail('$.set.layouts.animation','Keyframes must start at zero and increase.');
       for(const f of track.keyframes)if(track.property==='opacity'&&(f.value<0||f.value>1)||track.property==='scale'&&(f.value<.05||f.value>8)||['width','height'].includes(track.property)&&f.value<1)fail('$.set.layouts.animation','Animation value is outside its property range.');
       if(track.property.startsWith('shader.')&&(target!.type!=='shader'||track.keyframes.some(f=>track.property==='shader.intensity'?(f.value<0||f.value>2):(f.value<.25||f.value>4))))fail('$.set.layouts.animation','Shader tracks require a shader target and bounded values.');
-      const hasSlot=(n:PresentationNode):boolean=>n.type==='slot'||n.type==='shader'||!!n.children?.some(hasSlot)||n.type==='component';
+      const hasSlot=(n:PresentationNode):boolean=>n.type==='slot'||n.type==='shader'||n.type==='scene3d'||!!n.children?.some(hasSlot)||n.type==='component';
       if(!['slot','shader'].includes(target!.type)&&hasSlot(target!))fail('$.set.layouts.animation','Animate native layers directly; animated ancestors are unsupported.');
       if(['x','y','width','height'].includes(track.property)&&target!.styles?.position!=='absolute')fail('$.set.layouts.animation','Geometry tracks require an absolute element.');
       if(target!.type==='slot'&&['x','y'].includes(track.property)&&typeof target!.styles?.[track.property==='x'?'left':'top']!=='number')fail('$.set.layouts.animation','Source position tracks require numeric left and top.');

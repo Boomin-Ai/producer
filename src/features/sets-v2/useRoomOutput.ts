@@ -88,6 +88,7 @@ export function useRoomOutput(
   const [draftCandidate,setDraftCandidate]=useState<{doc:import('../presentation/schema').PresentationPackage;bindings:Record<string,string>;framing:Record<string,SlotFraming>}>();
   const [retryVersion,setRetryVersion]=useState(0);
   const bank=useRef<PreparedScenes|null>(null);
+  const scene3dCapability=useRef<Promise<boolean>|undefined>(undefined);
   const invalidateRoom=()=>{
     ++operation.current;++portraitOperation.current;
     confirmed.current="";shownLayout.current="";portraitShownLayout.current="";
@@ -95,6 +96,8 @@ export function useRoomOutput(
     bank.current?.reset();setRetryVersion(v=>v+1);
   };
   if(!bank.current)bank.current=new PreparedScenes(async value=>{
+    const scenes=(value.plan as {scenes3d?:Record<string,unknown>}|undefined)?.scenes3d;
+    if(scenes&&Object.keys(scenes).length){scene3dCapability.current??=invoke<boolean>('live_set_v2_scene3d_enabled').catch(()=>false);if(!await scene3dCapability.current)throw Error('This 3D Set requires an updated Producer app.');}
     const room=await ipc.liveSetStatus();
     if(cacheGeneration.current!==undefined&&cacheGeneration.current!==room.generation)invalidateRoom();
     cacheGeneration.current=room.generation;generation.current=room.generation;

@@ -752,6 +752,7 @@ pub async fn live_start_recording(
     room_id: Option<String>,
     dual: Option<bool>,
 ) -> EngineResult<String> {
+    let stamp = super::recording_name::unique_stamp(&stamp, &uuid::Uuid::new_v4().to_string());
     let path = state
         .live
         .start_recording_mode(stamp, dual.unwrap_or(false))
@@ -1452,6 +1453,11 @@ pub async fn live_set_v2_report(
 
 #[tauri::command]
 pub fn live_set_v2_enabled() -> bool {
+    cfg!(all(have_engine, target_os = "macos"))
+}
+
+#[tauri::command]
+pub fn live_set_v2_scene3d_enabled() -> bool {
     cfg!(all(have_engine, target_os = "macos"))
 }
 

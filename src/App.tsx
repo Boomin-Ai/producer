@@ -14,7 +14,15 @@ type View = "loading" | "onboarding" | "onboarding-server" | "signin" | "home" |
 
 function App() {
   const [setsDevelopment,setSetsDevelopment]=useState(false);
-  useEffect(()=>{if(hasTauri())void invoke<boolean>('live_set_v2_smoke_enabled').then(setSetsDevelopment).catch(()=>{});},[]);
+  useEffect(()=>{
+    if(!hasTauri())return;
+    void (async()=>{
+      const probe=await invoke<boolean>('live_set_v2_smoke_enabled');
+      const studio=import.meta.env.DEV&&import.meta.env.VITE_SCENE3D_STUDIO==='1'&&
+        await import('@tauri-apps/api/app').then(app=>app.getIdentifier())==='ai.boomin.producer.sets-v2-dev';
+      setSetsDevelopment(probe||studio);
+    })().catch(()=>{});
+  },[]);
   const [view, setView] = useState<View>("loading");
   const [firstLight, setFirstLight] = useState(() => !firstLightDone());
   const [endpoints, setEndpoints] = useState<EndpointInfo[]>([]);

@@ -1,0 +1,111 @@
+{
+  "at": "2026-10-26T02:02:21.953Z",
+  "cacheSamples": [
+    [
+      {
+        "bytes": 304107264,
+        "keys": 3
+      }
+    ],
+    [
+      {
+        "bytes": 405476352,
+        "keys": 4
+      }
+    ],
+    [
+      {
+        "bytes": 304107264,
+        "keys": 3
+      }
+    ],
+    [
+      {
+        "bytes": 304107264,
+        "keys": 3
+      }
+    ],
+    [
+      {
+        "bytes": 304107264,
+        "keys": 3
+      }
+    ],
+    [
+      {
+        "bytes": 304107264,
+        "keys": 3
+      }
+    ],
+    [
+      {
+        "bytes": 304107264,
+        "keys": 3
+      }
+    ],
+    [
+      {
+        "bytes": 304107264,
+        "keys": 3
+      }
+    ],
+    [
+      {
+        "bytes": 304107264,
+        "keys": 3
+      }
+    ],
+    [
+      {
+        "bytes": 405476352,
+        "keys": 4
+      }
+    ]
+  ],
+  "createdRoomSources": 0,
+  "duplicateAwardPrevented": true,
+  "kind": "just-facts-show-native",
+  "labels": [
+    "Question 02 / fact-check",
+    "Question 03 / fact-check",
+    "Question 04 / fact-check",
+    "Question 05 / fact-check",
+    "Question 06 / fact-check",
+    "Question 07 / fact-check",
+    "Question 08 / fact-check",
+    "Question 09 / fact-check",
+    "Question 10 / fact-check",
+    "Tie-breaker / fact-check"
+  ],
+  "layouts": 2,
+  "nativeOutputs": [
+    "program"
+  ],
+  "ok": true,
+  "pair": [
+    {
+      "cachedBytes": 304107264,
+      "cachedKeys": [
+        "scene-b81ea8f8-aeb3c48a",
+        "scene-3e88d499-926ba249",
+        "scene-fde841c1-83bf3357"
+      ],
+      "clockMs": 52233.330219984055,
+      "generation": 3,
+      "paused": false,
+      "preparedRevision": 74,
+      "queued": false,
+      "ready": true,
+      "renderSerial": 2922,
+      "renderedRevision": 74,
+      "scene3dContexts": 0,
+      "transitionProgress": 1,
+      "transitioning": false,
+      "warmed": true
+    }
+  ],
+  "providerCalls": 0,
+  "questionPreserved": true,
+  "segments": 11,
+  "virtualCameraPreserved": true
+}

@@ -78,7 +78,7 @@ export interface Viewport {
 }
 export type RenderNode = {
   id: string;
-  kind: SceneNode["kind"];
+  kind: SceneNode["kind"] | "scene3d";
   bounds: Bounds;
   properties: Record<string, Scalar>;
   resource?: string;
@@ -97,6 +97,7 @@ export interface RenderPlan {
   viewport: Viewport;
   root: RenderNode;
   resources: string[];
+  scenes3d?:Record<string,import("../presentation/scene3d/contract.mjs").Scene3dLayer>;
 }
 export const DEFAULT_CANVASES: Readonly<
   Record<Orientation, { width: number; height: number }>

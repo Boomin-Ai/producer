@@ -40,7 +40,7 @@ export class SetRuntime {
  }
  private initial(instance:ModuleInstanceDefinition,epoch:number):ModuleState{
   const d=this.definition.definitions[instance.definition],b=d.behavior;this.secrets.set(instance.id,{ballots:new Map(),submissions:new Map()});
-  return {id:instance.id,definition:instance.definition,epoch,execution:'created',pauseReasons:[],mounted:false,published:false,view:d.initialView,values:{...Object.fromEntries(Object.entries(d.state).map(([k,f])=>[k,f.default])),...instance.initialState},round:1,openedAt:0,admission:'closed',revealed:false,counts:Object.fromEntries(b?.type==='vote'?b.options.map(o=>[o.id,0]):[]),total:0,submissions:[],featured:null,weather:null,dataStatus:'empty',error:'',agent:{requestId:'',question:'',status:'idle',response:'',citations:[],displayedQuestion:'',displayedResponse:'',displayedCitations:[],origin:'manual',error:'',page:0}};
+  return {id:instance.id,definition:instance.definition,epoch,execution:'created',pauseReasons:[],mounted:false,published:false,view:d.initialView,values:{...Object.fromEntries(Object.entries(d.state).map(([k,f])=>[k,f.default])),...instance.initialState},round:1,openedAt:0,admission:'closed',revealed:false,counts:Object.fromEntries(b?.type==='vote'?b.options.map(o=>[o.id,0]):[]),total:0,submissions:[],featured:null,weather:null,dataStatus:'empty',error:'',agent:{requestId:'',question:b?.type==='agent'?b.initialQuestion??'':'',status:'idle',response:'',citations:[],displayedQuestion:b?.type==='agent'?b.initialQuestion??'':'',displayedResponse:'',displayedCitations:[],origin:'manual',error:'',page:0}};
  }
  snapshot=()=>this.state;
  subscribe=(fn:()=>void)=>{this.listeners.add(fn);return()=>{this.listeners.delete(fn);};};
@@ -95,13 +95,18 @@ export class SetRuntime {
    }else operator();
    if(op==='agent.ask'){
     if(m.execution!=='running'||typeof input.question!=='string'||!input.question.trim()||input.question.length>1000)throw Error('Start module and enter a question');
-    m.agent={...m.agent,requestId:commandId,question:input.question.trim(),status:'pending',response:'',citations:[],origin:'provider',error:''};return;
+    m.agent={...m.agent,requestId:commandId,question:input.question.trim(),status:'pending',response:'',citations:[],origin:'provider',error:''};if(d.behavior.researchView)m.view=d.behavior.researchView;return;
    }
    if(op==='agent.complete'||op==='agent.embed'){
     if(typeof input.response!=='string'||!input.response.trim()||input.response.length>d.behavior.maxLength)throw Error('Invalid agent response');
     let citations:Citation[]=[];
     if(input.citations!==undefined){const raw=JSON.parse(String(input.citations));if(!Array.isArray(raw)||raw.length>20)throw Error('Invalid citations');citations=raw.map(c=>{if(!c||typeof c!=='object'||Object.keys(c).some(k=>!['title','url','start','end'].includes(k))||typeof c.title!=='string'||c.title.length>160||typeof c.url!=='string'||c.url.length>2000)throw Error('Invalid citation');const url=new URL(c.url);if(url.protocol!=='https:'||url.username||url.password)throw Error('Citation must use HTTPS');if(c.start!==undefined||c.end!==undefined){if(!Number.isInteger(c.start)||!Number.isInteger(c.end)||c.start<0||c.end<=c.start||c.end>String(input.response).length)throw Error('Invalid citation position');return {title:c.title,url:url.href,start:c.start,end:c.end};}return {title:c.title,url:url.href};});}
     m.agent={...m.agent,status:'completed',response:input.response.trim(),citations,error:'',...(op==='agent.embed'?{question:String(input.question??m.agent.question).slice(0,1000),origin:'manual' as const,requestId:''}:{})};return;
+   }
+   if(op==='agent.showQuestion'){
+    if(m.execution!=='running'||typeof input.question!=='string'||!input.question.trim()||input.question.length>1000)throw Error('Start module and enter a question');
+    const question=input.question.trim(),changed=question!==m.agent.question;
+    m.agent={...m.agent,...(changed?{requestId:'',status:'idle' as const,response:'',citations:[],error:''}:{}),question,displayedQuestion:question,displayedResponse:'',displayedCitations:[],page:0};if(d.initialView)m.view=d.initialView;return;
    }
    if(op==='agent.page'){const page=input.page;if(typeof page!=='number'||!Number.isInteger(page)||page<0||page>=answerPages(presentationText(m.agent.displayedResponse)).length)throw Error('Invalid answer page');m.agent.page=page;return;}
    if(op==='agent.show'){m.agent.page=0;if(m.agent.status!=='completed')throw Error('No completed response to show');m.agent.displayedQuestion=m.agent.question;m.agent.displayedResponse=m.agent.response;m.agent.displayedCitations=structuredClone(m.agent.citations);if(d.behavior.showView)m.view=d.behavior.showView;return;}

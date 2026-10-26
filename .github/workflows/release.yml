@@ -116,6 +116,8 @@ jobs:
       - name: Install Linux system deps
         if: runner.os == 'Linux'
         run: |
+          # Avoid the Azure mirror stalling large WebKit downloads on hosted runners.
+          sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libclang-dev
 
@@ -153,11 +155,11 @@ jobs:
           releaseName: "Producer v__VERSION__"
           releaseCommitish: ${{ github.sha }}
           releaseBody: |
-            Introduces module-based interactive sets: Grand Arena, Decision Room, Open Floor, Atmosphere and Just Facts.
-            Apple Silicon uses prepared native scenes, layered artwork, live source slots and authored landscape/portrait compositions.
-            Configure audience voting, moderated submissions/chat, weather and Claude/OpenAI connections through the set editor and Settings → Integrations.
-            Shows optionally sequence independently scoped modules; rehearsal uses isolated simulated participants.
-            Fixes portrait weather flicker, native media-cache failures and module reconnection after workspace outages.
+            Adds GPU-rendered, JSON-authored 3D Set layers with native camera sources and coordinated studio transitions on Apple Silicon.
+            Redesigns Just Facts with ten question segments, an optional tie-breaker, host-controlled TRUE/FALSE answers and correctable point awards.
+            Fact-check evidence keeps the current question visible; questions publish independently from private agent responses.
+            Adds reusable segment-specific controls, authored initial questions and research views to the shared module runtime.
+            Bounds live scene snapshots, retains loaded artwork, and fixes graphics-thread readiness and repeated recording labels.
             Preserves the single virtual camera and native guest runtime on Apple Silicon. Windows retains its existing Live engine; Intel macOS and Linux retain their existing engine-less scope.
 
           releaseDraft: true
@@ -303,7 +305,7 @@ jobs:
       # engine-less intermediate app; signing happens after engine assembly.
       - name: Build app (engine linked, unsigned)
         env:
-          INCLUDE_NATIVE_GUEST: ${{ inputs.native_guest && '1' || '0' }}
+          INCLUDE_NATIVE_GUEST: ${{ (github.event_name == 'push' || inputs.native_guest) && '1' || '0' }}
         run: |
           if [ "$INCLUDE_NATIVE_GUEST" = "1" ]; then
             bun run tauri build --target aarch64-apple-darwin --features guest-rtc-production

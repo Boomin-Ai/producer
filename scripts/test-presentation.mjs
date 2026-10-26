@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 
 const result = await build({ stdin: { contents: `export * from './src/features/presentation/schema';
 export * from './src/features/presentation/fixtures';
+export * from './src/features/presentation/upgradeJustFacts';
 export * from './src/features/presentation/rehearsal';
 export * from './src/features/presentation/rundown';
 export * from './src/features/presentation/animation';
@@ -15,9 +16,23 @@ export * from './src/features/presentation/projection';`, resolveDir: process.cw
 const temp = await mkdtemp(join(tmpdir(), 'producer-presentation-'));
 const file = join(temp, 'runtime.mjs');
 await writeFile(file, result.outputFiles[0].text);
-const { parsePackage, presentationJsonSchema, AFTER_HOURS, HEAD_TO_HEAD, RehearsalSession, outputProjection, rundown, timeLabel, authoredCrossfadeMs } = await import(pathToFileURL(file));
+const { upgradeJustFacts, upgradeJustFactsShow, parsePackage, presentationJsonSchema, AFTER_HOURS, HEAD_TO_HEAD, RehearsalSession, outputProjection, rundown, timeLabel, authoredCrossfadeMs } = await import(pathToFileURL(file));
 await unlink(file); await rmdir(temp);
 let checks = 0;
+{
+ const old=JSON.parse(readFileSync('docs/shows/just-facts.json','utf8'));old.version='1.0.0';
+ old.set.values.title.default='My custom headline';
+ for(const layout of old.set.layouts)for(const node of layout.root.children??[])if(node.id==='headline')node.text={op:'if',args:[{get:'modules.research.hasAnswer'},{get:'modules.research.questionDisplay'},{get:'values.title'}]};
+ const before=structuredClone(old),next=upgradeJustFacts(parsePackage(old));parsePackage(next);
+ assert.equal(next.version,'1.0.1');assert.equal(next.set.values.title.default,'My custom headline');assert.deepEqual(next.runtime,before.runtime);assert.deepEqual(old,before);
+ assert.equal(upgradeJustFacts(next),next);assert.equal(next.set.layouts[0].root.children.find(n=>n.id==='headline').text.args[0].op,'eq');
+ console.log('PASS: question-only showcase migration preserves authored values and modules');
+ const target=JSON.parse(readFileSync('docs/shows/just-facts.json','utf8')),legacy=structuredClone(target);legacy.version='1.0.1';legacy.set.values.hostName={type:'text',default:'Kleveland '.repeat(5).trim(),maxLength:60};
+ legacy.runtime.definitions.extra={label:'Keep my module',state:{},publicFields:[],actions:{},controls:[],capabilities:[]};legacy.runtime.instances.push({id:'extra',definition:'extra',owner:'set',hidden:'continue',onExit:'continue',reenter:'resume'});
+ const upgraded=upgradeJustFactsShow(parsePackage(legacy),parsePackage(target));parsePackage(upgraded);assert.equal(upgraded.version,'2.0.0');assert.equal(upgraded.set.values.hostName.default,legacy.set.values.hostName.default);assert(upgraded.runtime.instances.some(i=>i.id==='extra'));assert.equal(upgradeJustFactsShow(upgraded,target),upgraded);
+
+}
+
 const test = (name, fn) => { fn(); checks++; console.log('PASS:', name); };
 const edit = fn => { const doc = structuredClone(AFTER_HOURS); fn(doc); return doc; };
 const texts = projection => JSON.stringify(projection);
@@ -30,8 +45,31 @@ test('presentation/2 rejects old packages and private module output references',
  const wrong=structuredClone(doc);wrong.set.viewController='missing';assert.throws(()=>parsePackage(wrong));
 });
 test('prepared canvas variants export a matching initial view and isolate simulated answers',()=>{
- const doc=JSON.parse(readFileSync('docs/shows/just-facts.json','utf8')),s=new RehearsalSession(doc,undefined,'prepare');control(s,'layout.select',{layoutId:'view1-portrait'});const exported=s.exportPreparedPackage();assert.equal(exported.set.initialView,'view1');assert.equal(exported.set.initialLayout,'view1-portrait');
+ const doc=JSON.parse(readFileSync('docs/shows/just-facts.json','utf8'));
+ doc.set.layouts.push(...doc.set.layouts.map(l=>({...structuredClone(l),id:l.id.replace('view0','view1')})));
+ const controller=doc.runtime.instances.find(i=>i.id==='research');controller.owner='set';delete controller.segment;
+ doc.set.viewController='research';doc.set.views={question:{landscape:'view0-landscape',portrait:'view0-portrait'},evidence:{landscape:'view1-landscape',portrait:'view1-portrait'}};doc.set.initialView='question';
+ const s=new RehearsalSession(doc,undefined,'prepare');control(s,'layout.select',{layoutId:'view1-portrait'});const exported=s.exportPreparedPackage();assert.equal(exported.set.initialView,'evidence');assert.equal(exported.set.initialLayout,'view1-portrait');
  assert.ok(s.enterRehearsal());const snap=s.moduleSnapshot();const result=s.receiveModuleData({id:'unrequested-answer',setEpoch:snap.setEpoch,module:'research',epoch:snap.modules.research.epoch,op:'agent.complete',input:{requestId:'unknown',response:'Unexpected answer'}});assert.equal(result.status,'rejected');s.exitRehearsal();assert(!JSON.stringify(s.exportPreparedPackage()).includes('Unexpected answer'));
+});
+
+test('Standalone module views morph both output variants, preserve scores and sample interrupted motion',()=>{
+ const doc=parsePackage(JSON.parse(readFileSync('docs/shows/grand-arena-3d-study.json','utf8'))),realNow=Date.now;let now=1_000_000;Date.now=()=>now;
+ try{
+  const session=new RehearsalSession(doc,undefined,'prepare');session.enterRehearsal();void session.sendModule('studio','start');void session.sendModule('scoring','start');void session.sendModule('scoring','hostPoint');
+  void session.sendModule('studio','hostFloor');assert.equal(session.snapshot().layoutId,'hostFocus-landscape');
+  const width=(id)=>outputProjection(doc,{...session.snapshot(),layoutId:id}).timeline.tracks.find(t=>t.target.endsWith('/camera-0')&&t.property==='width');
+  const landscape=width('hostFocus-landscape'),portrait=width('hostFocus-portrait');assert(landscape&&portrait);assert.equal(landscape.keyframes.at(-1).value,1075.2);assert.equal(portrait.keyframes.at(-1).value,918);
+  assert(outputProjection(doc,session.snapshot()).timeline.tracks.length<=32);
+  now+=325;void session.sendModule('studio','guestFloor');
+  const interrupted=width('guestFocus-landscape');assert(interrupted.keyframes[0].value>739.2&&interrupted.keyframes[0].value<1075.2);
+  void session.sendModule('studio','neutral');assert.equal(session.snapshot().layoutId,'studio-landscape');
+  control(session,'layout.select',{layoutId:'hostFocus-landscape'});void session.sendModule('scoring','guestPoint');assert.equal(session.snapshot().layoutId,'hostFocus-landscape');
+  void session.sendModule('studio','neutral');assert.equal(session.snapshot().layoutId,'studio-landscape');
+  assert.equal(session.snapshot().modules.scoring.hostScore,1);assert.equal(session.snapshot().modules.scoring.guestScore,1);
+  const cut=structuredClone(doc);for(const layout of cut.set.layouts)layout.animation.transition.durationMs=0;
+  const immediate=new RehearsalSession(cut,undefined,'prepare');immediate.enterRehearsal();void immediate.sendModule('studio','start');void immediate.sendModule('studio','hostFloor');assert(!immediate.snapshot().layoutMotion);
+ }finally{Date.now=realNow;}
 });
 
 test('Grand Arena segment morphs keep text visible unless its opacity is explicitly authored',()=>{

@@ -154,6 +154,8 @@ pub struct Plan {
     pub assets: HashMap<String, Asset>,
     #[serde(default)]
     pub shaders: HashMap<String, Shader>,
+    #[serde(default)]
+    pub scenes3d: HashMap<String, super::scene3d::Spec>,
     pub clock: Option<Clock>,
     #[serde(default)]
     pub motion: Vec<Track>,
@@ -192,6 +194,8 @@ pub enum Action {
         generation: u64,
         output_id: Option<String>,
         keys: Vec<String>,
+        #[serde(default)]
+        asset_ids: Vec<String>,
     },
     Take {
         generation: u64,
@@ -250,6 +254,7 @@ impl Action {
 #[derive(Debug, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Status {
+    pub scene3d_contexts: usize,
     pub cached_keys: Vec<String>,
     pub cached_bytes: usize,
     pub generation: u64,
@@ -315,7 +320,7 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
     {
         return Err("Invalid native v2 canvas request".into());
     }
-    if plan.assets.len() > 24 || plan.shaders.len() > 32 {
+    if plan.assets.len() > 24 || plan.shaders.len() > 32 || plan.scenes3d.len() > 2 {
         return Err("Set resource budget exceeded".into());
     }
     if let Some(c) = &plan.clock {
@@ -345,6 +350,12 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
         {
             return Err("Invalid embedded media resource".into());
         }
+    }
+    for (key, spec) in &plan.scenes3d {
+        if !identity(key) || *key != format!("{}-{}", spec.id, spec.pass) {
+            return Err("Invalid 3D resource identity".into());
+        }
+        super::scene3d::validate(spec)?;
     }
     for (key, s) in &plan.shaders {
         if !identity(key)
@@ -456,7 +467,7 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
                     walk(child, depth + 1, ids, resources)?;
                 }
             }
-            "source" | "graphic" | "text" | "asset" | "shader" => {
+            "source" | "graphic" | "text" | "asset" | "shader" | "scene3d" => {
                 if !n.children.is_empty() || n.mask.is_some() {
                     return Err("Invalid v2 leaf".into());
                 }
@@ -480,12 +491,14 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
                         return Err("Invalid graphic identity".into());
                     }
                     resources.insert(resource.clone());
-                } else if n.kind == "asset" || n.kind == "shader" {
+                } else if n.kind == "asset" || n.kind == "shader" || n.kind == "scene3d" {
                     let r = n.resource.as_ref().ok_or("Missing set resource")?;
                     let prefix = if n.kind == "asset" {
                         "asset:"
-                    } else {
+                    } else if n.kind == "shader" {
                         "shader:"
+                    } else {
+                        "scene3d:"
                     };
                     if !r.strip_prefix(prefix).is_some_and(identity) {
                         return Err("Invalid set resource identity".into());
@@ -518,6 +531,13 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
         Ok(())
     }
     walk(&plan.root, 0, &mut ids, &mut resources)?;
+    for resource in &resources {
+        if let Some(key) = resource.strip_prefix("scene3d:") {
+            if !plan.scenes3d.contains_key(key) {
+                return Err("Missing 3D definition".into());
+            }
+        }
+    }
     if plan.motion.len() > 128 {
         return Err("Native animation track budget exceeded".into());
     }

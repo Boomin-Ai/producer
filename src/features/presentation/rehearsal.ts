@@ -23,6 +23,7 @@ export interface RehearsalState {
   animationClock?:AnimationClock;
   layoutMotion?:AnimationTrack[];
   layoutMotionId?:string;
+  layoutMotions?:Record<string,AnimationTrack[]>;
   mode: 'rehearsal' | 'live'; sandboxId: string; revision: number; elapsedMs: number;
   workspaceMode: 'prepare' | 'rehearsal' | 'live';
   running: boolean; paused: boolean; layoutId: string;
@@ -69,7 +70,7 @@ export function evaluate(binding: Binding, state: RehearsalState, props: Record<
 }
 
 function hasShader(doc:PresentationPackage,node:PresentationPackage['set']['layouts'][number]['root']):boolean {
-  return node.type==='shader'||node.type==='component'&&hasShader(doc,doc.set.components[node.component!].root)||(node.children??[]).some(child=>hasShader(doc,child));
+  return node.type==='shader'||node.type==='scene3d'||node.type==='component'&&hasShader(doc,doc.set.components[node.component!].root)||(node.children??[]).some(child=>hasShader(doc,child));
 }
 
 /** Simulation has no transport/native/recording adapter. An imported command
@@ -126,14 +127,15 @@ export class RehearsalSession {
     this.sandboxId = `rehearsal-${crypto.randomUUID()}`;
     this.stopModules?.();this.moduleRuntime.shutdown();this.liveModules=undefined;this.moduleTransport=undefined;this.moduleLifecycleTransport=undefined;this.moduleRuntime=this.createModules();this.state = freeze(this.initial());this.observeModules();this.syncModuleLifecycle();this.emit();
   }
-  private lastModuleView='';
+  private lastControllerState='';
+  private controllerState(snapshot:ModuleSnapshot){const id=this.package.set.viewController,m=id?snapshot.modules[id]:undefined;return m?JSON.stringify([m.epoch,m.view,m.values]):'';}
   private applyModuleView(snapshot:ModuleSnapshot){
-    const id=this.package.set.viewController,view=id?snapshot.modules[id]?.view:undefined;if(!view||view===this.lastModuleView)return;this.lastModuleView=view;
+    const id=this.package.set.viewController,view=id?snapshot.modules[id]?.view:undefined;const stamp=this.controllerState(snapshot);if(!view||stamp===this.lastControllerState)return;this.lastControllerState=stamp;
     const variants=this.package.set.views?.[view],current=this.package.set.layouts.find(l=>l.id===this.state.layoutId);if(!variants||!current)return;
     const orientation=current.width>current.height?'landscape':current.width<current.height?'portrait':'square',layout=variants[orientation];if(layout&&layout!==this.state.layoutId)this.send({type:'control',action:{type:'layout.select',layoutId:layout}});
   }
   private createModules(){return new SetRuntime(this.package.runtime,{epoch:++moduleEpoch,domain:this.workspaceMode==='live'?'live':'rehearsal',capabilities:['audience.vote@1','audience.text@1','data.weather@1','data.agent@1','room.chat@1']});}
-  private observeModules(){const id=this.package.set.viewController;this.lastModuleView=id?this.moduleRuntime.snapshot().modules[id]?.view??'':'';this.stopModules=this.moduleRuntime.subscribe(()=>{this.state=freeze({...this.state,moduleCommit:{setEpoch:this.moduleRuntime.snapshot().setEpoch,revision:this.moduleRuntime.snapshot().revision},modules:runtimeFields(this.moduleRuntime.snapshot(),this.package.runtime),revision:this.state.revision+1});this.applyModuleView(this.moduleRuntime.snapshot());this.emit();});}
+  private observeModules(){this.lastControllerState=this.controllerState(this.moduleRuntime.snapshot());this.stopModules=this.moduleRuntime.subscribe(()=>{this.state=freeze({...this.state,moduleCommit:{setEpoch:this.moduleRuntime.snapshot().setEpoch,revision:this.moduleRuntime.snapshot().revision},modules:runtimeFields(this.moduleRuntime.snapshot(),this.package.runtime),revision:this.state.revision+1});this.applyModuleView(this.moduleRuntime.snapshot());this.emit();});}
   private moduleLifecycleTransport?: (state:{segment:string;running:boolean;paused:boolean})=>void;
   attachModuleLifecycle=(send:typeof this.moduleLifecycleTransport)=>{this.moduleLifecycleTransport=send;if(send)this.syncModuleLifecycle();};
   private syncModuleLifecycle(){
@@ -321,13 +323,23 @@ export class RehearsalSession {
       // editing a title never restarts an animation.
       if(this.state.animationClock&&(['pause','stop','tick','seek','segment.select'].includes(event.type)||event.type==='control'&&(['show.start','show.next','show.previous','layout.select'].includes(event.action.type))))next.animationClock={...position,positionMs:Math.max(0,position.positionMs),running:(!this.package.show||next.running)&&!next.paused,anchorMs:animationNow};
       if(next.layoutId!==this.state.layoutId){
-        delete next.layoutMotion;delete next.layoutMotionId;
+        delete next.layoutMotion;delete next.layoutMotionId;delete next.layoutMotions;
         const transition=this.package.set.layouts.find(l=>l.id===next.layoutId)?.animation?.transition;
-        if(transition?.type==='morph'&&transition.durationMs>0&&next.running&&!next.paused){
+        if(transition?.type==='morph'&&transition.durationMs>0&&(!this.package.show||next.running)&&!next.paused){
           next.layoutMotionId=next.layoutId;next.layoutMotion=layoutTransition(outputProjection(this.package,this.state),outputProjection(this.package,next),transition.durationMs,animationNow);
+          next.layoutMotions={[next.layoutId]:next.layoutMotion};
+          const variants=(layout:string)=>Object.values(this.package.set.views??{}).find(v=>Object.values(v).includes(layout));
+          const fromVariants=variants(this.state.layoutId),toVariants=variants(next.layoutId);
+          for(const orientation of ['landscape','portrait','square'] as const){
+            const fromId=fromVariants?.[orientation],toId=toVariants?.[orientation];
+            if(!fromId||!toId||toId===next.layoutId)continue;
+            const from={...this.state,layoutId:fromId,layoutMotionId:fromId,layoutMotion:this.state.layoutMotions?.[fromId]};
+            const to={...next,layoutId:toId,layoutMotion:undefined,layoutMotionId:undefined,layoutMotions:undefined};
+            next.layoutMotions[toId]=layoutTransition(outputProjection(this.package,from),outputProjection(this.package,to),transition.durationMs,animationNow);
+          }
         }
       }
-      if(event.type==='stop'){delete next.layoutMotion;delete next.layoutMotionId;}
+      if(event.type==='stop'){delete next.layoutMotion;delete next.layoutMotionId;delete next.layoutMotions;}
       if(event.type==='control'&&event.action.type==='show.start')enterMedia(this.package,undefined,next.layoutId,next.media);
       else enterMedia(this.package,this.state.layoutId,next.layoutId,next.media,Date.now(),this.state,next);
       if(event.type==='pause'||event.type==='stop'||event.type==='segment.select'&&next.running){

@@ -28,6 +28,7 @@ export async function compileRoomScene(
   const container = document.createElement("div");
   container.style.cssText = `all:initial;box-sizing:border-box;position:fixed;left:-30000px;top:0;width:${projection.width}px;height:${projection.height}px;visibility:hidden;pointer-events:none;contain:layout style;`;
   const shaders: Record<string, unknown> = {};
+  const scenes3d: Record<string, unknown> = {};
   const entries = new Map<
     string,
     { node: AuthorNode; element: HTMLDivElement; transform: string }
@@ -131,6 +132,12 @@ export async function compileRoomScene(
           fit: node.fit ?? "contain",
           ...({ playback: node.playback, looping: node.loop } as object),
         };
+      }
+      if(node.type==='scene3d'){
+        const key=node.scene3d!.id+'-'+node.scene3d!.pass,resource='scene3d:'+key;
+        if(scenes3d[key])throw Error('Duplicate 3D resource pass');
+        resources.add(resource);scenes3d[key]=node.scene3d;
+        return {...common,kind:'scene3d',resource};
       }
       if (node.type === "shader") {
         const resource = "shader:" + common.id;
@@ -242,6 +249,7 @@ export async function compileRoomScene(
       ...({
         assets: projection.assets ?? {},
         shaders,
+        scenes3d,
         clock: projection.timeline?.clock,
         retainedTargets:(options.retainedTargets??[]).map(nativeNodeId),
         motion:

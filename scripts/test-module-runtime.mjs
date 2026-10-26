@@ -50,12 +50,18 @@ test('Just Facts agent requests are fenced and responses require explicit on-out
  ok(r,'facts','start',{},host);const first='question-one',second='question-two';
  for(const request of [first,second])assert.equal(r.dispatch({id:request,setEpoch:10,module:'facts',epoch:1,op:'agent.ask',input:{question:request}},host,10000).status,'committed');
  no(r,'facts','agent.complete',{requestId:first,response:'Old answer'},connector);
+ ok(r,'facts','agent.showQuestion',{question:second},host);assert.equal(r.publicModule(r.snapshot().modules.facts).agent.question,second);assert.equal(r.publicModule(r.snapshot().modules.facts).agent.response,'');assert.equal(r.snapshot().modules.facts.agent.requestId,second);
  ok(r,'facts','agent.complete',{requestId:second,response:'A'.repeat(2000),citations:JSON.stringify([{title:'Evidence',url:'https://example.com/evidence'}])},connector);
  assert.equal(r.publicModule(r.snapshot().modules.facts).agent.response,'');
  ok(r,'facts','agent.show',{},host);assert.equal(r.publicModule(r.snapshot().modules.facts).agent.response.length,2000);
  no(r,'facts','agent.embed',{response:'Injected',citations:JSON.stringify([{title:'Bad',url:'javascript:alert(1)'}])},host);
  ok(r,'facts','agent.embed',{question:'Pasted question',response:'An existing agent response'},host);assert.equal(r.publicModule(r.snapshot().modules.facts).agent.response.length,2000);
  ok(r,'facts','agent.show',{},host);assert.equal(r.publicModule(r.snapshot().modules.facts).agent.response,'An existing agent response');
+ ok(r,'facts','agent.showQuestion',{question:'  New on-air question  '},host);
+ assert.equal(r.publicModule(r.snapshot().modules.facts).agent.question,'New on-air question');assert.equal(r.publicModule(r.snapshot().modules.facts).agent.response,'');assert.deepEqual(r.publicModule(r.snapshot().modules.facts).agent.citations,[]);no(r,'facts','agent.show',{},host);
+ no(r,'facts','agent.showQuestion',{question:'Audience override'},{role:'audience',id:'viewer',modules:['facts']});no(r,'facts','agent.showQuestion',{question:'   '},host);no(r,'facts','agent.showQuestion',{question:'x'.repeat(1001)},host);
+ assert.equal(r.dispatch({id:'pending-old',setEpoch:10,module:'facts',epoch:1,op:'agent.ask',input:{question:'Old pending question'}},host,10000).status,'committed');
+ ok(r,'facts','agent.showQuestion',{question:'Replacement question'},host);no(r,'facts','agent.complete',{requestId:'pending-old',response:'Late old result'},connector);assert.equal(r.publicModule(r.snapshot().modules.facts).agent.question,'Replacement question');
  ok(r,'facts','stop',{},host);assert.equal(r.snapshot().modules.facts.epoch,2);no(r,'facts','agent.complete',{requestId:second,response:'Late'},connector,{epoch:1});
 });
 test('segment orchestration commits once, preserves set modules, and isolates reentry policy',()=>{

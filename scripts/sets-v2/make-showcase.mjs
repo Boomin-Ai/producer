@@ -24,7 +24,7 @@ const specs=[
  {id:'atmosphere',name:'Atmosphere',label:'LIVE CONDITIONS / REAL CONSEQUENCES',title:'A window into the world.',kind:'weather',accent:'#b8d8df',views:['Conditions'],slots:['host'],module:'sky'},
  {id:'just-facts',name:'Just Facts',label:'ASK IT. CHECK IT. SHOW THE EVIDENCE.',title:'What does the evidence say?',kind:'agent',accent:'#c5d4ec',views:['The question','The evidence','The conversation'],slots:['host','guest1','guest2'],module:'research'},
 ];
-for(const s of specs){
+for(const s of specs.filter(s=>s.id!=='just-facts')){
  const runtime={schema:'producer.modules/1',definitions:{[s.module]:moduleTemplate(s.kind)},instances:[moduleInstance(s.module,s.module)]};
  if(['vote','submissions'].includes(s.kind))runtime.instances[0].audiencePolicy='whileRunning';
  if(s.kind!=='weather'){runtime.definitions[s.module].views=s.views.map((_,i)=>'view'+i);runtime.definitions[s.module].initialView='view0';runtime.definitions[s.module].behavior.showView='view1';}
@@ -36,7 +36,7 @@ for(const s of specs){
   const nodes=[art('studio',p?'portrait':'landscape',0,0,w,h,'cover'),box('legibility',0,0,w,h,[],{background:'#07101a77'}),text('identity',s.name.toUpperCase(),pad,52,w-pad*2,56,p?38:32,ink,800),text('promise',s.label,pad,115,w-pad*2,40,p?20:18,s.accent,700)];
   if(s.kind==='agent'){
    const answer=viewIndex===1;
-   nodes.push(text('headline',iff(f('hasAnswer'),f('questionDisplay'),get('values.title')),pad,185,w-pad*2,p?150:130,p?38:42,ink,700));
+   nodes.push(text('headline',iff({op:'eq',args:[f('questionDisplay'),'']},get('values.title'),f('questionDisplay')),pad,185,w-pad*2,p?150:130,p?38:42,ink,700));
    if(p&&viewIndex===2){nodes.push(rig(s.id,'host',80,350,920,'hostName'),rig(s.id,'guest1',30,1000,510,'guest1Name'),rig(s.id,'guest2',540,1000,510,'guest2Name'));}else if(p){s.slots.forEach((id,i)=>nodes.push(rig(s.id,id,30+i*350,350,320,id+'Name')));}
    else if(viewIndex===2){nodes.push(rig(s.id,'host',45,330,1050,'hostName'),rig(s.id,'guest1',1280,330,520,'guest1Name'),rig(s.id,'guest2',1280,675,520,'guest2Name'));}else if(answer){s.slots.forEach((id,i)=>nodes.push(rig(s.id,id,1450,300+i*245,350,id+'Name')));}
    else{s.slots.forEach((id,i)=>nodes.push(rig(s.id,id,48+i*620,340,590,id+'Name')));}
@@ -73,6 +73,8 @@ for(const s of specs){
  const set={...(s.kind!=='weather'?{viewController:s.module}:{}),initialLayout:layouts[0].id,values:{title:value(s.title,120),...Object.fromEntries(s.slots.map((id,i)=>[id+'Name',value(i===0?'Host / Moderator':i===1?'Guest one':'Guest two',60)]))},feeds:{},slots:s.slots.map((id,i)=>({id,label:i===0?'Host / Moderator camera':i===1?'Guest one camera':'Guest two camera'})),components:{},assets:Object.fromEntries([['landscape','studio-landscape.png'],['portrait','studio-portrait.png'],['bezel','camera-bezel.png']].map(([id,file])=>[id,{name:file,mime:'image/png',data:'data:image/png;base64,'+fs.readFileSync(path.join('docs/shows/media',s.id,file)).toString('base64')}])),layouts,views:Object.fromEntries(s.views.map((label,i)=>['view'+i,{landscape:'view'+i+'-landscape',portrait:'view'+i+'-portrait'}])),initialView:'view0',controls:[]};
  set.controls=Object.entries(set.values).map(([key,v])=>({id:'edit-'+key,type:v.type,label:key==='title'?'Opening title':key.replace('Name',' name'),key}));
  const show=s.kind==='agent'?{id:'just-facts-show',version:'1.0.0',initialPhase:'question',choices:[],phases:s.views.map((label,i)=>({id:['question','evidence','conversation'][i],label,layoutId:'view'+i+'-landscape',...(i<2?{next:['question','evidence','conversation'][i+1]}:{})}))}:undefined;
- let doc;try{doc=parsePackage({schema:'producer.presentation/2',id:s.id,version:'1.0.0',name:s.name,runtime,set,...(show?{show}:{})});}catch(e){console.error(s.id,e.message);process.exit(1);}
+ let doc;try{doc=parsePackage({schema:'producer.presentation/2',id:s.id,version:s.kind==='agent'?'1.0.1':'1.0.0',name:s.name,runtime,set,...(show?{show}:{})});}catch(e){console.error(s.id,e.message);process.exit(1);}
  fs.writeFileSync(`docs/shows/${s.id}.json`,JSON.stringify(doc));console.log('Authored',s.name,layouts.length,'layouts,',s.slots.length,'cameras,',Math.round(JSON.stringify(doc).length/1024),'KiB');
 }
+
+await import('./make-just-facts.mjs');

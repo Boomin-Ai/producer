@@ -1357,6 +1357,8 @@ static NSDictionary *browser_proof(NSString *app, NSString *out) {
     @"wholeGroupMask" : @YES
   };
 }
+#include "../scene3d/native-proof.inc.m"
+
 static void *(*originalMetalCompile)(void *, SEL, void *, void *, NSError **);
 static void *traceMetalCompile(id self, SEL sel, NSString *source, id options,
                                NSError **error) {
@@ -1416,6 +1418,11 @@ static int runProbe(int argc, char **argv) {
     producer_source_appearance_register();
     sets_v2_rust_register();
     register_test();
+    if(getenv("PRODUCER_PROBE_SCENE3D_MANIFEST")){
+      NSDictionary *report=scene3d_proof(app,out);
+      [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:@"scene3d-proof.json"] atomically:YES];
+      obs_shutdown();puts("PASS: Three.js layered native GPU proof");return 0;
+    }
     if(getenv("PRODUCER_PROBE_COLOR_ONLY")){
       NSDictionary *report=color_context_proof(out);
       [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:@"color-proof.json"] atomically:YES];

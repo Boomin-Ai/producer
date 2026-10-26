@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import plistlib
 import shutil
+import shlex
 import subprocess
 import sys
 import urllib.request
@@ -47,7 +48,7 @@ manifest=root/'src-tauri/Cargo.toml'
 original_manifest=manifest.read_text()
 try:
     manifest.write_text(original_manifest.replace('crate-type = ["staticlib", "cdylib", "rlib"]','crate-type = ["rlib"]'))
-    subprocess.run(['cargo', 'build', '--offline', '--manifest-path', str(manifest), '--features', 'sets-v2-dev'], cwd=root, env=env, check=True)
+    subprocess.run(['cargo', 'build', '--offline', *shlex.split(os.environ.get('PRODUCER_SETS_V2_CARGO_ARGS','')), '--manifest-path', str(manifest), '--features', 'sets-v2-dev'], cwd=root, env=env, check=True)
 finally:
     manifest.write_text(original_manifest)
 stage.parent.mkdir(parents=True, exist_ok=True)

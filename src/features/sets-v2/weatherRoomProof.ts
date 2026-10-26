@@ -16,7 +16,7 @@ export async function weatherRoomProof(){
   button('Show on output')?.click();await until(()=>showEditor.querySelector('.set-editor-apply-status.applied'),'applied Just Facts');button('Close editor')?.click();
   (await until(()=>button('Start show'),'enabled show start')).click();
   await until(()=>button('Stop run'),'running show');(await until(()=>button('Next'),'next segment')).click();
-  await until(()=>document.querySelector('.set-run-current-label')?.textContent?.includes('The evidence'),'next segment selected');
+  await until(()=>document.querySelector('.set-run-current-label')?.textContent?.includes('02 / Question'),'next segment selected');
   button('Stop run')!.click();await until(()=>button('Start show'),'stopped show');
   (await until(()=>button('Set settings'),'set editor')).click();
   const editor=await until(()=>document.querySelector<HTMLDialogElement>('dialog[open]'),'editor');

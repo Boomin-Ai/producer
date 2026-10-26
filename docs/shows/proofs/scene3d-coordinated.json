@@ -1,0 +1,143 @@
+{
+  "at": "2026-10-25T20:28:26.189Z",
+  "setVersion": "0.2.0",
+  "ok": true,
+  "preparedLayouts": 6,
+  "durationMs": 650,
+  "nativeVideo": true,
+  "worldContextsBefore": 2,
+  "worldContextsAfter": 2,
+  "takes": [
+    {
+      "contexts": 2,
+      "label": "Host\u2019s floor",
+      "portraitRevision": 11,
+      "revision": 10
+    },
+    {
+      "contexts": 2,
+      "label": "Challenger\u2019s floor",
+      "portraitRevision": 13,
+      "revision": 12
+    },
+    {
+      "contexts": 2,
+      "label": "Stage push",
+      "portraitRevision": 15,
+      "revision": 14
+    },
+    {
+      "contexts": 2,
+      "label": "Wide studio",
+      "portraitRevision": 17,
+      "revision": 16
+    },
+    {
+      "contexts": 2,
+      "label": "Reveal emblem",
+      "portraitRevision": 19,
+      "revision": 20
+    },
+    {
+      "contexts": 2,
+      "label": "Reveal emblem",
+      "portraitRevision": 22,
+      "revision": 21
+    },
+    {
+      "contexts": 2,
+      "label": "Face-off",
+      "portraitRevision": 24,
+      "revision": 23
+    }
+  ],
+  "recording": {
+    "paired": true,
+    "landscape": [
+      1920,
+      1080
+    ],
+    "portrait": [
+      1080,
+      1920
+    ],
+    "cameraImages": "Kept local; not included in this receipt."
+  },
+  "recordedGeometrySamples": {
+    "timesSeconds": [
+      0.1,
+      0.3,
+      0.5,
+      0.7,
+      0.9,
+      1.1
+    ],
+    "landscapeHostBlueOutlineSpan": [
+      [
+        125,
+        863
+      ],
+      [
+        125,
+        863
+      ],
+      [
+        125,
+        863
+      ],
+      [
+        115,
+        941
+      ],
+      [
+        98,
+        1074
+      ],
+      [
+        87,
+        1158
+      ]
+    ],
+    "portraitChallengerGoldOutlineSpan": [
+      [
+        98,
+        982
+      ],
+      [
+        98,
+        982
+      ],
+      [
+        98,
+        982
+      ],
+      [
+        98,
+        982
+      ],
+      [
+        367,
+        988
+      ],
+      [
+        508,
+        991
+      ]
+    ],
+    "method": "AVFoundation decoded native paired recordings; scan long vertical outline runs at landscape y=400..699 and portrait y=1400..1499. Intermediate spans demonstrate camera geometry interpolation in actual output."
+  },
+  "checks": [
+    "Standalone module-driven view morphs",
+    "Both orientation variants generate native geometry tracks",
+    "Interrupted motion sampling",
+    "Repeated direction action restores its view after manual override",
+    "Scoring commits preserve manual view overrides and scores",
+    "Zero authored duration produces a cut",
+    "GPU canvas retained across browser view morphs",
+    "Native surfaces draw three startup frames before idle suppression"
+  ],
+  "limits": [
+    "Outputs present and acknowledge independently; this is not an atomic cross-output take.",
+    "Browser interruption tests sample the shared animation clock; this receipt does not establish frame-perfect synchronization between separate outputs."
+  ]
+}
