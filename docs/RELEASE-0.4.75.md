@@ -1,7 +1,14 @@
 # Producer v0.4.75 — 3D Sets and Just Facts
 
-Release preparation: the public release remains 0.4.74 until the complete
-signed/notarized build and updater payload verification have passed.
+Published: [v0.4.75](https://github.com/Boomin-Ai/producer/releases/tag/v0.4.75).
+[Release workflow 40319734003](https://github.com/Boomin-Ai/producer/actions/runs/40319734003)
+passed all platform builds. Both macOS installers passed Apple signing,
+notarization and stapling. Four updater payloads passed cryptographic verification
+against the pinned public key before publication. producer.dev metadata, all four
+installer endpoints and the public updater manifest report 0.4.75.
+
+The hosted API and audience deployments passed before desktop publication.
+See [exact hashes and deployment receipts](RELEASE-0.4.75-VERIFIED.json).
 
 - Managed, bounded JSON-authored Three.js layers render on the GPU behind and
   above crisp native camera sources. Grand Arena — 3D Studio joins the picker.
@@ -33,4 +40,4 @@ and verify all four updater payloads against the pinned public key before promot
 Validation already recorded: native all-eleven-question replay, both browser
 orientations, managed 3D native/recording receipts and bounded live-cache regression.
 See `docs/shows/JUST-FACTS.md`, `docs/shows/scene3d.md` and the runtime hardening plan.
-Deployment and signed installer receipts will be recorded after successful release.
+Deployment and signed installer receipts are recorded in RELEASE-0.4.75-VERIFIED.json.

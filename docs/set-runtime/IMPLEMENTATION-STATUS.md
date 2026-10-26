@@ -1,6 +1,24 @@
 # Sets v2 implementation status
 
-Updated 2026-10-25. This supersedes the earlier foundation-only execution log.
+Updated 2026-10-26. This supersedes the earlier foundation-only execution log.
+
+## Production 0.4.75
+
+Producer 0.4.75 is published with managed GPU 3D layers, coordinated native
+camera/studio transitions and the host-led Just Facts ten-question Show plus an
+optional tie-breaker. The catalog includes Grand Arena — 3D Studio. Individual
+controls can follow a segment inside persistent set-owned modules; authored
+questions and declared research views use the shared hosted runtime. Live scene
+snapshots are bounded while loaded artwork remains retained.
+
+Hosted API and audience deployments, cross-platform CI, both Apple notarization
+paths and all four updater-signature checks passed. Public producer.dev downloads
+and the updater manifest report 0.4.75. See
+[the release receipt](../RELEASE-0.4.75-VERIFIED.json).
+
+Guest answer inputs, agent-awarded points, external network chat adapters and the
+broader moderator/hardening design remain future work. The following sections
+retain the original implementation and development verification history.
 
 ## Working development system
 

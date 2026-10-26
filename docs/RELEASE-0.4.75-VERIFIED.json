@@ -1,0 +1,90 @@
+{
+  "version": "0.4.75",
+  "sha": "0c8dd442ff2ad95c60932ed9753d43679a576000",
+  "checks": [
+    {
+      "platform": "darwin-aarch64",
+      "asset": "Producer_0.4.75_aarch64.app.tar.gz",
+      "sha256": "4b13c5298f915de4cfe772e8a13355d78b6173e11905d18eb6690dfd56cd7a77",
+      "signatureVerified": true
+    },
+    {
+      "platform": "darwin-x86_64",
+      "asset": "Producer_x64.app.tar.gz",
+      "sha256": "24d36aefd47316d4e848e8f8d9f5fe372ec517094c777b5f3989ef67f3de6754",
+      "signatureVerified": true
+    },
+    {
+      "platform": "windows-x86_64",
+      "asset": "Producer_0.4.75_x64-setup.exe",
+      "sha256": "c97585371533e08b89d366aeceedb1f244926aeec93611936a6bc357e3da9f5d",
+      "signatureVerified": true
+    },
+    {
+      "platform": "linux-x86_64",
+      "asset": "Producer_0.4.75_amd64.AppImage",
+      "sha256": "7095d2b269a3af157552cb334e284d157cfefbacce09321ef34e0f09ead82738",
+      "signatureVerified": true
+    },
+    {
+      "asset": "Producer_0.4.75_aarch64.dmg",
+      "sha256": "d55bd1c4e6307980d941f5ed1b31099743646d1479dc631226133bd699c90dfe"
+    },
+    {
+      "asset": "Producer_0.4.75_x64.dmg",
+      "sha256": "4027811f65f70ccb8581f313f6794510626634ddab81dc57eab83c0862f37726"
+    }
+  ],
+  "releaseRun": 40319734003,
+  "releaseUrl": "https://github.com/Boomin-Ai/producer/releases/tag/v0.4.75",
+  "api": {
+    "sha": "1979c2f1b22629f869223d97ba1726d8891d80b3",
+    "ciRun": 40317119209,
+    "deployRun": 40317602645,
+    "status": "success"
+  },
+  "audienceWeb": {
+    "sha": "e823c53080beeb294ccc3cb2d7ce6c27127aee29",
+    "deployRun": 40317615764,
+    "status": "success"
+  },
+  "desktopCi": {
+    "run": 40319258967,
+    "status": "success"
+  },
+  "catalogSavedCopySelection": "passed: old saved and new built-in selectable without overwrite",
+  "verifiedAt": "2026-10-26T12:23:33.843636+00:00",
+  "apple": {
+    "appleSiliconJob": 121561305606,
+    "intelJob": 121561305948,
+    "codesignNotarizationAndStapling": "passed",
+    "nativeGuestFeatureIncluded": true
+  },
+  "downloads": {
+    "macos": {
+      "status": 200,
+      "version": "0.4.75",
+      "bytes": 219173298
+    },
+    "macos-intel": {
+      "status": 200,
+      "version": "0.4.75",
+      "bytes": 35736295
+    },
+    "windows": {
+      "status": 200,
+      "version": "0.4.75",
+      "bytes": 160660238
+    },
+    "linux": {
+      "status": 200,
+      "version": "0.4.75",
+      "bytes": 113093112
+    }
+  },
+  "publicUpdaterVersion": "0.4.75",
+  "mainCi": {
+    "run": 40319727089,
+    "status": "success"
+  }
+}

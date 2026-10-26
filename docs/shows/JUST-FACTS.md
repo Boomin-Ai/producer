@@ -1,6 +1,6 @@
 # Just Facts: host-led question show
 
-Version 2.0.0 is a development redesign based on the supplied portrait reference.
+Version 2.0.0 ships in Producer 0.4.75 and follows the supplied portrait reference.
 It contains ten regular questions and an eleventh, optional tie-breaker. Every
 step is manual. The same landscape and portrait layouts are reused across the
 show; each question has its own segment-owned research module.
@@ -87,8 +87,8 @@ The original v1 question-only headline upgrade remains separate from this redesi
   `showView` selects the response view on reveal. This show binds geometry to the
   active question module's view without changing its shared layout identity.
 
-These additions require an updated host/server runtime. This document is not a
-claim that the previously released installer implements the redesigned contract.
+Producer 0.4.75 and its deployed hosted runtime include these additions.
+Older installers and self-hosted servers require the matching runtime update.
 
 ## Bounded live snapshot cache
 
