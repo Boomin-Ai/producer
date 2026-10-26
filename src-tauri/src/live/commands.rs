@@ -1457,7 +1457,9 @@ pub fn live_set_v2_enabled() -> bool {
 }
 
 #[tauri::command]
-pub fn live_set_v2_scene3d_enabled() -> bool { cfg!(all(have_engine, target_os = "macos")) }
+pub fn live_set_v2_scene3d_enabled() -> bool {
+    cfg!(all(have_engine, target_os = "macos"))
+}
 
 /// Isolated development workspace bootstrap. Provider credentials never enter this app.
 #[tauri::command]

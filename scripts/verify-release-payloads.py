@@ -54,12 +54,16 @@ for name in [f'Producer_{version}_aarch64.dmg', f'Producer_{version}_x64.dmg']:
 receipt = {'version': version, 'sha': sha, 'checks': checks}
 (out / 'verification.json').write_text(json.dumps(receipt, indent=2) + '\n')
 subprocess.run(['gh', 'release', 'upload', tag, str(out / 'verification.json'), '--clobber', '--repo', repo], check=True)
-(out / 'release-notes.md').write_text(f'''Producer {version} introduces five layered interactive sets: Grand Arena, Decision Room, Open Floor, Atmosphere and Just Facts.
+(out / 'release-notes.md').write_text(f'''Producer {version} adds GPU-rendered, JSON-authored 3D Set layers, coordinated native camera/studio transitions, and the redesigned Just Facts show.
 
-Sets have scoped modules, configurable operator and audience controls, isolated rehearsal, saved weather/Claude/OpenAI connections, and authored landscape/portrait layouts. Apple Silicon uses prepared native scenes. Fixes portrait polling flicker, media-cache failures and module recovery after workspace outages.
+Just Facts has ten question segments plus an optional tie-breaker, host-entered TRUE/FALSE answers, correctable one-point awards and persistent match scores. Fact-checking keeps a smaller question visible beside evidence. Agent responses remain private until revealed; the host decides awards.
+
+All sets can use segment-specific controls, authored initial questions and declared research views. The hosted module runtime and audience renderer are updated with the desktop contract. Saved weather, Claude and OpenAI connections remain in Integrations.
+
+Fixes live snapshot cache growth, repeated artwork uploads, graphics-thread readiness and duplicate recording labels. Grand Arena — 3D Studio is an included procedural design; external chat adapters and broader hardening capabilities remain planned work, not release claims.
 
 macOS installers are Apple signed, notarized and stapled by the platform release jobs. All four primary updater payloads passed signature verification against Producer's pinned public key before publication. verification.json contains the exact artifact hashes.
 
-Requires presentation/2 packages; old custom sets need reauthoring. API keys belong to your workspace's Integrations and are never bundled. Windows retains its existing Live engine; Intel macOS and Linux retain their engine-less scope. The native prepared compositor remains macOS-only.
+Requires presentation/2 packages; old custom sets need reauthoring. API keys are never bundled. The new 3D/native compositor capability is macOS Apple Silicon only. Windows retains its existing Live engine; Intel macOS and Linux retain their engine-less scope. Cameras, mixer and output remain room-owned.
 ''')
 print(json.dumps(receipt, indent=2))

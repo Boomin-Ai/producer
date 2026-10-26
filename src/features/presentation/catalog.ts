@@ -8,4 +8,4 @@ import { parsePackage } from './schema';
 
 /** Fresh authoring catalog. Older fixtures are regression inputs, not templates. */
 export const GRAND_ARENA = parsePackage(grandArena);
-export const BUILTIN_SETS = [GRAND_ARENA,...[decisionRoom,openFloor,atmosphere,justFacts].map(parsePackage),...(import.meta.env?.DEV?[parsePackage(studio3d)]:[])];
+export const BUILTIN_SETS = [GRAND_ARENA,...[decisionRoom,openFloor,atmosphere,justFacts,studio3d].map(parsePackage)];

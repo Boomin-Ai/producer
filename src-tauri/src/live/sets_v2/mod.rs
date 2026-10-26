@@ -124,7 +124,11 @@ extern "C" {
     fn producer_set_v2_program_status(p: *mut ffi::obs_source_t, out: *mut NativeStatus) -> bool;
     fn producer_set_v2_program_stop_motion(p: *mut ffi::obs_source_t);
     fn producer_set_v2_program_collect(p: *mut ffi::obs_source_t) -> bool;
-    fn producer_set_v2_surface_fence(s: *mut ffi::obs_source_t, y: u32, expected: *const u8) -> bool;
+    fn producer_set_v2_surface_fence(
+        s: *mut ffi::obs_source_t,
+        y: u32,
+        expected: *const u8,
+    ) -> bool;
     fn producer_set_v2_surface_marker(
         s: *mut ffi::obs_source_t,
         x: u32,
@@ -489,7 +493,7 @@ pub struct RoomProgram {
     building: Option<Building>,
     latest_revision: u64,
     resources: resources::Store,
-    pending_3d: Option<(u64,HashMap<String,scene3d::Spec>,Option<contract::Clock>)>,
+    pending_3d: Option<(u64, HashMap<String, scene3d::Spec>, Option<contract::Clock>)>,
     presented_revision: u64,
 }
 impl RoomProgram {
@@ -623,9 +627,14 @@ impl RoomProgram {
                 self.draft_revision = revision;
                 self.draft = Some(draft);
             }
-            Action::Retain { keys, asset_ids, .. } => {
-                if keys.len() > 64 || keys.iter().any(|k| !contract::identity(k))
-                    || asset_ids.len() > 24 || asset_ids.iter().any(|id| !contract::identity(id)) {
+            Action::Retain {
+                keys, asset_ids, ..
+            } => {
+                if keys.len() > 64
+                    || keys.iter().any(|k| !contract::identity(k))
+                    || asset_ids.len() > 24
+                    || asset_ids.iter().any(|id| !contract::identity(id))
+                {
                     return Err("Invalid retained scene inventory".into());
                 }
                 self.bank.retain(|key, _| keys.contains(key));
@@ -649,7 +658,11 @@ impl RoomProgram {
                         "V2 candidate is not ready, stale, or another transition is active".into(),
                     );
                 }
-                if let (Some(draft),Some((r,specs,clock)))=(&self.draft,&self.pending_3d){if *r==revision{draft._resources.publish3d(specs,clock.as_ref());}}
+                if let (Some(draft), Some((r, specs, clock))) = (&self.draft, &self.pending_3d) {
+                    if *r == revision {
+                        draft._resources.publish3d(specs, clock.as_ref());
+                    }
+                }
             }
             Action::Cancel { revision, .. } => {
                 if self
@@ -666,7 +679,9 @@ impl RoomProgram {
                 self.draft = None;
             }
             Action::Pause { paused, .. } => {
-                if let Some(current)=&self.current{current._resources.pause3d(paused);}
+                if let Some(current) = &self.current {
+                    current._resources.pause3d(paused);
+                }
                 if !producer_set_v2_program_pause(self.program.0, paused) {
                     return Err("V2 program clock unavailable".into());
                 }
@@ -683,7 +698,15 @@ impl RoomProgram {
         o.remove("motion");
         o.remove("assets");
         o.remove("definitionRevision");
-        if let Some(specs)=o.get_mut("scenes3d").and_then(|v|v.as_object_mut()){for spec in specs.values_mut(){if let Some(s)=spec.as_object_mut(){s.remove("cue");s.remove("view");s.remove("cueSequence");}}}
+        if let Some(specs) = o.get_mut("scenes3d").and_then(|v| v.as_object_mut()) {
+            for spec in specs.values_mut() {
+                if let Some(s) = spec.as_object_mut() {
+                    s.remove("cue");
+                    s.remove("view");
+                    s.remove("cueSequence");
+                }
+            }
+        }
         fn strip(n: &mut serde_json::Value) {
             if let Some(o) = n.as_object_mut() {
                 o.remove("playback");
@@ -821,7 +844,7 @@ impl RoomProgram {
         Ok(Rc::new(draft))
     }
     unsafe fn register(&mut self, draft: &Draft, plan: &Plan, revision: u64) -> Result<(), String> {
-        self.pending_3d=Some((revision,plan.scenes3d.clone(),plan.clock.clone()));
+        self.pending_3d = Some((revision, plan.scenes3d.clone(), plan.clock.clone()));
         let (show, segment, running) = contract::clock_positions(plan.clock.as_ref());
         for shader in &draft._resources.shaders {
             let spec = draft
@@ -945,7 +968,9 @@ impl RoomProgram {
     }
     pub unsafe fn poll(&mut self) -> Result<Status, String> {
         if let Some(building) = self.building.take() {
-            if let Some(error)=building.resources.error3d(){return Err(error);}
+            if let Some(error) = building.resources.error3d() {
+                return Err(error);
+            }
             if building.resources.ready()
                 && building.captures.values().all(|s| {
                     ffi::obs_source_get_width(s.0 .0) > 0 && ffi::obs_source_get_height(s.0 .0) > 0
@@ -953,7 +978,11 @@ impl RoomProgram {
             {
                 self.draft = Some(self.finish_build(building)?);
             } else if building.started.elapsed().as_secs()
-                > if building.resources.scenes3d.is_empty() { 12 } else { 30 }
+                > if building.resources.scenes3d.is_empty() {
+                    12
+                } else {
+                    30
+                }
             {
                 // Cold WebGL shader compilation and CEF's first imported paint
                 // can outlast media decoding. This is preparation only; cached
@@ -992,15 +1021,22 @@ impl RoomProgram {
                 && !native.queued
             {
                 producer_set_v2_program_collect(self.program.0);
-                if let (Some(old),Some(next))=(&self.current,&self.draft){old._resources.hide_unshared3d(&next._resources);}
+                if let (Some(old), Some(next)) = (&self.current, &self.draft) {
+                    old._resources.hide_unshared3d(&next._resources);
+                }
                 self.current = self.draft.take();
             }
         }
         producer_set_v2_program_collect(self.program.0);
-        let presented=self.current.as_ref().map_or(true,|d|d._resources.presented3d());
-        if presented {self.presented_revision=native.rendered_revision;}
+        let presented = self
+            .current
+            .as_ref()
+            .map_or(true, |d| d._resources.presented3d());
+        if presented {
+            self.presented_revision = native.rendered_revision;
+        }
         Ok(Status {
-            scene3d_contexts:scene3d::live_count(),
+            scene3d_contexts: scene3d::live_count(),
             cached_keys: self.bank.keys().cloned().collect(),
             cached_bytes: self.bank.values().map(|(_, d)| d.bytes).sum(),
             generation: self.generation,
@@ -1008,7 +1044,11 @@ impl RoomProgram {
                 .building
                 .as_ref()
                 .map_or(native.prepared_revision, |b| b.revision),
-            rendered_revision: if presented {native.rendered_revision}else{self.presented_revision},
+            rendered_revision: if presented {
+                native.rendered_revision
+            } else {
+                self.presented_revision
+            },
             render_serial: native.render_serial,
             clock_ms: native.clock_ms,
             transition_progress: native.transition_progress,

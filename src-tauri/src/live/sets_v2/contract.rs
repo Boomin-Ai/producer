@@ -254,7 +254,7 @@ impl Action {
 #[derive(Debug, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Status {
-    pub scene3d_contexts:usize,
+    pub scene3d_contexts: usize,
     pub cached_keys: Vec<String>,
     pub cached_bytes: usize,
     pub generation: u64,
@@ -352,7 +352,9 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
         }
     }
     for (key, spec) in &plan.scenes3d {
-        if !identity(key)||*key!=format!("{}-{}",spec.id,spec.pass) { return Err("Invalid 3D resource identity".into()); }
+        if !identity(key) || *key != format!("{}-{}", spec.id, spec.pass) {
+            return Err("Invalid 3D resource identity".into());
+        }
         super::scene3d::validate(spec)?;
     }
     for (key, s) in &plan.shaders {
@@ -495,7 +497,9 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
                         "asset:"
                     } else if n.kind == "shader" {
                         "shader:"
-                    } else { "scene3d:" };
+                    } else {
+                        "scene3d:"
+                    };
                     if !r.strip_prefix(prefix).is_some_and(identity) {
                         return Err("Invalid set resource identity".into());
                     }
@@ -527,7 +531,13 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
         Ok(())
     }
     walk(&plan.root, 0, &mut ids, &mut resources)?;
-    for resource in &resources { if let Some(key)=resource.strip_prefix("scene3d:") { if !plan.scenes3d.contains_key(key) { return Err("Missing 3D definition".into()); } } }
+    for resource in &resources {
+        if let Some(key) = resource.strip_prefix("scene3d:") {
+            if !plan.scenes3d.contains_key(key) {
+                return Err("Missing 3D definition".into());
+            }
+        }
+    }
     if plan.motion.len() > 128 {
         return Err("Native animation track budget exceeded".into());
     }

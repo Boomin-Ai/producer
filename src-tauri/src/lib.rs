@@ -165,8 +165,7 @@ pub fn run() {
                     let probe = std::env::var("PRODUCER_SETS_V2_UI_PROBE").as_deref() == Ok("1");
                     let url = if !probe {
                         "http://localhost:1436/?roomInspect=1"
-                    } else if std::env::var("PRODUCER_SETS_V2_APPLY_PROBE").as_deref() == Ok("1")
-                    {
+                    } else if std::env::var("PRODUCER_SETS_V2_APPLY_PROBE").as_deref() == Ok("1") {
                         "http://localhost:1436/?roomInspect=1&roomApplyCheck=1"
                     } else if std::env::var("PRODUCER_SETS_V2_INSPECT").as_deref() == Ok("1") {
                         "http://localhost:1436/?roomInspect=1"
