@@ -1,0 +1,23 @@
+{
+  "nativeWebviewPoints": {
+    "width": 1440,
+    "height": 813
+  },
+  "domViewportCssPixels": {
+    "width": 1440,
+    "height": 781
+  },
+  "measuredTopSafeAreaPoints": 32,
+  "nativeGeometryTests": [
+    "nested non-flipped container",
+    "nested flipped container",
+    "full-size titlebar safe area",
+    "same DOM rect after native container movement",
+    "resized preview bounds"
+  ],
+  "withoutInsetCorrection": "passes ordinary containers, fails full-size titlebar case",
+  "withInsetCorrection": "all geometry cases pass",
+  "previewSessionTests": "attachment ordering, recovery, unchanged suppression and forced refresh pass",
+  "liveDevWindow": "canvas outline and native image alignment verified in a window-only capture",
+  "scope": "shared landscape/portrait preview mapping; authored and encoded output geometry unchanged"
+}

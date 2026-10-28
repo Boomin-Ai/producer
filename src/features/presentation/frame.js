@@ -6,7 +6,7 @@
   let assets={};
   let slotSources,sourceFrames={};
   let width = 1280, height = 720, port, sequence = 0;
-  let entries = new Map(),previousLayer;
+  let entries = new Map(),previousLayer,previewContent,previewCharts;
   let timeline,motionReady=false;
   function removePrevious(){if(!previousLayer)return;for(const entry of previousLayer.entries.values()){entry.gpu?.destroy();entry.scene3d?.dispose();entry.scene3dPending=true;entry.scene3dPromise=null;entry.animation?.destroy();entry.element.querySelector('video')?.pause();}previousLayer.element.remove();previousLayer=null;}
   function sample(track,time){
@@ -17,16 +17,28 @@
     if(track.easing==='easeIn')t*=t;else if(track.easing==='easeOut')t=1-(1-t)*(1-t);else if(!track.easing||track.easing==='easeInOut')t=t*t*(3-2*t);
     return a.value+(b.value-a.value)*t;
   }
+  function layerMask(entry,progress){
+    const m=entry.mask;if(!m)return;const el=entry.element,w=parseFloat(el.style.width)||el.clientWidth,h=parseFloat(el.style.height)||el.clientHeight;
+    if(m.radius)el.style.clipPath='inset(0 round '+m.radius+'px)';
+    if(m.kind==='rounded'){el.style.clipPath='inset(0 round '+(m.radius||0)+'px)';return;}
+    const p=progress??m.progress??1,inside=m.invert?'transparent':'#000',outside=m.invert?'#000':'transparent',f=Math.max(.5,m.feather||0);
+    let image;if(p<=0)image='linear-gradient('+outside+','+outside+')';else if(p>=1)image='linear-gradient('+inside+','+inside+')';
+    else if(m.kind==='circle'){const x=m.x??.5,y=m.y??.5,r=Math.hypot(Math.max(x,1-x)*w,Math.max(y,1-y)*h)*p;image='radial-gradient(circle at '+x*100+'% '+y*100+'%, '+inside+' '+Math.max(0,r-f/2)+'px, '+outside+' '+(r+f/2)+'px)';}
+    else{const vertical=['up','down'].includes(m.direction),end=p*(vertical?h:w),direction={left:'to right',right:'to left',up:'to bottom',down:'to top'}[m.direction||'left'];image='linear-gradient('+direction+', '+inside+' '+Math.max(0,end-f/2)+'px, '+outside+' '+(end+f/2)+'px)';}
+    el.style.maskImage=image;el.style.webkitMaskImage=image;
+  }
   function animateTracks(map,tracks,show,segment){
       const transforms=new Map();
       for(const entry of map.values())if(entry.shader)entry.shaderValues={intensity:entry.shader.intensity,scale:entry.shader.scale,opacity:1};
       for(const track of tracks){const entry=map.get(track.target);if(!entry)continue;const value=sample(track,track.clock==='show'?show:segment),el=entry.element;
-        if(track.property.startsWith('shader.')){if(entry.shaderValues)entry.shaderValues[track.property.slice(7)]=value;}
+        if(track.property==='mask.progress')layerMask(entry,value);
+        else if(track.property.startsWith('shader.')){if(entry.shaderValues)entry.shaderValues[track.property.slice(7)]=value;}
         else if(entry.shaderValues&&track.property==='opacity')entry.shaderValues.opacity=value;
         else if(track.property==='scale'||track.property==='rotation'){const t=transforms.get(el)||{scale:1,rotation:0};t[track.property]=value;transforms.set(el,t);}
         else el.style[({x:'left',y:'top'})[track.property]||track.property]=track.property==='opacity'?String(value):value+'px';
       }
       for(const [el,t]of transforms){el.style.transformOrigin='0 0';el.style.transform=(el.dataset.baseTransform||'')+' scale('+t.scale+') rotate('+t.rotation+'deg)';}
+      for(const entry of map.values())if(entry.chart)entry.chart.draw(show);
       for(const entry of map.values())if(entry.gpu){const v=entry.shaderValues;entry.gpu.draw((entry.shader.clock==='show'?show:segment)/1000,v.intensity,v.scale,v.opacity,parseFloat(entry.element.style.width),parseFloat(entry.element.style.height));}
   }
   function animate(){
@@ -36,7 +48,7 @@
       if(previousLayer){
         if(previousLayer.timeline)animateTracks(previousLayer.entries,previousLayer.timeline.tracks,show,Math.max(0,show-previousLayer.origin));
         if(previousLayer.running!==c.running){const now=Date.now();for(const entry of previousLayer.entries.values()){const t=entry.playback;if(!t)continue;if(!c.running){entry.resume=t.playing;if(t.playing)t.positionMs+=Math.max(0,now-t.anchorMs);t.playing=false;}else if(entry.resume)t.playing=true;t.anchorMs=now;transport(entry);}previousLayer.running=c.running;}
-        const progress=Math.min(1,segment/previousLayer.duration);previousLayer.element.style.opacity=String(1-progress);if(progress>=1)removePrevious();
+        const progress=Math.min(1,(previousLayer.fadeStart===undefined?segment:Math.max(0,show-previousLayer.fadeStart))/previousLayer.duration);previousLayer.element.style.opacity=String(1-progress);if(progress>=1)removePrevious();
       }
     }
     requestAnimationFrame(animate);
@@ -118,6 +130,8 @@
     entry.appearance = node.appearance; entry.framing=node.framing;
     el.removeAttribute('style');
     for (const [key, value] of Object.entries(node.styles)) el.style[key] = typeof value === 'number' && px.has(key) ? value + 'px' : String(value);
+    entry.mask=node.mask;if(node.mask)layerMask(entry);
+    if(node.backdrop){el.style.backdropFilter='blur('+node.backdrop.blur+'px)';el.style.webkitBackdropFilter=el.style.backdropFilter;}
     el.dataset.baseTransform=el.style.transform;
     // Experimental two-layer native proof: root backdrop below media, remaining
     // graphics above it. General interleaved layers/masks are not implemented.
@@ -134,6 +148,9 @@
         const pending=ProducerScene3d.mountWorld(gpu,spec.world,{pass:spec.pass,width:node.styles.width,height:node.styles.height,control:update,onStatus:s=>{gpu.dataset.scene3dReady=String(s.ready);if(s.error&&!s.lost)port?.postMessage({type:'error'});}});
         entry.scene3dPromise=pending;pending.then(api=>{if(entry.scene3dPromise!==pending||!el.isConnected){api.dispose();return;}entry.scene3d=api;entry.scene3dPending=false;api.update(entry.scene3dControl);}).catch(()=>port?.postMessage({type:'error'}));
       }else entry.scene3d?.update(update);
+    }
+    if(node.type==='chart'){
+      if(surface==='preview'){const signature=JSON.stringify(node.chart),size=JSON.stringify([node.styles.width,node.styles.height]);const c=timeline?.clock,now=c?c.positionMs+(c.running?Math.max(0,Date.now()-c.anchorMs):0):0;if(entry.chartSize!==size){el.replaceChildren();const gpu=document.createElement('canvas');gpu.style.cssText='width:100%;height:100%;display:block';el.appendChild(gpu);entry.chart=producerChartPreview(gpu,node.chart,node.styles.width,node.styles.height);entry.chartSize=size;entry.chartSignature=signature;entry.chart.draw(now);}else if(entry.chartSignature!==signature){entry.chart.update(node.chart,now);entry.chartSignature=signature;}}else el.style.visibility='hidden';
     }
     if(node.type==='shader'){
       entry.shader=node.shader;
@@ -222,6 +239,19 @@
         const p = data.projection,outgoingTimeline=timeline;timeline=p.timeline;motionReady=false;assets={...assets,...(p.assets||{})}; if(Array.isArray(data.assetIds))for(const id of Object.keys(assets))if(!data.assetIds.includes(id))delete assets[id];width = p.width; height = p.height;
         const surface = ['background', 'foreground'].includes(data.surface) ? data.surface : 'preview';
         if(!p.timeline||!p.timeline.clock.running&&p.timeline.clock.positionMs===0)removePrevious();
+        const content=[];const collectContent=n=>{if(n.type==='text')content.push([n.id,n.text,n.styles]);if(n.type==='chart')content.push([n.id,n.chart]);n.children.forEach(collectContent);};collectContent(p.root);
+        const series=[];const collectSeries=n=>{if(n.type==='chart')series.push([n.chart.id,n.chart.data]);n.children.forEach(collectSeries);};collectSeries(p.root);const nextCharts=series.length?JSON.stringify(series):'',chartUpdate=!!previewCharts&&!!nextCharts&&previewCharts!==nextCharts;previewCharts=nextCharts;
+        const nextContent=JSON.stringify(content),sameLayout=canvas.firstElementChild?.dataset.node===p.root.id;
+        // Freeze only the outgoing preview pixels. Keep live entries (including
+        // Three.js contexts and camera subscriptions) in place during a content
+        // dissolve; no second scene renderer is constructed.
+        if(surface==='preview'&&sameLayout&&!chartUpdate&&p.timeline?.clock.running&&p.timeline.transition?.contentDurationMs>0&&previewContent!==undefined&&previewContent!==nextContent){
+          removePrevious();const overlay=document.createElement('div');overlay.dataset.transition='content';overlay.style.cssText='position:absolute;inset:0;pointer-events:none;z-index:1000';
+          for(const child of [...canvas.children]){const clone=child.cloneNode(true);const originals=child.querySelectorAll('canvas'),copies=clone.querySelectorAll('canvas');originals.forEach((source,i)=>{try{copies[i]?.getContext('2d')?.drawImage(source,0,0);}catch{}});overlay.appendChild(clone);}
+          const c=p.timeline.clock,show=c.positionMs+Math.max(0,Date.now()-c.anchorMs);
+          previousLayer={element:overlay,entries:new Map(),timeline:null,running:true,fadeStart:show,duration:p.timeline.transition.contentDurationMs};canvas.appendChild(overlay);
+        }
+        previewContent=nextContent;
         if(surface==='preview'&&p.timeline?.clock.running&&p.timeline?.transition?.type==='crossfade'&&p.timeline.transition.durationMs>0&&canvas.firstElementChild?.dataset.node!==p.root.id&&entries.size){
           removePrevious();const overlay=document.createElement('div');overlay.dataset.transition='crossfade';overlay.style.cssText='position:absolute;inset:0;pointer-events:none;z-index:1000';for(const child of [...canvas.children])overlay.appendChild(child);
           previousLayer={element:overlay,entries,timeline:outgoingTimeline,origin:outgoingTimeline?outgoingTimeline.clock.positionMs-outgoingTimeline.clock.segmentMs:0,running:p.timeline.clock.running,duration:p.timeline.transition.durationMs};entries=new Map();canvas.appendChild(overlay);

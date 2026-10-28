@@ -9,7 +9,7 @@ import { formatGuestLink, hostedAudienceLink } from "../lib/hostedShare";
 import { previewSession, setPreviewTransparency } from "../lib/previewSession";
 import { useSetOutput } from "../features/presentation/useSetOutput";
 import { SetControlsPanel } from "../features/presentation/SetControlsPanel";
-import { GRAND_ARENA } from "../features/presentation/catalog";
+import { DEFAULT_SET } from "../features/presentation/catalog";
 import { RehearsalSession } from "../features/presentation/rehearsal";
 import { roomSession } from "../lib/roomSession";
 import { sharedProgramCapture } from "../lib/programCapture";
@@ -1752,16 +1752,22 @@ function PreviewPanel({ children }: { children?: ReactNode }) {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => void session.sync(measure), 0);
     };
+    // Native webview/titlebar offsets can change even when the CSS canvas
+    // rectangle is identical (fullscreen and window chrome changes).
+    const refresh = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => void session.sync(measure, true), 0);
+    };
     sync();
     const ro = new ResizeObserver(sync);
     if (ref.current) ro.observe(ref.current);
-    window.addEventListener("resize", sync);
+    window.addEventListener("resize", refresh);
     window.addEventListener("scroll", sync, true);
     // Timers also run when WebKit pauses animation frames behind native video.
     const tick = window.setInterval(() => void session.sync(measure), 250);
     return () => {
       window.clearInterval(tick); window.clearTimeout(timer); ro.disconnect();
-      window.removeEventListener("resize", sync);
+      window.removeEventListener("resize", refresh);
       window.removeEventListener("scroll", sync, true);
       void session.close();
     };
@@ -2803,7 +2809,7 @@ export function LiveView({
   const [micPopOpen, setMicPopOpen] = useState(false);
   const [destsOpen, setDestsOpen] = useState(false);
   const [qualityOpen, setQualityOpen] = useState(false);
-  const [setRehearsal, setSetRehearsal] = useState(() => new RehearsalSession(parseConfig(room?.config).presentation?.package ?? GRAND_ARENA, undefined, 'prepare'));
+  const [setRehearsal, setSetRehearsal] = useState(() => new RehearsalSession(parseConfig(room?.config).presentation?.package ?? DEFAULT_SET, undefined, 'prepare'));
   const [panelMenu, setPanelMenu] = useState<PanelId | null>(null);
   const [layoutMenu, setLayoutMenu] = useState(false);
   const [layoutEdit, setLayoutEdit] = useState(false);

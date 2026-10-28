@@ -1,0 +1,73 @@
+{
+  "ok": true,
+  "environment": "Local macOS dev app; live Atmosphere module controls and native rendered-revision receipts",
+  "samples": [
+    {
+      "label": "Today",
+      "clickToPresentedMs": 136,
+      "graphicsBefore": 7,
+      "graphicsAfter": 7,
+      "cachedBytes": 627068560,
+      "scene3dContexts": 2
+    },
+    {
+      "label": "Hourly",
+      "clickToPresentedMs": 137,
+      "graphicsBefore": 7,
+      "graphicsAfter": 7,
+      "cachedBytes": 627068560,
+      "scene3dContexts": 2
+    },
+    {
+      "label": "7 day",
+      "clickToPresentedMs": 256,
+      "graphicsBefore": 7,
+      "graphicsAfter": 7,
+      "cachedBytes": 627068560,
+      "scene3dContexts": 2
+    },
+    {
+      "label": "Now",
+      "clickToPresentedMs": 145,
+      "graphicsBefore": 7,
+      "graphicsAfter": 7,
+      "cachedBytes": 627068560,
+      "scene3dContexts": 2
+    },
+    {
+      "label": "Today",
+      "clickToPresentedMs": 139,
+      "graphicsBefore": 7,
+      "graphicsAfter": 7,
+      "cachedBytes": 627068560,
+      "scene3dContexts": 2
+    },
+    {
+      "label": "Hourly",
+      "clickToPresentedMs": 135,
+      "graphicsBefore": 7,
+      "graphicsAfter": 7,
+      "cachedBytes": 627068560,
+      "scene3dContexts": 2
+    },
+    {
+      "label": "7 day",
+      "clickToPresentedMs": 124,
+      "graphicsBefore": 7,
+      "graphicsAfter": 7,
+      "cachedBytes": 627068560,
+      "scene3dContexts": 2
+    },
+    {
+      "label": "Now",
+      "clickToPresentedMs": 131,
+      "graphicsBefore": 7,
+      "graphicsAfter": 7,
+      "cachedBytes": 627068560,
+      "scene3dContexts": 2
+    }
+  ],
+  "medianClickToPresentedMs": 136.5,
+  "maximumClickToPresentedMs": 256,
+  "note": "Warm views with current data. Includes native status polling; not a cold-start or cross-hardware performance guarantee."
+}

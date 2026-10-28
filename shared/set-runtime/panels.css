@@ -18,3 +18,5 @@
 .module-cited-response { overflow-wrap:anywhere; font-size:14px; line-height:1.55; }
 .module-cited-response a { color:var(--mint,#3ddca6); text-decoration:underline; }
 .module-cited-response ul { padding-left:18px; font-size:12px; }
+
+.module-weather-controls form{display:flex;align-items:end;gap:8px;flex-wrap:wrap}.module-weather-controls form label{flex:1;min-width:160px}.module-weather-controls input{width:100%;box-sizing:border-box}.module-weather-controls ul{list-style:none;padding:0;display:grid;gap:6px}.module-weather-controls li button{width:100%;text-align:left;white-space:normal}.module-weather-location{font-weight:600}

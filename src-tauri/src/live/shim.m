@@ -21,9 +21,26 @@ static void run_on_main(void (^block)(void)) {
 
 // Convert a top-left-origin CSS-point rect (webview coordinates) into an
 // AppKit bottom-left frame within the window's content view.
+static NSView *find_webview(NSView *v);
 static NSRect frame_from_css(NSView *content, double x, double y, double w, double h) {
-    double ch = content.bounds.size.height;
-    return NSMakeRect(x, ch - y - h, w, h);
+    // DOM rectangles belong to the webview viewport, not the window content
+    // view. Titlebar insets and Wry containers can give those different origins.
+    // Convert through the real view hierarchy rather than assuming they align.
+    NSView *web = find_webview(content);
+    if (web) {
+        NSRect bounds = web.bounds;
+        // A full-size-content WKWebView includes the titlebar in its native
+        // bounds, while WebKit's default DOM viewport excludes the safe area.
+        // Match that viewport origin before converting to the parent view.
+        NSEdgeInsets inset = web.safeAreaInsets;
+        NSRect local = NSMakeRect(NSMinX(bounds) + inset.left + x,
+            web.isFlipped ? NSMinY(bounds) + inset.top + y
+                          : NSMaxY(bounds) - inset.top - y - h, w, h);
+        return [content convertRect:local fromView:web];
+    }
+    NSRect bounds = content.bounds;
+    return NSMakeRect(NSMinX(bounds) + x,
+        content.isFlipped ? NSMinY(bounds) + y : NSMaxY(bounds) - y - h, w, h);
 }
 
 static NSView *find_webview(NSView *v) {

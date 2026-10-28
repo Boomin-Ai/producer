@@ -31,7 +31,19 @@ pub struct Properties {
 #[serde(deny_unknown_fields)]
 pub struct Mask {
     pub kind: String,
+    #[serde(default)]
     pub radius: f32,
+    pub progress: Option<f32>,
+    pub x: Option<f32>,
+    pub y: Option<f32>,
+    pub feather: Option<f32>,
+    pub invert: Option<bool>,
+    pub direction: Option<String>,
+}
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Backdrop {
+    pub blur: f32,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -60,6 +72,7 @@ pub struct Node {
     pub resource: Option<String>,
     pub fit: Option<String>,
     pub mask: Option<Mask>,
+    pub backdrop: Option<Backdrop>,
     pub isolate: Option<bool>,
     pub children: Vec<Node>,
     pub paint: Option<HashMap<String, serde_json::Value>>,
@@ -154,6 +167,8 @@ pub struct Plan {
     pub assets: HashMap<String, Asset>,
     #[serde(default)]
     pub shaders: HashMap<String, Shader>,
+    #[serde(default)]
+    pub charts: HashMap<String, super::chart::Spec>,
     #[serde(default)]
     pub scenes3d: HashMap<String, super::scene3d::Spec>,
     pub clock: Option<Clock>,
@@ -255,6 +270,7 @@ impl Action {
 #[serde(rename_all = "camelCase")]
 pub struct Status {
     pub scene3d_contexts: usize,
+    pub graphics_layers: usize,
     pub cached_keys: Vec<String>,
     pub cached_bytes: usize,
     pub generation: u64,
@@ -320,8 +336,18 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
     {
         return Err("Invalid native v2 canvas request".into());
     }
-    if plan.assets.len() > 24 || plan.shaders.len() > 32 || plan.scenes3d.len() > 2 {
+    if plan.assets.len() > 24
+        || plan.shaders.len() > 32
+        || plan.scenes3d.len() > 2
+        || plan.charts.len() > 4
+    {
         return Err("Set resource budget exceeded".into());
+    }
+    for (id, spec) in &plan.charts {
+        if id != &spec.id {
+            return Err("Chart identity mismatch".into());
+        }
+        super::chart::validate(spec)?;
     }
     if let Some(c) = &plan.clock {
         if ![c.position_ms, c.segment_ms, c.anchor_ms]
@@ -453,8 +479,30 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
             validate_paint(paint)?;
         }
         if let Some(m) = &n.mask {
-            if m.kind != "rounded" || !number(m.radius, 0., 8192.) {
+            if !["rounded", "circle", "wipe"].contains(&m.kind.as_str())
+                || !number(m.radius, 0., 8192.)
+                || [m.progress, m.x, m.y]
+                    .iter()
+                    .flatten()
+                    .any(|v| !number(*v, 0., 1.))
+                || m.kind == "rounded" && (m.progress.is_some() || m.invert == Some(true))
+                || m.feather.is_some_and(|v| !number(v, 0., 32.))
+                || m.direction
+                    .as_ref()
+                    .is_some_and(|v| !["left", "right", "up", "down"].contains(&v.as_str()))
+            {
                 return Err("Invalid v2 mask".into());
+            }
+        }
+        if let Some(b) = &n.backdrop {
+            if n.kind != "group"
+                || !number(b.blur, 0., 24.)
+                || n.properties.rotation.unwrap_or(0.) != 0.
+                || n.properties.scale.unwrap_or(1.) != 1.
+                || n.properties.scale_x.unwrap_or(1.) != 1.
+                || n.properties.scale_y.unwrap_or(1.) != 1.
+            {
+                return Err("Invalid backdrop geometry/effect".into());
             }
         }
         let _ = n.isolate;
@@ -467,8 +515,8 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
                     walk(child, depth + 1, ids, resources)?;
                 }
             }
-            "source" | "graphic" | "text" | "asset" | "shader" | "scene3d" => {
-                if !n.children.is_empty() || n.mask.is_some() {
+            "source" | "graphic" | "text" | "asset" | "shader" | "scene3d" | "chart" => {
+                if !n.children.is_empty() || n.mask.is_some() || n.backdrop.is_some() {
                     return Err("Invalid v2 leaf".into());
                 }
                 if n.kind == "source" {
@@ -491,12 +539,18 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
                         return Err("Invalid graphic identity".into());
                     }
                     resources.insert(resource.clone());
-                } else if n.kind == "asset" || n.kind == "shader" || n.kind == "scene3d" {
+                } else if n.kind == "asset"
+                    || n.kind == "shader"
+                    || n.kind == "scene3d"
+                    || n.kind == "chart"
+                {
                     let r = n.resource.as_ref().ok_or("Missing set resource")?;
                     let prefix = if n.kind == "asset" {
                         "asset:"
                     } else if n.kind == "shader" {
                         "shader:"
+                    } else if n.kind == "chart" {
+                        "chart:"
                     } else {
                         "scene3d:"
                     };
@@ -531,7 +585,30 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
         Ok(())
     }
     walk(&plan.root, 0, &mut ids, &mut resources)?;
+    fn chart_refs(n: &Node, seen: &mut HashSet<String>) -> Result<(), String> {
+        if n.kind == "chart" {
+            let key = n.resource.clone().ok_or("Missing chart resource")?;
+            if !seen.insert(key)
+                || seen.len() > 4
+                || n.bounds.width > 4096.
+                || n.bounds.height > 4096.
+            {
+                return Err("Duplicate or oversized chart placement".into());
+            }
+        }
+        for child in &n.children {
+            chart_refs(child, seen)?;
+        }
+        Ok(())
+    }
+    chart_refs(&plan.root, &mut HashSet::new())?;
+
     for resource in &resources {
+        if let Some(key) = resource.strip_prefix("chart:") {
+            if !plan.charts.contains_key(key) {
+                return Err("Missing chart definition".into());
+            }
+        }
         if let Some(key) = resource.strip_prefix("scene3d:") {
             if !plan.scenes3d.contains_key(key) {
                 return Err("Missing 3D definition".into());
@@ -557,6 +634,7 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
                 "scale",
                 "shader.intensity",
                 "shader.scale",
+                "mask.progress",
             ]
             .contains(&t.property.as_str())
             || t.clock
@@ -573,10 +651,26 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
         {
             return Err("Invalid native animation track".into());
         }
+        fn find<'a>(n: &'a Node, id: &str) -> Option<&'a Node> {
+            if n.id == id {
+                return Some(n);
+            }
+            n.children.iter().find_map(|c| find(c, id))
+        }
+        let node = find(&plan.root, &t.target).ok_or("Missing animation target")?;
+        if t.property == "mask.progress" && !node.mask.as_ref().is_some_and(|m| m.kind != "rounded")
+        {
+            return Err("Mask track requires a mask".into());
+        }
+        if node.backdrop.is_some()
+            && ["x", "y", "width", "height", "rotation", "scale"].contains(&t.property.as_str())
+        {
+            return Err("Backdrop geometry must be static".into());
+        }
         let mut last = -1.;
         for frame in &t.keyframes {
             let bounds = match t.property.as_str() {
-                "opacity" => (0., 1.),
+                "opacity" | "mask.progress" => (0., 1.),
                 "scale" => (0.01, 32.),
                 "shader.intensity" => (0., 2.),
                 "shader.scale" => (0.25, 4.),
@@ -607,6 +701,37 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
     } else {
         sx.min(sy)
     };
+    fn effects(
+        n: &Node,
+        backdrops: &mut usize,
+        masks: &mut usize,
+        area: &mut f64,
+    ) -> Result<(), String> {
+        if n.mask.as_ref().is_some_and(|m| m.kind != "rounded") {
+            *masks += 1;
+        }
+        if n.backdrop.is_some() {
+            *backdrops += 1;
+            *area += f64::from(n.bounds.width) * f64::from(n.bounds.height);
+        }
+        for c in &n.children {
+            effects(c, backdrops, masks, area)?;
+            if c.backdrop.is_some()
+                && (c.bounds.x < 0.
+                    || c.bounds.y < 0.
+                    || c.bounds.x + c.bounds.width > n.bounds.width + 0.01
+                    || c.bounds.y + c.bounds.height > n.bounds.height + 0.01)
+            {
+                return Err("Backdrop must be inside its local group".into());
+            }
+        }
+        Ok(())
+    }
+    let (mut backdrops, mut masks, mut area) = (0, 0, 0.);
+    effects(&plan.root, &mut backdrops, &mut masks, &mut area)?;
+    if backdrops > 4 || masks > 16 || area > 4_194_304. || plan.root.backdrop.is_some() {
+        return Err("Layer effect budget exceeded".into());
+    }
     let (sx, sy) = if plan.target.scaling == "stretch" {
         (sx, sy)
     } else {
@@ -707,7 +832,9 @@ pub fn validate_paint(paint: &HashMap<String, serde_json::Value>) -> Result<(), 
 fn paint_css(paint: &HashMap<String, serde_json::Value>) -> Result<String, String> {
     validate_paint(paint)?;
     let mut result = String::new();
-    for (key, value) in paint {
+    let mut declarations = paint.iter().collect::<Vec<_>>();
+    declarations.sort_by(|(a, _), (b, _)| a.cmp(b));
+    for (key, value) in declarations {
         let css_key = key
             .chars()
             .map(|c| {

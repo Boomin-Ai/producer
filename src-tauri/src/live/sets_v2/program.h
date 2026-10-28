@@ -47,6 +47,7 @@ bool producer_set_v2_program_shader(obs_source_t *program, uint64_t revision,
                                     obs_source_t *shader, float intensity,
                                     float scale, float opacity, double base_ms,
                                     bool running);
+bool producer_set_v2_program_chart(obs_source_t *program,uint64_t revision,obs_source_t *chart);
 bool producer_set_v2_program_media(obs_source_t *program, uint64_t revision,
                                    obs_source_t *media, bool playing,
                                    double position_ms);

@@ -20,6 +20,7 @@ struct producer_set_v2_node {
   const struct producer_set_v2_node *children;
   size_t child_count;
   float rotation, scale_x, scale_y;
+  int mask_kind;float mask_progress,mask_x,mask_y,mask_feather;bool mask_invert;int mask_direction;float backdrop_blur;
 };
 struct producer_set_v2_scene;
 struct producer_set_v2_scene *producer_set_v2_scene_prepare(

@@ -34,6 +34,7 @@ struct Cached {
     bytes: usize,
 }
 pub struct Store {
+    pub(super) graphics: std::cell::RefCell<HashMap<String, std::rc::Weak<super::GraphicsLayer>>>,
     images: std::cell::RefCell<HashMap<String, std::rc::Weak<Source>>>,
     scenes3d: std::cell::RefCell<HashMap<String, std::rc::Weak<super::scene3d::Lease>>>,
     directory: PathBuf,
@@ -50,6 +51,7 @@ impl Store {
         ));
         std::fs::create_dir(&directory).map_err(|e| e.to_string())?;
         Ok(Self {
+            graphics: Default::default(),
             images: Default::default(),
             scenes3d: Default::default(),
             directory,
@@ -143,6 +145,13 @@ impl Store {
         self.assets.retain(|id, _| ids.contains(id));
         self.files.retain(|_, file| file.strong_count() > 0);
     }
+    pub fn graphics_count(&self) -> usize {
+        self.graphics
+            .borrow()
+            .values()
+            .filter(|lease| lease.strong_count() > 0)
+            .count()
+    }
     pub fn versions(&self, resources: &[String]) -> String {
         let mut versions = resources
             .iter()
@@ -162,6 +171,7 @@ impl Store {
             sources: HashMap::new(),
             files: Vec::new(),
             shaders: Vec::new(),
+            charts: Vec::new(),
             media: Vec::new(),
             scenes3d: HashMap::new(),
         };
@@ -216,6 +226,18 @@ impl Store {
                     };
                 out.sources.insert(resource.clone(), lease.source.clone());
                 out.scenes3d.insert(key.to_string(), lease);
+            } else if n.kind == "chart" {
+                if out.sources.contains_key(resource) {
+                    return Err("Duplicate chart resource".into());
+                }
+                let key = resource
+                    .strip_prefix("chart:")
+                    .ok_or("Invalid chart identity")?;
+                let spec = plan.charts.get(key).ok_or("Missing chart definition")?;
+                let source = super::chart::create(spec, n.bounds.width, n.bounds.height)?;
+                out.charts.push(source);
+                out.sources
+                    .insert(resource.clone(), std::rc::Rc::new(Source(source)));
             } else if n.kind == "shader" {
                 let key = resource
                     .strip_prefix("shader:")
@@ -336,6 +358,7 @@ pub struct Prepared {
     pub sources: HashMap<String, std::rc::Rc<Source>>,
     files: Vec<Arc<FileLease>>,
     pub shaders: Vec<ShaderBinding>,
+    pub charts: Vec<*mut ffi::obs_source_t>,
     pub scenes3d: HashMap<String, std::rc::Rc<super::scene3d::Lease>>,
     pub media: Vec<MediaBinding>,
 }

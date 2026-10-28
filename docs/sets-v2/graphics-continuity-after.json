@@ -1,0 +1,15 @@
+{
+  "duration": 64.1,
+  "frames": 1918,
+  "height": 1080,
+  "maximumHeaderSamples": 727,
+  "minimumHeaderSamples": 720,
+  "missingHeaderFrames": [],
+  "readerStatus": 2,
+  "width": 1920,
+  "switches": 32,
+  "minimumGraphicsLayers": 7,
+  "maximumGraphicsLayers": 7,
+  "maximum3dContexts": 2,
+  "note": "Real local Atmosphere output, 32 operator time-block switches, every encoded frame decoded. Fixed header ROI; video/camera/audio contents stay local."
+}

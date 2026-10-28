@@ -1,15 +1,16 @@
+import {parseWeatherForecast,parseWeatherLocation,type WeatherForecast,type WeatherLocation} from './weather';
 import {answerPages,presentationText} from './projection';
 import {evaluate,fieldValue,key,parseRuntimeDefinition,type RuntimeDefinition,type ModuleDefinition,type ModuleInstanceDefinition,type Scalar,type Role} from './contract';
 export interface Principal {role:Role;id:string;modules:readonly string[];actions?:readonly string[]}
 export interface Command {id:string;setEpoch:number;module:string;epoch:number;op:string;input?:Record<string,Scalar>;expectedRevision?:number}
 export type Result={status:'committed';revision:number;moduleEpoch:number}|{status:'rejected';revision:number;error:string};
 export interface Submission {id:string;name:string;text:string;at:number;status:'pending'|'approved'|'rejected';source:'submission'|'chat'}
-export interface Weather {at:number;observedAt:number;temperature:number;condition:'clear'|'cloudy'|'fog'|'rain'|'snow'|'storm';isDay:boolean;wind:number;precipitation:number;provider:string;location:string;units:'celsius'|'fahrenheit'}
+export interface Weather {at:number;observedAt:number;temperature:number;condition:'clear'|'cloudy'|'fog'|'rain'|'snow'|'storm';isDay:boolean;wind:number;precipitation:number;provider:string;location:string;units:'celsius'|'fahrenheit';forecast?:WeatherForecast}
 export interface Citation {title:string;url:string;start?:number;end?:number}
 export interface AgentState {requestId:string;question:string;status:'idle'|'pending'|'completed'|'error';response:string;citations:Citation[];displayedQuestion:string;displayedResponse:string;displayedCitations:Citation[];origin:'manual'|'provider';error:string;page:number}
 export interface ModuleState {
  id:string;definition:string;epoch:number;execution:'created'|'running'|'paused'|'stopped'|'disposed';pauseReasons:string[];mounted:boolean;published:boolean;view?:string;values:Record<string,Scalar>;
- round:number;openedAt:number;admission:'closed'|'open';revealed:boolean;counts:Record<string,number>;total:number;submissions:Submission[];featured:string|null;weather:Weather|null;dataStatus:'empty'|'fresh'|'stale'|'error';error:string;agent:AgentState;
+ round:number;openedAt:number;admission:'closed'|'open';revealed:boolean;counts:Record<string,number>;total:number;submissions:Submission[];featured:string|null;weather:Weather|null;weatherLocation?:WeatherLocation;weatherLocationRevision?:number;dataStatus:'empty'|'fresh'|'stale'|'error';error:string;agent:AgentState;
 }
 export interface Snapshot {revision:number;setEpoch:number;modules:Record<string,ModuleState>}
 export interface RuntimeCheckpoint {version:1;definition:RuntimeDefinition;domain:'live'|'rehearsal';state:Snapshot;lifecycle?:{segment:string;running:boolean;paused:boolean;showAttached?:boolean;visible?:boolean};secrets:Array<[string,{ballots:Array<[string,string]>;submissions:Array<[string,string]>}]>;dedupe:Array<[string,{body:string;result:Result}]>}
@@ -113,13 +114,21 @@ export class SetRuntime {
    if(op==='agent.clear'){m.agent.displayedQuestion='';m.agent.displayedResponse='';m.agent.displayedCitations=[];return;}
    throw Error('Unknown agent action');
   }
+  if(op==='weather.selectLocation'||op==='weather.clearLocation'){
+   operator();if(d.behavior?.type!=='weather'||m.execution!=='running')throw Error('Start the weather module before selecting a city');
+   if((m.weatherLocationRevision??0)>=Number.MAX_SAFE_INTEGER)throw Error('Weather location revision limit reached');
+   m.weatherLocation=op==='weather.clearLocation'?undefined:parseWeatherLocation(JSON.parse(String(input.location??'')));
+   m.weatherLocationRevision=(m.weatherLocationRevision??0)+1;m.weather=null;m.dataStatus='empty';m.error='';return;
+  }
   if(op==='weather.update'||op==='weather.error'){
    if(p.role!=='connector'||d.behavior?.type!=='weather')throw Error('Weather connector authority required');
+   if((input.locationRevision??0)!==(m.weatherLocationRevision??0))throw Error('Weather city selection changed');
    if(op==='weather.error'){m.dataStatus=m.weather?'stale':'error';m.error=String(input.message??'Weather unavailable').slice(0,240);return;}
    const finite=(k:string,min:number,max:number)=>{const v=input[k];if(typeof v!=='number'||!Number.isFinite(v)||v<min||v>max)throw Error('Invalid weather '+k);return v;};
    if(typeof input.isDay!=='boolean'||!['clear','cloudy','fog','rain','snow','storm'].includes(String(input.condition)))throw Error('Invalid weather condition');
    const observedAt=finite('observedAt',0,now+300000);if(m.weather&&observedAt<m.weather.observedAt)throw Error('Stale weather observation');
-   m.weather={at:now,observedAt,temperature:finite('temperature',-150,180),condition:input.condition as Weather['condition'],isDay:input.isDay,wind:finite('wind',0,500),precipitation:finite('precipitation',0,1000),provider:String(input.provider??'').slice(0,80),location:String(input.location??'').slice(0,120),units:input.units==='fahrenheit'?'fahrenheit':'celsius'};m.dataStatus='fresh';m.error='';return;
+   const fetchedAt=input.fetchedAt===undefined?now:finite('fetchedAt',0,now+300000);if(input.stale!==undefined&&typeof input.stale!=='boolean')throw Error('Invalid weather freshness');
+   m.weather={at:fetchedAt,observedAt,temperature:finite('temperature',-150,180),condition:input.condition as Weather['condition'],isDay:input.isDay,wind:finite('wind',0,500),precipitation:finite('precipitation',0,1000),provider:String(input.provider??'').slice(0,80),location:String(input.location??'').slice(0,120),units:input.units==='fahrenheit'?'fahrenheit':'celsius',...(input.forecast===undefined?{}:{forecast:parseWeatherForecast(JSON.parse(String(input.forecast)))})};m.dataStatus=input.stale===true?'stale':'fresh';m.error=input.stale===true?'Using cached weather; live refresh unavailable.':'';return;
   }
   if(op==='chat.ingest'){
    const b=d.behavior;

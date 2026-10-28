@@ -18,9 +18,13 @@ try{
   function Harness(){const state=R.useSyncExternalStore(session.subscribe,session.snapshot);useSetModules(session,'test-workspace','test-room',true,state.workspaceMode,{});return R.createElement('div',null,state.moduleConnection+' '+state.moduleError);}
   const host=document.createElement('div');document.body.replaceChildren(host);(D.createRoot??D.default.createRoot)(host).render(R.createElement(Harness));
  });
- await page.waitForFunction(()=>window.session.snapshot().moduleConnection==='live'&&window.session.moduleSnapshot().modules.research.execution==='running');
+ await page.waitForFunction(()=>window.session.snapshot().moduleConnection==='live'&&window.session.moduleSnapshot().modules.scoreboard.execution==='running');
  assert.equal(await page.evaluate(()=>window.reads>=2&&window.connections.includes('error')),true);
+ // Healthy polls refresh transport functions but must not emit a new UI
+ // snapshot when neither connection state nor committed module state changed.
+ const stable=await page.evaluate(()=>{let emits=0;const session=window.session,stop=session.subscribe(()=>emits++),before=session.snapshot();for(let i=0;i<20;i++)session.attachModuleTransport(async()=>({status:'committed',revision:0}));stop();return {emits,same:session.snapshot()===before};});
+ assert.deepEqual(stable,{emits:0,same:true});
  assert.equal(await page.evaluate(()=>window.session.send({type:'control',action:{type:'show.start'}})),true);
- await page.waitForFunction(()=>window.lifecycle.some(l=>l.running));assert.deepEqual(errors,[]);
- console.log('PASS: failed initial module connection retries automatically, starts the set module and accepts Show start without reapplying the set');
+ await page.waitForFunction(()=>window.lifecycle.some(l=>l.running)&&window.session.moduleSnapshot().modules.research.execution==='running');assert.deepEqual(errors,[]);
+ console.log('PASS: connection recovery, quiet unchanged transport polls, standalone module activation and segment module activation on Show start');
 }finally{await browser.close();}

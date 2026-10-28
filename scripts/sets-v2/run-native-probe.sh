@@ -20,7 +20,7 @@ mkdir -p "$proof_dir"
 # A failed rerun must never leave an older successful report looking current.
 python3 - "$proof_dir" <<'PY_REPORT'
 import pathlib, sys
-for name in ['proof.json', 'run.json', 'text-quality.json', 'text-quality-run.json', 'showcase-proof.json', 'showcase-run.json']:
+for name in ['proof.json', 'run.json', 'text-quality.json', 'text-quality-run.json', 'showcase-proof.json', 'showcase-run.json', 'visual-effects-proof.json']:
     (pathlib.Path(sys.argv[1]) / name).unlink(missing_ok=True)
 PY_REPORT
 mkdir -p "$probe_app/Contents/MacOS"
@@ -32,12 +32,18 @@ cat > "$probe_app/Contents/Info.plist" <<'PLIST'
 PLIST
 CARGO_BUILD_JOBS=1 CARGO_TARGET_DIR="${PRODUCER_SETS_V2_RUST_TARGET:-/private/tmp/producer-sets-v2-rust-target}" cargo build --offline --manifest-path scripts/sets-v2/rust-probe/Cargo.toml
 rust_lib="${PRODUCER_SETS_V2_RUST_TARGET:-/private/tmp/producer-sets-v2-rust-target}/debug/libproducer_sets_v2_native_adapter_probe.a"
-clang -std=gnu11 -fobjc-arc -Werror=implicit-function-declaration -Isrc-tauri/src/live \
-  scripts/sets-v2/native-probe.m src-tauri/src/live/sets_v2/group.c src-tauri/src/live/sets_v2/transition.c src-tauri/src/live/sets_v2/scene.c src-tauri/src/live/sets_v2/program.c src-tauri/src/live/sets_v2/readiness.c src-tauri/src/live/source_appearance.c "$rust_lib" \
+probe_sanitizer=(-fno-omit-frame-pointer)
+if [[ "${PRODUCER_PROBE_ASAN:-0}" == "1" ]]; then
+  probe_sanitizer=(-fsanitize=address -fno-omit-frame-pointer -g)
+fi
+clang "${probe_sanitizer[@]}" -std=gnu11 -fobjc-arc -Werror=implicit-function-declaration -Isrc-tauri/src/live \
+  scripts/sets-v2/native-probe.m src-tauri/src/live/sets_v2/group.c src-tauri/src/live/sets_v2/transition.c src-tauri/src/live/sets_v2/scene.c src-tauri/src/live/sets_v2/program.c src-tauri/src/live/sets_v2/readiness.c src-tauri/src/live/sets_v2/chart.c src-tauri/src/live/source_appearance.c "$rust_lib" \
   -F"$frameworks" -framework libobs -framework AppKit -framework Metal -framework AVFoundation -framework Security -framework SystemConfiguration -liconv \
   -Wl,-rpath,"$frameworks" -o "$probe_app/Contents/MacOS/producer"
 codesign --force --sign - "$probe_app"
-if [[ -n "${PRODUCER_PROBE_SCENE3D_MANIFEST:-}" ]]; then
+if [[ -n "${PRODUCER_PROBE_VISUAL_EFFECTS_ONLY:-}" ]]; then
+  : # Pure GPU mask/backdrop proof; no CEF or fixture generation.
+elif [[ -n "${PRODUCER_PROBE_SCENE3D_MANIFEST:-}" ]]; then
   : # Three.js scene is served by the local prototype runner.
 elif [[ -n "${PRODUCER_PROBE_TEXT_QUALITY_ONLY:-}" ]]; then
   node scripts/sets-v2/make-text-quality-plans.mjs "$proof_dir"
@@ -55,6 +61,6 @@ fi
 if [[ -n "${PRODUCER_PROBE_TEXT_QUALITY_ONLY:-}" ]]; then
   node scripts/sets-v2/record-text-quality-proof.mjs "$proof_dir" "$app"
 fi
-if [[ -z "${PRODUCER_PROBE_SCENE3D_MANIFEST:-}" && -z "${PRODUCER_PROBE_SHARPNESS_ONLY:-}" && -z "${PRODUCER_PROBE_TEXT_QUALITY_ONLY:-}" && -z "${PRODUCER_PROBE_SHOWCASE_ONLY:-}" && -z "${PRODUCER_PROBE_COLOR_ONLY:-}" ]]; then
+if [[ -z "${PRODUCER_PROBE_VISUAL_EFFECTS_ONLY:-}" && -z "${PRODUCER_PROBE_SCENE3D_MANIFEST:-}" && -z "${PRODUCER_PROBE_SHARPNESS_ONLY:-}" && -z "${PRODUCER_PROBE_TEXT_QUALITY_ONLY:-}" && -z "${PRODUCER_PROBE_SHOWCASE_ONLY:-}" && -z "${PRODUCER_PROBE_COLOR_ONLY:-}" ]]; then
   node scripts/sets-v2/record-native-proof.mjs "$proof_dir" "$app" "$started_at"
 fi

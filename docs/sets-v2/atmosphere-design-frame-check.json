@@ -1,0 +1,8 @@
+{
+  "frames": 609,
+  "duration": 20.366,
+  "minimumHeaderSamples": 742,
+  "maximumHeaderSamples": 752,
+  "missingHeaderFrames": [],
+  "scope": "Persistent header ROI across the native diagnostic Atmosphere motion recording; does not certify all pixels or eliminate the separately documented Metal crash."
+}

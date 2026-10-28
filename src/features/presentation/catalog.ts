@@ -4,8 +4,12 @@ import openFloor from '../../../docs/shows/open-floor.json';
 import atmosphere from '../../../docs/shows/atmosphere.json';
 import studio3d from '../../../docs/shows/grand-arena-3d-study.json';
 import justFacts from '../../../docs/shows/just-facts.json';
+import attention from '../../../docs/shows/attention-is-currency.json';
 import { parsePackage } from './schema';
 
 /** Fresh authoring catalog. Older fixtures are regression inputs, not templates. */
 export const GRAND_ARENA = parsePackage(grandArena);
-export const BUILTIN_SETS = [GRAND_ARENA,...[decisionRoom,openFloor,atmosphere,justFacts,studio3d].map(parsePackage)];
+export const DEFAULT_SET = import.meta.env.DEV ? GRAND_ARENA : parsePackage(atmosphere);
+export const BUILTIN_SETS = import.meta.env.DEV
+  ? [GRAND_ARENA,...[decisionRoom,openFloor,atmosphere,justFacts,attention,studio3d].map(parsePackage)]
+  : [parsePackage(atmosphere)];

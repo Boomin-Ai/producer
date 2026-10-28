@@ -1384,6 +1384,9 @@ static void shaderDiagnostics(void) {
     originalMetalCompile =
         (void *)method_setImplementation(m, (IMP)traceMetalCompile);
 }
+#include "visual-effects-proof.inc.m"
+#include "graphics-cache-proof.inc.m"
+#include "chart-proof.inc.m"
 static void uiTask(void (*task)(void *), void *param, bool wait);
 static int runProbe(int argc, char **argv) {
   @autoreleasepool {
@@ -1418,6 +1421,11 @@ static int runProbe(int argc, char **argv) {
     producer_source_appearance_register();
     sets_v2_rust_register();
     register_test();
+    if(getenv("PRODUCER_PROBE_VISUAL_EFFECTS_ONLY")){
+      NSDictionary *report=getenv("PRODUCER_PROBE_CHART")?chart_proof(out):getenv("PRODUCER_PROBE_GRAPHICS_CACHE")?graphics_cache_proof(app,out):visual_effects_proof(out);
+      [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:@"visual-effects-proof.json"] atomically:YES];
+      obs_shutdown();puts(getenv("PRODUCER_PROBE_GRAPHICS_CACHE")?"PASS: immutable graphics layers reused across live content views":"PASS: native masks, animated progress and bounded backdrop blur");return 0;
+    }
     if(getenv("PRODUCER_PROBE_SCENE3D_MANIFEST")){
       NSDictionary *report=scene3d_proof(app,out);
       [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:@"scene3d-proof.json"] atomically:YES];

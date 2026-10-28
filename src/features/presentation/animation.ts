@@ -1,6 +1,6 @@
 export type AnimationClock={running:boolean;positionMs:number;segmentMs:number;anchorMs:number};
-export type AnimationTrack={target:string;property:'x'|'y'|'width'|'height'|'opacity'|'scale'|'rotation'|'shader.intensity'|'shader.scale';keyframes:Array<{atMs:number;value:number}>;easing?:'linear'|'easeIn'|'easeOut'|'easeInOut';clock?:'show'|'segment';delayMs?:number;loop?:'none'|'repeat'|'pingpong'};
-export type LayoutAnimation={tracks:AnimationTrack[];transition?:{type:'cut'|'crossfade'|'morph';durationMs:number}};
+export type AnimationTrack={target:string;property:'x'|'y'|'width'|'height'|'opacity'|'scale'|'rotation'|'shader.intensity'|'shader.scale'|'mask.progress';keyframes:Array<{atMs:number;value:number}>;easing?:'linear'|'easeIn'|'easeOut'|'easeInOut';clock?:'show'|'segment';delayMs?:number;loop?:'none'|'repeat'|'pingpong'};
+export type LayoutAnimation={tracks:AnimationTrack[];transition?:{type:'cut'|'crossfade'|'morph';durationMs:number;contentDurationMs?:number}};
 export type AnimationTimeline=LayoutAnimation&{clock:AnimationClock};
 export function clockPosition(clock:AnimationClock,now=Date.now()){
  const delta=clock.running?Math.max(0,now-clock.anchorMs):0;
@@ -18,7 +18,9 @@ export function sampleTrack(track:AnimationTrack,position:number){
  return a.value+(b.value-a.value)*t;
 }
 
-/** Only a set-authored crossfade adds a compositor transition. Morph uses tracks. */
-export function authoredCrossfadeMs(transition:LayoutAnimation['transition'],layoutChanged:boolean,paused:boolean):number {
- return layoutChanged&&!paused&&transition?.type==='crossfade'?transition.durationMs:0;
+/** Layout morphs use placement tracks. Content dissolves are independently authored. */
+export function authoredCrossfadeMs(transition:LayoutAnimation['transition'],layoutChanged:boolean,paused:boolean,contentChanged=false):number {
+ if(paused)return 0;
+ if(layoutChanged)return transition?.type==='crossfade'?transition.durationMs:0;
+ return contentChanged?transition?.contentDurationMs??0:0;
 }

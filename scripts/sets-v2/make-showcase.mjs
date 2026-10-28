@@ -24,7 +24,7 @@ const specs=[
  {id:'atmosphere',name:'Atmosphere',label:'LIVE CONDITIONS / REAL CONSEQUENCES',title:'A window into the world.',kind:'weather',accent:'#b8d8df',views:['Conditions'],slots:['host'],module:'sky'},
  {id:'just-facts',name:'Just Facts',label:'ASK IT. CHECK IT. SHOW THE EVIDENCE.',title:'What does the evidence say?',kind:'agent',accent:'#c5d4ec',views:['The question','The evidence','The conversation'],slots:['host','guest1','guest2'],module:'research'},
 ];
-for(const s of specs.filter(s=>s.id!=='just-facts')){
+for(const s of specs.filter(s=>!['just-facts','atmosphere'].includes(s.id))){
  const runtime={schema:'producer.modules/1',definitions:{[s.module]:moduleTemplate(s.kind)},instances:[moduleInstance(s.module,s.module)]};
  if(['vote','submissions'].includes(s.kind))runtime.instances[0].audiencePolicy='whileRunning';
  if(s.kind!=='weather'){runtime.definitions[s.module].views=s.views.map((_,i)=>'view'+i);runtime.definitions[s.module].initialView='view0';runtime.definitions[s.module].behavior.showView='view1';}
@@ -78,3 +78,5 @@ for(const s of specs.filter(s=>s.id!=='just-facts')){
 }
 
 await import('./make-just-facts.mjs');
+
+await import('./make-atmosphere.mjs');

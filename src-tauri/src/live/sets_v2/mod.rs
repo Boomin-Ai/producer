@@ -1,4 +1,5 @@
 //! Opt-in dev-room adapter. No v1 conversion and no production registration.
+pub mod chart;
 pub mod contract;
 mod resources;
 pub mod scene3d;
@@ -28,6 +29,14 @@ struct NativeNode {
     rotation: f32,
     scale_x: f32,
     scale_y: f32,
+    mask_kind: i32,
+    mask_progress: f32,
+    mask_x: f32,
+    mask_y: f32,
+    mask_feather: f32,
+    mask_invert: bool,
+    mask_direction: i32,
+    backdrop_blur: f32,
 }
 #[repr(C)]
 #[derive(Default)]
@@ -51,6 +60,12 @@ struct NativeKeyframe {
 enum NativeScene {}
 extern "C" {
     fn producer_set_v2_register();
+    fn producer_chart_register();
+    fn producer_set_v2_program_chart(
+        p: *mut ffi::obs_source_t,
+        r: u64,
+        s: *mut ffi::obs_source_t,
+    ) -> bool;
     fn producer_set_v2_program_register();
     fn producer_set_v2_program_track(
         p: *mut ffi::obs_source_t,
@@ -124,6 +139,7 @@ extern "C" {
     fn producer_set_v2_program_status(p: *mut ffi::obs_source_t, out: *mut NativeStatus) -> bool;
     fn producer_set_v2_program_stop_motion(p: *mut ffi::obs_source_t);
     fn producer_set_v2_program_collect(p: *mut ffi::obs_source_t) -> bool;
+    fn producer_set_v2_surface_warm(source: *mut ffi::obs_source_t) -> bool;
     fn producer_set_v2_surface_fence(
         s: *mut ffi::obs_source_t,
         y: u32,
@@ -140,6 +156,7 @@ extern "C" {
 }
 pub unsafe fn register() {
     producer_set_v2_register();
+    producer_chart_register();
     producer_set_v2_transition_register();
     producer_set_v2_program_register();
 }
@@ -149,9 +166,26 @@ impl Drop for Source {
         unsafe { ffi::obs_source_release(self.0) }
     }
 }
+struct GraphicsLayer {
+    browser: Source,
+    clip: Source,
+}
+// Prepared HTML is immutable, but CEF visibility is asynchronous. Keep its
+// paint producer showing for the full cached-layer lease, not only while one
+// scene happens to be current/pending. A take must not trigger WasHidden /
+// texture invalidation after its first-paint receipt was already accepted.
+impl Drop for GraphicsLayer {
+    fn drop(&mut self) {
+        unsafe {
+            ffi::obs_source_dec_showing(self.browser.0);
+            ffi::obs_source_dec_active(self.browser.0);
+        }
+    }
+}
 struct Draft {
     scene: *mut NativeScene,
     markers: Vec<(Source, u32)>,
+    _graphics: Vec<Rc<GraphicsLayer>>,
     _resources: resources::Prepared,
     bytes: usize,
     captures: HashMap<String, usize>,
@@ -178,7 +212,9 @@ impl Drop for Draft {
         unsafe { producer_set_v2_scene_release(self.scene) }
     }
 }
-struct Arena {
+struct Arena<'a> {
+    store: &'a resources::Store,
+    graphics: Vec<Rc<GraphicsLayer>>,
     ids: Vec<CString>,
     children: Vec<Box<[NativeNode]>>,
     sources: Vec<Source>,
@@ -188,9 +224,11 @@ struct Arena {
     density: f32,
     motion_targets: std::collections::HashSet<String>,
 }
-impl Arena {
-    fn new() -> Self {
+impl<'a> Arena<'a> {
+    fn new(store: &'a resources::Store) -> Self {
         Self {
+            store,
+            graphics: Vec::new(),
             ids: Vec::new(),
             children: Vec::new(),
             sources: Vec::new(),
@@ -202,7 +240,9 @@ impl Arena {
         }
     }
     fn graphics_only(&self, n: &Node) -> bool {
-        !self.motion_targets.contains(&n.id)
+        n.mask.as_ref().is_none_or(|m| m.kind == "rounded")
+            && n.backdrop.is_none()
+            && !self.motion_targets.contains(&n.id)
             && ["text", "graphic", "group"].contains(&n.kind.as_str())
             && n.children.iter().all(|child| self.graphics_only(child))
     }
@@ -248,54 +288,75 @@ impl Arena {
         }
         self.browser_pixels += pixels;
         let html = contract::graphics_document_scaled(nodes, w, h, (x, y), palette, self.density)?;
-        let url = format!(
-            "data:text/html;charset=utf-8,{}",
-            html.as_bytes()
-                .iter()
-                .map(|c| format!("%{c:02X}"))
-                .collect::<String>()
+        use sha2::{Digest, Sha256};
+        // Exact trusted raster content and dimensions, scoped to this output
+        // owner. A pooled layer is immutable; a value edit creates a new layer
+        // while unchanged headers/art remain shared with the live scene.
+        let identity = format!(
+            "{}:{pw}:{ph}",
+            format!("{:x}", Sha256::digest(html.as_bytes()))
         );
-        let config = serde_json::json!({"url":url,"is_local_file":false,"css":"","width":pw,"height":ph+1,"fps":30,"fps_custom":true,"shutdown":false,"restart_when_active":false,"reroute_audio":true,"webpage_control_level":0});
-        let settings =
-            ffi::obs_data_create_from_json(CString::new(config.to_string()).unwrap().as_ptr());
-        if settings.is_null() {
-            return Err("V2 graphics settings allocation failed".into());
-        }
-        let browser = ffi::obs_source_create_private(
-            c"browser_source".as_ptr(),
-            c"V2 graphics batch".as_ptr(),
-            settings,
-        );
-        ffi::obs_data_release(settings);
-        if browser.is_null() {
-            return Err("V2 browser surface allocation failed".into());
-        }
-        let browser = Source(browser);
-        ffi::obs_source_set_audio_mixers(browser.0, 0);
-        let clip = producer_set_v2_group_create(w, h, 0., 1.);
-        if clip.is_null() {
-            return Err("V2 graphics crop allocation failed".into());
-        }
-        let clip = Source(clip);
-        if !producer_set_v2_group_density(clip.0, self.density) {
-            return Err("Graphics density exceeds texture budget".into());
-        }
+        let mut cache = self.store.graphics.borrow_mut();
+        cache.retain(|_, lease| lease.strong_count() > 0);
+        let layer = if let Some(layer) = cache.get(&identity).and_then(std::rc::Weak::upgrade) {
+            layer
+        } else {
+            let url = format!(
+                "data:text/html;charset=utf-8,{}",
+                html.as_bytes()
+                    .iter()
+                    .map(|c| format!("%{c:02X}"))
+                    .collect::<String>()
+            );
+            let config = serde_json::json!({"url":url,"is_local_file":false,"css":"","width":pw,"height":ph+1,"fps":30,"fps_custom":true,"shutdown":false,"restart_when_active":false,"reroute_audio":true,"webpage_control_level":0});
+            let settings =
+                ffi::obs_data_create_from_json(CString::new(config.to_string()).unwrap().as_ptr());
+            if settings.is_null() {
+                return Err("V2 graphics settings allocation failed".into());
+            }
+            let browser = ffi::obs_source_create_private(
+                c"browser_source".as_ptr(),
+                c"V2 graphics batch".as_ptr(),
+                settings,
+            );
+            ffi::obs_data_release(settings);
+            if browser.is_null() {
+                return Err("V2 browser surface allocation failed".into());
+            }
+            let browser = Source(browser);
+            ffi::obs_source_set_audio_mixers(browser.0, 0);
+            let clip = producer_set_v2_group_create(w, h, 0., 1.);
+            if clip.is_null() {
+                return Err("V2 graphics crop allocation failed".into());
+            }
+            let clip = Source(clip);
+            if !producer_set_v2_group_density(clip.0, self.density) {
+                return Err("Graphics density exceeds texture budget".into());
+            }
+            if !producer_set_v2_group_add(
+                clip.0,
+                browser.0,
+                0.,
+                0.,
+                w as f32,
+                (ph + 1) as f32 * h as f32 / ph as f32,
+                false,
+            ) || !producer_set_v2_group_seal(clip.0)
+            {
+                return Err("V2 graphics crop attachment failed".into());
+            }
+            ffi::obs_source_inc_active(browser.0);
+            ffi::obs_source_inc_showing(browser.0);
+            let layer = Rc::new(GraphicsLayer { browser, clip });
+            cache.insert(identity, Rc::downgrade(&layer));
+            layer
+        };
+        // Account conservatively per scene even when the raster is shared.
         self.intermediate_pixels += (pw as usize) * (ph as usize);
-        if !producer_set_v2_group_add(
-            clip.0,
-            browser.0,
-            0.,
-            0.,
-            w as f32,
-            (ph + 1) as f32 * h as f32 / ph as f32,
-            false,
-        ) || !producer_set_v2_group_seal(clip.0)
-        {
-            return Err("V2 graphics crop attachment failed".into());
-        }
-        let surface = clip.0;
-        self.sources.push(clip);
-        self.markers.push((browser, ph));
+        let surface = layer.clip.0;
+        self.markers
+            .push((Source(ffi::obs_source_get_ref(layer.browser.0)), ph));
+        self.graphics.push(layer);
         self.ids
             .push(CString::new(format!("graphics-{}", self.markers.len())).unwrap());
         Ok(NativeNode {
@@ -315,6 +376,14 @@ impl Arena {
             rotation: 0.,
             scale_x: 1.,
             scale_y: 1.,
+            mask_kind: 0,
+            mask_progress: 1.,
+            mask_x: 0.5,
+            mask_y: 0.5,
+            mask_feather: 0.,
+            mask_invert: false,
+            mask_direction: 0,
+            backdrop_blur: 0.,
         })
     }
     unsafe fn node(
@@ -333,6 +402,27 @@ impl Arena {
             width: n.bounds.width,
             height: n.bounds.height,
             radius: n.mask.as_ref().map_or(0., |m| m.radius),
+            mask_kind: n.mask.as_ref().map_or(0, |m| match m.kind.as_str() {
+                "circle" => 1,
+                "wipe" => 2,
+                _ => 0,
+            }),
+            mask_progress: n.mask.as_ref().and_then(|m| m.progress).unwrap_or(1.),
+            mask_x: n.mask.as_ref().and_then(|m| m.x).unwrap_or(0.5),
+            mask_y: n.mask.as_ref().and_then(|m| m.y).unwrap_or(0.5),
+            mask_feather: n.mask.as_ref().and_then(|m| m.feather).unwrap_or(0.),
+            mask_invert: n.mask.as_ref().and_then(|m| m.invert).unwrap_or(false),
+            mask_direction: n
+                .mask
+                .as_ref()
+                .and_then(|m| m.direction.as_deref())
+                .map_or(0, |d| match d {
+                    "right" => 1,
+                    "up" => 2,
+                    "down" => 3,
+                    _ => 0,
+                }),
+            backdrop_blur: n.backdrop.as_ref().map_or(0., |b| b.blur),
             opacity: n.properties.opacity.unwrap_or(1.),
             visible: n.properties.visible.unwrap_or(true),
             fit: 0,
@@ -372,7 +462,7 @@ impl Arena {
             out.children = children.as_ptr();
             out.child_count = children.len();
             self.children.push(children);
-        } else if ["source", "asset", "shader", "scene3d"].contains(&n.kind.as_str()) {
+        } else if ["source", "asset", "shader", "scene3d", "chart"].contains(&n.kind.as_str()) {
             out.kind = 1;
             out.fit = match n.fit.as_deref() {
                 Some("cover") => 2,
@@ -599,6 +689,7 @@ impl RoomProgram {
                         && !resource.starts_with("shader:")
                         && !resource.starts_with("asset:")
                         && !resource.starts_with("scene3d:")
+                        && !resource.starts_with("chart:")
                     {
                         let current = resolve(resource)?;
                         if draft.captures.get(resource) != Some(&(current as usize)) {
@@ -747,6 +838,7 @@ impl RoomProgram {
                 || resource.starts_with("asset:")
                 || resource.starts_with("shader:")
                 || resource.starts_with("scene3d:")
+                || resource.starts_with("chart:")
             {
                 continue;
             }
@@ -775,7 +867,7 @@ impl RoomProgram {
         Ok(())
     }
     unsafe fn finish_build(&mut self, b: Building) -> Result<Rc<Draft>, String> {
-        let mut arena = Arena::new();
+        let mut arena = Arena::new(&self.resources);
         let sx = self.width as f32 / b.plan.root.bounds.width;
         let sy = self.height as f32 / b.plan.root.bounds.height;
         arena.density = if b.plan.target.scaling == "contain" {
@@ -820,6 +912,7 @@ impl RoomProgram {
         let draft = Draft {
             scene,
             markers: std::mem::take(&mut arena.markers),
+            _graphics: std::mem::take(&mut arena.graphics),
             bytes,
             asset_versions: self.resources.versions(&b.plan.resources),
             captures: b
@@ -846,6 +939,11 @@ impl RoomProgram {
     unsafe fn register(&mut self, draft: &Draft, plan: &Plan, revision: u64) -> Result<(), String> {
         self.pending_3d = Some((revision, plan.scenes3d.clone(), plan.clock.clone()));
         let (show, segment, running) = contract::clock_positions(plan.clock.as_ref());
+        for chart in &draft._resources.charts {
+            if !producer_set_v2_program_chart(self.program.0, revision, *chart) {
+                return Err("Native chart clock rejected".into());
+            }
+        }
         for shader in &draft._resources.shaders {
             let spec = draft
                 ._resources
@@ -910,6 +1008,7 @@ impl RoomProgram {
                 "scale",
                 "shader.intensity",
                 "shader.scale",
+                "mask.progress",
             ]
             .iter()
             .position(|p| *p == t.property)
@@ -981,12 +1080,13 @@ impl RoomProgram {
                 > if building.resources.scenes3d.is_empty() {
                     12
                 } else {
-                    30
+                    60
                 }
             {
                 // Cold WebGL shader compilation and CEF's first imported paint
-                // can outlast media decoding. This is preparation only; cached
-                // layout changes never wait for this startup deadline.
+                // can outlast media decoding on memory-constrained hosts.
+                // This is preparation only; cached layout changes never wait
+                // for this startup deadline.
                 return Err("Media did not decode its first frame; current output retained".into());
             } else {
                 self.building = Some(building);
@@ -997,6 +1097,14 @@ impl RoomProgram {
             return Err("Native v2 program unavailable".into());
         }
         if let Some(draft) = &self.draft {
+            // Preparation must paint even before the program has a visible
+            // parent/output. Its render callback warms pending scene children;
+            // waiting for that callback via normal output activity can deadlock
+            // the first take. The painted browser markers remain mandatory.
+            if native.prepared_revision == self.draft_revision && !native.warmed {
+                producer_set_v2_surface_warm(self.program.0);
+                producer_set_v2_program_status(self.program.0, &mut native);
+            }
             if native.prepared_revision == self.draft_revision
                 && !native.ready
                 && draft
@@ -1037,6 +1145,7 @@ impl RoomProgram {
         }
         Ok(Status {
             scene3d_contexts: scene3d::live_count(),
+            graphics_layers: self.resources.graphics_count(),
             cached_keys: self.bank.keys().cloned().collect(),
             cached_bytes: self.bank.values().map(|(_, d)| d.bytes).sum(),
             generation: self.generation,

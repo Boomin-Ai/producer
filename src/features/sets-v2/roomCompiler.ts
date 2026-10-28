@@ -28,6 +28,7 @@ export async function compileRoomScene(
   const container = document.createElement("div");
   container.style.cssText = `all:initial;box-sizing:border-box;position:fixed;left:-30000px;top:0;width:${projection.width}px;height:${projection.height}px;visibility:hidden;pointer-events:none;contain:layout style;`;
   const shaders: Record<string, unknown> = {};
+  const charts:Record<string,import("../presentation/charts").ChartSpec>={};
   const scenes3d: Record<string, unknown> = {};
   const entries = new Map<
     string,
@@ -110,29 +111,32 @@ export async function compileRoomScene(
         properties,
         children: [] as RenderNode[],
       };
+      // Native effects are placement-local groups, including source/media leaves.
+      const wrap=(leaf:RenderNode):RenderNode=>node.mask||node.backdrop?{...common,kind:'group',...(node.mask?{mask:node.mask}:{}),...(node.backdrop?{backdrop:node.backdrop}:{}),isolate:true,children:[{...leaf,id:identity(node.id+'-content'),bounds:{...bounds,x:0,y:0},properties:{...leaf.properties,opacity:1}}]}:leaf;
       if (node.type === "slot") {
         const resource = options.bindings[node.slotId ?? ""];
-        if (!resource) return { ...common, kind: "group" };
+        if (!resource) return wrap({ ...common, kind: "group" });
         resources.add(resource);
-        return {
+        return wrap({
           ...common,
           kind: "source",
           fit: node.framing?.mode === "fit" ? "contain" : "cover",
           ...(resource ? { resource } : {}),
           ...({ appearance: node.appearance, framing: node.framing } as object),
-        };
+        });
       }
       if (node.type === "media") {
         const resource = "asset:" + node.assetId;
         resources.add(resource);
-        return {
+        return wrap({
           ...common,
           kind: "asset",
           resource,
           fit: node.fit ?? "contain",
           ...({ playback: node.playback, looping: node.loop } as object),
-        };
+        });
       }
+      if(node.type==='chart'){const key=nativeNodeId(options.definitionId+':'+options.instanceId+':'+node.chart!.id);if(charts[key])throw Error('Duplicate chart identity');charts[key]={...node.chart!,id:key};const resource='chart:'+key;resources.add(resource);return {...common,kind:'chart',resource};}
       if(node.type==='scene3d'){
         const key=node.scene3d!.id+'-'+node.scene3d!.pass,resource='scene3d:'+key;
         if(scenes3d[key])throw Error('Duplicate 3D resource pass');
@@ -222,12 +226,20 @@ export async function compileRoomScene(
         ...common,
         kind: "group",
         children,
-        ...(clipped
+        ...(node.backdrop?{backdrop:node.backdrop}:{}),
+        ...(node.mask?{mask:node.mask,isolate:true}:clipped
           ? { mask: { kind: "rounded" as const, radius }, isolate: true }
           : {}),
       };
     };
     const root = walk(projection.root);
+    let backdropCount=0,maskCount=0,backdropArea=0;
+    const checkEffects=(n:RenderNode,parent?:RenderNode)=>{
+      if(n.mask&&n.mask.kind!=='rounded')maskCount++;
+      if(n.backdrop){backdropCount++;backdropArea+=n.bounds.width*n.bounds.height;if(!parent||n.bounds.x<0||n.bounds.y<0||n.bounds.x+n.bounds.width>parent.bounds.width+.01||n.bounds.y+n.bounds.height>parent.bounds.height+.01)throw Error('Backdrop must fit its local group');}
+      n.children.forEach(c=>checkEffects(c,n));
+    };checkEffects(root);
+    if(backdropCount>4||maskCount>16||backdropArea>4194304)throw Error('Layer effect budget exceeded');
     root.bounds = {
       x: 0,
       y: 0,
@@ -246,6 +258,7 @@ export async function compileRoomScene(
       ),
       root,
       resources: [...resources],
+      ...(Object.keys(charts).length?{charts}:{}),
       ...({
         assets: projection.assets ?? {},
         shaders,

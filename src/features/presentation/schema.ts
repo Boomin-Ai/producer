@@ -1,3 +1,4 @@
+import {validateMask,validateBackdrop} from './visualEffects';
 import {parseWorld,WORLD_SCHEMA,type Scene3dWorld} from './scene3d/contract.mjs';
 import {parseRuntimeDefinition,type RuntimeDefinition} from '../../../shared/set-runtime/contract';
 import {runtimeSchemaBody,runtimeSchemaDefs} from '../../../shared/set-runtime/jsonSchema';
@@ -110,14 +111,19 @@ const motion = object({ durationMs: number(200, 30_000), property: union(literal
   from: scalar, to: scalar });
 const scene3dWorld:Codec<Scene3dWorld>={json:WORLD_SCHEMA,read(v,p){try{return parseWorld(v);}catch(e){return fail(p,String(e));}}};
 const scene3dLayer=object({id:string(53,'^[a-z][a-z0-9-]{0,52}$'),pass:union(literal('background'),literal('foreground')),world:scene3dWorld,cue:optional(binding),view:optional(binding),cueSequence:optional(binding)});
+const chart=object({id,kind:union(literal('line'),literal('area'),literal('bar')),unit:optional(binding),timeZone:optional(binding),data:union(string(32768),binding),color:string(9,'^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$'),gridColor:optional(string(9,'^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$')),durationMs:optional(number(0,2000)),lineWidth:optional(number(1,8)),fillOpacity:optional(number(0,.5)),yMin:optional(number(-1e6,1e6)),yMax:optional(number(-1e6,1e6)),windowMs:optional(number(1,604800000))});
 const shader=object({effect:union(literal('aurora'),literal('edgeGlow'),literal('lightSweep'),literal('plasma'),literal('silk'),literal('rings'),literal('grid'),literal('stars'),literal('petals'),literal('contours'),literal('prism'),literal('borderFlare'),literal('rain'),literal('snow'),literal('clouds')),colors:array(string(7),3),speed:number(0,4),intensity:number(0,2),scale:number(.25,4),opacity:number(0,1),radius:number(0,960),quality:union(literal('low'),literal('medium')),clock:union(literal('show'),literal('segment'))});
-const animation=object({tracks:array(object({target:id,property:union(literal('x'),literal('y'),literal('width'),literal('height'),literal('opacity'),literal('scale'),literal('rotation'),literal('shader.intensity'),literal('shader.scale')),
+const layerMask=object({kind:union(literal('rounded'),literal('circle'),literal('wipe')),radius:optional(binding),progress:optional(binding),x:optional(binding),y:optional(binding),feather:optional(binding),invert:optional(binding),direction:optional(union(literal('left'),literal('right'),literal('up'),literal('down')))});
+const backdropEffect=object({blur:binding});
+const animation=object({tracks:array(object({target:id,property:union(literal('x'),literal('y'),literal('width'),literal('height'),literal('opacity'),literal('scale'),literal('rotation'),literal('shader.intensity'),literal('shader.scale'),literal('mask.progress')),
   keyframes:array(object({atMs:number(0,60_000),value:number(-3840,3840)}),16),easing:optional(union(literal('linear'),literal('easeIn'),literal('easeOut'),literal('easeInOut'))),
-  clock:optional(union(literal('show'),literal('segment'))),delayMs:optional(number(0,60_000)),loop:optional(union(literal('none'),literal('repeat'),literal('pingpong')))}),32),transition:optional(object({type:union(literal('cut'),literal('crossfade'),literal('morph')),durationMs:number(0,2000)}))});
+  clock:optional(union(literal('show'),literal('segment'))),delayMs:optional(number(0,60_000)),loop:optional(union(literal('none'),literal('repeat'),literal('pingpong')))}),32),transition:optional(object({type:union(literal('cut'),literal('crossfade'),literal('morph')),durationMs:number(0,2000),contentDurationMs:optional(number(0,1000))}))});
 export interface SlotFraming { mode:'fill'|'fit'; x:number; y:number }
 const framing = object({mode:union(literal('fill'),literal('fit')),x:number(0,1),y:number(0,1)});
 export interface PresentationNode {
-  id: string; type: 'box' | 'text' | 'slot' | 'component' | 'media' | 'shader' | 'scene3d';
+  id: string; type: 'box' | 'text' | 'slot' | 'component' | 'media' | 'shader' | 'scene3d' | 'chart';
+  mask?:Type<typeof layerMask>;backdrop?:Type<typeof backdropEffect>;
+  chart?:Type<typeof chart>;
   shader?:import('./shaders').ShaderEffect;
   scene3d?:{id:string;pass:'background'|'foreground';world:Scene3dWorld;cue?:Binding;view?:Binding;cueSequence?:Binding};
   styleId?: string; styles?: Record<string, Binding>; text?: Binding; children?: PresentationNode[];
@@ -125,7 +131,7 @@ export interface PresentationNode {
   slotId?: string; framing?:SlotFraming; appearance?: Partial<Record<keyof SourceAppearance, Binding>>; component?: string; props?: Record<string, Binding>; when?: Binding;
   motion?: Type<typeof motion>;
 }
-const common = { id, styleId:optional(id), styles: optional(styles), when: optional(binding), motion: optional(motion) };
+const common = { id, styleId:optional(id), styles: optional(styles),mask:optional(layerMask),backdrop:optional(backdropEffect), when: optional(binding), motion: optional(motion) };
 const appearance: Codec<Partial<Record<keyof SourceAppearance, Binding>>> = {
   json: { ...sourceAppearanceSchema, properties: Object.fromEntries(Object.entries(sourceAppearanceSchema.properties).map(([k,s]) =>
     [k, { anyOf: [s, { allOf: [{ type: 'object' }, { $ref: '#/$defs/binding' }] }] }])) },
@@ -148,6 +154,7 @@ const node: Codec<PresentationNode> = union(
   object({ ...common, type: literal('box'), children: array(ref('node', () => node), 100) }),
   object({ ...common, type: literal('text'), text: binding }),
   object({ ...common, type: literal('slot'), slotId: id, framing: optional(framing), appearance: optional(appearance) }),
+  object({ ...common, type: literal('chart'),chart }),
   object({ ...common, type: literal('shader'),shader:shader }),
   object({ ...common, type: literal('scene3d'),scene3d:scene3dLayer }),
   object({ ...common, type: literal('media'),assetId:id,fit:optional(union(literal('contain'),literal('cover'))),loop:optional(boolean),autoplay:optional(boolean) }),
@@ -176,7 +183,7 @@ const show = object({ id, version: string(32), initialPhase: id,
 });
 const moduleCodec:Codec<RuntimeDefinition>={json:runtimeSchemaBody,read(v,p){try{return parseRuntimeDefinition(v);}catch(error){return fail(p,error instanceof Error?error.message:'Invalid module configuration');}}};
 const codec = object({
-  schema: literal('producer.presentation/2'), runtime:defaulted(moduleCodec,{schema:'producer.modules/1',definitions:{},instances:[]}), id, version: string(32), name: string(80),
+  schema: literal('producer.presentation/2'),requires:optional(array(union(literal('mask@1'),literal('backdrop@1'),literal('chart@1')),3)), runtime:defaulted(moduleCodec,{schema:'producer.modules/1',definitions:{},instances:[]}), id, version: string(32), name: string(80),
   set: object({ viewController:optional(id),views:optional(dictionary(object({landscape:optional(id),portrait:optional(id),square:optional(id)}),32)),initialView:optional(id),styles:optional(dictionary(styles,32)), tokens:optional(dictionary(union(string(240),number(-10000,10000)),64)), assets:optional(dictionary(object({name:string(160),mime:string(40),data:string(ASSET_BYTES*4/3+100),playback:optional(object({start:union(literal('entry'),literal('manual')),loop:boolean,exit:union(literal('reset'),literal('pause'),literal('continue')),return:union(literal('restart'),literal('resume')),hostControls:boolean}))}),24)),initialLayout: id, values: dictionary(valueDefinition),
     feeds: dictionary(valueDefinition), slots: array(object({ id, label: string(80) }), 8),
     components: dictionary(object({ props: dictionary(scalar), root: ref('node', () => node) }), 16),
@@ -243,11 +250,19 @@ export function parsePackage(value: unknown): PresentationPackage {
   doc.set.slots.forEach(s => { if (slots.has(s.id)) fail('$.set.slots', 'Duplicate slot ID.'); slots.add(s.id); });
   const walk = (n: PresentationNode, props: Record<string, Scalar>, stack: string[], ids: Set<string>) => {
     if(n.styleId){const preset=doc.set.styles?.[n.styleId];if(!preset)fail('$.set',`Unknown style preset ${n.styleId}.`);n={...n,styles:{...preset,...n.styles}};}
-    const hasNative=(node:PresentationNode,seen=new Set<string>()):boolean=>node.type==='slot'||node.type==='shader'||node.type==='scene3d'||!!node.children?.some(c=>hasNative(c,seen))||(node.type==='component'&&!seen.has(node.component!)&&(seen.add(node.component!),hasNative(doc.set.components[node.component!]?.root??{id:'empty',type:'box'},seen)));
+    const hasNative=(node:PresentationNode,seen=new Set<string>()):boolean=>node.type==='slot'||node.type==='shader'||node.type==='scene3d'||node.type==='chart'||!!node.children?.some(c=>hasNative(c,seen))||(node.type==='component'&&!seen.has(node.component!)&&(seen.add(node.component!),hasNative(doc.set.components[node.component!]?.root??{id:'empty',type:'box'},seen)));
+    if(n.mask||n.backdrop){
+      if(n.type!=='box'&&n.type!=='slot'&&n.type!=='media')fail('$.set','Layer effects require a box, slot or media element.');
+      if(n.mask&&!doc.requires?.includes('mask@1'))fail('$.requires','Declare mask@1 for layer masks.');
+      if(n.backdrop&&!doc.requires?.includes('backdrop@1'))fail('$.requires','Declare backdrop@1 for backdrop effects.');
+      try{if(n.mask)validateMask(Object.fromEntries(Object.entries(n.mask).map(([k,v])=>[k,typeof v==='object'?(k==='invert'?false:k==='progress'?1:k==='x'||k==='y'?.5:0):v])) as unknown as import('./visualEffects').LayerMask);if(n.backdrop&&typeof n.backdrop.blur==='number')validateBackdrop(n.backdrop as {blur:number});}catch(e){fail('$.set',String(e));}
+    }
     if(['filter','mixBlendMode','clipPath'].some(k=>n.styles?.[k]!==undefined)&&hasNative(n))fail('$.set','Graphic compositing effects cannot wrap native video or shader layers.');
     const scope = new Set(Object.keys(props));
     if (++expanded > 600) fail('$.set', 'Expanded output exceeds 600 nodes.');
     if (ids.has(n.id)) fail('$.set', `Duplicate node ID ${n.id}.`); ids.add(n.id);
+    for(const [key,v]of Object.entries(n.mask??{})){if(['kind','direction'].includes(key))continue;checkBinding(v as Binding,scope);if(bindingType(v as Binding,props)!==(key==='invert'?'boolean':'number'))fail('$.set','Invalid mask binding type');}
+    if(n.backdrop){checkBinding(n.backdrop.blur,scope);if(bindingType(n.backdrop.blur,props)!=='number')fail('$.set','Blur must be numeric.');}
     if (n.when !== undefined) { checkBinding(n.when, scope); booleanBinding(n.when, props); }
     for (const [k, v] of Object.entries(n.styles ?? {})) {
       if (!(STYLE_KEYS as readonly string[]).includes(k)) fail('$.set', `Unsupported style ${k}.`);
@@ -260,6 +275,13 @@ export function parsePackage(value: unknown): PresentationPackage {
     if (n.motion) { safeStyle(n.motion.property, n.motion.from); safeStyle(n.motion.property, n.motion.to); }
     if (n.type === 'text') { checkBinding(n.text!, scope); bindingType(n.text!, props); }
     if(n.type==='media'&&!doc.set.assets?.[n.assetId!])fail('$.set','Missing media asset.');
+    if(n.type==='chart'){
+      if(!doc.requires?.includes('chart@1'))fail('$.requires','Declare chart@1 for chart layers.');
+      for(const label of [n.chart!.unit,n.chart!.timeZone])if(label!==undefined){checkBinding(label,scope);if(bindingType(label,props)!=='string')fail('$.set','Chart labels must be text.');}
+      if(n.styles?.position!=='absolute'||['left','top','width','height'].some(k=>typeof n.styles?.[k]!=='number')||Number(n.styles?.width)<160||Number(n.styles?.height)<100||Number(n.styles?.width)>4096||Number(n.styles?.height)>4096)fail('$.set','Charts require bounded numeric absolute geometry.');
+      checkBinding(n.chart!.data,scope);if(bindingType(n.chart!.data,props)!=='string')fail('$.set','Chart data must be public JSON text.');
+      if(n.chart!.yMin!==undefined&&n.chart!.yMax!==undefined&&n.chart!.yMin>=n.chart!.yMax)fail('$.set','Chart vertical range must increase.');
+    }
     if(n.type==='scene3d'){
       if(['constructor','prototype'].includes(n.scene3d!.id))fail('$.set','Invalid 3D identity.');
       if(Number(n.styles?.width)<16||Number(n.styles?.height)<16)fail('$.set','3D surfaces require at least 16 pixels per side.');
@@ -296,10 +318,15 @@ export function parsePackage(value: unknown): PresentationPackage {
     if (!Number.isInteger(layout.width) || !Number.isInteger(layout.height)) fail('$.set.layouts', 'Output dimensions must be integer pixels.');
     walk(layout.root, {}, [], new Set());
     const nodes=new Map<string,PresentationNode>();const collect=(n:PresentationNode)=>{nodes.set(n.id,n);n.children?.forEach(collect);};collect(layout.root);
+    const backdropNodes=[...nodes.values()].filter(n=>n.backdrop);
+    if(backdropNodes.length>4)fail('$.set','At most four backdrop panels per layout.');
+    if([...nodes.values()].filter(n=>n.mask).length>16)fail('$.set','At most sixteen masks per layout.');
+    for(const n of backdropNodes){if(n===layout.root)fail('$.set','A root has no local backdrop.');if(n.styles?.transform!==undefined||n.motion)fail('$.set','Backdrop panels cannot transform.');}
     const worlds=[...nodes.values()].filter(n=>n.type==='scene3d');
     const worldKeys=worlds.map(n=>n.scene3d!.id+'-'+n.scene3d!.pass);
     if(new Set(worldKeys).size!==worldKeys.length)fail('$.set.layouts','Duplicate 3D pass.');
     if(worlds.length>2||worlds.some(n=>!layout.root.children?.includes(n)))fail('$.set.layouts','Up to two 3D passes belong directly under the layout root.');
+    const charts=[...nodes.values()].filter(n=>n.type==='chart');if(charts.length>4||new Set(charts.map(n=>n.chart!.id)).size!==charts.length)fail('$.set.layouts','Use at most four uniquely identified chart layers.');
     const shaderNodes=[...nodes.values()].filter(n=>n.type==='shader');
     if(shaderNodes.length>4||shaderNodes.some(n=>!layout.root.children?.includes(n)))fail('$.set.layouts','Up to four shader layers belong directly under the layout root.');
     if(shaderNodes.length&&(layout.root.styles?.position!=='relative'||layout.root.styles?.transform!==undefined||layout.root.styles?.opacity!==undefined&&layout.root.styles.opacity!==1||layout.root.motion))fail('$.set.layouts','Shader layouts require a plain relative root.');
@@ -311,9 +338,11 @@ export function parsePackage(value: unknown): PresentationPackage {
       const key=`${track.target}:${track.property}`;if(animated.has(key))fail('$.set.layouts.animation','Duplicate animation property.');animated.add(key);
       if(track.keyframes.length<2||track.keyframes[0].atMs!==0||track.keyframes.some((f,i)=>i>0&&f.atMs<=track.keyframes[i-1].atMs))fail('$.set.layouts.animation','Keyframes must start at zero and increase.');
       for(const f of track.keyframes)if(track.property==='opacity'&&(f.value<0||f.value>1)||track.property==='scale'&&(f.value<.05||f.value>8)||['width','height'].includes(track.property)&&f.value<1)fail('$.set.layouts.animation','Animation value is outside its property range.');
+      if(track.property==='mask.progress'&&(!target!.mask||target!.mask.kind==='rounded'||track.keyframes.some(f=>f.value<0||f.value>1)))fail('$.set.layouts.animation','Mask animation requires a mask and normalized progress.');
+      if(target!.backdrop&&['x','y','width','height','rotation','scale'].includes(track.property))fail('$.set.layouts.animation','Backdrop geometry must be static; animate its mask or opacity.');
       if(track.property.startsWith('shader.')&&(target!.type!=='shader'||track.keyframes.some(f=>track.property==='shader.intensity'?(f.value<0||f.value>2):(f.value<.25||f.value>4))))fail('$.set.layouts.animation','Shader tracks require a shader target and bounded values.');
       const hasSlot=(n:PresentationNode):boolean=>n.type==='slot'||n.type==='shader'||n.type==='scene3d'||!!n.children?.some(hasSlot)||n.type==='component';
-      if(!['slot','shader'].includes(target!.type)&&hasSlot(target!))fail('$.set.layouts.animation','Animate native layers directly; animated ancestors are unsupported.');
+      if(track.property!=='mask.progress'&&!['slot','shader'].includes(target!.type)&&hasSlot(target!))fail('$.set.layouts.animation','Animate native layers directly; animated ancestors are unsupported.');
       if(['x','y','width','height'].includes(track.property)&&target!.styles?.position!=='absolute')fail('$.set.layouts.animation','Geometry tracks require an absolute element.');
       if(target!.type==='slot'&&['x','y'].includes(track.property)&&typeof target!.styles?.[track.property==='x'?'left':'top']!=='number')fail('$.set.layouts.animation','Source position tracks require numeric left and top.');
     }

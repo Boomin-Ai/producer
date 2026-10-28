@@ -1,7 +1,7 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {Hono} from 'hono';
 import type {Env} from '../src/env';
-import {dataIntegrationRoutes} from '../src/dataIntegrations/routes';
+import {dataIntegrationRoutes,querySavedConnection} from '../src/dataIntegrations/routes';
 import {parseConnection,weather,agent,testConnection,type Connection} from '../src/dataIntegrations/providers';
 import {fakeD1} from './d1';
 import {decryptSecret} from '../src/crypto';
@@ -11,7 +11,7 @@ const env=()=>({DB:fakeD1(),TOKEN_ENCRYPTION_KEY:'test-workspace-encryption-key'
 const observation=()=>({current:{time:Math.floor(Date.now()/1000),temperature_2m:22,weather_code:63,is_day:1,wind_speed_10m:14,precipitation:2}});
 function app(role:'primary'|'automation'='primary'){const a=new Hono<{Bindings:Env;Variables:{tokenClass:'primary'|'automation'}}>();a.use('*',async(c,next)=>{c.set('tokenClass',role);await next();});a.route('/connections',dataIntegrationRoutes);return a;}
 const request=(a:ReturnType<typeof app>,e:Env,path='',method='GET',body?:unknown)=>a.request('/connections'+path,{method,headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})},e);
-afterEach(()=>vi.unstubAllGlobals());
+afterEach(()=>{vi.unstubAllGlobals();vi.restoreAllMocks();});
 describe('managed data integration routes',()=>{
  it('creates, lists, updates and removes connections with explicit revision checks',async()=>{
   const a=app(),e=env();expect((await request(a,e,'','POST',{connection:config})).status).toBe(201);
@@ -36,6 +36,36 @@ describe('managed data integration routes',()=>{
   const a=app(),e=env(),fetcher=vi.fn<typeof fetch>(async()=>Response.json(observation()));vi.stubGlobal('fetch',fetcher);
   await request(a,e,'','POST',{connection:config});expect((await request(a,e,'/weather-main/test','POST',{})).status).toBe(200);
   const queried=await request(a,e,'/weather-main/query','POST',{expectedRevision:1});expect(queried.status).toBe(200);const body=await queried.json() as any;expect(body.cached).toBe(true);expect(body.result.condition).toBe('rain');expect(fetcher).toHaveBeenCalledTimes(1);
+ });
+ it('keeps separate city objects, reuses all forecast panels, and preserves the original fetch time',async()=>{
+  let now=Date.now();vi.spyOn(Date,'now').mockImplementation(()=>now);
+  const a=app(),e=env(),fetcher=vi.fn<typeof fetch>(async()=>Response.json(observation()));vi.stubGlobal('fetch',fetcher);
+  await request(a,e,'','POST',{connection:config});const first=await querySavedConnection(e,config.id,1);expect('cache' in first&&first.cache.fetchedAt).toBe(now);
+  now+=2100;const location={id:'denver',label:'Denver, Colorado, US',latitude:39.74,longitude:-104.99,timezone:'America/Denver'};
+  await querySavedConnection(e,config.id,1,{location});now+=2100;
+  for(let panel=0;panel<4;panel++){const again=await querySavedConnection(e,config.id,1);expect('cached' in again&&again.cached).toBe(true);expect('cache' in again&&again.cache.fetchedAt).toBe(now-4200);expect('location' in again.result&&again.result.location).toBe('Atlanta');}
+  expect(fetcher).toHaveBeenCalledTimes(2);
+ });
+ it('coalesces concurrent identical pulls and supports explicit refresh inside the freshness window',async()=>{
+  let now=Date.now();vi.spyOn(Date,'now').mockImplementation(()=>now);const a=app(),e=env();
+  const fetcher=vi.fn<typeof fetch>(async()=>Response.json(observation()));vi.stubGlobal('fetch',fetcher);
+  await request(a,e,'','POST',{connection:config});const [x,y]=await Promise.all([querySavedConnection(e,config.id,1),querySavedConnection(e,config.id,1)]);expect(x.result).toEqual(y.result);expect(fetcher).toHaveBeenCalledTimes(1);
+  now+=2100;await querySavedConnection(e,config.id,1,undefined,{refresh:true});expect(fetcher).toHaveBeenCalledTimes(2);
+ });
+ it('marks outage fallback stale without extending freshness, and rejects expired fallback',async()=>{
+  let now=Date.now();vi.spyOn(Date,'now').mockImplementation(()=>now);const a=app(),e=env();
+  vi.stubGlobal('fetch',vi.fn<typeof fetch>(async()=>Response.json(observation())));await request(a,e,'','POST',{connection:config});const first=await querySavedConnection(e,config.id,1);
+  now+=300001;vi.stubGlobal('fetch',vi.fn<typeof fetch>(async()=>{throw Error('Provider offline');}));
+  const fallback=await querySavedConnection(e,config.id,1);expect('stale' in fallback&&fallback.stale).toBe(true);expect('cache' in fallback&&fallback.cache.fetchedAt).toBe('cache' in first&&first.cache.fetchedAt);
+  now+=1800001;await expect(querySavedConnection(e,config.id,1)).rejects.toThrow('Provider offline');
+ });
+ it('merges concurrent different-city responses without overwriting an existing object',async()=>{
+  let now=Date.now();vi.spyOn(Date,'now').mockImplementation(()=>now);const a=app(),e=env();let release!:()=>void,entered!:()=>void;
+  const started=new Promise<void>(r=>entered=r),gate=new Promise<void>(r=>release=r);
+  const fetcher=vi.fn<typeof fetch>(async()=>{if(fetcher.mock.calls.length===1){entered();await gate;}return Response.json(observation());});vi.stubGlobal('fetch',fetcher);
+  await request(a,e,'','POST',{connection:config});const atlanta=querySavedConnection(e,config.id,1);await started;now+=2100;
+  const location={id:'denver',label:'Denver',latitude:39.74,longitude:-104.99,timezone:'America/Denver'};await querySavedConnection(e,config.id,1,{location});release();await atlanta;
+  const home=await querySavedConnection(e,config.id,1),away=await querySavedConnection(e,config.id,1,{location});expect('location' in home.result&&home.result.location).toBe('Atlanta');expect('location' in away.result&&away.result.location).toBe('Denver');expect(fetcher).toHaveBeenCalledTimes(2);
  });
  it('rejects stale connection revisions before contacting any provider',async()=>{
   const a=app(),e=env(),fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);await request(a,e,'','POST',{connection:config});expect((await request(a,e,'/weather-main/query','POST',{expectedRevision:0})).status).toBe(409);expect(fetcher).not.toHaveBeenCalled();

@@ -12,7 +12,7 @@ struct owned_node {
   obs_source_t *group;
   obs_source_t *parent;
   size_t index;
-  float x, y, width, height, radius, opacity, rotation, sx, sy;
+  float x, y, width, height, radius, opacity, rotation, sx, sy, mask_progress;
   bool visible;
 };
 struct producer_set_v2_scene {
@@ -71,12 +71,18 @@ static bool validate(struct preparation *p,
       !isfinite(n->scale_x) || !isfinite(n->scale_y) || n->scale_x < 0 ||
       n->scale_y < 0 || n->scale_x > 32 || n->scale_y > 32)
     return fail(p, "Invalid native placement transform");
+  if(n->mask_kind<0||n->mask_kind>2||!isfinite(n->mask_progress)||n->mask_progress<0||n->mask_progress>1||!isfinite(n->mask_x)||n->mask_x<0||n->mask_x>1||!isfinite(n->mask_y)||n->mask_y<0||n->mask_y>1||!isfinite(n->mask_feather)||n->mask_feather<0||n->mask_feather>32||n->mask_direction<0||n->mask_direction>3||!isfinite(n->backdrop_blur)||n->backdrop_blur<0||n->backdrop_blur>24)return fail(p,"Invalid native layer effect");
   if (!allocation(p, ceil(n->width)*p->density, ceil(n->height)*p->density))
     return false;
   snprintf(p->scene->nodes[p->scene->count++].id, 65, "%s", n->id);
   if (n->kind == SET_V2_GROUP) {
     if (n->surface || n->child_count > 128 || (n->child_count && !n->children))
       return fail(p, "Invalid native group children");
+    bool backdrop=false;for(size_t i=0;i<n->child_count;i++)if(n->children[i].backdrop_blur>0)backdrop=true;
+    if(backdrop){
+      // Two ping-pong accumulators plus a reusable horizontal blur surface.
+      for(int i=0;i<3;i++)if(!allocation(p,ceil(n->width)*p->density,(ceil(n->height)+(i==2?48:0))*p->density))return false;
+    }
     for (size_t i = 0; i < n->child_count; i++)
       if (!validate(p, &n->children[i], depth + 1))
         return false;
@@ -111,7 +117,7 @@ static obs_source_t *assemble(struct preparation *p,
   uint32_t w = (uint32_t)ceilf(n->width), h = (uint32_t)ceilf(n->height);
   obs_source_t *group = producer_set_v2_group_create(
       w, h, n->radius, n->visible ? n->opacity : 0);
-  if (!group || !producer_set_v2_group_density(group,p->density)) {
+  if (!group || !producer_set_v2_group_density(group,p->density)||!producer_set_v2_group_effects(group,n->mask_kind,n->mask_progress,n->mask_x,n->mask_y,n->mask_feather,n->mask_invert,n->mask_direction,n->backdrop_blur)) {
     if (group) obs_source_release(group);
     fail(p, "Native group allocation failed");
     return NULL;
@@ -124,6 +130,7 @@ static obs_source_t *assemble(struct preparation *p,
   entry->width = n->width;
   entry->height = n->height;
   entry->radius = n->radius;
+  entry->mask_progress=n->mask_progress;
   entry->opacity = n->opacity;
   entry->visible = n->visible;
   entry->rotation = n->rotation;
@@ -242,6 +249,7 @@ bool producer_set_v2_scene_frame(struct producer_set_v2_scene *s,
     }
   if (!n)
     return false;
+  if(property==9){if(value<0||value>1)return false;n->mask_progress=value;return producer_set_v2_group_mask_progress(n->group,value);}
   if (property == 4) {
     if (value < 0 || value > 1)
       return false;
@@ -290,6 +298,7 @@ void producer_set_v2_scene_reset(struct producer_set_v2_scene *s) {
   for(size_t i=0;i<s->count;i++){
     struct owned_node n=s->initial[i];
     producer_set_v2_scene_frame(s,n.id,4,n.opacity);
+    producer_set_v2_scene_frame(s,n.id,9,n.mask_progress);
     if(n.parent){
       producer_set_v2_scene_frame(s,n.id,0,n.x);producer_set_v2_scene_frame(s,n.id,1,n.y);
       producer_set_v2_scene_frame(s,n.id,2,n.width);producer_set_v2_scene_frame(s,n.id,3,n.height);

@@ -18,6 +18,7 @@ jobs:
       - run: bun run test:presentation
       - run: bun run test:module-runtime
       - run: node scripts/test-just-facts-show.mjs
+      - run: node scripts/test-atmosphere.mjs
       - run: node scripts/scene3d/test.mjs
       - run: node scripts/test-windows-native-imports.mjs
       - run: bun run test:scene-restoration

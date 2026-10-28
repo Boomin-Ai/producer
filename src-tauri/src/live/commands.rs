@@ -1456,6 +1456,16 @@ pub fn live_set_v2_enabled() -> bool {
     cfg!(all(have_engine, target_os = "macos"))
 }
 
+/// Versioned compositor features; packages declare requirements before loading.
+#[tauri::command]
+pub fn live_set_v2_capabilities() -> Vec<&'static str> {
+    if cfg!(all(have_engine, target_os = "macos")) {
+        vec!["mask@1", "backdrop@1", "chart@1"]
+    } else {
+        vec![]
+    }
+}
+
 #[tauri::command]
 pub fn live_set_v2_scene3d_enabled() -> bool {
     cfg!(all(have_engine, target_os = "macos"))

@@ -5,12 +5,13 @@ export type RenderOperation =
       id: string;
       bounds: Bounds;
       offscreen: boolean;
-      mask?: { kind: "rounded"; radius: number };
+      mask?: import('../presentation/visualEffects').LayerMask;
+      backdrop?: import('../presentation/visualEffects').BackdropEffect;
       properties: RenderNode["properties"];
     }
   | { op: "end-group"; id: string }
   | { op: "graphics"; id: string; nodes: RenderNode[] }
-  | { op: "source" | "asset" | "shader"; node: RenderNode };
+  | { op: "source" | "asset" | "shader" | "chart"; node: RenderNode };
 export interface PassPlan {
   operations: RenderOperation[];
   graphicsSurfaces: number;
@@ -33,18 +34,20 @@ export function planPasses(
   const group = (node: RenderNode) => {
     const offscreen =
       node.isolate === true ||
-      !!node.mask ||
+      !!node.mask || !!node.backdrop || node.children.some(c=>!!c.backdrop) ||
       (node.properties.opacity !== undefined && node.properties.opacity !== 1);
     if (offscreen) {
       offscreenGroups++;
       estimatedRGBABytes += bytes(node.bounds);
     }
+    if(node.children.some(c=>!!c.backdrop))estimatedRGBABytes+=3*bytes(node.bounds)+Math.ceil(node.bounds.width)*48*4;
     operations.push({
       op: "begin-group",
       id: node.id,
       bounds: { ...node.bounds },
       offscreen,
       ...(node.mask ? { mask: { ...node.mask } } : {}),
+      ...(node.backdrop?{backdrop:{...node.backdrop}}:{}),
       properties: { ...node.properties },
     });
     let graphics: RenderNode[] = [];
@@ -77,7 +80,7 @@ export function planPasses(
       else if (
         child.kind === "source" ||
         child.kind === "asset" ||
-        child.kind === "shader"
+        child.kind === "chart" || child.kind === "shader"
       )
         operations.push({ op: child.kind, node: structuredClone(child) });
     }

@@ -1,3 +1,4 @@
+import {weatherPayload} from '../../shared/set-runtime/weather';
 import {savedConnection,querySavedConnection} from './dataIntegrations/routes';
 import type {RuntimeDefinition} from '../../shared/set-runtime/contract';
 import type {Snapshot,Result} from '../../shared/set-runtime/runtime';
@@ -49,10 +50,10 @@ setRuntimeHostRoutes.post('/rooms/:id/set-runtime/modules/:module/query',async c
  if(!claim.claimed)return c.json({snapshot:current,result:{status:'committed',revision:current.revision,moduleEpoch:current.modules[module].epoch}});
  const deliver=async(op:string,fields:Record<string,string|number|boolean>)=>roomStateCall(c.env,room.id,'/set-runtime/command',{method:'POST',body:JSON.stringify({command:{...command,id:command.id+'-result',op,input:fields},principal:{role:'connector',id:'saved-connection',modules:[module]}})});
  try{
-  const result=await querySavedConnection(c.env,binding.id,binding.revision,b.type==='agent'?{question:command.input?.question,mode:b.mode,instructions:b.prompt}:undefined);
+  const result=await querySavedConnection(c.env,binding.id,binding.revision,b.type==='agent'?{question:command.input?.question,mode:b.mode,instructions:b.prompt}:{...(current.modules[module].weatherLocation?{location:current.modules[module].weatherLocation}:{})},{refresh:command.input?.refresh===true});
   if(b.type==='agent'){const answer=result.result as AgentResult;return c.json(await deliver('agent.complete',{requestId:command.id,response:answer.response,citations:JSON.stringify(answer.citations)}));}
-  return c.json(await deliver('weather.update',{...(result.result as WeatherResult)}));
- }catch(error){await deliver(b.type==='agent'?'agent.error':'weather.error',{requestId:command.id,message:error instanceof ApiError?error.message:'The provider request did not complete'});throw error;}
+  return c.json(await deliver('weather.update',{...weatherPayload(result.result as WeatherResult,'cache' in result?result.cache:undefined,'stale' in result&&result.stale),locationRevision:current.modules[module].weatherLocationRevision??0}));
+ }catch(error){await deliver(b.type==='agent'?'agent.error':'weather.error',{requestId:command.id,locationRevision:current.modules[module].weatherLocationRevision??0,message:error instanceof ApiError?error.message:'The provider request did not complete'});throw error;}
 });
 
 setRuntimeHostRoutes.post('/rooms/:id/set-runtime/orchestrate',async c=>{

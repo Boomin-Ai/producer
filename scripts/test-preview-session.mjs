@@ -29,3 +29,9 @@ await retryAttach.sync(() => rect); Date.now = () => realNow() + 2000;
 await retryAttach.sync(() => rect); Date.now = realNow;
 assert.equal(attaches, 2); await retryAttach.close();
 console.log('PASS: late attach teardown, mount ordering, failed move retry, and startup attach recovery.');
+
+let refreshedMoves=0;
+const geometry=previewSession({attach:async()=>true,move:async()=>{refreshedMoves++;},detach:async()=>{}},()=>{});
+await geometry.sync(()=>rect);await geometry.sync(()=>rect);assert.equal(refreshedMoves,1);
+await geometry.sync(()=>rect,true);assert.equal(refreshedMoves,2,'explicit geometry refresh reaches native placement for an unchanged DOM rect');await geometry.close();
+console.log('PASS unchanged DOM bounds suppress routine moves but explicit native geometry refresh is retained.');

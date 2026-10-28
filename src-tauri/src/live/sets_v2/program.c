@@ -1,5 +1,6 @@
 #include "program.h"
 #include "scene.h"
+#include "chart.h"
 #include <math.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -46,6 +47,7 @@ struct program {
       rendered_revision, serial;
   double clock_ms, start_ms, duration_ms, progress;
   bool warmed, ready, queued, transitioning, paused;
+  obs_source_t *charts[4],*pending_charts[4],*retired_charts[4];size_t chart_count,pending_chart_count,retired_chart_count;
   struct effect_clock effects[32], pending_effects[32], retired_effects[32];
   size_t effect_count, pending_effect_count, retired_effect_count;
   struct media_clock media[24], pending_media[24];
@@ -200,7 +202,7 @@ static void animate(struct program *p, struct motion_track *tracks,
       value = t->frames[k - 1].value +
               (t->frames[k].value - t->frames[k - 1].value) * (float)phase;
     }
-    if (t->property >= 7) {
+    if (t->property == 7 || t->property == 8) {
       struct effect_clock *sets[] = {p->effects, p->pending_effects,
                                      p->retired_effects};
       size_t sizes[] = {p->effect_count, p->pending_effect_count,
@@ -220,6 +222,8 @@ static void animate(struct program *p, struct motion_track *tracks,
 static void render(void *data, gs_effect_t *unused) {
   (void)unused;
   struct program *p = data;
+  for(size_t i=0;i<p->chart_count;i++)producer_chart_frame(p->charts[i],p->clock_ms);
+  for(size_t i=0;i<p->retired_chart_count;i++)producer_chart_frame(p->retired_charts[i],p->clock_ms);
   animate(p, p->pending_tracks, p->pending_track_count, p->clock_ms, true);
   effects(p->pending_effects, p->pending_effect_count, p->clock_ms);
   if (p->pending && !p->warmed)
@@ -237,11 +241,14 @@ static void render(void *data, gs_effect_t *unused) {
     p->pending_track_count = 0;
     for (size_t i = 0; i < p->track_count; i++)
       p->tracks[i].anchor_ms = p->clock_ms;
+    for(size_t i=0;i<p->pending_chart_count;i++){obs_source_t *previous=NULL;for(size_t j=0;j<p->chart_count;j++)if(!strcmp(producer_chart_key(p->pending_charts[i]),producer_chart_key(p->charts[j]))){previous=p->charts[j];break;}producer_chart_begin(p->pending_charts[i],previous,p->clock_ms);}
+    memcpy(p->retired_charts,p->charts,sizeof(p->charts));p->retired_chart_count=p->chart_count;memcpy(p->charts,p->pending_charts,sizeof(p->charts));p->chart_count=p->pending_chart_count;
     memcpy(p->retired_effects, p->effects, sizeof(p->effects));
     p->retired_effect_count = p->effect_count;
     memcpy(p->effects, p->pending_effects, sizeof(p->effects));
     p->effect_count = p->pending_effect_count;
     p->pending_effect_count = 0;
+  p->pending_chart_count = 0;
     p->pending_track_count = 0;
     for (size_t i = 0; i < p->effect_count; i++)
       p->effects[i].anchor_ms = p->clock_ms;
@@ -323,6 +330,7 @@ static void collect(struct program *p) {
   p->transition = NULL;
   p->retiring = NULL;
   p->retired_effect_count = 0;
+  p->retired_chart_count = 0;
   p->retired_track_count = 0;
   snapshot_children(p);
   detach(p, t);
@@ -352,6 +360,7 @@ bool producer_set_v2_program_prepare(obs_source_t *s, obs_source_t *candidate,
   obs_source_t *old = p->pending;
   p->pending = ref;
   p->pending_effect_count = 0;
+  p->pending_chart_count = 0;
   p->pending_track_count = 0;
   p->pending_media_count = 0;
   p->latest_revision = revision;
@@ -416,6 +425,7 @@ bool producer_set_v2_program_cancel(obs_source_t *s, uint64_t revision) {
     obs_source_t *old = p->pending, *t = p->transition;
     p->pending = NULL;
     p->pending_effect_count = 0;
+  p->pending_chart_count = 0;
     p->pending_track_count = 0;
     p->pending_media_count = 0;
     p->transition = NULL;
@@ -518,7 +528,7 @@ bool producer_set_v2_program_track(
   struct program *p = get(s);
   if (!p || !scene || !target || strlen(target) > 64 ||
       !producer_set_v2_scene_node(scene, target) || property < 0 ||
-      property > 8 || !frames || count < 2 || count > 64 || easing < 0 ||
+      property > 9 || !frames || count < 2 || count > 64 || easing < 0 ||
       easing > 3 || loop < 0 || loop > 2 || !isfinite(base) || base < 0 ||
       base > 86400000 || !isfinite(delay) || delay < 0 || delay > 60000)
     return false;
@@ -528,14 +538,14 @@ bool producer_set_v2_program_track(
     if (!isfinite(at) || at < 0 || at > 60000 || (!i && at != 0) ||
         (i && at <= frames[i - 1].at_ms) || !isfinite(v) || fabsf(v) > 36000)
       return false;
-    if ((property == 4 && (v < 0 || v > 1)) ||
+    if (((property == 4 || property == 9) && (v < 0 || v > 1)) ||
         (property == 6 && (v < .01f || v > 32)) ||
         (property == 7 && (v < 0 || v > 2)) ||
         (property == 8 && (v < .25f || v > 4)) ||
         ((property == 2 || property == 3) && (v < 0 || v > 8192)))
       return false;
   }
-  if (property >= 7 &&
+  if ((property == 7 || property == 8) &&
       (!shader || strcmp(obs_source_get_id(shader), "producer_shader_layer")))
     return false;
   obs_enter_graphics();
@@ -575,3 +585,5 @@ bool producer_set_v2_program_cached_ready(obs_source_t *s,uint64_t revision){
   obs_enter_graphics();bool ok=p->pending&&p->prepared_revision==revision;
   if(ok){p->ready=true;p->warmed=true;}obs_leave_graphics();return ok;
 }
+
+bool producer_set_v2_program_chart(obs_source_t*s,uint64_t revision,obs_source_t*chart){struct program*p=get(s);if(!p||!chart||!producer_chart_key(chart)[0])return false;obs_enter_graphics();bool ok=p->pending&&p->prepared_revision==revision&&p->pending_chart_count<4;if(ok)p->pending_charts[p->pending_chart_count++]=chart;obs_leave_graphics();return ok;}

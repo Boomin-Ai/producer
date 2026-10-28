@@ -2077,13 +2077,9 @@ impl Preview {
         Ok(p)
     }
     fn set_rect(&mut self, rect: PreviewRect) {
-        if (self.rect.x - rect.x).abs() < 0.1
-            && (self.rect.y - rect.y).abs() < 0.1
-            && (self.rect.w - rect.w).abs() < 0.1
-            && (self.rect.h - rect.h).abs() < 0.1
-        {
-            return;
-        }
+        // The frontend suppresses unchanged DOM measurements. An explicit
+        // move with the same CSS rect must still recompute native placement:
+        // the WKWebView's container/titlebar origin may have moved.
         self.rect = rect;
         unsafe {
             let (mut px_w, mut px_h) = (0f64, 0f64);

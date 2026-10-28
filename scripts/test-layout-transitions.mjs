@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {build} from 'esbuild';
-const result=await build({stdin:{contents:"export {RehearsalSession} from './src/features/presentation/rehearsal';export {outputProjection} from './src/features/presentation/projection';export {sampleTrack} from './src/features/presentation/animation';",resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',write:false});
-const {RehearsalSession,outputProjection,sampleTrack}=await import('data:text/javascript;base64,'+Buffer.from(result.outputFiles[0].text).toString('base64'));
+const result=await build({stdin:{contents:"export {RehearsalSession} from './src/features/presentation/rehearsal';export {outputProjection} from './src/features/presentation/projection';export {authoredCrossfadeMs,sampleTrack} from './src/features/presentation/animation';",resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',write:false});
+const {RehearsalSession,outputProjection,authoredCrossfadeMs,sampleTrack}=await import('data:text/javascript;base64,'+Buffer.from(result.outputFiles[0].text).toString('base64'));
 const doc=JSON.parse(fs.readFileSync('docs/shows/ai-signal.show.json'));
 const original=Date.now;let now=10000;Date.now=()=>now;
 try{
@@ -28,3 +28,12 @@ try{
  s.send({type:'reset'});assert.equal(s.snapshot().layoutMotion,undefined);assert.equal(s.snapshot().layoutId,'ai-react-portrait');
  console.log('PASS layout movement, interrupted reversal, synchronized camera rim/halo, pause/resume, track budget, one segment and clean exports.');
 }finally{Date.now=original;}
+
+const hybrid={type:'morph',durationMs:760,contentDurationMs:260};
+assert.equal(authoredCrossfadeMs(hybrid,false,false,true),260,'content dissolves independently');
+assert.equal(authoredCrossfadeMs(hybrid,true,false,true),0,'camera morph is not ghosted by a full-frame dissolve');
+assert.equal(authoredCrossfadeMs(hybrid,false,true,true),0,'paused output does not animate');
+assert.equal(authoredCrossfadeMs(hybrid,false,false,false),0,'initial/unchanged content does not fade');
+assert.equal(authoredCrossfadeMs({type:'morph',durationMs:700},false,false,true),0,'older sets retain their authored behavior');
+assert.equal(authoredCrossfadeMs({type:'crossfade',durationMs:400},true,false,true),400);
+console.log('PASS independent content dissolve, camera morph, pause and legacy transition behavior.');

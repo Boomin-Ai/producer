@@ -1,0 +1,11 @@
+{
+  "kind": "navigation-lifetime",
+  "ok": true,
+  "changes": 24,
+  "maximum3dContexts": 2,
+  "minimumCachedBytes": 724446656,
+  "maximumCachedBytes": 724446656,
+  "minimumRenderedRevision": 17,
+  "maximumRenderedRevision": 40,
+  "note": "Live Atmosphere room; cached resource byte estimate, not a GPU utilization or process RAM measurement."
+}
