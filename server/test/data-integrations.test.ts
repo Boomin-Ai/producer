@@ -43,7 +43,7 @@ describe('managed data integration routes',()=>{
   await request(a,e,'','POST',{connection:config});const first=await querySavedConnection(e,config.id,1);expect('cache' in first&&first.cache.fetchedAt).toBe(now);
   now+=2100;const location={id:'denver',label:'Denver, Colorado, US',latitude:39.74,longitude:-104.99,timezone:'America/Denver'};
   await querySavedConnection(e,config.id,1,{location});now+=2100;
-  for(let panel=0;panel<4;panel++){const again=await querySavedConnection(e,config.id,1);expect('cached' in again&&again.cached).toBe(true);expect('cache' in again&&again.cache.fetchedAt).toBe(now-4200);expect(again.result.location).toBe('Atlanta');}
+  for(let panel=0;panel<4;panel++){const again=await querySavedConnection(e,config.id,1);expect('cached' in again&&again.cached).toBe(true);expect('cache' in again&&again.cache.fetchedAt).toBe(now-4200);expect('location' in again.result&&again.result.location).toBe('Atlanta');}
   expect(fetcher).toHaveBeenCalledTimes(2);
  });
  it('coalesces concurrent identical pulls and supports explicit refresh inside the freshness window',async()=>{
@@ -65,7 +65,7 @@ describe('managed data integration routes',()=>{
   const fetcher=vi.fn<typeof fetch>(async()=>{if(fetcher.mock.calls.length===1){entered();await gate;}return Response.json(observation());});vi.stubGlobal('fetch',fetcher);
   await request(a,e,'','POST',{connection:config});const atlanta=querySavedConnection(e,config.id,1);await started;now+=2100;
   const location={id:'denver',label:'Denver',latitude:39.74,longitude:-104.99,timezone:'America/Denver'};await querySavedConnection(e,config.id,1,{location});release();await atlanta;
-  expect((await querySavedConnection(e,config.id,1)).result.location).toBe('Atlanta');expect((await querySavedConnection(e,config.id,1,{location})).result.location).toBe('Denver');expect(fetcher).toHaveBeenCalledTimes(2);
+  const home=await querySavedConnection(e,config.id,1),away=await querySavedConnection(e,config.id,1,{location});expect('location' in home.result&&home.result.location).toBe('Atlanta');expect('location' in away.result&&away.result.location).toBe('Denver');expect(fetcher).toHaveBeenCalledTimes(2);
  });
  it('rejects stale connection revisions before contacting any provider',async()=>{
   const a=app(),e=env(),fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);await request(a,e,'','POST',{connection:config});expect((await request(a,e,'/weather-main/query','POST',{expectedRevision:0})).status).toBe(409);expect(fetcher).not.toHaveBeenCalled();
