@@ -9,7 +9,7 @@ export interface OperatorPanelProps {
  definition:RuntimeDefinition;snapshot:Snapshot;segment?:string;disabled?:boolean;
  send:(module:string,op:string,input?:Record<string,Scalar>)=>Promise<Result>;
  searchWeatherLocations?:(query:string)=>Promise<WeatherLocation[]>;
- requestAgent?:(module:string,question:string)=>Promise<void>;
+ requestAgent?:(module:string,question:string,refresh?:boolean)=>Promise<void>;
  simulateWeather?:(module:string,condition:Weather['condition'],isDay:boolean)=>Promise<Result>;
 }
 /** One renderer for package-authored operator controls; authority stays in the runtime. */
@@ -33,7 +33,7 @@ export function OperatorPanel({definition,snapshot,segment,disabled=false,send,r
   };
   return <article key={id} className="module-operator-card"><div className="module-panel-heading"><h3>{d.label}</h3><span>{instance.owner==='set'?'Set':'Segment'} · {m.execution}{m.published?' · Audience visible':''}</span></div>
    <div className="module-operator-actions">{m.execution==='running'?button('Pause','pause'):button(m.execution==='paused'?'Resume':'Start',m.execution==='paused'?'resume':'start')}{button('Reset','reset')}</div>
-   {behavior?.type==='weather'&&<WeatherOperator module={m} disabled={locked} search={searchWeatherLocations} send={(op,input)=>send(id,op,input)} refresh={requestAgent?()=>requestAgent(id,''):undefined}/>}
+   {behavior?.type==='weather'&&<WeatherOperator module={m} disabled={locked} search={searchWeatherLocations} send={(op,input)=>send(id,op,input)} refresh={requestAgent?(force)=>requestAgent(id,'',force):undefined}/>}
    {d.controls.filter(g=>g.audience==='operator').map(g=>{const controls=g.controls.filter(c=>!c.segment||c.segment===segment);return controls.length?<div key={g.id} className="module-control-group"><h4>{g.label}</h4>{controls.map(render)}</div>:null;})}
    {(behavior?.type==='vote'||behavior?.type==='submissions')&&<><p>{behavior.type==='vote'?behavior.question:behavior.prompt}</p><div className="module-operator-actions">
     {m.published?button('Remove from audience','withdraw'):button('Show to audience','publish',m.execution!=='running')}

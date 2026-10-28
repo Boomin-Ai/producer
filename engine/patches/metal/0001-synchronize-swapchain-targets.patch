@@ -1,0 +1,57 @@
+--- a/OBSSwapChain.swift
++++ b/OBSSwapChain.swift
+@@ -33,10 +33,22 @@
+     var colorRange: ColorRange
+     var edrHeadroom: CGFloat = 0.0
+     let layer: CAMetalLayer
+-    var renderTarget: MetalTexture?
++    // CVDisplayLink reads while the graphics thread replaces/resizes targets.
++    // Swift strong-reference loads/stores are not atomic. Retain the snapshot
++    // under the same lock that publishes/releases it.
++    private let targetLock = NSLock()
++    private var target: MetalTexture?
++    var renderTarget: MetalTexture? {
++        get { targetLock.lock(); defer { targetLock.unlock() }; return target }
++        set { targetLock.lock(); defer { targetLock.unlock() }; target = newValue }
++    }
+     var viewSize: MTLSize
+     var fence: MTLFence
+-    var discard: Bool = false
++    private var discarded = false
++    var discard: Bool {
++        get { targetLock.lock(); defer { targetLock.unlock() }; return discarded }
++        set { targetLock.lock(); defer { targetLock.unlock() }; discarded = newValue }
++    }
+ 
+     init?(device: MetalDevice, size: MTLSize, colorSpace: gs_color_format) {
+         self.device = device
+--- a/MetalDevice.swift
++++ b/MetalDevice.swift
+@@ -147,7 +147,13 @@
+     /// transfer command on the GPU to copy the contents of the projector rendered by `libobs`'s render loop into the
+     /// drawable provided by a `CAMetalLayer`.
+     func blitSwapChains() {
+-        guard swapChains.count > 0 else { return }
++        // Retain a stable array snapshot inside the writer queue. Iterating
++        // the live Swift Array outside it races append/filter and ARC teardown.
++        let activeSwapChains = swapChainQueue.sync {
++            swapChains = swapChains.filter { $0.discard == false }
++            return swapChains
++        }
++        guard !activeSwapChains.isEmpty else { return }
+ 
+         guard let commandBuffer = commandQueue.makeCommandBuffer(),
+             let encoder = commandBuffer.makeBlitCommandEncoder()
+@@ -155,11 +161,7 @@
+             return
+         }
+ 
+-        self.swapChainQueue.sync {
+-            swapChains = swapChains.filter { $0.discard == false }
+-        }
+-
+-        for swapChain in swapChains {
++        for swapChain in activeSwapChains {
+             guard let renderTarget = swapChain.renderTarget, let drawable = swapChain.layer.nextDrawable() else {
+                 continue
+             }

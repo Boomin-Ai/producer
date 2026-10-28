@@ -5,6 +5,7 @@ import {
   type DataValue,
   type PublicData,
 } from "./data";
+import {validateMask,validateBackdrop,type LayerMask,type BackdropEffect} from '../presentation/visualEffects';
 import { validatePaint, type Paint } from "./paint";
 export type Orientation = "landscape" | "portrait";
 export type Scalar = string | number | boolean;
@@ -32,7 +33,7 @@ export type SceneNode = CommonNode &
     | {
         kind: "group";
         children: SceneNode[];
-        mask?: { kind: "rounded"; radius: number };
+        mask?: LayerMask;backdrop?:BackdropEffect;
         isolate?: boolean;
       }
     | { kind: "text" }
@@ -78,12 +79,12 @@ export interface Viewport {
 }
 export type RenderNode = {
   id: string;
-  kind: SceneNode["kind"] | "scene3d";
+  kind: SceneNode["kind"] | "scene3d" | "chart";
   bounds: Bounds;
   properties: Record<string, Scalar>;
   resource?: string;
   fit?: "contain" | "cover";
-  mask?: { kind: "rounded"; radius: number };
+  mask?: LayerMask;backdrop?:BackdropEffect;
   children: RenderNode[];
   isolate?: boolean;
   paint?: Paint;
@@ -97,6 +98,7 @@ export interface RenderPlan {
   viewport: Viewport;
   root: RenderNode;
   resources: string[];
+  charts?:Record<string,import("../presentation/charts").ChartSpec>;
   scenes3d?:Record<string,import("../presentation/scene3d/contract.mjs").Scene3dLayer>;
 }
 export const DEFAULT_CANVASES: Readonly<
@@ -242,7 +244,7 @@ export function validateDefinition(input: unknown): SetDefinition {
       if (++budget > 2048 || depth > 16)
         throw Error("Scene graph exceeds budget");
       const specific = {
-        group: ["children", "mask", "isolate"],
+        group: ["children", "mask", "isolate", "backdrop"],
         text: [],
         source: ["input", "fit"],
         asset: ["asset", "fit"],
@@ -279,10 +281,9 @@ export function validateDefinition(input: unknown): SetDefinition {
         )
           throw Error("Invalid group");
         if (n.mask) {
-          exact(n.mask, ["kind", "radius"]);
-          if (n.mask.kind !== "rounded") throw Error("Unsupported mask");
-          finite(n.mask.radius, 0, 8192);
+          validateMask(n.mask);
         }
+        if(n.backdrop)validateBackdrop(n.backdrop);
         n.children.forEach((child) => visit(child, depth + 1));
       }
       if (n.kind === "source" && !roles.has(n.input))
@@ -473,6 +474,7 @@ export function compileSet(
     if (n.kind === "group") {
       out.children = n.children.map(walk);
       if (n.mask) out.mask = { ...n.mask };
+      if (n.backdrop) out.backdrop = { ...n.backdrop };
       if (n.isolate !== undefined) out.isolate = n.isolate;
     }
     return out;

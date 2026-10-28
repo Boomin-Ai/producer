@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+import {build} from 'esbuild';
+import {visualEffectsFixture} from './visual-effects-fixture.mjs';
+const built=await build({stdin:{contents:"export {parsePackage} from './src/features/presentation/schema';",resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',write:false});
+const {parsePackage}=await import('data:text/javascript;base64,'+Buffer.from(built.outputFiles[0].text).toString('base64'));
+const doc=structuredClone(visualEffectsFixture),base=doc.set.layouts[0];
+doc.set.controls=[];doc.set.initialLayout='ready';doc.set.viewController='effects';doc.set.initialView='ready';
+doc.set.views=Object.fromEntries(['ready','circle','wipe'].map(id=>[id,{landscape:id}]));
+doc.set.layouts=['ready','circle','wipe'].map(id=>{const layout=structuredClone(base);layout.id=id;layout.label={ready:'Ready / hidden camera',circle:'Circle reveal',wipe:'Wipe reveal'}[id];const mask=layout.root.children.find(n=>n.id==='host-mask').mask;mask.kind=id==='wipe'?'wipe':'circle';mask.progress=id==='ready'?0:1;if(id==='ready')layout.animation.tracks=[];return layout;});
+doc.runtime={schema:'producer.modules/1',definitions:{effects:{label:'Reveal direction',state:{},publicFields:[],views:['ready','circle','wipe'],initialView:'ready',capabilities:[],actions:Object.fromEntries(['ready','circle','wipe'].map(view=>[view,{roles:['operator'],steps:[{op:'view',view}]}])),controls:[{id:'reveal',label:'Camera reveal',audience:'operator',controls:[{id:'ready',type:'button',label:'Hide / reset',action:'ready'},{id:'circle',type:'button',label:'Circle reveal',action:'circle'},{id:'wipe',type:'button',label:'Wipe reveal',action:'wipe'}]}]}},instances:[{id:'effects',definition:'effects',owner:'set',hidden:'continue',onExit:'continue',reenter:'resume'}]};
+fs.writeFileSync('docs/shows/visual-effects-lab.json',JSON.stringify(parsePackage(doc),null,2)+'\n');
+console.log('Authored reusable Visual Effects Lab: glass header and module-controlled circle/wipe layouts.');

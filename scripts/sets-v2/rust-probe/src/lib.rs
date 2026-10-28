@@ -2,7 +2,7 @@
 #[path = "../../../../src-tauri/src/live/ffi.rs"]
 mod ffi;
 #[path = "../../../../src-tauri/src/live/sets_v2/mod.rs"]
-mod sets_v2;
+pub mod sets_v2;
 use std::ffi::{c_char, c_void, CStr};
 #[no_mangle]
 pub unsafe extern "C" fn sets_v2_rust_attach(

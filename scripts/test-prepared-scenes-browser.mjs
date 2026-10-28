@@ -4,7 +4,7 @@ const browser=await chromium.launch({executablePath:'/Applications/Google Chrome
 try{
  const page=await browser.newPage();await page.goto('http://127.0.0.1:1436/');
  const result=await page.evaluate(async()=>{
-  const {PreparedScenes,layoutProjections,morphTargets,runtimePlan}=await import('/src/features/sets-v2/preparedScenes.ts');
+  const {PreparedScenes,layoutProjections,moduleViewProjections,warmInventory,morphTargets,runtimePlan}=await import('/src/features/sets-v2/preparedScenes.ts');
   const {HEAD_TO_HEAD}=await import('/src/features/presentation/fixtures.ts');
   const {RehearsalSession}=await import('/src/features/presentation/rehearsal.ts');
   const {compileRoomScene}=await import('/src/features/sets-v2/roomCompiler.ts');
@@ -52,9 +52,30 @@ try{
   Date.now=()=>coldNow;window.setTimeout=(run,ms,...args)=>ms===20?(queueMicrotask(()=>run(...args)),0):originalTimer(run,ms,...args);
   const cold=new PreparedScenes(async request=>{if(request.op==='preload'){coldKey=request.key;coldRevision=request.revision;}if(request.op==='status'&&coldKey){coldNow+=40;polls++;}return {preparedRevision:coldRevision,renderedRevision:0,cachedKeys:polls>=1200?[coldKey]:[],ready:polls>=1200,warmed:polls>=1200};},()=>{},async()=>({root:{id:'root',kind:'group',bounds:{x:0,y:0,width:100,height:100},children:[]},scenes3d:{test:{}},assets:{}}));
   try{await cold.ensure(specs[0]);if(polls<1200||cold.readiness(specs[0]).state!=='ready')throw Error('Cold WebGL startup was cancelled prematurely');}finally{cold.dispose();Date.now=originalNow;window.setTimeout=originalTimer;}
+  const atmosphere=await(await fetch('/docs/shows/atmosphere.json')).json();
+  const weatherSession=new RehearsalSession(atmosphere,undefined,'rehearsal');
+  const beforeSnapshot=JSON.stringify(weatherSession.snapshot()),beforeModules=JSON.stringify(weatherSession.moduleSnapshot());
+  const warmViews=moduleViewProjections(weatherSession);
+  if(warmViews.length!==6)throw Error('Expected three alternate views for each current composition orientation: '+warmViews.length);
+  const landscape=warmViews.filter(v=>v.projection.width>v.projection.height);
+  if(landscape.length!==3||new Set(landscape.map(v=>v.entry.modules.sky.view)).size!==3)throw Error('Missing distinct view variants');
+  if(JSON.stringify(weatherSession.snapshot())!==beforeSnapshot||JSON.stringify(weatherSession.moduleSnapshot())!==beforeModules)throw Error('Speculation mutated authoritative state');
+  const allViews=[...layoutProjections(weatherSession),...warmViews].map(item=>({...specs[0],definition:'atmosphere',layout:item.layout,projection:item.projection,phase:item.phase,speculative:item.variant,target:{...specs[0].target,id:item.projection.width>item.projection.height?'program':'portrait'}}));
+  const warmed=warmInventory(allViews,new Set(['hero-landscape','hero-portrait']));
+  for(const target of ['program','portrait']){const selected=warmed.filter(s=>s.target.id===target);if(selected.length!==5||selected.filter(s=>s.layout.startsWith('hero-')).length!==4)throw Error('View warming did not prioritize the four active-composition views within budget');}
+  const unchanged=allViews.filter(s=>!s.speculative);if(warmInventory(unchanged,new Set()).length!==unchanged.length)throw Error('Ordinary layout inventory changed');
+  const viewCache=new Set();let viewRevision=0,viewBuilds=0;
+  const viewBank=new PreparedScenes(async request=>{if(request.op==='preload'){viewCache.add(request.key);viewRevision=request.revision;}return {preparedRevision:viewRevision,renderedRevision:viewRevision,cachedKeys:[...viewCache],ready:true,warmed:true};},()=>{},async()=>{viewBuilds++;return {root:{id:'root',kind:'group',bounds:{x:0,y:0,width:100,height:100},children:[]},assets:{}};});
+  const makeSpec=item=>({...specs[0],definition:'atmosphere',layout:item.layout,projection:item.projection,phase:item.phase});
+  await viewBank.preload(landscape.map(makeSpec),()=>false);const preparedBuilds=viewBuilds;
+  await weatherSession.sendModule('sky','start');await weatherSession.sendModule('sky','today');
+  const actual=layoutProjections(weatherSession).find(v=>v.layout==='hero-landscape');
+  await viewBank.take(makeSpec(actual),async()=>{});
+  if(viewBuilds!==preparedBuilds)throw Error('Prepared module view rebuilt on selection');
+  viewBank.dispose();
   bank.dispose();
   return {layouts:specs.length,loaded,repeatCompiles,edited,updates,preloads:calls.filter(c=>c==='preload').length,hasPlan:!!plan.root,churnPeak:peak,churnFinal:churnCache.size};
  });
  assert.equal(result.loaded,result.layouts+1);assert.equal(result.repeatCompiles,result.loaded);assert.equal(result.edited,result.loaded+1);assert(result.updates>=result.layouts*2);assert(result.hasPlan);assert(result.churnPeak<=5);assert(result.churnFinal<=4);
- console.log('PASS: all layouts compile/prepare once, ready repeat takes skip rebuild, edited design invalidates only its scene, and 80 live variants remain bounded',result);
+ console.log('PASS: all layouts compile/prepare once, ready repeat takes skip rebuild, edited design invalidates only its scene, 80 live variants remain bounded, and speculative module views take without rebuild or state mutation',result);
 }finally{await browser.close();}

@@ -1752,16 +1752,22 @@ function PreviewPanel({ children }: { children?: ReactNode }) {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => void session.sync(measure), 0);
     };
+    // Native webview/titlebar offsets can change even when the CSS canvas
+    // rectangle is identical (fullscreen and window chrome changes).
+    const refresh = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => void session.sync(measure, true), 0);
+    };
     sync();
     const ro = new ResizeObserver(sync);
     if (ref.current) ro.observe(ref.current);
-    window.addEventListener("resize", sync);
+    window.addEventListener("resize", refresh);
     window.addEventListener("scroll", sync, true);
     // Timers also run when WebKit pauses animation frames behind native video.
     const tick = window.setInterval(() => void session.sync(measure), 250);
     return () => {
       window.clearInterval(tick); window.clearTimeout(timer); ro.disconnect();
-      window.removeEventListener("resize", sync);
+      window.removeEventListener("resize", refresh);
       window.removeEventListener("scroll", sync, true);
       void session.close();
     };

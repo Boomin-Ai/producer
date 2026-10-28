@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build/stage an isolated v2 app using the installed read-only engine runtime."""
 import json
+import hashlib
 import os
 from pathlib import Path
 import plistlib
@@ -19,6 +20,19 @@ if config['identifier'] != 'ai.boomin.producer.sets-v2-dev':
     raise SystemExit('Refusing to build the v2 development app without its isolated identity')
 if not (runtime / 'Contents/Frameworks/libobs.framework').is_dir():
     raise SystemExit('Installed Producer runtime not found')
+# Keep local staging aligned with the versioned Metal fixes. The installed
+# production bundle can predate the source lock; never silently copy that
+# older backend into a newly built dev binary.
+engine_lock=json.loads((root/'engine/obs.lock').read_text())
+metal_backend=None
+metal_patches=[p['sha256'] for p in engine_lock['patchsets'] if p['target']=='libobs-metal']
+if metal_patches:
+    metal_backend=root/'src-tauri/target/cutout-lab/libobs-metal-current-frame.dylib'
+    marker=metal_backend.parent/'metal-tested.json'
+    expected={'obs_commit':engine_lock['obs']['commit'],'artifact_rev':engine_lock['artifact_rev'],'metal_patch_sha256':metal_patches,'copy_api_sha256':hashlib.sha256((root/'engine/metal-current-frame.swift').read_bytes()).hexdigest()}
+    actual=json.loads(marker.read_text()) if marker.exists() else {}
+    if not metal_backend.exists() or any(actual.get(k)!=v for k,v in expected.items()) or actual.get('binary_sha256')!=hashlib.sha256(metal_backend.read_bytes()).hexdigest():
+        raise SystemExit('Build and test the pinned Metal backend first: bash scripts/build-cutout-metal-lab.sh')
 if subprocess.run(['pgrep', '-f', str(stage / 'Contents/MacOS/producer')], stdout=subprocess.DEVNULL).returncode == 0:
     raise SystemExit('Close only Producer Sets v2 Dev before replacing its bundle')
 with urllib.request.urlopen('http://127.0.0.1:1436/', timeout=3) as response:
@@ -58,6 +72,10 @@ if stage.exists():
 # needs actual bundle topology; changing these files cannot modify the original.
 subprocess.run(['cp', '-cR', str(runtime), str(stage)], check=True)
 shutil.copyfile(target / 'debug/producer', stage / 'Contents/MacOS/producer')
+if metal_backend:
+    destination=stage/'Contents/Frameworks/libobs-metal.dylib'
+    shutil.copyfile(metal_backend,destination)
+    subprocess.run(['codesign','--force','--sign','-',str(destination)],check=True)
 plist = stage / 'Contents/Info.plist'
 with plist.open('rb') as stream:
     info = plistlib.load(stream)

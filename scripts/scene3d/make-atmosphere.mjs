@@ -1,14 +1,15 @@
 import {parseWorld} from '../../src/features/presentation/scene3d/contract.mjs';
-/** Transparent architectural accents sit between the photograph and native video. */
+/** Motion accents only. The photographed architecture supplies the environment;
+ * Three.js adds restrained light movement and condition-specific precipitation. */
 export function atmosphereWorld(portrait=false){
  const objects=[];
- const add=(id,kind,args,position,color,extra={})=>objects.push({id,kind,args,position,rotation:[0,0,0],color,metalness:.7,roughness:.28,pass:'foreground',...extra});
- add('stage','cylinder',[9,9.15,.16,64],[0,-3.1,-2],'#26323c',{metalness:.48,roughness:.3});
- add('stage-surface','cylinder',[8.85,8.85,.04,64],[0,-3,-2],'#273743',{metalness:.65,roughness:.22});
- for(const [i,r]of[8.95,9.13].entries())add('stage-light-'+i,'torus',[r,.018,8,64],[0,-2.98-i*.1,-2],'#edcf98',{rotation:[Math.PI/2,0,0],emissive:'#f4d5a3',emissiveIntensity:.2});
- add('atmosphere-orbit','torus',[2.25,.012,8,64],[0,2,-10],'#a7cbd8',{rotation:[.2,.3,.1],opacity:.16,unlit:true,motion:{kind:'rotateY',speed:.035,amplitude:0,phase:0}});
- const camera={position:portrait?[0,3.1,22]:[0,2.1,19],target:[0,-.5,-4],fov:portrait?49:47};
- const lights=[{id:'warm',position:[-7,6,4],color:'#ffdcaa',intensity:150},{id:'cool',position:[7,5,3],color:'#9fd9ff',intensity:70},{id:'ceiling',position:[0,9,-2],color:'#e9f2ff',intensity:180}];
- const cue=(warm,cool,ceiling)=>({lights:{warm,cool,ceiling},durationMs:700});
- return parseWorld({schema:'producer.scene3d/1',fps:30,clearColor:'#101b27',environment:'studio',environmentIntensity:.28,exposure:1.05,fog:{color:'#1a293a',near:35,far:100},camera,objects,slots:[],lights,cueDurationMs:700,views:{hero:camera,split:{...camera,position:portrait?[.6,2.7,22.5]:[-.7,2,19.5]},presenter:{...camera,position:portrait?[-.5,3.5,23]:[.6,2.8,20.2]}},cues:{neutral:cue(150,70,180),clear:cue(180,60,190),cloudy:cue(100,120,170),fog:cue(65,100,125),rain:cue(45,150,130),snow:cue(85,180,190),storm:cue(35,130,90),night:cue(90,65,65)}});
+ const add=(id,kind,args,position,color,extra={})=>objects.push({id,kind,args,position,rotation:[0,0,0],color,metalness:0,roughness:1,pass:'foreground',unlit:true,...extra});
+ // Fine moving reflections at the perimeter, away from camera and forecast text.
+ for(let i=0;i<6;i++)add('light-trace-'+i,'plane',[.012,1.4+i*.15],[(i%2?1:-1)*(portrait?6.5:13.8),2.6-Math.floor(i/2)*2,-12],'#f2d3a5',{opacity:.26,rotation:[0,0,i%2?.18:-.18],motion:{kind:'swayZ',speed:.22,amplitude:.12,phase:i*.8}});
+ for(let i=0;i<24;i++)add('rain-'+i,'plane',[.012,.24+(i%3)*.08],[-15+(i*7%30),-3+(i*11%12),-14-(i%4)],'#c3deed',{opacity:.24,visible:false,rotation:[0,0,-.15],motion:{kind:'moveY',speed:-.65,amplitude:1,phase:(i%6)*.12,clock:'cue'}});
+ for(let i=0;i<12;i++)add('snow-'+i,'plane',[.055,.055],[-13+(i*9%26),-2+(i*7%10),-12-i%3],'#e9f4ff',{opacity:.45,visible:false,motion:{kind:'swayZ',speed:.4,amplitude:.7,phase:i*.45}});
+ const camera={position:portrait?[0,1,23]:[0,1,20],target:[0,0,-8],fov:47};
+ const visibility=(rain=false,snow=false)=>Object.fromEntries(objects.filter(o=>o.visible===false).map(o=>[o.id,o.id.startsWith('rain-')?rain:snow]));
+ const cue=(rain=false,snow=false)=>({visibility:visibility(rain,snow),durationMs:760});
+ return parseWorld({schema:'producer.scene3d/1',fps:30,clearColor:'#101b27',environment:'none',environmentIntensity:0,exposure:1,fog:{color:'#1a293a',near:60,far:100},camera,objects,slots:[],cueDurationMs:760,views:{hero:camera,split:{...camera,position:[.25,1,20]},presenter:{...camera,position:[-.25,1.1,20.3]}},cues:{neutral:cue(),clear:cue(),cloudy:cue(),fog:cue(),rain:cue(true),snow:cue(false,true),storm:cue(true),night:cue()}});
 }

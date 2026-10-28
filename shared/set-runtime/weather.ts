@@ -23,7 +23,7 @@ export function parseWeatherForecast(v:unknown):WeatherForecast{
  return {timezone:weatherTimezone(o.timezone),utcOffsetSeconds:number(o.utcOffsetSeconds,-50400,50400),feelsLike:optional(o.feelsLike,-150,180),humidity:optional(o.humidity,0,100),cloudCover:optional(o.cloudCover,0,100),gusts:optional(o.gusts,0,500),windDirection:optional(o.windDirection,0,360),visibility:optional(o.visibility,0,1000000),pressure:optional(o.pressure,500,1200),hourly,daily};
 }
 /** Transport remains bounded scalar input; forecast objects cross as checked JSON. */
-export function weatherPayload<T extends {forecast?:WeatherForecast;requestKey?:string}>(result:T):Record<string,string|number|boolean>{
+export function weatherPayload<T extends {forecast?:WeatherForecast;requestKey?:string}>(result:T,cache?:{fetchedAt:number},stale=false):Record<string,string|number|boolean>{
  const {forecast,requestKey:_key,...values}=result;
- return {...values as Record<string,string|number|boolean>,...(forecast?{forecast:JSON.stringify(parseWeatherForecast(forecast))}:{})};
+ return {...values as Record<string,string|number|boolean>,...(cache?{fetchedAt:cache.fetchedAt,stale}:{}),...(forecast?{forecast:JSON.stringify(parseWeatherForecast(forecast))}:{})};
 }

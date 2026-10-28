@@ -22,8 +22,9 @@
     "url": "https://github.com/obsproject/obs-studio/releases/download/32.1.2/OBS-Studio-32.1.2-macOS-Apple.dmg",
     "sha256": "2aeb3aaa99544fefd557f10ac6550e73df71540dd57528b2a1e6f39a55ebacfb"
   },
-  "artifact_rev": 9,
+  "artifact_rev": 10,
   "artifact_adds": [
+    "rev 10: synchronize Metal swapchain target ownership and display-link snapshots during preview navigation/resize",
     "rev 9: current-frame asynchronous Metal texture copy API for responsive Apple Vision cutout",
     "rev 8: stage the source-built Producer camera system extension in the engine archive for clean release runners",
     "obs-ffmpeg",
@@ -45,6 +46,12 @@
       "target": ".",
       "sha256": "e8e444c32953d9a1cc9c2d887c57f5383d476939370b66df27673c817c29311c",
       "note": "win-dshow virtual camera: the DirectShow filter's user-visible name is Producer Virtual Camera, not OBS Virtual Camera; output registered unconditionally, filter checked at start (install without restart)"
+    },
+    {
+      "dir": "engine/patches/metal",
+      "target": "libobs-metal",
+      "sha256": "c7010aea0ef737adf7ed403973de54ba59ed89014390f189a9e42819d6df01a6",
+      "note": "Serialize Swift ARC target ownership between CVDisplayLink and graphics, and snapshot the swapchain array under its writer queue."
     }
   ]
 }

@@ -13,7 +13,7 @@ use std::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc, Mutex,
     },
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 const SCRIPT: &[u8] =
     include_bytes!("../../../../src/features/presentation/vendor/scene3d-renderer.js");
@@ -489,6 +489,7 @@ impl Bridge {
         let Some(route) = path.strip_prefix(&format!("/{}/", self.token)) else {
             return;
         };
+        let route = route.split('?').next().unwrap_or(route);
         if headers
             .lines()
             .filter_map(|l| l.split_once(':'))
@@ -688,6 +689,7 @@ pub struct Lease {
     raw: Rc<Source>,
     height: u32,
     verified: std::cell::RefCell<Option<(u64, u64)>>,
+    navigation: std::cell::RefCell<(Instant, u8)>,
 }
 impl Lease {
     pub unsafe fn create(spec: &Spec, w: u32, h: u32) -> Result<Rc<Self>, String> {
@@ -734,6 +736,7 @@ impl Lease {
             bridge,
             height: h,
             verified: std::cell::RefCell::new(None),
+            navigation: std::cell::RefCell::new((Instant::now(), 0)),
         }))
     }
     pub fn pixels(&self) -> usize {
@@ -745,11 +748,28 @@ impl Lease {
     pub fn ready(&self) -> bool {
         let Some(key) = self.bridge.fence() else {
             *self.verified.borrow_mut() = None;
-            // A hidden browser source still needs a render request to start
-            // importing its first GPU paint. Waiting for its receipt before
-            // rendering creates a cold-start dependency cycle. Warming never
-            // substitutes for the revision/session pixel fence below.
-            unsafe { super::producer_set_v2_surface_warm(self.raw.0) };
+            // CEF can fail its first loopback navigation while its network
+            // service is starting. Retry only if /world has never been read;
+            // a healthy renderer, compilation, or a reported error is never
+            // restarted. Every retry still needs the session/revision fence.
+            let not_started = self.bridge.state.lock().unwrap().session == 0;
+            let mut navigation = self.navigation.borrow_mut();
+            if not_started && navigation.1 < 2 && navigation.0.elapsed() >= Duration::from_secs(10)
+            {
+                navigation.0 = Instant::now();
+                navigation.1 += 1;
+                let url = CString::new(format!(
+                    "{}/{}/view?attempt={}",
+                    self.bridge.origin, self.bridge.token, navigation.1
+                ))
+                .unwrap();
+                unsafe {
+                    let settings = ffi::obs_source_get_settings(self.raw.0);
+                    ffi::obs_data_set_string(settings, c"url".as_ptr(), url.as_ptr());
+                    ffi::obs_source_update(self.raw.0, settings);
+                    ffi::obs_data_release(settings);
+                }
+            }
             return false;
         };
         if *self.verified.borrow() == Some(key) {

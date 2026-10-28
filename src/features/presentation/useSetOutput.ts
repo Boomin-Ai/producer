@@ -171,11 +171,22 @@ function useLegacySetOutput(session:RehearsalSession,roomId:string|null,sources:
 }
 
 let nativeCapability:Promise<boolean>|undefined;
+let visualCapabilities:Promise<string[]>|undefined;
 export function useSetOutput(session:RehearsalSession,roomId:string|null,sources:LiveSources,enabled:boolean,initialBindings:Record<string,string>={},onBindings?:(bindings:Record<string,string>)=>void,initialFraming:Record<string,import('./schema').SlotFraming>={},onFraming?:(framing:Record<string,import('./schema').SlotFraming>)=>void):SetOutputControls {
  useShowClock(session);
  const [renderer,setRenderer]=useState<'waiting'|'native'|'legacy'>('waiting');
  useEffect(()=>{let stopped=false;nativeCapability??=invoke<boolean>('live_set_v2_enabled').catch(()=>false);void nativeCapability.then(value=>{if(!stopped)setRenderer(value?'native':'legacy');});return()=>{stopped=true;};},[]);
- const native=useRoomOutput(session,roomId,sources,enabled&&renderer==='native',initialBindings,onBindings,initialFraming,onFraming);
- const legacy=useLegacySetOutput(session,roomId,sources,enabled&&renderer==='legacy',initialBindings,onBindings,initialFraming,onFraming);
- return renderer==='native'?native:legacy;
+ const requirements=JSON.stringify(session.package.requires??[]);
+ const [features,setFeatures]=useState({key:'',error:''});
+ useEffect(()=>{let stopped=false;const required=session.package.requires??[];
+  if(!required.length){setFeatures({key:requirements,error:''});return;}
+  visualCapabilities??=invoke<string[]>('live_set_v2_capabilities').catch(()=>[]);
+  void visualCapabilities.then(supported=>{if(stopped)return;const missing=required.filter(f=>!supported.includes(f));setFeatures({key:requirements,error:missing.length?'This Producer engine does not support '+missing.join(', ')+'. Update Producer to use this set.':''});});
+  return()=>{stopped=true;};
+ },[requirements]);
+ const featuresReady=features.key===requirements&&!features.error;
+ const native=useRoomOutput(session,roomId,sources,enabled&&renderer==='native'&&featuresReady,initialBindings,onBindings,initialFraming,onFraming);
+ const legacy=useLegacySetOutput(session,roomId,sources,enabled&&renderer==='legacy'&&featuresReady,initialBindings,onBindings,initialFraming,onFraming);
+ const output=renderer==='native'?native:legacy;
+ return features.error?{...output,error:features.error,apply:async()=>{throw Error(features.error);}}:output;
 }

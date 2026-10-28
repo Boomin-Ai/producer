@@ -8,7 +8,7 @@ import {
 import type { SlotFraming } from "../presentation/schema";
 import { AssetTransport } from "../presentation/assetTransport";
 import {authoredCrossfadeMs} from '../presentation/animation';
-import {PreparedScenes,layoutProjections,morphTargets,runtimePlan,type SceneSpec,type NativeSceneStatus} from './preparedScenes';
+import {PreparedScenes,layoutProjections,moduleViewProjections,warmInventory,morphTargets,runtimePlan,type SceneSpec,type NativeSceneStatus} from './preparedScenes';
 import {RehearsalSession} from '../presentation/rehearsal';
 type NativeStatus = NativeSceneStatus & {
   generation: number;
@@ -20,6 +20,7 @@ type NativeStatus = NativeSceneStatus & {
   transitioning: boolean;
   renderSerial: number;
 };
+const chartSeries=(projection:import('../presentation/projection').OutputProjection)=>{const data:unknown[]=[];const visit=(n:typeof projection.root)=>{if(n.chart)data.push([n.chart.id,n.chart.data]);n.children.forEach(visit);};visit(projection.root);return data.length?JSON.stringify(data):'';};
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 /** Normal room controls consume this adapter; engineering lab controls do not
@@ -38,6 +39,7 @@ export function useRoomOutput(
   const [bindings, setBindings] = useState(initialBindings),
     [framing, setFraming] = useState(initialFraming);
   const [pendingChange, setPendingChange] = useState<"set" | "segment" | "content">("content");
+  const shownCharts=useRef(''),portraitShownCharts=useRef('');
   const shownSelection = useRef({definition: "", layout: "", phase: ""});
   const deliberatelyHidden=useRef(false);
   useEffect(()=>{deliberatelyHidden.current=false;},[session.package.id,roomId]);
@@ -91,7 +93,7 @@ export function useRoomOutput(
   const scene3dCapability=useRef<Promise<boolean>|undefined>(undefined);
   const invalidateRoom=()=>{
     ++operation.current;++portraitOperation.current;
-    confirmed.current="";shownLayout.current="";portraitShownLayout.current="";
+    confirmed.current="";shownLayout.current="";portraitShownLayout.current="";shownCharts.current="";portraitShownCharts.current="";
     isActive.current=false;setError("");
     bank.current?.reset();setRetryVersion(v=>v+1);
   };
@@ -104,12 +106,12 @@ export function useRoomOutput(
     return invoke<NativeStatus>('live_set_v2',{request:{generation:room.generation,...value}}).catch(e=>{if(value.op==='status'&&/Prepare (a v2|the portrait) set first/.test(String(e)))return {preparedRevision:0,renderedRevision:0,renderSerial:0,ready:false,warmed:false,queued:false,transitioning:false,cachedKeys:[],generation:room.generation};throw e;});
   },()=>notifyPreparation(v=>v+1));
   const specsFor=(selected:RehearsalSession,selectedBindings:Record<string,string>,selectedFraming:Record<string,SlotFraming>):SceneSpec[]=>{
-    const inventory=layoutProjections(selected);
+    const inventory=[...layoutProjections(selected),...(selected.snapshot().workspaceMode==='prepare'?[]:moduleViewProjections(selected))];
     const projections=inventory.map(i=>i.projection);
     const version=JSON.stringify(media.current.signature({...inventory[0].projection,assets:selected.package.set.assets}).assets);
     return inventory.map(item=>{
       const frame=(n:typeof item.projection.root)=>{if(n.slotId&&selectedFraming[n.slotId])n.framing=selectedFraming[n.slotId];n.children.forEach(frame);};frame(item.projection.root);
-      return {projection:item.projection,phase:item.phase,layout:item.layout,definition:selected.package.id,instance:'room-'+(roomId??'local').slice(0,50),bindings:selectedBindings,target:item.projection.height>item.projection.width?{id:'portrait',orientation:'portrait',width:canvas.height,height:Math.round(canvas.height*16/9),scaling:'contain'}:{id:'program',orientation:'landscape',...canvas,scaling:'contain'},targets:morphTargets(projections,item.projection),assetVersion:version+JSON.stringify(Object.values(selectedBindings).map(id=>{const source=sources.items?.find(s=>s.id===id);return [id,source?.src_w,source?.src_h];}))};
+      return {speculative:item.variant,projection:item.projection,phase:item.phase,layout:item.layout,definition:selected.package.id,instance:'room-'+(roomId??'local').slice(0,50),bindings:selectedBindings,target:item.projection.height>item.projection.width?{id:'portrait',orientation:'portrait',width:canvas.height,height:Math.round(canvas.height*16/9),scaling:'contain'}:{id:'program',orientation:'landscape',...canvas,scaling:'contain'},targets:morphTargets(projections,item.projection),assetVersion:version+JSON.stringify(Object.values(selectedBindings).map(id=>{const source=sources.items?.find(s=>s.id===id);return [id,source?.src_w,source?.src_h];}))};
     });
   };
   const inventory=useMemo(()=>specsFor(session,bindings,framing),[session.package,JSON.stringify(state.values),JSON.stringify(state.feeds),JSON.stringify(state.modules),JSON.stringify(bindings),JSON.stringify(framing),JSON.stringify(sources.items?.map(s=>[s.id,s.src_w,s.src_h,s.has_frame])),canvas,roomId]);
@@ -122,9 +124,10 @@ export function useRoomOutput(
     // fitted copy of every portrait layout on the landscape renderer.
     const selected=inventory.find(s=>s.layout===state.layoutId);
     const fallback=selected&&selected.target.id!=='program'?{...selected,target:{id:'program',orientation:'landscape' as const,...canvas,scaling:'contain' as const}}:undefined;
-    const specs=[...authoredSpecs,...(fallback?[fallback]:[])];
-    const prioritized=[...specs].sort((a,b)=>Number(b.layout===state.layoutId)-Number(a.layout===state.layoutId));
-    void bank.current!.retain(specs).then(()=>bank.current!.preload(prioritized,()=>cancelled));
+    const currentVariants=session.package.set.views&&Object.values(session.package.set.views).find(variants=>Object.values(variants).includes(state.layoutId));
+    const currentLayouts=new Set<string>(currentVariants?Object.values(currentVariants):[state.layoutId]);
+    const specs=warmInventory([...authoredSpecs,...(fallback?[fallback]:[])],currentLayouts);
+    void bank.current!.retain(specs).then(()=>bank.current!.preload(specs,()=>cancelled));
     return()=>{cancelled=true;};
   },[enabled,canvasReady,inventory,candidates,retryVersion]);
   const bankDisposal=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
@@ -158,7 +161,7 @@ export function useRoomOutput(
     const timer=setInterval(()=>{void refresh().catch(()=>{});},1500);
     return()=>{cancelled=true;canvasReadyRoom.current=undefined;clearInterval(timer);stop?.();};
   },[enabled,roomId]);
-  const layoutReadiness=Object.fromEntries(inventory.map(spec=>[spec.layout,bank.current!.readiness(spec)]));
+  const layoutReadiness=Object.fromEntries(inventory.filter((spec,index)=>inventory.findIndex(other=>other.layout===spec.layout)===index).map(spec=>[spec.layout,bank.current!.readiness(spec)]));
   void preparationVersion;
   const project = () => {
     const current = latest.current,
@@ -216,8 +219,9 @@ export function useRoomOutput(
       timing('activate-request',{cacheKey:entry.key});
       await request({op:'activate',revision:attempted,key:entry.key,plan});
       if (ticket !== operation.current) return;
+      const charts=chartSeries(full),chartUpdate=!!charts&&!!shownCharts.current&&charts!==shownCharts.current;
       const transition =
-        authoredCrossfadeMs(full.timeline?.transition,isActive.current&&(shownSelection.current.definition!==selection.definition||shownLayout.current!==layout),snapshot.paused);
+        authoredCrossfadeMs(full.timeline?.transition,isActive.current&&(shownSelection.current.definition!==selection.definition||shownLayout.current!==layout),snapshot.paused,isActive.current&&!chartUpdate);
       timing('take-request',{transitionMs:transition});
       await request({
         op: "take",
@@ -236,6 +240,7 @@ export function useRoomOutput(
             return;
           media.current.acknowledge(full);
           confirmed.current = fingerprint;
+          shownCharts.current=charts;
           shownLayout.current = layout;
           shownSelection.current = selection;
           isActive.current = true;
@@ -371,13 +376,14 @@ export function useRoomOutput(
     await bank.current!.take(spec,async(entry,candidate)=>{
       const plan=runtimePlan(entry.plan!,projection);
       await send({op:'activate',key:entry.key,revision:candidate,plan});
-      await send({op:'take',revision:candidate,durationMs:authoredCrossfadeMs(projection.timeline?.transition,portraitShownLayout.current!==portraitKey,!!current.session.snapshot().paused),mode:'dissolve'});
+      const charts=chartSeries(projection),chartUpdate=!!charts&&!!portraitShownCharts.current&&charts!==portraitShownCharts.current;
+      await send({op:'take',revision:candidate,durationMs:authoredCrossfadeMs(projection.timeline?.transition,portraitShownLayout.current!==portraitKey,!!current.session.snapshot().paused,!!portraitShownLayout.current&&!chartUpdate),mode:'dissolve'});
     for (let i = 0; i < 200; i++) {
       const state = await send({ op: "status" });
       if (
         state.renderedRevision === candidate &&
         !state.transitioning
-      ) { portraitShownLayout.current=portraitKey;if(projection.moduleCommit)window.dispatchEvent(new CustomEvent('producer:module-presented',{detail:{output:'portrait',generation:generation.current,nativeRevision:candidate,renderSerial:state.renderSerial,moduleCommit:projection.moduleCommit}})); return; }
+      ) { portraitShownCharts.current=chartSeries(projection);portraitShownLayout.current=portraitKey;if(projection.moduleCommit)window.dispatchEvent(new CustomEvent('producer:module-presented',{detail:{output:'portrait',generation:generation.current,nativeRevision:candidate,renderSerial:state.renderSerial,moduleCommit:projection.moduleCommit}})); return; }
       if (i === 199) throw Error("Portrait did not confirm its rendered frame");
       await sleep(20);
     }

@@ -9,10 +9,24 @@ const doc=api.parsePackage(JSON.parse(fs.readFileSync('docs/shows/atmosphere.jso
 const session=new api.RehearsalSession(doc,undefined,'rehearsal');
 const send=async(module,op,input={})=>{const r=await session.sendModule(module,op,input);assert.equal(r.status,'committed',JSON.stringify(r));};
 await send('sky','start');await send('studio','start');
-const deliver=(sample,revision=0)=>{const s=session.moduleSnapshot();return session.receiveModuleData({id:crypto.randomUUID(),setEpoch:s.setEpoch,module:'sky',epoch:s.modules.sky.epoch,op:'weather.update',input:{...api.weatherPayload(sample),locationRevision:revision}});};
+const deliver=(sample,revision=0,cache,stale=false)=>{const s=session.moduleSnapshot();return session.receiveModuleData({id:crypto.randomUUID(),setEpoch:s.setEpoch,module:'sky',epoch:s.modules.sky.epoch,op:'weather.update',input:{...api.weatherPayload(sample,cache,stale),locationRevision:revision}});};
 assert.equal(deliver(atmosphereSample()).status,'committed');
+const fetchedAt=Date.now()-10000;assert.equal(deliver(atmosphereSample(),0,{fetchedAt},true).status,'committed');assert.equal(session.moduleSnapshot().modules.sky.weather.at,fetchedAt);assert.equal(session.moduleSnapshot().modules.sky.dataStatus,'stale');assert.equal(deliver(atmosphereSample()).status,'committed');
 const before=session.snapshot().modules.sky;assert.equal(before.humidityLabel,'42%');assert.equal(before.highLabel,'74°');assert.equal(before.day2Rain,'80%');
-for(const pose of ['hero','split','presenter']){await send('studio',pose);for(const orientation of ['landscape','portrait']){session.send({type:'control',action:{type:'layout.select',layoutId:pose+'-'+orientation}});for(const view of ['now','today','hourly','week']){await send('sky',view);const p=api.outputProjection(doc,session.snapshot());const flat=n=>[n,...n.children.flatMap(flat)];const nodes=flat(p.root),host=nodes.find(n=>n.slotId==='host');assert(host);assert(host.styles.width*host.styles.height>(orientation==='portrait'?500000:300000));assert.equal(p.timeline.tracks.length<=32,true);}}}
+for(const pose of ['hero','split','presenter']){await send('studio',pose);for(const orientation of ['landscape','portrait']){session.send({type:'control',action:{type:'layout.select',layoutId:pose+'-'+orientation}});for(const view of ['now','today','hourly','week']){await send('sky',view);const p=api.outputProjection(doc,session.snapshot());const flat=n=>[n,...n.children.flatMap(flat)];const nodes=flat(p.root),host=nodes.find(n=>n.slotId==='host');assert(host);if(orientation==='landscape'&&pose!=='presenter')assert.equal(host.styles.width/host.styles.height,9/16);assert(host.styles.width*host.styles.height>(orientation==='portrait'?500000:300000));assert.equal(p.timeline.tracks.length<=32,true);}}}
+// Real operator composition edges must move the camera and complete panels.
+for(const pose of ['hero','split','presenter','hero']){
+ await send('studio',pose);
+ const projection=api.outputProjection(doc,session.snapshot());
+ assert.equal(projection.timeline.transition.contentDurationMs,260);
+ assert.equal(projection.timeline.transition.durationMs,760);
+ const tracks=projection.timeline.tracks;
+ assert(tracks.length<=32);
+ if(pose!=='hero'||tracks.length){
+  assert(tracks.some(t=>t.target.endsWith('/host-camera')),'camera has native movement');
+  assert(tracks.some(t=>t.target.endsWith('/forecast-panel')),'forecast moves as one unit');
+ }
+}
 const target={id:'5128581',label:'New York, New York, US',latitude:40.714,longitude:-74.006,timezone:'America/New_York'};
 await send('sky','weather.selectLocation',{location:JSON.stringify(target)});const selected=session.moduleSnapshot().modules.sky;assert.equal(selected.weather,null);assert.equal(selected.weatherLocation.label,target.label);assert.equal(deliver(atmosphereSample(),0).status,'rejected');assert.equal(deliver(atmosphereSample({location:target.label}),1).status,'committed');
 const old=structuredClone(session.moduleSnapshot());const invalid=atmosphereSample({location:target.label});invalid.forecast.daily[0].high=0;invalid.forecast.daily[0].low=100;assert.throws(()=>api.weatherPayload(invalid));const invalidState=session.moduleSnapshot();assert.equal(session.receiveModuleData({id:crypto.randomUUID(),setEpoch:invalidState.setEpoch,module:'sky',epoch:invalidState.modules.sky.epoch,op:'weather.update',input:{...api.weatherPayload(atmosphereSample()),forecast:JSON.stringify(invalid.forecast),locationRevision:1}}).status,'rejected');assert.deepEqual(session.moduleSnapshot(),old);

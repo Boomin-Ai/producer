@@ -1,0 +1,593 @@
+{
+  "kind": "atmosphere-design",
+  "ok": true,
+  "recording": "/Users/klevelandbishop/Movies/Producer/Producer Atmosphere design motion 3660fe97-d597-4039-94ca-e4d26bf32e30.mp4",
+  "samples": [
+    {
+      "after": {
+        "cachedBytes": 139739488,
+        "cachedKeys": [
+          "scene-39f368be-53e358ae"
+        ],
+        "clockMs": 18033.332265913486,
+        "generation": 2,
+        "graphicsLayers": 9,
+        "paused": false,
+        "preparedRevision": 9,
+        "queued": false,
+        "ready": true,
+        "renderSerial": 145,
+        "renderedRevision": 9,
+        "scene3dContexts": 1,
+        "transitionProgress": 1,
+        "transitioning": false,
+        "warmed": true
+      },
+      "elapsedMs": 1718,
+      "events": [
+        {
+          "at": 54146,
+          "definition": "atmosphere",
+          "elapsedMs": 0,
+          "layout": "split-landscape",
+          "phase": "",
+          "revision": 0,
+          "stage": "apply-start"
+        },
+        {
+          "at": 54238,
+          "definition": "atmosphere",
+          "elapsedMs": 92,
+          "layout": "split-landscape",
+          "phase": "",
+          "revision": 0,
+          "stage": "cache-request"
+        },
+        {
+          "at": 55580,
+          "cacheKey": "scene-39f368be-53e358ae",
+          "definition": "atmosphere",
+          "elapsedMs": 1434,
+          "layout": "split-landscape",
+          "phase": "",
+          "revision": 9,
+          "stage": "activate-request"
+        },
+        {
+          "at": 55625,
+          "definition": "atmosphere",
+          "elapsedMs": 1479,
+          "layout": "split-landscape",
+          "phase": "",
+          "revision": 9,
+          "stage": "take-request",
+          "transitionMs": 0
+        },
+        {
+          "at": 55691,
+          "definition": "atmosphere",
+          "elapsedMs": 1545,
+          "layout": "split-landscape",
+          "moduleCommit": {
+            "domain": "live",
+            "revision": 5,
+            "setEpoch": 4
+          },
+          "phase": "",
+          "renderSerial": 144,
+          "revision": 9,
+          "stage": "render-complete"
+        }
+      ],
+      "label": "Split"
+    },
+    {
+      "after": {
+        "cachedBytes": 278591880,
+        "cachedKeys": [
+          "scene-39f368be-53e358ae",
+          "scene-dbb60ced-8913b8db"
+        ],
+        "clockMs": 20933.33214521408,
+        "generation": 2,
+        "graphicsLayers": 12,
+        "paused": false,
+        "preparedRevision": 13,
+        "queued": false,
+        "ready": true,
+        "renderSerial": 211,
+        "renderedRevision": 13,
+        "scene3dContexts": 1,
+        "transitionProgress": 1,
+        "transitioning": false,
+        "warmed": true
+      },
+      "elapsedMs": 1811,
+      "events": [
+        {
+          "at": 56952,
+          "definition": "atmosphere",
+          "elapsedMs": 0,
+          "layout": "presenter-landscape",
+          "phase": "",
+          "revision": 0,
+          "stage": "apply-start"
+        },
+        {
+          "at": 56963,
+          "definition": "atmosphere",
+          "elapsedMs": 11,
+          "layout": "presenter-landscape",
+          "phase": "",
+          "revision": 0,
+          "stage": "cache-request"
+        },
+        {
+          "at": 58564,
+          "cacheKey": "scene-dbb60ced-8913b8db",
+          "definition": "atmosphere",
+          "elapsedMs": 1612,
+          "layout": "presenter-landscape",
+          "phase": "",
+          "revision": 13,
+          "stage": "activate-request"
+        },
+        {
+          "at": 58595,
+          "definition": "atmosphere",
+          "elapsedMs": 1643,
+          "layout": "presenter-landscape",
+          "phase": "",
+          "revision": 13,
+          "stage": "take-request",
+          "transitionMs": 0
+        }
+      ],
+      "label": "Presenter"
+    },
+    {
+      "after": {
+        "cachedBytes": 141259808,
+        "cachedKeys": [
+          "scene-7a0f5263-a891655f"
+        ],
+        "clockMs": 23733.33201557398,
+        "generation": 2,
+        "graphicsLayers": 9,
+        "paused": false,
+        "preparedRevision": 17,
+        "queued": false,
+        "ready": true,
+        "renderSerial": 273,
+        "renderedRevision": 17,
+        "scene3dContexts": 1,
+        "transitionProgress": 1,
+        "transitioning": false,
+        "warmed": true
+      },
+      "elapsedMs": 1611,
+      "events": [
+        {
+          "at": 59924,
+          "definition": "atmosphere",
+          "elapsedMs": 0,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 0,
+          "stage": "apply-start"
+        },
+        {
+          "at": 59935,
+          "definition": "atmosphere",
+          "elapsedMs": 11,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 0,
+          "stage": "cache-request"
+        },
+        {
+          "at": 61265,
+          "cacheKey": "scene-7a0f5263-a891655f",
+          "definition": "atmosphere",
+          "elapsedMs": 1341,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 17,
+          "stage": "activate-request"
+        },
+        {
+          "at": 61299,
+          "definition": "atmosphere",
+          "elapsedMs": 1375,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 17,
+          "stage": "take-request",
+          "transitionMs": 0
+        },
+        {
+          "at": 61355,
+          "definition": "atmosphere",
+          "elapsedMs": 1431,
+          "layout": "hero-landscape",
+          "moduleCommit": {
+            "domain": "live",
+            "revision": 7,
+            "setEpoch": 4
+          },
+          "phase": "",
+          "renderSerial": 271,
+          "revision": 17,
+          "stage": "render-complete"
+        }
+      ],
+      "label": "Hero"
+    },
+    {
+      "after": {
+        "cachedBytes": 423779424,
+        "cachedKeys": [
+          "scene-94730076-5910fabe",
+          "scene-7a0f5263-a891655f",
+          "scene-a59410ab-2c177eb9"
+        ],
+        "clockMs": 26566.66523218155,
+        "generation": 2,
+        "graphicsLayers": 14,
+        "paused": false,
+        "preparedRevision": 21,
+        "queued": false,
+        "ready": true,
+        "renderSerial": 337,
+        "renderedRevision": 21,
+        "scene3dContexts": 1,
+        "transitionProgress": 1,
+        "transitioning": false,
+        "warmed": true
+      },
+      "elapsedMs": 1700,
+      "events": [
+        {
+          "at": 62627,
+          "definition": "atmosphere",
+          "elapsedMs": 0,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 0,
+          "stage": "apply-start"
+        },
+        {
+          "at": 62734,
+          "definition": "atmosphere",
+          "elapsedMs": 107,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 0,
+          "stage": "cache-request"
+        },
+        {
+          "at": 63860,
+          "cacheKey": "scene-94730076-5910fabe",
+          "definition": "atmosphere",
+          "elapsedMs": 1233,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 21,
+          "stage": "activate-request"
+        },
+        {
+          "at": 63892,
+          "definition": "atmosphere",
+          "elapsedMs": 1265,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 21,
+          "stage": "take-request",
+          "transitionMs": 260
+        },
+        {
+          "at": 63931,
+          "definition": "atmosphere",
+          "elapsedMs": 1304,
+          "layout": "hero-landscape",
+          "phase": "",
+          "renderSerial": 327,
+          "revision": 21,
+          "stage": "transition-first-observed"
+        },
+        {
+          "at": 64200,
+          "definition": "atmosphere",
+          "elapsedMs": 1573,
+          "layout": "hero-landscape",
+          "moduleCommit": {
+            "domain": "live",
+            "revision": 8,
+            "setEpoch": 4
+          },
+          "phase": "",
+          "renderSerial": 335,
+          "revision": 21,
+          "stage": "render-complete"
+        }
+      ],
+      "label": "Today"
+    },
+    {
+      "after": {
+        "cachedBytes": 565039232,
+        "cachedKeys": [
+          "scene-7a0f5263-a891655f",
+          "scene-a59410ab-2c177eb9",
+          "scene-94730076-5910fabe",
+          "scene-c44a7035-9f02aca7"
+        ],
+        "clockMs": 29499.998413026333,
+        "generation": 2,
+        "graphicsLayers": 16,
+        "paused": false,
+        "preparedRevision": 25,
+        "queued": false,
+        "ready": true,
+        "renderSerial": 413,
+        "renderedRevision": 25,
+        "scene3dContexts": 1,
+        "transitionProgress": 1,
+        "transitioning": false,
+        "warmed": true
+      },
+      "elapsedMs": 1829,
+      "events": [
+        {
+          "at": 65444,
+          "definition": "atmosphere",
+          "elapsedMs": 0,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 0,
+          "stage": "apply-start"
+        },
+        {
+          "at": 65469,
+          "definition": "atmosphere",
+          "elapsedMs": 25,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 0,
+          "stage": "cache-request"
+        },
+        {
+          "at": 66793,
+          "cacheKey": "scene-c44a7035-9f02aca7",
+          "definition": "atmosphere",
+          "elapsedMs": 1349,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 25,
+          "stage": "activate-request"
+        },
+        {
+          "at": 66825,
+          "definition": "atmosphere",
+          "elapsedMs": 1381,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 25,
+          "stage": "take-request",
+          "transitionMs": 260
+        },
+        {
+          "at": 66865,
+          "definition": "atmosphere",
+          "elapsedMs": 1421,
+          "layout": "hero-landscape",
+          "phase": "",
+          "renderSerial": 403,
+          "revision": 25,
+          "stage": "transition-first-observed"
+        },
+        {
+          "at": 67136,
+          "definition": "atmosphere",
+          "elapsedMs": 1692,
+          "layout": "hero-landscape",
+          "moduleCommit": {
+            "domain": "live",
+            "revision": 9,
+            "setEpoch": 4
+          },
+          "phase": "",
+          "renderSerial": 411,
+          "revision": 25,
+          "stage": "render-complete"
+        }
+      ],
+      "label": "Hourly"
+    },
+    {
+      "after": {
+        "cachedBytes": 706299040,
+        "cachedKeys": [
+          "scene-7a0f5263-a891655f",
+          "scene-a59410ab-2c177eb9",
+          "scene-94730076-5910fabe",
+          "scene-c44a7035-9f02aca7",
+          "scene-aef9dbb9-a99a17d3"
+        ],
+        "clockMs": 32466.66492521763,
+        "generation": 2,
+        "graphicsLayers": 18,
+        "paused": false,
+        "preparedRevision": 29,
+        "queued": false,
+        "ready": true,
+        "renderSerial": 491,
+        "renderedRevision": 29,
+        "scene3dContexts": 2,
+        "transitionProgress": 1,
+        "transitioning": false,
+        "warmed": true
+      },
+      "elapsedMs": 1872,
+      "events": [
+        {
+          "at": 68368,
+          "definition": "atmosphere",
+          "elapsedMs": 0,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 0,
+          "stage": "apply-start"
+        },
+        {
+          "at": 68378,
+          "definition": "atmosphere",
+          "elapsedMs": 10,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 0,
+          "stage": "cache-request"
+        },
+        {
+          "at": 69561,
+          "cacheKey": "scene-aef9dbb9-a99a17d3",
+          "definition": "atmosphere",
+          "elapsedMs": 1193,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 29,
+          "stage": "activate-request"
+        },
+        {
+          "at": 69597,
+          "definition": "atmosphere",
+          "elapsedMs": 1229,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 29,
+          "stage": "take-request",
+          "transitionMs": 260
+        },
+        {
+          "at": 69727,
+          "definition": "atmosphere",
+          "elapsedMs": 1359,
+          "layout": "hero-landscape",
+          "phase": "",
+          "renderSerial": 478,
+          "revision": 29,
+          "stage": "transition-first-observed"
+        },
+        {
+          "at": 69935,
+          "definition": "atmosphere",
+          "elapsedMs": 1567,
+          "layout": "hero-landscape",
+          "moduleCommit": {
+            "domain": "live",
+            "revision": 10,
+            "setEpoch": 4
+          },
+          "phase": "",
+          "renderSerial": 484,
+          "revision": 29,
+          "stage": "render-complete"
+        }
+      ],
+      "label": "7 day"
+    },
+    {
+      "after": {
+        "cachedBytes": 706299040,
+        "cachedKeys": [
+          "scene-7a0f5263-a891655f",
+          "scene-a59410ab-2c177eb9",
+          "scene-94730076-5910fabe",
+          "scene-c44a7035-9f02aca7",
+          "scene-aef9dbb9-a99a17d3"
+        ],
+        "clockMs": 34233.331486582756,
+        "generation": 2,
+        "graphicsLayers": 18,
+        "paused": false,
+        "preparedRevision": 32,
+        "queued": false,
+        "ready": true,
+        "renderSerial": 544,
+        "renderedRevision": 32,
+        "scene3dContexts": 1,
+        "transitionProgress": 1,
+        "transitioning": false,
+        "warmed": true
+      },
+      "elapsedMs": 632,
+      "events": [
+        {
+          "at": 71427,
+          "definition": "atmosphere",
+          "elapsedMs": 0,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 0,
+          "stage": "apply-start"
+        },
+        {
+          "at": 71438,
+          "definition": "atmosphere",
+          "elapsedMs": 11,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 0,
+          "stage": "cache-request"
+        },
+        {
+          "at": 71527,
+          "cacheKey": "scene-7a0f5263-a891655f",
+          "definition": "atmosphere",
+          "elapsedMs": 100,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 32,
+          "stage": "activate-request"
+        },
+        {
+          "at": 71574,
+          "definition": "atmosphere",
+          "elapsedMs": 147,
+          "layout": "hero-landscape",
+          "phase": "",
+          "revision": 32,
+          "stage": "take-request",
+          "transitionMs": 260
+        },
+        {
+          "at": 71643,
+          "definition": "atmosphere",
+          "elapsedMs": 216,
+          "layout": "hero-landscape",
+          "phase": "",
+          "renderSerial": 535,
+          "revision": 32,
+          "stage": "transition-first-observed"
+        },
+        {
+          "at": 71893,
+          "definition": "atmosphere",
+          "elapsedMs": 466,
+          "layout": "hero-landscape",
+          "moduleCommit": {
+            "domain": "live",
+            "revision": 11,
+            "setEpoch": 4
+          },
+          "phase": "",
+          "renderSerial": 543,
+          "revision": 32,
+          "stage": "render-complete"
+        }
+      ],
+      "label": "Now"
+    }
+  ],
+  "stage": "complete"
+}

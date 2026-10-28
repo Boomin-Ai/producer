@@ -5,6 +5,23 @@
     "schema": {
       "const": "producer.presentation/2"
     },
+    "requires": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "const": "mask@1"
+          },
+          {
+            "const": "backdrop@1"
+          },
+          {
+            "const": "chart@1"
+          }
+        ]
+      },
+      "maxItems": 3
+    },
     "runtime": {
       "type": "object",
       "properties": {
@@ -646,6 +663,9 @@
                             },
                             {
                               "const": "shader.scale"
+                            },
+                            {
+                              "const": "mask.progress"
                             }
                           ]
                         },
@@ -747,6 +767,11 @@
                         "type": "number",
                         "minimum": 0,
                         "maximum": 2000
+                      },
+                      "contentDurationMs": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1000
                       }
                     },
                     "required": [
@@ -2356,6 +2381,501 @@
                 }
               }
             },
+            "mask": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "anyOf": [
+                    {
+                      "const": "rounded"
+                    },
+                    {
+                      "const": "circle"
+                    },
+                    {
+                      "const": "wipe"
+                    }
+                  ]
+                },
+                "radius": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "progress": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "x": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "y": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "feather": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "invert": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "direction": {
+                  "anyOf": [
+                    {
+                      "const": "left"
+                    },
+                    {
+                      "const": "right"
+                    },
+                    {
+                      "const": "up"
+                    },
+                    {
+                      "const": "down"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            },
+            "backdrop": {
+              "type": "object",
+              "properties": {
+                "blur": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "blur"
+              ],
+              "additionalProperties": false
+            },
             "when": {
               "anyOf": [
                 {
@@ -2587,6 +3107,501 @@
                   ]
                 }
               }
+            },
+            "mask": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "anyOf": [
+                    {
+                      "const": "rounded"
+                    },
+                    {
+                      "const": "circle"
+                    },
+                    {
+                      "const": "wipe"
+                    }
+                  ]
+                },
+                "radius": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "progress": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "x": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "y": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "feather": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "invert": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "direction": {
+                  "anyOf": [
+                    {
+                      "const": "left"
+                    },
+                    {
+                      "const": "right"
+                    },
+                    {
+                      "const": "up"
+                    },
+                    {
+                      "const": "down"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            },
+            "backdrop": {
+              "type": "object",
+              "properties": {
+                "blur": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "blur"
+              ],
+              "additionalProperties": false
             },
             "when": {
               "anyOf": [
@@ -2876,6 +3891,501 @@
                   ]
                 }
               }
+            },
+            "mask": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "anyOf": [
+                    {
+                      "const": "rounded"
+                    },
+                    {
+                      "const": "circle"
+                    },
+                    {
+                      "const": "wipe"
+                    }
+                  ]
+                },
+                "radius": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "progress": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "x": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "y": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "feather": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "invert": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "direction": {
+                  "anyOf": [
+                    {
+                      "const": "left"
+                    },
+                    {
+                      "const": "right"
+                    },
+                    {
+                      "const": "up"
+                    },
+                    {
+                      "const": "down"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            },
+            "backdrop": {
+              "type": "object",
+              "properties": {
+                "blur": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "blur"
+              ],
+              "additionalProperties": false
             },
             "when": {
               "anyOf": [
@@ -3258,6 +4768,1491 @@
                 }
               }
             },
+            "mask": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "anyOf": [
+                    {
+                      "const": "rounded"
+                    },
+                    {
+                      "const": "circle"
+                    },
+                    {
+                      "const": "wipe"
+                    }
+                  ]
+                },
+                "radius": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "progress": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "x": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "y": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "feather": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "invert": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "direction": {
+                  "anyOf": [
+                    {
+                      "const": "left"
+                    },
+                    {
+                      "const": "right"
+                    },
+                    {
+                      "const": "up"
+                    },
+                    {
+                      "const": "down"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            },
+            "backdrop": {
+              "type": "object",
+              "properties": {
+                "blur": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "blur"
+              ],
+              "additionalProperties": false
+            },
+            "when": {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "get": {
+                      "type": "string",
+                      "maxLength": 128,
+                      "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                    }
+                  },
+                  "required": [
+                    "get"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "op": {
+                      "anyOf": [
+                        {
+                          "const": "eq"
+                        },
+                        {
+                          "const": "if"
+                        },
+                        {
+                          "const": "concat"
+                        }
+                      ]
+                    },
+                    "args": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/$defs/binding"
+                      },
+                      "maxItems": 8
+                    }
+                  },
+                  "required": [
+                    "op",
+                    "args"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "motion": {
+              "type": "object",
+              "properties": {
+                "durationMs": {
+                  "type": "number",
+                  "minimum": 200,
+                  "maximum": 30000
+                },
+                "property": {
+                  "anyOf": [
+                    {
+                      "const": "opacity"
+                    },
+                    {
+                      "const": "transform"
+                    }
+                  ]
+                },
+                "from": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                },
+                "to": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 512
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -1000000,
+                      "maximum": 1000000
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "durationMs",
+                "property",
+                "from",
+                "to"
+              ],
+              "additionalProperties": false
+            },
+            "type": {
+              "const": "chart"
+            },
+            "chart": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "maxLength": 64,
+                  "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+                },
+                "kind": {
+                  "anyOf": [
+                    {
+                      "const": "line"
+                    },
+                    {
+                      "const": "area"
+                    },
+                    {
+                      "const": "bar"
+                    }
+                  ]
+                },
+                "unit": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "timeZone": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "data": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 32768
+                    },
+                    {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 512
+                            },
+                            {
+                              "type": "number",
+                              "minimum": -1000000,
+                              "maximum": 1000000
+                            },
+                            {
+                              "type": "boolean"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "get": {
+                              "type": "string",
+                              "maxLength": 128,
+                              "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                            }
+                          },
+                          "required": [
+                            "get"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "op": {
+                              "anyOf": [
+                                {
+                                  "const": "eq"
+                                },
+                                {
+                                  "const": "if"
+                                },
+                                {
+                                  "const": "concat"
+                                }
+                              ]
+                            },
+                            "args": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/$defs/binding"
+                              },
+                              "maxItems": 8
+                            }
+                          },
+                          "required": [
+                            "op",
+                            "args"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "color": {
+                  "type": "string",
+                  "maxLength": 9,
+                  "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+                },
+                "gridColor": {
+                  "type": "string",
+                  "maxLength": 9,
+                  "pattern": "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"
+                },
+                "durationMs": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 2000
+                },
+                "lineWidth": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 8
+                },
+                "fillOpacity": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 0.5
+                },
+                "yMin": {
+                  "type": "number",
+                  "minimum": -1000000,
+                  "maximum": 1000000
+                },
+                "yMax": {
+                  "type": "number",
+                  "minimum": -1000000,
+                  "maximum": 1000000
+                },
+                "windowMs": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 604800000
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "data",
+                "color"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "chart"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+            },
+            "styleId": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+            },
+            "styles": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      {
+                        "type": "number",
+                        "minimum": -1000000,
+                        "maximum": 1000000
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "get": {
+                        "type": "string",
+                        "maxLength": 128,
+                        "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                      }
+                    },
+                    "required": [
+                      "get"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "op": {
+                        "anyOf": [
+                          {
+                            "const": "eq"
+                          },
+                          {
+                            "const": "if"
+                          },
+                          {
+                            "const": "concat"
+                          }
+                        ]
+                      },
+                      "args": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/$defs/binding"
+                        },
+                        "maxItems": 8
+                      }
+                    },
+                    "required": [
+                      "op",
+                      "args"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "maxProperties": 41,
+              "propertyNames": {
+                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                "not": {
+                  "enum": [
+                    "constructor",
+                    "prototype",
+                    "__proto__"
+                  ]
+                }
+              }
+            },
+            "mask": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "anyOf": [
+                    {
+                      "const": "rounded"
+                    },
+                    {
+                      "const": "circle"
+                    },
+                    {
+                      "const": "wipe"
+                    }
+                  ]
+                },
+                "radius": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "progress": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "x": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "y": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "feather": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "invert": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "direction": {
+                  "anyOf": [
+                    {
+                      "const": "left"
+                    },
+                    {
+                      "const": "right"
+                    },
+                    {
+                      "const": "up"
+                    },
+                    {
+                      "const": "down"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            },
+            "backdrop": {
+              "type": "object",
+              "properties": {
+                "blur": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "blur"
+              ],
+              "additionalProperties": false
+            },
             "when": {
               "anyOf": [
                 {
@@ -3601,6 +6596,501 @@
                   ]
                 }
               }
+            },
+            "mask": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "anyOf": [
+                    {
+                      "const": "rounded"
+                    },
+                    {
+                      "const": "circle"
+                    },
+                    {
+                      "const": "wipe"
+                    }
+                  ]
+                },
+                "radius": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "progress": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "x": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "y": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "feather": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "invert": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "direction": {
+                  "anyOf": [
+                    {
+                      "const": "left"
+                    },
+                    {
+                      "const": "right"
+                    },
+                    {
+                      "const": "up"
+                    },
+                    {
+                      "const": "down"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            },
+            "backdrop": {
+              "type": "object",
+              "properties": {
+                "blur": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "blur"
+              ],
+              "additionalProperties": false
             },
             "when": {
               "anyOf": [
@@ -4615,6 +8105,501 @@
                 }
               }
             },
+            "mask": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "anyOf": [
+                    {
+                      "const": "rounded"
+                    },
+                    {
+                      "const": "circle"
+                    },
+                    {
+                      "const": "wipe"
+                    }
+                  ]
+                },
+                "radius": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "progress": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "x": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "y": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "feather": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "invert": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "direction": {
+                  "anyOf": [
+                    {
+                      "const": "left"
+                    },
+                    {
+                      "const": "right"
+                    },
+                    {
+                      "const": "up"
+                    },
+                    {
+                      "const": "down"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            },
+            "backdrop": {
+              "type": "object",
+              "properties": {
+                "blur": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "blur"
+              ],
+              "additionalProperties": false
+            },
             "when": {
               "anyOf": [
                 {
@@ -4860,6 +8845,501 @@
                   ]
                 }
               }
+            },
+            "mask": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "anyOf": [
+                    {
+                      "const": "rounded"
+                    },
+                    {
+                      "const": "circle"
+                    },
+                    {
+                      "const": "wipe"
+                    }
+                  ]
+                },
+                "radius": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "progress": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "x": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "y": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "feather": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "invert": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "direction": {
+                  "anyOf": [
+                    {
+                      "const": "left"
+                    },
+                    {
+                      "const": "right"
+                    },
+                    {
+                      "const": "up"
+                    },
+                    {
+                      "const": "down"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            },
+            "backdrop": {
+              "type": "object",
+              "properties": {
+                "blur": {
+                  "anyOf": [
+                    {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "maxLength": 512
+                        },
+                        {
+                          "type": "number",
+                          "minimum": -1000000,
+                          "maximum": 1000000
+                        },
+                        {
+                          "type": "boolean"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "get": {
+                          "type": "string",
+                          "maxLength": 128,
+                          "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                        }
+                      },
+                      "required": [
+                        "get"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "op": {
+                          "anyOf": [
+                            {
+                              "const": "eq"
+                            },
+                            {
+                              "const": "if"
+                            },
+                            {
+                              "const": "concat"
+                            }
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/binding"
+                          },
+                          "maxItems": 8
+                        }
+                      },
+                      "required": [
+                        "op",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "blur"
+              ],
+              "additionalProperties": false
             },
             "when": {
               "anyOf": [

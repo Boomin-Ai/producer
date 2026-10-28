@@ -127,7 +127,8 @@ export class SetRuntime {
    const finite=(k:string,min:number,max:number)=>{const v=input[k];if(typeof v!=='number'||!Number.isFinite(v)||v<min||v>max)throw Error('Invalid weather '+k);return v;};
    if(typeof input.isDay!=='boolean'||!['clear','cloudy','fog','rain','snow','storm'].includes(String(input.condition)))throw Error('Invalid weather condition');
    const observedAt=finite('observedAt',0,now+300000);if(m.weather&&observedAt<m.weather.observedAt)throw Error('Stale weather observation');
-   m.weather={at:now,observedAt,temperature:finite('temperature',-150,180),condition:input.condition as Weather['condition'],isDay:input.isDay,wind:finite('wind',0,500),precipitation:finite('precipitation',0,1000),provider:String(input.provider??'').slice(0,80),location:String(input.location??'').slice(0,120),units:input.units==='fahrenheit'?'fahrenheit':'celsius',...(input.forecast===undefined?{}:{forecast:parseWeatherForecast(JSON.parse(String(input.forecast)))})};m.dataStatus='fresh';m.error='';return;
+   const fetchedAt=input.fetchedAt===undefined?now:finite('fetchedAt',0,now+300000);if(input.stale!==undefined&&typeof input.stale!=='boolean')throw Error('Invalid weather freshness');
+   m.weather={at:fetchedAt,observedAt,temperature:finite('temperature',-150,180),condition:input.condition as Weather['condition'],isDay:input.isDay,wind:finite('wind',0,500),precipitation:finite('precipitation',0,1000),provider:String(input.provider??'').slice(0,80),location:String(input.location??'').slice(0,120),units:input.units==='fahrenheit'?'fahrenheit':'celsius',...(input.forecast===undefined?{}:{forecast:parseWeatherForecast(JSON.parse(String(input.forecast)))})};m.dataStatus=input.stale===true?'stale':'fresh';m.error=input.stale===true?'Using cached weather; live refresh unavailable.':'';return;
   }
   if(op==='chat.ingest'){
    const b=d.behavior;

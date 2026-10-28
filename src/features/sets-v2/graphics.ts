@@ -52,7 +52,7 @@ export function graphicsSurface(
     if (
       !["text", "graphic"].includes(n.kind) ||
       n.children.length ||
-      n.mask ||
+      n.mask || n.backdrop ||
       n.isolate
     )
       throw Error("Graphics batch must contain only flat graphics leaves");

@@ -150,7 +150,10 @@ export class RehearsalSession {
   moduleParticipantSnapshot=()=>this.moduleRuntime.public();
   moduleSnapshot=()=>this.liveModules??this.moduleRuntime.snapshot();
   attachModuleTransport=(send:((command:ModuleCommand)=>Promise<ModuleResult>)|undefined,error='')=>{
-    this.moduleTransport=send;this.state=freeze({...this.state,moduleConnection:error?'error':send?'live':this.workspaceMode==='live'?'connecting':this.workspaceMode==='rehearsal'?'simulation':'private',moduleError:error});this.emit();
+    this.moduleTransport=send;
+    const moduleConnection=error?'error':send?'live':this.workspaceMode==='live'?'connecting':this.workspaceMode==='rehearsal'?'simulation':'private';
+    if(this.state.moduleConnection===moduleConnection&&this.state.moduleError===error)return;
+    this.state=freeze({...this.state,moduleConnection,moduleError:error});this.emit();
   };
   receiveModuleSnapshot=(snapshot:ModuleSnapshot)=>{
     if(this.workspaceMode!=='live')return;

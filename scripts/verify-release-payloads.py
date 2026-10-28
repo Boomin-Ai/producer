@@ -58,9 +58,9 @@ subprocess.run(['gh', 'release', 'upload', tag, str(out / 'verification.json'), 
 
 Choose a city directly in the room's Weather desk controls. Each Set instance owns its city selection; saved Integration defaults and credentials stay in Integrations. Forecast delivery is bounded and late replies cannot put a previous city's numbers under a newly selected city.
 
-Generated day/night architecture, restrained GPU 3D lighting and weather effects compose behind native camera video and crisp text. Camera compositions use coordinated 700 ms native transitions. No Show is required. Open-Meteo supplies model forecasts; Map, radar, air quality and severe-weather alerts are not included.
+Generated day/night architecture, restrained GPU 3D lighting and weather effects compose behind native camera video and crisp text. Camera compositions use coordinated native transitions. No Show is required. Open-Meteo supplies model forecasts; Map, radar, air quality and severe-weather alerts are not included.
 
-The hosted module authority and audience runtime support the same forecast contract. Existing Grand Arena and Just Facts capabilities remain available.
+The hosted module authority and audience runtime support the same forecast contract, bounded city caching, explicit refresh and honest stale-data labels. Hourly forecasts include animated temperature and precipitation charts. Shared renderer updates add bounded mask/backdrop/chart capabilities, retained graphics surfaces and preview placement fixes. Atmosphere is the only bundled built-in Set. Other authored presentation/2 packages, including Attention Is Currency, can be imported without adding them to the built-in catalog.
 
 macOS installers are Apple signed, notarized and stapled by the platform release jobs. All four primary updater payloads passed signature verification against Producer's pinned public key before publication. verification.json contains the exact artifact hashes.
 

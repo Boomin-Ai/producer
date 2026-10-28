@@ -3,8 +3,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import {spawn,spawnSync} from 'node:child_process';
+import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {createRequire} from 'node:module';
+import {parseEnv} from 'node:util';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),profile=path.join(os.homedir(),'Library/Application Support/ai.boomin.producer.sets-v2-dev/local-workspace');
 const envFile=path.join(profile,'workspace.env'),workspace=path.join(profile,'workspace.json');
 if(!fs.existsSync(envFile)||!fs.existsSync(workspace))throw Error('Initialize the private Sets v2 local workspace before starting it.');
@@ -23,8 +25,29 @@ if(process.argv.includes('--background')){
  }
  console.log('Local Sets v2 workspace is managed by launchd for this login.');process.exit(0);
 }
-let config=fs.readFileSync(path.join(root,'server/wrangler.toml'),'utf8').replace('name = "producer-server"','name = "producer-sets-v2-local"').replace('main = "src/index.ts"',`main = ${JSON.stringify(path.join(root,'server/src/index.ts'))}`).replace('REPLACE_WITH_YOUR_D1_ID','11111111-2222-3333-4444-555555555555').replace('directory = "./public"',`directory = ${JSON.stringify(path.join(root,'server/public'))}`);
-const configFile=path.join(profile,'wrangler.toml');fs.writeFileSync(configFile,config,{mode:0o600});
+// Review sessions run a fixed bundle. Wrangler's live esbuild watcher can
+// restart the local service while the desktop is issuing module commands.
+// Build once on service startup; source edits require an explicit restart.
+const buildDirectory=path.join(profile,'build');fs.mkdirSync(buildDirectory,{recursive:true});
+const workerBundle=path.join(buildDirectory,'worker.mjs');
+const {buildSync}=createRequire(path.join(root,'package.json'))('esbuild');
+buildSync({entryPoints:[path.join(root,'server/src/index.ts')],outfile:workerBundle,bundle:true,format:'esm',platform:'browser',target:'es2022'});
+// Use the same Workers runtime and persistent namespace identities directly.
+// This local review service has no watcher, inspector proxy, or rebuild loop.
 fs.copyFileSync(workspace,'/private/tmp/producer-sets-v2-local-workspace.json');fs.chmodSync('/private/tmp/producer-sets-v2-local-workspace.json',0o600);
-const child=spawn(path.join(root,'server/node_modules/.bin/wrangler'),['dev','--local','--config',configFile,'--env-file',envFile,'--persist-to',path.join(profile,'worker-state'),'--ip','127.0.0.1','--port','8795','--inspector-port','9237','--log-level','warn','--show-interactive-dev-session','false'],{cwd:root,stdio:'inherit',env:{...process.env,WRANGLER_SEND_METRICS:'false'}});
-for(const signal of ['SIGTERM','SIGINT'])process.on(signal,()=>child.kill(signal));child.on('exit',code=>process.exit(code??0));
+const {Miniflare,convertV4MiniflareOptions}=createRequire(path.join(root,'server/package.json'))('miniflare');
+const runtime=new Miniflare(convertV4MiniflareOptions({
+ name:'producer-sets-v2-local',rootPath:buildDirectory,modules:true,scriptPath:workerBundle,
+ compatibilityDate:'2026-08-01',host:'127.0.0.1',port:8795,cf:false,logRequests:false,
+ resourcePersistencePath:path.join(profile,'worker-state/v3'),
+ isolatedResourcePersistencePath:path.join(profile,'worker-state/v3'),
+ bindings:{INSTAGRAM_APP_ID:'',FACEBOOK_APP_ID:'',THREADS_APP_ID:'',...parseEnv(fs.readFileSync(envFile,'utf8'))},
+ d1Databases:{DB:'11111111-2222-3333-4444-555555555555'},r2Buckets:{MEDIA:'producer-media'},
+ durableObjects:{REALTIME:{className:'RealtimeHub',useSQLite:true},ROOMSTATE:{className:'RoomState',useSQLite:true}},
+ assets:{directory:path.join(root,'server/public'),binding:'ASSETS',run_worker_first:true,routerConfig:{has_user_worker:true}},
+ telemetry:{enabled:false},
+}));
+let stopping=false;
+for(const signal of ['SIGTERM','SIGINT'])process.on(signal,async()=>{if(stopping)return;stopping=true;await runtime.dispose();process.exit(0);});
+await runtime.ready;
+console.log('Local Sets v2 fixed-bundle runtime ready on 127.0.0.1:8795');

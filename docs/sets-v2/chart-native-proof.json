@@ -1,0 +1,22 @@
+{
+  "midpointRow": 99,
+  "maxPoints": 256,
+  "remainingCharts": 0,
+  "targetRow": 40,
+  "pauseHoldsPixels": true,
+  "programAnimation": true,
+  "steadyGeometryReused": true,
+  "ok": true,
+  "cityFence": true,
+  "nativeLineAreaAndBar": true,
+  "fromRow": 159,
+  "missingValuesRemainGaps": true,
+  "liveDevReview": {
+    "verified": true,
+    "set": "Atmosphere 2.2",
+    "view": "Hourly",
+    "provider": "Open-Meteo",
+    "nativeChartWithLiveCamera": true,
+    "published": false
+  }
+}

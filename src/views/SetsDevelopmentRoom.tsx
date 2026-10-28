@@ -22,6 +22,12 @@ export function SetsDevelopmentRoom() {
   useEffect(()=>{if(room&&studio&&import.meta.env.VITE_SCENE3D_STUDIO_PROOF==="1"&&!studioStarted.current){studioStarted.current=true;void import("../features/sets-v2/studioRoomProof").then(m=>m.studioRoomProof());}},[room,studio]);
   const weatherStarted=useRef(false);
   useEffect(()=>{if(room&&import.meta.env.DEV&&import.meta.env.VITE_ATMOSPHERE_PROOF==='1'&&!weatherStarted.current){weatherStarted.current=true;void import('../features/sets-v2/atmosphereRoomProof').then(m=>m.atmosphereRoomProof());}},[room]);
+  const navigationStarted=useRef(false);
+  useEffect(()=>{if(room&&import.meta.env.DEV&&import.meta.env.VITE_NAVIGATION_LIFETIME_PROOF==='1'&&!navigationStarted.current){navigationStarted.current=true;void import('../features/sets-v2/navigationLifetimeProof').then(m=>m.navigationLifetimeProof());}},[room]);
+  const viewCacheStarted=useRef(false);
+  useEffect(()=>{if(room&&import.meta.env.DEV&&import.meta.env.VITE_VIEW_CACHE_PROOF==='1'&&!viewCacheStarted.current){viewCacheStarted.current=true;void import('../features/sets-v2/viewCacheRoomProof').then(m=>m.viewCacheRoomProof());}},[room]);
+  const designStarted=useRef(false);
+  useEffect(()=>{if(room&&import.meta.env.DEV&&import.meta.env.VITE_ATMOSPHERE_DESIGN_PROOF==='1'&&!designStarted.current){designStarted.current=true;void import('../features/sets-v2/atmosphereDesignProof').then(m=>m.atmosphereDesignProof());}},[room]);
   const factsStarted=useRef(false);
   useEffect(()=>{if(room&&import.meta.env.DEV&&import.meta.env.VITE_JUST_FACTS_PROOF==='1'&&!factsStarted.current){factsStarted.current=true;void import('../features/sets-v2/justFactsRoomProof').then(m=>m.justFactsRoomProof());}},[room]);
   const scene3dStarted = useRef(false);
@@ -61,6 +67,7 @@ export function SetsDevelopmentRoom() {
           await ipc.liveUpdateRoom(room.id,{config:JSON.stringify(config)});room={...room,config:JSON.stringify(config)};
         }
       }
+      if(atmosphere&&import.meta.env.VITE_ATMOSPHERE_DESIGN_PROOF==='1'){const config=JSON.parse(room.config||'{}');config.sizes={...config.sizes,bottom:420};await ipc.liveUpdateRoom(room.id,{config:JSON.stringify(config)});room={...room,config:JSON.stringify(config)};}
       // This isolated study was previously saved as 0.1 (lighting only).
       // Upgrade that exact fixture on a normal reopen as well as in proof mode;
       // preserve room bindings/framing and authored text defaults.

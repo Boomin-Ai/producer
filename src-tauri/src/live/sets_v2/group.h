@@ -25,6 +25,8 @@ bool producer_set_v2_group_frame(obs_source_t *group, float radius,
 bool producer_set_v2_group_layer_frame(obs_source_t *group, size_t index,
                                        float x, float y, float width,
                                        float height, bool visible);
+bool producer_set_v2_group_effects(obs_source_t *group,int kind,float progress,float x,float y,float feather,bool invert,int direction,float blur);
+bool producer_set_v2_group_mask_progress(obs_source_t *group,float progress);
 size_t producer_set_v2_live_groups(void);
 bool producer_set_v2_group_layer_transform(obs_source_t *group, size_t index,
                                            float rotation, float scale_x,

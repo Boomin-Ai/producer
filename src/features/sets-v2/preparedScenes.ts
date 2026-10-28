@@ -9,7 +9,7 @@ import type {RenderPlan,OutputTarget} from './scene';
 export type SceneReadiness={state:'queued'|'loading'|'ready'|'error';error?:string};
 export type NativeSceneStatus={preparedRevision:number;renderedRevision:number;ready:boolean;warmed:boolean;transitioning:boolean;queued:boolean;cachedKeys?:string[];cachedBytes?:number;renderSerial:number};
 type Plan=RenderPlan&{motion?:AnimationTrack[];clock?:import('../presentation/animation').AnimationClock;retainedTargets?:string[];assets?:OutputProjection['assets']};
-export type SceneSpec={projection:OutputProjection;phase:string;layout:string;bindings:Record<string,string>;target:OutputTarget;definition:string;instance:string;targets:string[];assetVersion:string};
+export type SceneSpec={projection:OutputProjection;phase:string;layout:string;bindings:Record<string,string>;target:OutputTarget;definition:string;instance:string;targets:string[];assetVersion:string;speculative?:boolean};
 type Entry={pins:number;key:string;identity:string;spec:SceneSpec;state:SceneReadiness;plan?:Plan;promise?:Promise<Entry>};
 type Job={priority:number;run:(abort:()=>boolean)=>Promise<unknown>;resolve:(v:any)=>void;reject:(e:unknown)=>void;preemptible:boolean};
 const sleep=(ms:number)=>new Promise(r=>setTimeout(r,ms));
@@ -120,11 +120,47 @@ export function layoutProjections(session:RehearsalSession){
   entry.counts=Object.fromEntries(Object.keys(entry.counts).map(k=>[k,0]));if(entry.animationClock)entry.animationClock={...entry.animationClock,positionMs:0,segmentMs:0,running:false};
   const projection=outputProjection(doc,entry);projection.assets=Object.fromEntries(Object.entries(doc.set.assets??{}).map(([id,{name,mime,data}])=>[id,{name,mime,data}]));
   // Resolve phase-dependent visuals using the entry state; avoid private votes/results.
-  return {layout:layout.id,phase:phase?.id??'',projection,entry};
+  return {layout:layout.id,phase:phase?.id??'',projection,entry,variant:false};
  });
 }
 export function morphTargets(projections:OutputProjection[],to:OutputProjection){
  if(to.timeline?.transition?.type!=='morph')return [];
  const targets=new Set<string>();for(const from of projections){try{for(const track of layoutTransition(from,to,to.timeline.transition.durationMs,Date.now()))targets.add(track.target);}catch{/* Runtime still validates authored transition limits. */}}
  return [...targets].sort();
+}
+
+/** Speculate only bounded, side-effect-free view selections. Never dispatch an
+ * action, fetch data, change scores, reveal private fields or expand products
+ * of independent modules. Resolve against the latest public data snapshot. */
+export function moduleViewProjections(session:RehearsalSession){
+ const doc=session.package,state=session.snapshot(),base=layoutProjections(session),snapshot=session.moduleSnapshot();
+ const current=doc.set.views&&Object.values(doc.set.views).find(variants=>Object.values(variants).includes(state.layoutId));
+ const layouts=new Set(current?Object.values(current):[state.layoutId]);
+ const variants:ReturnType<typeof layoutProjections>=[];
+ for(const instance of doc.runtime?.instances??[]){
+  if(instance.id===doc.set.viewController||instance.owner==='segment'&&instance.segment!==state.show.phase)continue;
+  const definition=doc.runtime!.definitions[instance.definition],module=state.modules?.[instance.id];
+  if(!module||snapshot.modules[instance.id]?.execution==='disposed')continue;
+  const views=[...new Set(Object.values(definition.actions).filter(action=>action.steps.length===1&&action.steps[0].op==='view').map(action=>(action.steps[0] as {op:'view';view:string}).view))];
+  for(const view of views){
+   if(view===module.view)continue;
+   for(const item of base.filter(item=>layouts.has(item.layout))){
+    if(variants.filter(v=>v.layout===item.layout).length>=3)continue;
+    const entry=structuredClone(item.entry);entry.modules={...entry.modules,[instance.id]:{...entry.modules![instance.id],view}};
+    const projection=outputProjection(doc,entry);projection.assets=item.projection.assets;
+    variants.push({...item,entry,projection,variant:true});
+   }
+  }
+ }
+ return variants;
+}
+
+/** Reserve a scene slot for the presented snapshot while warming at most five
+ * candidates per native output. Prefer current composition/view alternatives;
+ * do not grow a cartesian product or raise the native texture budget. */
+export function warmInventory(specs:SceneSpec[],layouts:ReadonlySet<string>){
+ if(!specs.some(spec=>spec.speculative))return specs;
+ const score=(spec:SceneSpec)=>layouts.has(spec.layout)?(spec.speculative?2:3):spec.speculative?0:1;
+ const ordered=[...specs].sort((a,b)=>score(b)-score(a)),seen=new Set<string>(),counts=new Map<string,number>();
+ return ordered.filter(spec=>{const key=sceneIdentity(spec);if(seen.has(key)||(counts.get(spec.target.id)??0)>=5)return false;seen.add(key);counts.set(spec.target.id,(counts.get(spec.target.id)??0)+1);return true;});
 }

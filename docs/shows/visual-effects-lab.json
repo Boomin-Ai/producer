@@ -1,0 +1,474 @@
+{
+  "schema": "producer.presentation/2",
+  "requires": [
+    "mask@1",
+    "backdrop@1"
+  ],
+  "runtime": {
+    "schema": "producer.modules/1",
+    "definitions": {
+      "effects": {
+        "label": "Reveal direction",
+        "state": {},
+        "publicFields": [],
+        "actions": {
+          "ready": {
+            "roles": [
+              "operator"
+            ],
+            "steps": [
+              {
+                "op": "view",
+                "view": "ready"
+              }
+            ]
+          },
+          "circle": {
+            "roles": [
+              "operator"
+            ],
+            "steps": [
+              {
+                "op": "view",
+                "view": "circle"
+              }
+            ]
+          },
+          "wipe": {
+            "roles": [
+              "operator"
+            ],
+            "steps": [
+              {
+                "op": "view",
+                "view": "wipe"
+              }
+            ]
+          }
+        },
+        "controls": [
+          {
+            "id": "reveal",
+            "label": "Camera reveal",
+            "audience": "operator",
+            "controls": [
+              {
+                "id": "ready",
+                "type": "button",
+                "label": "Hide / reset",
+                "action": "ready"
+              },
+              {
+                "id": "circle",
+                "type": "button",
+                "label": "Circle reveal",
+                "action": "circle"
+              },
+              {
+                "id": "wipe",
+                "type": "button",
+                "label": "Wipe reveal",
+                "action": "wipe"
+              }
+            ]
+          }
+        ],
+        "capabilities": [],
+        "views": [
+          "ready",
+          "circle",
+          "wipe"
+        ],
+        "initialView": "ready"
+      }
+    },
+    "instances": [
+      {
+        "id": "effects",
+        "definition": "effects",
+        "owner": "set",
+        "hidden": "continue",
+        "onExit": "continue",
+        "reenter": "resume"
+      }
+    ]
+  },
+  "id": "visual-effects-lab",
+  "version": "1.0.0",
+  "name": "Visual Effects Lab",
+  "set": {
+    "viewController": "effects",
+    "views": {
+      "ready": {
+        "landscape": "ready"
+      },
+      "circle": {
+        "landscape": "circle"
+      },
+      "wipe": {
+        "landscape": "wipe"
+      }
+    },
+    "initialView": "ready",
+    "initialLayout": "ready",
+    "values": {
+      "reveal": {
+        "type": "number",
+        "default": 1,
+        "min": 0,
+        "max": 1
+      }
+    },
+    "feeds": {},
+    "slots": [
+      {
+        "id": "host",
+        "label": "Host camera"
+      }
+    ],
+    "components": {},
+    "layouts": [
+      {
+        "id": "ready",
+        "label": "Ready / hidden camera",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "root",
+          "styles": {
+            "position": "relative",
+            "width": 1280,
+            "height": 720
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "base",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720,
+                "background": "linear-gradient(90deg,#ec3344,#2244dd)"
+              },
+              "type": "text",
+              "text": ""
+            },
+            {
+              "id": "host-mask",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 150,
+                "width": 560,
+                "height": 500
+              },
+              "mask": {
+                "kind": "circle",
+                "progress": 0,
+                "x": 0.5,
+                "y": 0.5,
+                "feather": 8
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "host",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 0,
+                    "top": 0,
+                    "width": 560,
+                    "height": 500
+                  },
+                  "type": "slot",
+                  "slotId": "host"
+                }
+              ]
+            },
+            {
+              "id": "glass",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 40,
+                "width": 1200,
+                "height": 100,
+                "background": "#10203066",
+                "border": "1px solid #ffffff88",
+                "borderRadius": 18
+              },
+              "mask": {
+                "kind": "rounded",
+                "radius": 18
+              },
+              "backdrop": {
+                "blur": 12
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 30,
+                    "width": 1100,
+                    "height": 50,
+                    "color": "#ffffff",
+                    "fontSize": 28
+                  },
+                  "type": "text",
+                  "text": "LIVE · GPU GLASS + ANIMATED REVEALS"
+                }
+              ]
+            }
+          ]
+        },
+        "animation": {
+          "tracks": []
+        }
+      },
+      {
+        "id": "circle",
+        "label": "Circle reveal",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "root",
+          "styles": {
+            "position": "relative",
+            "width": 1280,
+            "height": 720
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "base",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720,
+                "background": "linear-gradient(90deg,#ec3344,#2244dd)"
+              },
+              "type": "text",
+              "text": ""
+            },
+            {
+              "id": "host-mask",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 150,
+                "width": 560,
+                "height": 500
+              },
+              "mask": {
+                "kind": "circle",
+                "progress": 1,
+                "x": 0.5,
+                "y": 0.5,
+                "feather": 8
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "host",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 0,
+                    "top": 0,
+                    "width": 560,
+                    "height": 500
+                  },
+                  "type": "slot",
+                  "slotId": "host"
+                }
+              ]
+            },
+            {
+              "id": "glass",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 40,
+                "width": 1200,
+                "height": 100,
+                "background": "#10203066",
+                "border": "1px solid #ffffff88",
+                "borderRadius": 18
+              },
+              "mask": {
+                "kind": "rounded",
+                "radius": 18
+              },
+              "backdrop": {
+                "blur": 12
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 30,
+                    "width": 1100,
+                    "height": 50,
+                    "color": "#ffffff",
+                    "fontSize": 28
+                  },
+                  "type": "text",
+                  "text": "LIVE · GPU GLASS + ANIMATED REVEALS"
+                }
+              ]
+            }
+          ]
+        },
+        "animation": {
+          "tracks": [
+            {
+              "target": "host-mask",
+              "property": "mask.progress",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 0
+                },
+                {
+                  "atMs": 1200,
+                  "value": 1
+                }
+              ],
+              "easing": "easeInOut",
+              "clock": "segment"
+            }
+          ]
+        }
+      },
+      {
+        "id": "wipe",
+        "label": "Wipe reveal",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "root",
+          "styles": {
+            "position": "relative",
+            "width": 1280,
+            "height": 720
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "base",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1280,
+                "height": 720,
+                "background": "linear-gradient(90deg,#ec3344,#2244dd)"
+              },
+              "type": "text",
+              "text": ""
+            },
+            {
+              "id": "host-mask",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 150,
+                "width": 560,
+                "height": 500
+              },
+              "mask": {
+                "kind": "wipe",
+                "progress": 1,
+                "x": 0.5,
+                "y": 0.5,
+                "feather": 8
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "host",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 0,
+                    "top": 0,
+                    "width": 560,
+                    "height": 500
+                  },
+                  "type": "slot",
+                  "slotId": "host"
+                }
+              ]
+            },
+            {
+              "id": "glass",
+              "styles": {
+                "position": "absolute",
+                "left": 40,
+                "top": 40,
+                "width": 1200,
+                "height": 100,
+                "background": "#10203066",
+                "border": "1px solid #ffffff88",
+                "borderRadius": 18
+              },
+              "mask": {
+                "kind": "rounded",
+                "radius": 18
+              },
+              "backdrop": {
+                "blur": 12
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 30,
+                    "width": 1100,
+                    "height": 50,
+                    "color": "#ffffff",
+                    "fontSize": 28
+                  },
+                  "type": "text",
+                  "text": "LIVE · GPU GLASS + ANIMATED REVEALS"
+                }
+              ]
+            }
+          ]
+        },
+        "animation": {
+          "tracks": [
+            {
+              "target": "host-mask",
+              "property": "mask.progress",
+              "keyframes": [
+                {
+                  "atMs": 0,
+                  "value": 0
+                },
+                {
+                  "atMs": 1200,
+                  "value": 1
+                }
+              ],
+              "easing": "easeInOut",
+              "clock": "segment"
+            }
+          ]
+        }
+      }
+    ],
+    "controls": []
+  }
+}

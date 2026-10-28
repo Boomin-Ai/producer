@@ -71,7 +71,14 @@ fn link_live_engine_macos() {
     println!("cargo:rustc-cfg=have_engine");
     {
         let mut build = cc::Build::new();
-        for name in ["group", "scene", "transition", "program", "readiness"] {
+        for name in [
+            "group",
+            "scene",
+            "transition",
+            "program",
+            "readiness",
+            "chart",
+        ] {
             let file = format!("src/live/sets_v2/{name}.c");
             println!("cargo:rerun-if-changed={file}");
             println!("cargo:rerun-if-changed=src/live/sets_v2/{name}.h");

@@ -1,6 +1,6 @@
 import { finite, safeKey } from "./data";
 export type MotionProperty =
-  "x" | "y" | "width" | "height" | "opacity" | "rotation" | "scale";
+  "x" | "y" | "width" | "height" | "opacity" | "rotation" | "scale" | "mask.progress";
 export interface MotionTrack {
   target: string;
   property: MotionProperty;
@@ -20,6 +20,7 @@ const properties = [
   "opacity",
   "rotation",
   "scale",
+  "mask.progress",
 ];
 export function validateClip(clip: MotionClip): void {
   if (!safeKey(clip.id) || clip.tracks.length > 256)
@@ -44,7 +45,7 @@ export function validateClip(clip: MotionClip): void {
       finite(f.value, -16384, 16384);
       if (f.atMs <= last || (last === -1 && f.atMs !== 0))
         throw Error("Keyframes must have increasing time starting at zero");
-      if (t.property === "opacity") finite(f.value, 0, 1);
+      if (t.property === "opacity" || t.property === "mask.progress") finite(f.value, 0, 1);
       if (["width", "height", "scale"].includes(t.property))
         finite(f.value, 0, 16384);
       last = f.atMs;

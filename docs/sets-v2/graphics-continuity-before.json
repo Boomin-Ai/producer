@@ -1,0 +1,82 @@
+{
+  "duration": 13.6,
+  "frames": 406,
+  "height": 1080,
+  "maximumHeaderSamples": 730,
+  "minimumHeaderSamples": 0,
+  "missingHeaderFrames": [
+    {
+      "frame": 88,
+      "headerWhiteSamples": 0,
+      "seconds": 3
+    },
+    {
+      "frame": 89,
+      "headerWhiteSamples": 0,
+      "seconds": 3.033333333333333
+    },
+    {
+      "frame": 222,
+      "headerWhiteSamples": 0,
+      "seconds": 7.466666666666667
+    },
+    {
+      "frame": 223,
+      "headerWhiteSamples": 0,
+      "seconds": 7.5
+    },
+    {
+      "frame": 224,
+      "headerWhiteSamples": 0,
+      "seconds": 7.533333333333333
+    },
+    {
+      "frame": 262,
+      "headerWhiteSamples": 0,
+      "seconds": 8.8
+    },
+    {
+      "frame": 263,
+      "headerWhiteSamples": 0,
+      "seconds": 8.833333333333334
+    },
+    {
+      "frame": 296,
+      "headerWhiteSamples": 0,
+      "seconds": 9.933333333333334
+    },
+    {
+      "frame": 326,
+      "headerWhiteSamples": 0,
+      "seconds": 10.933333333333334
+    },
+    {
+      "frame": 327,
+      "headerWhiteSamples": 0,
+      "seconds": 10.966666666666667
+    },
+    {
+      "frame": 354,
+      "headerWhiteSamples": 0,
+      "seconds": 11.866666666666667
+    },
+    {
+      "frame": 355,
+      "headerWhiteSamples": 0,
+      "seconds": 11.9
+    },
+    {
+      "frame": 383,
+      "headerWhiteSamples": 0,
+      "seconds": 12.833333333333334
+    },
+    {
+      "frame": 384,
+      "headerWhiteSamples": 0,
+      "seconds": 12.866666666666667
+    }
+  ],
+  "readerStatus": 2,
+  "width": 1920,
+  "note": "User-supplied Atmosphere recording; fixed white-header ROI. Camera/audio contents are not included in this evidence."
+}

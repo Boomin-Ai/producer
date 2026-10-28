@@ -16,6 +16,9 @@ Related contracts:
 - [Implementation status](IMPLEMENTATION-STATUS.md)
 - [Showcase and audience plan](SHOWCASE-AND-AUDIENCE-PLAN.md)
 - [Managed 3D layers](../shows/scene3d.md)
+- [Metal navigation lifetime repair and regression evidence](../sets-v2/NAVIGATION-LIFETIME.md)
+- [Shared view and immutable graphics caching](../sets-v2/VIEW-CACHE.md)
+- [Versioned layer masks, animated reveals and GPU backdrop blur](../sets-v2/VISUAL-EFFECTS.md)
 - [Existing external chat output](../CHAT-OUTPUT.md)
 
 ## 1. Current foundation and gaps
@@ -195,3 +198,10 @@ These phases build on the current runtime. They do not replace the module model 
 - External chat stable-identity guarantees, round/replay policy and command ambiguity rules.
 - Asset/model formats, packaging, provenance and validation strategy.
 - Public schema stability, migration support window and compatibility test distribution.
+
+
+### Open native crash observed during Atmosphere 2.1 review (2026-10-27)
+
+The redesigned Set passed the browser/native-lowering checks and a complete native diagnostic recording of three composition changes plus four forecast changes. The normal dev app also crashed once during development, before the motion proof began. Report: `producer-2026-10-27-070127.ips`; graphics thread: Swift release in `device_begin_frame + 88`. The loaded backend UUID was `4098F9BA-761B-39AF-8961-AAF258698940`, matching the backend containing the swapchain synchronization patch. Therefore the earlier swapchain test is evidence for that specific race fix, not proof that every render-target lifetime issue is closed.
+
+The actual backend, compiled with Thread Sanitizer, completed all seven native changes without a sanitizer report (`ignore_noninstrumented_modules=1` avoids an Apple Security interceptor deadlock). This is diagnostic evidence, not a root-cause fix or production stability signoff. Keep this crash open until it has a reproducer and a validated correction. Restore the ordinary tested backend after diagnostics; sanitizer libraries must never ship. The UI/Set review remains local and unpublished.
