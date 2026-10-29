@@ -20,3 +20,13 @@
 .module-cited-response ul { padding-left:18px; font-size:12px; }
 
 .module-weather-controls form{display:flex;align-items:end;gap:8px;flex-wrap:wrap}.module-weather-controls form label{flex:1;min-width:160px}.module-weather-controls input{width:100%;box-sizing:border-box}.module-weather-controls ul{list-style:none;padding:0;display:grid;gap:6px}.module-weather-controls li button{width:100%;text-align:left;white-space:normal}.module-weather-location{font-weight:600}
+
+/* Arranged controls share the same actions and state as the full module panel. */
+.module-arranged-control{padding:0;border:0;border-radius:0;background:transparent}
+.module-operator-panel.is-compact{display:flex;flex-direction:row;align-items:center;gap:8px;flex:none}
+.module-operator-panel.is-compact .module-arranged-control{flex:none;max-width:320px}
+.module-operator-panel.is-compact button{white-space:nowrap;max-width:280px;overflow:hidden;text-overflow:ellipsis}
+.module-operator-panel.is-compact label{max-width:240px}
+.module-operator-panel.is-compact input,.module-operator-panel.is-compact select{max-width:100%;box-sizing:border-box}
+.module-weather-popover{position:fixed;margin:0;width:320px;max-width:calc(100vw - 16px);max-height:calc(100vh - 24px);overflow:auto;box-sizing:border-box;color:var(--fg-1,#eef1f6);background:var(--surface-1,#18222e);font-family:inherit;box-shadow:0 12px 36px #0008}
+.module-weather-popover::backdrop{background:transparent}

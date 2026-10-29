@@ -85,4 +85,14 @@ for(const pose of poses)for(const p of [false,true]){
 }
 const runtime={schema:'producer.modules/1',definitions:{sky,studio},instances:['sky','studio'].map(id=>({id,definition:id,owner:'set',hidden:'continue',onExit:'continue',reenter:'resume'}))};
 const raw={schema:'producer.presentation/2',requires:['mask@1','backdrop@1','chart@1'],id:'atmosphere',version:'2.2.0',name:'Atmosphere',runtime,set:{viewController:'studio',initialView:'hero',views:Object.fromEntries(poses.map(pose=>[pose,{landscape:pose+'-landscape',portrait:pose+'-portrait'}])),initialLayout:'hero-landscape',assets,values:{hostName:{type:'text',default:'Host',maxLength:60}},feeds:{},slots:[{id:'host',label:'Host camera'}],components:{},layouts,controls:[{id:'host-name',type:'text',label:'Host name',key:'hostName'}]}};
+raw.set.controlArrangement={
+ sections:[
+  {id:'weather',label:'Weather and city',controls:['module:sky:$weather-location']},
+  {id:'forecast',label:'Forecast',controls:['now','today','hourly','week','previousHours','nextHours'].map(id=>'module:sky:'+id)},
+  {id:'composition',label:'Camera composition',controls:['hero','split','presenter'].map(id=>'module:studio:'+id)},
+  {id:'host',label:'Host',controls:['set:host-name']},
+  {id:'runtime',label:'Module playback',controls:['module:sky:$lifecycle','module:studio:$lifecycle'],collapsed:true},
+ ],
+ minimized:['now','today','hourly','week'].map(id=>'module:sky:'+id).concat(['hero','split','presenter'].map(id=>'module:studio:'+id),'module:sky:$weather-location'),
+};
 const doc=parsePackage(raw);fs.writeFileSync('docs/shows/atmosphere.json',JSON.stringify(doc));console.log('Authored Atmosphere observatory: six compositions, four forecast views, standalone modules.');

@@ -41,7 +41,17 @@
     "dev:sets-v2": "vite --host 127.0.0.1 --port 1436 --strictPort",
     "test:module-recovery-browser": "node scripts/test-module-recovery-browser.mjs",
     "test:weather-output-stability-browser": "node scripts/test-weather-output-stability-browser.mjs",
-    "dev:sets-v2-workspace": "node scripts/sets-v2/local-workspace.mjs --background"
+    "dev:sets-v2-workspace": "node scripts/sets-v2/local-workspace.mjs --background",
+    "validate:set": "node scripts/validate-set.mjs",
+    "test:package-validation": "node scripts/test-package-validation.mjs",
+    "test:module-push": "node scripts/test-module-push.mjs",
+    "test:set-control": "node scripts/test-set-control.mjs",
+    "test:room-set-control": "node scripts/test-room-set-control.mjs",
+    "test:control-arrangements": "node scripts/test-control-arrangements.mjs",
+    "test:module-arrangements": "node scripts/test-module-arrangements.mjs",
+    "test:control-arrangements-browser": "node scripts/test-control-arrangements-browser.mjs",
+    "test:set-authoring": "node scripts/test-set-authoring-draft.mjs",
+    "test:set-authoring-browser": "node scripts/test-set-authoring-browser.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.0",

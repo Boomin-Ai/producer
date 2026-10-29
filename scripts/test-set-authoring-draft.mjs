@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+const bundle=await build({stdin:{contents:"export {SetAuthoringDraft,authoringBaseIssue} from './src/features/presentation/setAuthoring';export {AFTER_HOURS} from './src/features/presentation/fixtures';",resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',write:false});
+const {SetAuthoringDraft,authoringBaseIssue,AFTER_HOURS}=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+const doc=structuredClone(AFTER_HOURS),request={connectionId:'claude',expectedRevision:3,prompt:'Create a magazine Set'};
+let complete,calls=0;
+const model=new SetAuthoringDraft(()=>{calls++;return new Promise(resolve=>{complete=resolve;});});
+const reply=packageDoc=>({connectionId:'claude',connectionRevision:3,provider:'anthropic',model:'test-model',package:packageDoc});
+const generated=model.generate(request);assert.equal(model.snapshot().status,'generating');assert.equal(model.snapshot().package,undefined);complete(reply(doc));await generated;assert.equal(model.snapshot().status,'ready');assert.equal(model.snapshot().package.id,doc.id);assert.equal(calls,1);
+const canceled=model.generate(request);model.cancel();complete(reply(doc));await canceled;assert.equal(model.snapshot().package,undefined,'cancel fences late reply');
+const edited=model.generate(request);model.editCandidate('{"manual":"draft"}');complete(reply(doc));await edited;assert.equal(model.snapshot().text,'{"manual":"draft"}','editing fences old generation');model.validate();assert.equal(model.snapshot().status,'error');assert.equal(model.snapshot().package,undefined);
+const invalid=model.generate(request);complete(reply({schema:'producer.presentation/2',script:'bad'}));await invalid;assert.equal(model.snapshot().status,'error');assert.equal(model.snapshot().package,undefined,'invalid generated JSON never becomes previewable');
+const changed=model.generate(request);complete({...reply(doc),connectionRevision:4});await changed;assert.match(model.snapshot().error,/connection changed/);
+const missingShow=structuredClone(doc);delete missingShow.show;missingShow.set.controls=missingShow.set.controls.filter(c=>c.type!=='button'||!c.action.type.startsWith('show.'));
+const show=model.generate({...request,requireShow:true});complete(reply(missingShow));await show;assert.match(model.snapshot().error,/no Show/);
+model.editCandidate(JSON.stringify(doc));model.validate();assert.equal(model.snapshot().status,'ready','manual workflow uses same validator');
+assert.match(authoringBaseIssue({...doc,set:{...doc.set,assets:{image:{name:'Image',mime:'image/png',data:'data:image/png;base64,AA=='}}}}),/(media assets|features)/);
+console.log('PASS: isolated authoring validates candidates, fences canceled/edited requests, checks connection revision and required Shows, and retains manual import');

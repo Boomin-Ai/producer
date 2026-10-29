@@ -3,13 +3,13 @@ import {requestModuleData,type ModuleBindings} from './moduleConnections';
 import {dataIntegrations,type SavedConnection} from '../../lib/dataIntegrations';
 import {OperatorPanel} from '../../../shared/set-runtime/OperatorPanel';
 import {ParticipantPanel} from '../../../shared/set-runtime/ParticipantPanel';
+import {evaluate as evaluateModule} from '../../../shared/set-runtime/contract';
 import '../../../shared/set-runtime/panels.css';
 import {ModuleConfiguration} from './ModuleConfiguration';
 import {useShowClock} from './showClock';
-import {createPortal} from 'react-dom';
 import {layoutMedia,mediaConfig} from './playback';
 import {MediaPlaybackControls} from './MediaPlaybackControls';
-import { useEffect, useMemo, useId, useRef, useState, useSyncExternalStore, type ReactNode, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type CSSProperties } from 'react';
 import { evaluate, RehearsalSession, voteLeaders } from './rehearsal';
 import { RehearsalPreview } from './RehearsalPreview';
 import {SetPreview} from './SetPreview';
@@ -21,9 +21,11 @@ import type { SetOutputControls } from './useSetOutput';
 import './presentation.css';
 import {SetSourceCreator} from './SetSourceCreator';
 import {SetConfiguration} from './SetConfiguration';
+import {ControlArrangementEditor,useControlArrangement} from './ControlArrangementEditor';
+import {CommittedField} from './CommittedField';
 
 type PanelProps={
-  endpoint?:string;serverRoomId?:string;moduleBindings?:ModuleBindings;
+  endpoint?:string;serverRoomId?:string;preferenceRoomId?:string;moduleBindings?:ModuleBindings;
   voting?:ReactNode; sourceNames?: Record<string,string>; onFieldEdit?: (key:string)=>void; output?: SetOutputControls; session: RehearsalSession; blocked?: boolean; blockedReason?: string; onChange: (doc: PresentationPackage,moduleBindings?:ModuleBindings) => void;
 };
 function designIdentity(doc:PresentationPackage) {
@@ -82,8 +84,9 @@ export function SetControlsPanel(props:PanelProps) {
   const workspace=<SetControlsPanelView {...props} moduleBindings={moduleBindings} connections={connections} connectionError={connectionError} onRetryConnections={retryConnections} onModuleBinding={(role,binding)=>setModuleBindings(old=>({...old,[role]:binding}))} session={draft} output={previewOutput} onFieldEdit={undefined} onChange={doc=>setDraft(new RehearsalSession(doc,undefined,'prepare'))} editorOnly onPublish={publish} publishError={publishError||props.output?.error||''} editorStatus={editorStatus}/>;
   return <SetControlsPanelView {...props} connections={connections} connectionError={connectionError} onRetryConnections={retryConnections} workspace={workspace} onWorkspaceClose={()=>draft.exitRehearsal()}/>;
 }
-function SetControlsPanelView({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, voting, onFieldEdit, workspace, editorOnly=false,onPublish,publishError,onWorkspaceClose,editorStatus='changed',endpoint,serverRoomId,moduleBindings={},connections=[],connectionError='',onRetryConnections,onModuleBinding }: PanelProps & {connections?:SavedConnection[];connectionError?:string;onRetryConnections?:()=>void;onModuleBinding?:(role:string,binding:{id:string;revision:number})=>void;} & {editorStatus?:'changed'|'applying'|'applied'|'error';onWorkspaceClose?:()=>void;workspace?:ReactNode;editorOnly?:boolean;onPublish?:()=>void;publishError?:string}) {
+function SetControlsPanelView({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, voting, onFieldEdit, workspace, editorOnly=false,onPublish,publishError,onWorkspaceClose,editorStatus='changed',endpoint,serverRoomId,preferenceRoomId,moduleBindings={},connections=[],connectionError='',onRetryConnections,onModuleBinding }: PanelProps & {connections?:SavedConnection[];connectionError?:string;onRetryConnections?:()=>void;onModuleBinding?:(role:string,binding:{id:string;revision:number})=>void;} & {editorStatus?:'changed'|'applying'|'applied'|'error';onWorkspaceClose?:()=>void;workspace?:ReactNode;editorOnly?:boolean;onPublish?:()=>void;publishError?:string}) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
+  const arrangements=useControlArrangement(session.package,JSON.stringify([endpoint??'local',serverRoomId??preferenceRoomId??'preview']));
   const [player, setPlayer] = useState('player-1');
   useShowClock(session);
   // Fast Refresh can retain a session built by the previous runtime module.
@@ -150,7 +153,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
   function renderControl(c: SetControl) {
     if (c.when !== undefined && !evaluate(c.when, state, {}, 64, doc.set.tokens)) return null;
     if (c.type === 'button') {
-      let disabled = blocked || c.enabled !== undefined && !evaluate(c.enabled, state, {}, 64, doc.set.tokens);
+      let disabled = blocked || !!state.controlPending || c.enabled !== undefined && !evaluate(c.enabled, state, {}, 64, doc.set.tokens);
       if (c.action.type === 'show.start') disabled ||= state.running;
       if (c.action.type === 'show.next') disabled ||= !state.running || state.paused || state.show.collecting ||
         !doc.show?.phases.find(p => p.id === state.show.phase)?.next ||
@@ -161,6 +164,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
         {c.label}</button>;
     }
     const def = doc.set.values[c.key];
+    if(session.hasRoomControl())return <CommittedField key={c.id} label={c.label} field={def} value={state.values[c.key]} disabled={blocked} pending={!!state.controlPending} onApply={value=>{onFieldEdit?.(c.key);return session.send({type:'field',key:c.key,value});}}/>;
     return <label key={c.id}>{c.label}<input aria-label={c.label} type={c.type === 'number' ? 'number' : 'text'}
       disabled={blocked} value={String(state.values[c.key])} maxLength={def.type === 'text' ? def.maxLength : undefined}
       min={def.type === 'number' ? def.min : undefined} max={def.type === 'number' ? def.max : undefined}
@@ -185,11 +189,44 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
   const editSegment=(id:string)=>{session.send({type:'segment.select',phaseId:id});};
   const ready=(layout:string)=>output?.layoutReadiness?.[layout];
   const readinessLabel=(layout:string)=>{const status=ready(layout);return !status?'':status.state==='ready'?'Ready':status.state==='error'?`Layout unavailable: ${status.error}`:'Loading layout';};
+  const modulePanel=(controlRefs?:readonly string[],compact=false,includeRuntimeControls=controlRefs===undefined)=><OperatorPanel controlRefs={controlRefs} compact={compact} includeRuntimeControls={includeRuntimeControls} definition={doc.runtime} snapshot={session.moduleSnapshot()} segment={state.show.phase} disabled={blocked||state.workspaceMode==='prepare'||state.moduleConnection==='connecting'||state.moduleConnection==='error'} send={session.sendModule} searchWeatherLocations={endpoint?async query=>(await dataIntegrations.locations(endpoint,query)).locations:undefined} simulateWeather={rehearsing?async(module,condition,isDay)=>{const snapshot=session.moduleSnapshot(),now=Date.now();return session.receiveModuleData({id:crypto.randomUUID(),setEpoch:snapshot.setEpoch,module,epoch:snapshot.modules[module].epoch,op:'weather.update',input:{locationRevision:snapshot.modules[module].weatherLocationRevision??0,observedAt:now,temperature:condition==='snow'?-4:18,condition,isDay,wind:12,precipitation:['rain','snow','storm'].includes(condition)?3:0,provider:'Rehearsal',location:snapshot.modules[module].weather?.location??'Preview location',units:'celsius'}});}:undefined} requestAgent={endpoint?(module,question,refresh)=>requestModuleData(session,module,question,endpoint,serverRoomId,moduleBindings,connections,refresh):undefined}/>;
   const moduleControls=doc.runtime.instances.length>0&&<>
-    <OperatorPanel definition={doc.runtime} snapshot={session.moduleSnapshot()} segment={state.show.phase} disabled={blocked||state.workspaceMode==='prepare'||state.moduleConnection==='connecting'||state.moduleConnection==='error'} send={session.sendModule} searchWeatherLocations={endpoint?async query=>(await dataIntegrations.locations(endpoint,query)).locations:undefined} simulateWeather={rehearsing?async(module,condition,isDay)=>{const snapshot=session.moduleSnapshot(),now=Date.now();return session.receiveModuleData({id:crypto.randomUUID(),setEpoch:snapshot.setEpoch,module,epoch:snapshot.modules[module].epoch,op:'weather.update',input:{locationRevision:snapshot.modules[module].weatherLocationRevision??0,observedAt:now,temperature:condition==='snow'?-4:18,condition,isDay,wind:12,precipitation:['rain','snow','storm'].includes(condition)?3:0,provider:'Rehearsal',location:snapshot.modules[module].weather?.location??'Preview location',units:'celsius'}});}:undefined} requestAgent={endpoint?(module,question,refresh)=>requestModuleData(session,module,question,endpoint,serverRoomId,moduleBindings,connections,refresh):undefined}/>
+    {modulePanel()}
     {state.moduleError&&<p role="alert">{state.moduleError}</p>}
     {rehearsing&&<><label>Simulated participant<input value={player} onChange={e=>setPlayer(e.target.value)}/></label><button onClick={()=>setPlayer(`player-${crypto.randomUUID().slice(0,8)}`)}>New participant</button><ParticipantPanel snapshot={session.moduleParticipantSnapshot()} simulation onCommand={command=>session.sendModule(command.module,command.op,command.input,player)}/></>}
   </>;
+  const controlVisible=(ref:string):boolean=>{
+    if(ref==='builtin:layout')return true;
+    const entry=arrangements.catalog.controls.find(c=>c.id===ref);
+    if(!entry)return false;
+    if(entry.kind==='module'){
+      const instance=doc.runtime.instances.find(i=>i.id===entry.moduleId),snapshot=session.moduleSnapshot();
+      if(!instance||(instance.owner!=='set'&&instance.segment!==state.show.phase)||!snapshot.modules[instance.id])return false;
+      if(entry.controlId.startsWith('$'))return true;
+      const item=doc.runtime.definitions[instance.definition].controls.filter(g=>g.audience==='operator').flatMap(g=>g.controls).find(c=>c.id===entry.controlId);
+      return !!item&&(!item.segment||item.segment===state.show.phase)&&(item.when===undefined||evaluateModule(item.when,snapshot.modules[instance.id].values,{},{})===true);
+    }
+    const item=doc.set.controls.find(c=>c.id===entry.controlId);
+    if(!item||item.type!=='button'&&!activeFieldKeys.has(item.key))return false;
+    if(item.type==='button'&&['show.vote','show.react'].includes(item.action.type)&&(!editorOnly||!collecting))return false;
+    try{return item.when===undefined||!!evaluate(item.when,state,{},64,doc.set.tokens);}catch{return true;}
+  };
+  const arrangedControl=(ref:string,compact=false):ReactNode=>{
+    if(!controlVisible(ref))return null;
+    if(ref==='builtin:layout')return <label key={ref} data-control-ref={ref}>Layout<select aria-label={compact?'Minimized layout':'Set layout'} disabled={blocked||!!state.controlPending} value={state.layoutId} onChange={e=>session.send({type:'control',action:{type:'layout.select',layoutId:e.target.value}})}>{doc.set.layouts.map(layout=><option key={layout.id} value={layout.id}>{layout.label}</option>)}</select></label>;
+    const entry=arrangements.catalog.controls.find(c=>c.id===ref);
+    if(!entry)return null;
+    if(entry.kind==='module')return <div key={ref} className="set-arranged-module" data-control-ref={ref}>{modulePanel([ref],compact)}</div>;
+    const item=doc.set.controls.find(c=>c.id===entry.controlId);
+    if(!item)return null;
+    if(item.type!=='button'&&!activeFieldKeys.has(item.key))return null;
+    if(item.type==='button'&&['show.vote','show.react'].includes(item.action.type)&&(!editorOnly||!collecting))return null;
+    return <div key={ref} className="set-arranged-control" data-control-ref={ref}>{control(item)}</div>;
+  };
+  const arrangedExpanded=<div className="set-arranged-sections">{arrangements.arrangement.sections.filter(section=>section.controls.some(controlVisible)).map(section=><section key={section.id} className="set-arranged-section" data-section-id={section.id}>
+    <h4><button type="button" aria-expanded={!section.collapsed} aria-label={`${section.collapsed?'Expand':'Collapse'} ${section.label} section`} onClick={()=>arrangements.update({...arrangements.preferences,collapsed:{...arrangements.preferences.collapsed,[section.id]:!section.collapsed}})}><span>{section.collapsed?'▸':'▾'}</span>{section.label}</button></h4>
+    <div className="set-arranged-section-controls" hidden={section.collapsed}>{section.controls.map(ref=>arrangedControl(ref))}</div>
+  </section>)}</div>;
   const editor = <>
         <div className="set-editor-details-header"><strong>{doc.show?'Segment details':'Set details'}</strong><p>{editorOnly?'Changes stay in this preview until you show the set on output.':'Changes update room output.'}</p></div>
         <section className="set-editor-navigation" aria-label={doc.show?'Segment navigation':'Layout navigation'}>
@@ -251,22 +288,16 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
       </div>}
       {doc.show && <div className="set-fixed-playback">{transport}</div>}
       <div className="set-compact-run" aria-label={doc.show?'Compact show controls':'Compact set controls'}>
-        {doc.show&&<select className="set-compact-segment" aria-label="Choose segment" disabled={blocked} value={state.show.phase} onChange={e=>editSegment(e.target.value)}>{editorSegments.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</select>}
-        <select className="set-compact-layout" aria-label="Choose layout" disabled={blocked} value={state.layoutId} onChange={e=>session.send({type:'control',action:{type:'layout.select',layoutId:e.target.value}})}>{doc.set.layouts.map(l=><option key={l.id} value={l.id}>{l.label}</option>)}</select>
-        {(actionControls.length>0||state.running)&&<SetActionsMenu>
-          {actionControls.map(control)}
-          {state.running&&<>
-            {collecting&&<button disabled={state.paused} onClick={()=>session.send({type:'tick',milliseconds:state.show.remainingMs})}>Close voting</button>}
-            {segmentControls.filter(c=>c.type==='button'&&c.action.type==='show.reveal').map(control)}
-            {unresolved&&<button disabled={state.paused} onClick={()=>session.send({type:'control',action:{type:'show.reopen'}})}>Reopen voting</button>}
-            {unresolved&&tied&&<><button disabled={state.paused} onClick={()=>session.send({type:'control',action:{type:'show.tiebreak'}})}>Tie-break</button><button disabled={state.paused} onClick={()=>session.send({type:'control',action:{type:'show.draw'}})}>Reveal draw</button></>}
-          </>}
-        </SetActionsMenu>}
+        {arrangements.arrangement.minimized.map(ref=>arrangedControl(ref,true))}
+
       </div>
       <div className="set-toolbar-tools">
+        <ControlArrangementEditor value={arrangements}/>
         <RehearsalPreview doc={doc} state={state} output={output} outputActive={output?.active} workspace={workspace} onEditorClose={onWorkspaceClose} configuration={<SetConfiguration session={session} onChange={onChange} output={output}/>} editor={editor} sources={visibleSlots.size ? sourceEditor : undefined} />
       </div>
     </header>
+    {session.hasRoomControl()&&<p role="status">{state.controlPending?"Sending room command…":"Shared room controls · changes require output confirmation"}</p>}
+    {state.controlError&&<p role="alert" className="set-error">{state.controlError}</p>}
     {doc.runtime.instances.length>0&&state.workspaceMode==='live'&&state.moduleConnection!=='live'&&<p role="status" className={state.moduleError?'set-error':'set-section-note'}>{state.moduleError?`Modules disconnected — reconnecting. ${state.moduleError}`:'Connecting live controls…'}</p>}
     {output?.layoutReadiness&&Object.values(output.layoutReadiness).some(s=>s.state==='error')&&<p className="set-error">Some layouts could not load. <button onClick={output.retryPreparation}>Retry loading</button></p>}
     {output?.error && <div role="alert" className="set-error">{output.error} <button disabled={output.busy&&!output.active} onClick={()=>void output.apply()}>Retry update</button></div>}
@@ -279,9 +310,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
             onClick={()=>session.send({type:'control',action:{type:'layout.select',layoutId:layout.id}})}><span>{layout.label}</span><small>{layout.height>layout.width?'Portrait':layout.width>layout.height?'Landscape':'Square'}</small></button>)}</div>
         </section>
         <section className="set-manual-controls" aria-label="Set controls">
-          <h3>Controls <span>{activeLayout?.label}</span></h3>{moduleControls}
-          <div className="set-controls-fields set-manual-fields">{layoutFields.map(control)}</div>
-          {!!actionControls.length&&<div className="set-controls-fields set-segment-actions">{actionControls.map(control)}</div>}
+          <h3>Controls <span>{activeLayout?.label}</span></h3>{arrangedExpanded}
           {hasHostMedia&&<MediaPlaybackControls session={session}/>}
           {!layoutFields.length&&!actionControls.length&&!hasHostMedia&&<p className="set-section-note">Switch layouts to change the set’s output.</p>}
           {voting&&!doc.runtime.instances.some(i=>doc.runtime.definitions[i.definition].behavior?.type==='vote')&&<section className="set-room-voting" aria-label="Room voting"><h3>Voting</h3>{voting}</section>}
@@ -325,9 +354,8 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
       {doc.show && <section className="set-participation" aria-label="Segment controls">
         <h3>Segment controls <span>{rehearsing ? 'Rehearsal' : state.workspaceMode==='live'&&state.running?'Show':'Prepared'}</span></h3>
         {hasHostMedia&&<div className="set-segment-media"><MediaPlaybackControls session={session}/></div>}
-        {moduleControls}<strong className="set-participation-heading">{state.running ? phase?.label : activeLayout?.label}</strong>
+        {arrangedExpanded}<strong className="set-participation-heading">{state.running ? phase?.label : activeLayout?.label}</strong>
         <label className="set-panel-layout-picker">Layout<select aria-label="Segment layout" disabled={blocked} value={state.layoutId} onChange={e=>session.send({type:'control',action:{type:'layout.select',layoutId:e.target.value}})}>{doc.set.layouts.map(l=><option key={l.id} value={l.id}>{l.label}</option>)}</select></label>
-        {!!actionControls.length&&<div className="set-controls-fields set-segment-actions">{actionControls.map(control)}</div>}
 
         {collecting ? <>
           <div className="set-participation-stats" role="status">{state.show.ballot > 1 ? `Tie-break ${state.show.ballot - 1} · ` : ''}{state.show.total} votes · heat {Math.round(state.show.heat * 100)}%</div>
@@ -362,7 +390,6 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
           </>}
           <p className="set-rehearsal-note">Reopen adds {timeLabel(phase?.collectMs ?? 0)} and keeps votes. A tie-break starts a new ballot.</p>
         </div>}
-        {!!segmentControls.length && <div className="set-controls-fields">{segmentControls.filter(c=>editorOnly||c.type!=='button'||!['show.vote','show.react'].includes(c.action.type)).map(control)}</div>}
       </section>}
       <div className="set-reference">
         <section className="set-assignments" aria-label="Assigned sources">
@@ -385,11 +412,4 @@ function findSlotFraming(node:import('./schema').PresentationNode|undefined,slot
 }
 function SlotFramingControls({label,value,disabled,onChange}:{label:string;value:import('./schema').SlotFraming;disabled:boolean;onChange:(v:import('./schema').SlotFraming)=>void}) {
  return <span className="set-slot-framing"><select aria-label={`${label} framing`} disabled={disabled} value={value.mode} onChange={e=>onChange({...value,mode:e.target.value as 'fill'|'fit'})}><option value="fill">Fill frame</option><option value="fit">Fit entire source</option></select>{value.mode==='fill' && <details className="set-framing-adjust"><summary>Adjust framing</summary><span className="set-slot-position"><span>Horizontal<input aria-label={`${label} horizontal crop position`} type="range" min="0" max="1" step="0.01" value={value.x} disabled={disabled} onChange={e=>onChange({...value,x:Number(e.target.value)})} /></span><span>Vertical<input aria-label={`${label} vertical crop position`} type="range" min="0" max="1" step="0.01" value={value.y} disabled={disabled} onChange={e=>onChange({...value,y:Number(e.target.value)})} /></span></span><button type="button" disabled={disabled} onClick={()=>onChange({...value,x:0.5,y:0.5})}>Center crop</button></details>}</span>;
-}
-
-function SetActionsMenu({children}:{children:ReactNode}) {
- const id=useId(),trigger=useRef<HTMLButtonElement>(null),menu=useRef<HTMLDivElement>(null);
- const [position,setPosition]=useState({left:8,top:60});
- return <><button type="button" className="set-compact-actions-trigger" ref={trigger} popoverTarget={id} aria-label="Set actions" onClick={()=>{const r=trigger.current!.getBoundingClientRect();setPosition({left:Math.max(8,Math.min(r.left,innerWidth-288)),top:Math.max(8,r.top-8)});}}>Actions ▴</button>
- {createPortal(<div id={id} ref={menu} popover="auto" className="set-actions-popover set-controls" style={{left:position.left,top:position.top}}><strong>Segment actions</strong>{children}</div>,document.body)}</>;
 }

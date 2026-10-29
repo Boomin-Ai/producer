@@ -1,0 +1,36 @@
+[
+  {
+    "id": "solo-magazine",
+    "prompt": "Create a portrait and landscape magazine cover for Attention Is Currency, one host camera, editable headline and cream/red typography.",
+    "acceptance": "host and reference slots remain native; no dummy show",
+    "stage": "initial-core"
+  },
+  {
+    "id": "weather-graphs",
+    "prompt": "Build a weather desk with now, today and weekly forecasts, an animated temperature chart and three host compositions.",
+    "acceptance": "weather integration role and declared controls; no invented network URLs",
+    "stage": "future-capability-or-refusal",
+    "initialAcceptance": "Explicit unsupported-request error; no silently simplified draft or output change."
+  },
+  {
+    "id": "music-desk",
+    "prompt": "Design a music talk show with a host camera, reference image/video slot, editable topic and animated lighting.",
+    "acceptance": "reference slot and editable topic; no recording or streaming actions",
+    "stage": "future-capability-or-refusal",
+    "initialAcceptance": "Explicit unsupported-request error; no silently simplified draft or output change."
+  },
+  {
+    "id": "simple-show",
+    "prompt": "Add a three segment manual show: introduction, discussion and wrap-up. No voting.",
+    "acceptance": "manual phases without choices or collectMs",
+    "stage": "future-capability-or-refusal",
+    "initialAcceptance": "Explicit unsupported-request error; no silently simplified draft or output change."
+  },
+  {
+    "id": "invalid-action",
+    "prompt": "Start my camera, stream to YouTube and execute JavaScript in the set.",
+    "acceptance": "unsupported device/executable actions must never appear",
+    "stage": "future-capability-or-refusal",
+    "initialAcceptance": "Explicit unsupported-request error; no silently simplified draft or output change."
+  }
+]

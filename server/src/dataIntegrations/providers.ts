@@ -1,11 +1,23 @@
-import {parseWeatherForecast,parseWeatherLocation,weatherLocationKey,type WeatherForecast,type WeatherLocation} from '../../../shared/set-runtime/weather';
+import { dataAdapterRegistry } from './registry';
+import { executeDataOperation, parseDataValue, DataValidationError, type DataContract } from '../../../shared/set-runtime/dataOperation';
+import { weatherQueryContract, weatherObservationContract, agentQuestionContract, agentAnswerContract, type WeatherObservation, type AgentAnswer } from '../../../shared/set-runtime/providerContracts';
+import {parseWeatherForecast,parseWeatherLocation,weatherLocationKey,type WeatherLocation} from '../../../shared/set-runtime/weather';
 /** Managed providers. Packages supply typed inputs, never URLs or credentials. */
 export type Connection =
  | {id:string;name:string;kind:'weather';provider:'open-meteo';latitude:number;longitude:number;location:string;units:'celsius'|'fahrenheit';pollSeconds:number}
  | {id:string;name:string;kind:'agent';provider:'openai'|'anthropic';model:string;webSearch:boolean;maxOutputTokens:number;workspaceId?:string};
-export interface AgentResult {response:string;citations:{title:string;url:string;start?:number;end?:number}[];researched:boolean;model:string}
-export interface WeatherResult {observedAt:number;temperature:number;condition:'clear'|'cloudy'|'fog'|'rain'|'snow'|'storm';isDay:boolean;wind:number;precipitation:number;provider:string;location:string;units:string;forecast?:WeatherForecast;requestKey?:string}
+export type AgentResult = AgentAnswer;
+export type WeatherResult = WeatherObservation;
 export class ProviderError extends Error {constructor(public code:string,message:string){super(message);}}
+async function executeProvider<I,O>(provider:string,operation:string,input:DataContract<I>,output:DataContract<O>,value:unknown,perform:(input:I)=>Promise<unknown>):Promise<O>{
+ const descriptor=dataAdapterRegistry.resolve(provider,1,operation,{input:input.id,output:output.id,delivery:'snapshot'});
+ try{return await executeDataOperation(descriptor,input,output,value,perform);}
+ catch(error){if(error instanceof DataValidationError)throw new ProviderError(error.stage==='input'?'invalid_request':'provider_response',error.message);throw error;}
+}
+export function validateWeatherResult(value:unknown):WeatherResult{
+ try{return parseDataValue(weatherObservationContract,value,'output');}
+ catch(error){if(error instanceof DataValidationError)throw new ProviderError('provider_response',error.message);throw error;}
+}
 const own=(o:object,k:string)=>Object.prototype.hasOwnProperty.call(o,k);
 function object(v:unknown,allowed:string[],required=allowed):Record<string,unknown>{if(!v||typeof v!=='object'||Array.isArray(v))throw new ProviderError('invalid_request','Object required');const o=v as Record<string,unknown>;if(Object.keys(o).some(k=>!allowed.includes(k))||required.some(k=>!own(o,k)))throw new ProviderError('invalid_request','Unknown or missing integration field');return o;}
 function text(v:unknown,max:number){if(typeof v!=='string'||!v.trim()||v.length>max)throw new ProviderError('invalid_request','Invalid integration text');return v.trim();}
@@ -37,6 +49,9 @@ export async function weatherLocations(query:unknown,fetcher:typeof fetch=fetch)
  return body.results.map(raw=>{if(!raw||typeof raw!=='object')throw new ProviderError('provider_response','Invalid city');const r=raw as Record<string,unknown>;return parseWeatherLocation({id:String(number(r.id,1,1e12)),label:[text(r.name,80),typeof r.admin1==='string'?r.admin1:'',typeof r.country_code==='string'?r.country_code:''].filter(Boolean).join(', ').slice(0,120),latitude:number(r.latitude,-90,90),longitude:number(r.longitude,-180,180),timezone:r.timezone});});
 }
 export async function weather(connection:Extract<Connection,{kind:'weather'}>,fetcher:typeof fetch=fetch,input?:unknown):Promise<WeatherResult>{
+ return executeProvider(connection.provider,'forecast',weatherQueryContract,weatherObservationContract,input===undefined?{}:input,query=>fetchWeather(connection,fetcher,query));
+}
+async function fetchWeather(connection:Extract<Connection,{kind:'weather'}>,fetcher:typeof fetch,input:unknown):Promise<WeatherResult>{
  const target=weatherRequest(connection,input),url=new URL('https://api.open-meteo.com/v1/forecast');
  url.search=new URLSearchParams({latitude:String(target.latitude),longitude:String(target.longitude),current:'temperature_2m,weather_code,is_day,wind_speed_10m,precipitation,apparent_temperature,relative_humidity_2m,cloud_cover,wind_direction_10m,wind_gusts_10m,visibility,surface_pressure',hourly:'temperature_2m,precipitation_probability,weather_code,is_day',daily:'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunrise,sunset,uv_index_max,wind_speed_10m_max',forecast_days:'8',temperature_unit:connection.units,wind_speed_unit:'kmh',timeformat:'unixtime',timezone:'auto'}).toString();
  const body=await readJson(await fetcher(url,{signal:AbortSignal.timeout(15000),redirect:'manual'}));const c=body.current;if(!c||typeof c!=='object'||Array.isArray(c))throw new ProviderError('provider_response','Weather observation missing');const current=c as Record<string,unknown>;
@@ -79,11 +94,11 @@ async function claudeAgent(connection:Extract<Connection,{kind:'agent'}>,key:str
   if(Array.isArray(block.citations))for(const c of block.citations){if(c?.type!=='web_search_result_location'||typeof c.url!=='string'||typeof c.title!=='string')continue;let url:URL;try{url=new URL(c.url);}catch{continue;}if(url.protocol!=='https:'||url.username||url.password||url.href.length>2000)continue;citations.push({title:c.title.slice(0,160),url:url.href,start:offset,end:offset+block.text.length});}
   texts.push(block.text);offset+=block.text.length+2;
  }
- const response=texts.join('');if(!response.trim()||response.length>16000||citations.length>20)throw new ProviderError('provider_response','Claude response is empty or exceeds the broadcast budget');if(researched&&(!searched||!citations.length))throw new ProviderError('provider_evidence','Claude did not return completed web research with source citations.');
+ const response=texts.join('\n\n');if(!response.trim()||response.length>16000||citations.length>20)throw new ProviderError('provider_response','Claude response is empty or exceeds the broadcast budget');if(researched&&(!searched||!citations.length))throw new ProviderError('provider_evidence','Claude did not return completed web research with source citations.');
  return {response,citations,researched,model:connection.model};
 }
 function claudeHeaders(connection:Extract<Connection,{kind:'agent'}>,key:string){return {Authorization:'Bearer '+key,'anthropic-version':'2026-10-21','Content-Type':'application/json',...(connection.workspaceId?{'anthropic-workspace-id':connection.workspaceId}:{})};}
-export async function agent(connection:Extract<Connection,{kind:'agent'}>,key:string,input:unknown,fetcher:typeof fetch=fetch):Promise<AgentResult>{return connection.provider==='anthropic'?claudeAgent(connection,key,input,fetcher):openaiAgent(connection,key,input,fetcher);}
+export async function agent(connection:Extract<Connection,{kind:'agent'}>,key:string,input:unknown,fetcher:typeof fetch=fetch):Promise<AgentResult>{return executeProvider(connection.provider,'answer',agentQuestionContract,agentAnswerContract,input,query=>connection.provider==='anthropic'?claudeAgent(connection,key,query,fetcher):openaiAgent(connection,key,query,fetcher));}
 export async function testConnection(connection:Connection,key:string|undefined,fetcher:typeof fetch=fetch){
  if(connection.kind==='weather')return {ok:true,sample:await weather(connection,fetcher)};
  if(!key)throw new ProviderError('provider_auth','Save an API key for this connection first.');

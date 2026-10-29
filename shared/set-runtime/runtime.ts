@@ -1,3 +1,4 @@
+import {initialControl,parseControlDefinition,parseControlCommand,reduceControl,type ControlDefinition,type ControlState,type ControlCommand} from './control';
 import {parseWeatherForecast,parseWeatherLocation,type WeatherForecast,type WeatherLocation} from './weather';
 import {answerPages,presentationText} from './projection';
 import {evaluate,fieldValue,key,parseRuntimeDefinition,type RuntimeDefinition,type ModuleDefinition,type ModuleInstanceDefinition,type Scalar,type Role} from './contract';
@@ -12,8 +13,8 @@ export interface ModuleState {
  id:string;definition:string;epoch:number;execution:'created'|'running'|'paused'|'stopped'|'disposed';pauseReasons:string[];mounted:boolean;published:boolean;view?:string;values:Record<string,Scalar>;
  round:number;openedAt:number;admission:'closed'|'open';revealed:boolean;counts:Record<string,number>;total:number;submissions:Submission[];featured:string|null;weather:Weather|null;weatherLocation?:WeatherLocation;weatherLocationRevision?:number;dataStatus:'empty'|'fresh'|'stale'|'error';error:string;agent:AgentState;
 }
-export interface Snapshot {revision:number;setEpoch:number;modules:Record<string,ModuleState>}
-export interface RuntimeCheckpoint {version:1;definition:RuntimeDefinition;domain:'live'|'rehearsal';state:Snapshot;lifecycle?:{segment:string;running:boolean;paused:boolean;showAttached?:boolean;visible?:boolean};secrets:Array<[string,{ballots:Array<[string,string]>;submissions:Array<[string,string]>}]>;dedupe:Array<[string,{body:string;result:Result}]>}
+export interface Snapshot {revision:number;setEpoch:number;modules:Record<string,ModuleState>;control?:ControlState}
+export interface RuntimeCheckpoint {version:1;definition:RuntimeDefinition;controlDefinition?:ControlDefinition;domain:'live'|'rehearsal';state:Snapshot;lifecycle?:{segment:string;running:boolean;paused:boolean;showAttached?:boolean;visible?:boolean};secrets:Array<[string,{ballots:Array<[string,string]>;submissions:Array<[string,string]>}]>;dedupe:Array<[string,{body:string;result:Result}]>}
 interface Secret {ballots:Map<string,string>;submissions:Map<string,string>}
 const own=(o:object,k:string)=>Object.prototype.hasOwnProperty.call(o,k);
 const freeze=<T>(v:T):T=>{if(v&&typeof v==='object'){Object.values(v).forEach(freeze);Object.freeze(v);}return v;};
@@ -26,6 +27,7 @@ const scalarInput=(input:unknown):Record<string,Scalar>=>{
  * No module may call network/device APIs here. Adapters deliver checked results. */
 export class SetRuntime {
  readonly definition:RuntimeDefinition;
+ readonly controlDefinition?:ControlDefinition;
  readonly domain:'live'|'rehearsal';
  private state:Snapshot;
  private lifecycle:{segment:string;running:boolean;paused:boolean;showAttached?:boolean;visible?:boolean}={segment:'',running:false,paused:false,showAttached:false,visible:true};
@@ -33,11 +35,16 @@ export class SetRuntime {
  private listeners=new Set<()=>void>();
  private dedupe=new Map<string,{body:string;result:Result}>();
  private trace:Array<{id:string;module:string;op:string;result:Result}>=[];
- constructor(definition:unknown,options:{epoch:number;domain:'live'|'rehearsal';capabilities:readonly string[]}){
+ constructor(definition:unknown,options:{epoch:number;domain:'live'|'rehearsal';capabilities:readonly string[];control?:unknown}){
   this.definition=freeze(parseRuntimeDefinition(definition));this.domain=options.domain;
   if(!Number.isSafeInteger(options.epoch)||options.epoch<1)throw Error('Invalid set epoch');
   for(const d of Object.values(this.definition.definitions))for(const c of d.capabilities)if(!options.capabilities.includes(c))throw Error('Required capability unavailable: '+c);
   this.state=freeze({revision:0,setEpoch:options.epoch,modules:Object.fromEntries(this.definition.instances.map(i=>[i.id,this.initial(i,1)]))});
+  if(options.control!==undefined){
+   this.controlDefinition=freeze(parseControlDefinition(options.control));
+   if(this.definition.instances.some(i=>i.owner==='segment'&&!this.controlDefinition!.show?.phases.some(p=>p.id===i.segment)))throw Error('Module references unknown Show phase');
+   this.state=freeze({...this.state,control:initialControl(this.controlDefinition)});
+  }
  }
  private initial(instance:ModuleInstanceDefinition,epoch:number):ModuleState{
   const d=this.definition.definitions[instance.definition],b=d.behavior;this.secrets.set(instance.id,{ballots:new Map(),submissions:new Map()});
@@ -166,8 +173,38 @@ export class SetRuntime {
   if(action.when!==undefined&&evaluate(action.when,m.values,input,{})!==true)throw Error('Action precondition failed');
   for(const step of action.steps){if(step.op==='view'){m.view=step.view;continue;}const value=evaluate(step.value,m.values,input,{});const next=step.op==='add'?Number(m.values[step.field])+Number(value):value;if(step.op==='add'&&(typeof value!=='number'||typeof m.values[step.field]!=='number'))throw Error('Add requires numbers');m.values[step.field]=fieldValue(d.state[step.field],next);}
  }
- /** One state commit for a show transition. Set-owned modules remain independent. */
+ /** A layout/Show transition and its module lifecycle share one commit revision. */
+ control(command:ControlCommand,principal:Principal,now:number):Result{
+  try{
+   if(!this.controlDefinition||!this.state.control)throw Error('Room control is not configured');
+   if(!principal||principal.role!=='operator'||typeof principal.id!=='string'||!principal.id||principal.id.length>160||this.definition.instances.some(i=>!principal.modules.includes(i.id)))throw Error('Set control authority required');
+   if(principal.actions&&!principal.actions.includes(command.op))throw Error('Action not granted');
+   // Validate the bounded envelope before using any client identity as a key.
+   command=parseControlCommand(command);
+   if(command.setEpoch!==this.state.setEpoch)throw Error('Set epoch expired');
+   const cacheKey=JSON.stringify(['control',principal.id,command.setEpoch,command.id]),body=JSON.stringify(command),previous=this.dedupe.get(cacheKey);
+   if(previous){if(previous.body!==body)throw Error('Command identity reused');return structuredClone(previous.result);}
+   if(command.expectedRevision!==this.state.revision)throw Error('State revision conflict');
+   if(this.state.revision>=Number.MAX_SAFE_INTEGER)throw Error('Revision limit reached');
+   const next=reduceControl(this.controlDefinition,this.state.control,command,now);
+   const draft=SetRuntime.restore(this.checkpoint(),Object.values(this.definition.definitions).flatMap(d=>d.capabilities));
+   // The authorized root operation grants only its declared lifecycle effects.
+   const result=draft.applyLifecycle({setEpoch:this.state.setEpoch,segment:next.show.phase,running:next.show.status!=='stopped',paused:next.show.status==='paused',showAttached:!!this.controlDefinition.show,visible:next.visible},{...principal,role:'show',actions:undefined},now);
+   if(result.status==='rejected')throw Error(result.error);
+   this.state=freeze({...draft.state,control:next,revision:this.state.revision+1});this.secrets=draft.secrets;this.lifecycle=draft.lifecycle;
+   const committed:Result={status:'committed',revision:this.state.revision,moduleEpoch:0};
+   this.dedupe.set(cacheKey,{body,result:committed});this.trimDedupe();
+   for(const listener of this.listeners)try{listener();}catch{}
+   return structuredClone(committed);
+  }catch(error){return {status:'rejected',revision:this.state.revision,error:error instanceof Error?error.message:'Set control failed'};}
+ }
+ private trimDedupe(){let bytes=0;for(const [k,v]of this.dedupe)bytes+=k.length+v.body.length+128;while(this.dedupe.size>2048||bytes>512000){const first=this.dedupe.entries().next().value!;bytes-=first[0].length+first[1].body.length+128;this.dedupe.delete(first[0]);}}
+ /** Legacy clients cannot overwrite a DO-owned Show with host-local lifecycle. */
  orchestrate(command:{setEpoch:number;segment:string;running:boolean;paused:boolean;showAttached?:boolean;visible?:boolean},principal:Principal,now:number):Result{
+  if(this.controlDefinition)return {status:'rejected',revision:this.state.revision,error:'Use authoritative Set control commands'};
+  return this.applyLifecycle(command,principal,now);
+ }
+ private applyLifecycle(command:{setEpoch:number;segment:string;running:boolean;paused:boolean;showAttached?:boolean;visible?:boolean},principal:Principal,now:number):Result{
   try{
    if(command.setEpoch!==this.state.setEpoch)throw Error('Set epoch expired');
    if(!['operator','show'].includes(principal.role)||this.definition.instances.some(i=>!principal.modules.includes(i.id)))throw Error('Show orchestration authority required');
@@ -212,10 +249,10 @@ export class SetRuntime {
   }catch(error){return {status:'rejected',revision:this.state.revision,error:error instanceof Error?error.message:'Orchestration failed'};}
  }
  /** Internal durable storage only. Contains private identities; never send to clients or export in a set. */
- checkpoint():RuntimeCheckpoint{return structuredClone({version:1,definition:this.definition,domain:this.domain,state:this.state,lifecycle:this.lifecycle,secrets:[...this.secrets].map(([id,s])=>[id,{ballots:[...s.ballots],submissions:[...s.submissions]}]),dedupe:[...this.dedupe]});}
+ checkpoint():RuntimeCheckpoint{return structuredClone({version:1,definition:this.definition,...(this.controlDefinition?{controlDefinition:this.controlDefinition}:{}),domain:this.domain,state:this.state,lifecycle:this.lifecycle,secrets:[...this.secrets].map(([id,s])=>[id,{ballots:[...s.ballots],submissions:[...s.submissions]}]),dedupe:[...this.dedupe]});}
  static restore(checkpoint:RuntimeCheckpoint,capabilities:readonly string[]){
   if(checkpoint.version!==1||!Number.isSafeInteger(checkpoint.state.revision)||checkpoint.state.revision<0)throw Error('Invalid runtime checkpoint');
-  const runtime=new SetRuntime(checkpoint.definition,{epoch:checkpoint.state.setEpoch,domain:checkpoint.domain,capabilities});
+  const runtime=new SetRuntime(checkpoint.definition,{epoch:checkpoint.state.setEpoch,domain:checkpoint.domain,capabilities,control:checkpoint.controlDefinition});
   if(Object.keys(runtime.state.modules).sort().join(',')!==Object.keys(checkpoint.state.modules).sort().join(','))throw Error('Checkpoint instance mismatch');
   runtime.state=freeze(structuredClone(checkpoint.state));runtime.lifecycle=structuredClone(checkpoint.lifecycle??runtime.lifecycle);runtime.secrets=new Map(checkpoint.secrets.map(([id,s])=>[id,{ballots:new Map(s.ballots),submissions:new Map(s.submissions)}]));runtime.dedupe=new Map(structuredClone(checkpoint.dedupe));return runtime;
  }

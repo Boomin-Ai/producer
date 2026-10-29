@@ -9,6 +9,7 @@ async function call<T>(endpoint:string,method:'GET'|'POST'|'DELETE',path:string,
  return result.body as T;
 }
 export const dataIntegrations={
+ authorSet:(endpoint:string,id:string,body:{expectedRevision:number;prompt:string;package?:import('../features/presentation/schema').PresentationPackage})=>call<import('../features/presentation/setAuthoring').AuthoringReply>(endpoint,'POST','/'+encodeURIComponent(id)+'/author-set',body),
  locations:(endpoint:string,query:string)=>call<{locations:WeatherLocation[]}>(endpoint,'GET','/locations?query='+encodeURIComponent(query)),
  list:(endpoint:string)=>call<{connections:SavedConnection[];capabilities:string[]}>(endpoint,'GET',''),
  save:(endpoint:string,connection:Connection,apiKey?:string,expectedRevision?:number)=>call<SavedConnection>(endpoint,'POST','',{connection,...(apiKey?{apiKey}:{}),...(expectedRevision!==undefined?{expectedRevision}:{})}),

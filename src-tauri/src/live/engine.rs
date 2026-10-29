@@ -1868,7 +1868,9 @@ extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, cx: u32, cy: u32) 
     // callback runs at all, and at what size. Throttled so it cannot flood.
     let n = PREVIEW_DRAWS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
     if n == 1 || n == 30 || n % 600 == 0 {
-        eprintln!("[preview] draw #{n} target {cx}x{cy}");
+        super::callback_diagnostics::write_stderr(format_args!(
+            "[preview] draw #{n} target {cx}x{cy}"
+        ));
     }
     // Once: what does output channel 0 actually hold? Expected the "main" scene.
     // "Live Screen" means attach_capture_sources rebound it; null means the
@@ -1877,15 +1879,17 @@ extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, cx: u32, cy: u32) 
         unsafe {
             let src = ffi::obs_get_output_source(0);
             if src.is_null() {
-                eprintln!("[preview] channel 0 = NULL");
+                super::callback_diagnostics::write_stderr(format_args!(
+                    "[preview] channel 0 = NULL"
+                ));
             } else {
                 let name = CStr::from_ptr(ffi::obs_source_get_name(src))
                     .to_string_lossy()
                     .into_owned();
-                eprintln!(
+                super::callback_diagnostics::write_stderr(format_args!(
                     "[preview] channel 0 = '{name}'  color space = {}",
                     ffi::gs_get_color_space()
-                );
+                ));
                 ffi::obs_source_release(src);
             }
         }

@@ -13,6 +13,49 @@ function app(role:'primary'|'automation'='primary'){const a=new Hono<{Bindings:E
 const request=(a:ReturnType<typeof app>,e:Env,path='',method='GET',body?:unknown)=>a.request('/connections'+path,{method,headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})},e);
 afterEach(()=>{vi.unstubAllGlobals();vi.restoreAllMocks();});
 describe('managed data integration routes',()=>{
+ it('keeps Claude multi-block citation ranges aligned with the normalized answer',async()=>{
+  const connection:Extract<Connection,{kind:'agent'}>={...llm,provider:'anthropic'};
+  const fetcher=vi.fn<typeof fetch>(async()=>Response.json({stop_reason:'end_turn',content:[
+   {type:'text',text:'First.'},
+   {type:'text',text:'Second.',citations:[{type:'web_search_result_location',title:'Source',url:'https://example.com/source'}]},
+  ]}));
+  const result=await agent(connection,'synthetic-key',{question:'Explain',mode:'answer'},fetcher);
+  expect(result.response).toBe('First.\n\nSecond.');
+  const citation=result.citations[0];expect(result.response.slice(citation.start,citation.end)).toBe('Second.');
+  expect(fetcher).toHaveBeenCalledTimes(1);
+ });
+ it('rejects malformed cached weather rather than returning unchecked Set data',async()=>{
+  const a=app(),e=env(),fetcher=vi.fn<typeof fetch>(async()=>Response.json(observation()));vi.stubGlobal('fetch',fetcher);
+  await request(a,e,'','POST',{connection:config});await querySavedConnection(e,config.id,1);
+  const row=await e.DB.prepare('SELECT last_result FROM data_integrations WHERE id=?1').bind(config.id).first<{last_result:string}>();
+  const cache=JSON.parse(row!.last_result);cache.entries[0].value.temperature='not a temperature';
+  await e.DB.prepare('UPDATE data_integrations SET last_result=?1 WHERE id=?2').bind(JSON.stringify(cache),config.id).run();
+  await expect(querySavedConnection(e,config.id,1)).rejects.toMatchObject({code:'provider_response'});
+  expect(fetcher).toHaveBeenCalledTimes(1);
+ });
+ for(const kind of ['weather','claude'] as const) it(`fences a late ${kind} result after its saved connection changes`,async()=>{
+  const a=app(),e=env(),connection=kind==='weather'?config:{...llm,provider:'anthropic'};
+  await request(a,e,'','POST',{connection,...(kind==='claude'?{apiKey:'synthetic-key'}:{})});
+  let release!:(r:Response)=>void,started!:()=>void;
+  const ready=new Promise<void>(resolve=>{started=resolve;});
+  vi.stubGlobal('fetch',vi.fn(()=>{started();return new Promise<Response>(resolve=>{release=resolve;});}));
+  const query=querySavedConnection(e,connection.id,1,kind==='claude'?{question:'Explain',mode:'answer'}:undefined);
+  const rejected=expect(query).rejects.toMatchObject({code:'revision_conflict'});
+  await ready;
+  expect((await request(a,e,'','POST',{connection:{...connection,name:'Changed'},expectedRevision:1})).status).toBe(200);
+  release(Response.json(kind==='weather'?observation():{stop_reason:'end_turn',content:[{type:'text',text:'A late answer'}]}));
+  await rejected;
+ });
+ it('discovers versioned adapters without contacting providers or changing connections',async()=>{
+  const fetcher=vi.fn<typeof fetch>();vi.stubGlobal('fetch',fetcher);
+  const response=await request(app(),env());expect(response.status).toBe(200);
+  const body=await response.json() as any;
+  expect(body.connections).toEqual([]);
+  expect(body.capabilities).toEqual(['data.weather@1','data.agent@1']);
+  expect(body.adapters.map((a:any)=>a.id)).toEqual(['open-meteo','openai','anthropic']);
+  expect(body.adapters[0].operations[0]).toEqual({id:'forecast',input:'weather.location-query@1',output:'weather.observation@1',delivery:'snapshot',refresh:true});
+  expect(fetcher).not.toHaveBeenCalled();
+ });
  it('creates, lists, updates and removes connections with explicit revision checks',async()=>{
   const a=app(),e=env();expect((await request(a,e,'','POST',{connection:config})).status).toBe(201);
   let list=await (await request(a,e)).json() as any;expect(list.connections[0].connection.location).toBe('Atlanta');expect(list.connections[0].hasSecret).toBe(false);

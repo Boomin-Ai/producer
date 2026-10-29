@@ -5,7 +5,7 @@ import type {Command,Result,Snapshot} from '../../../shared/set-runtime/runtime'
 import type {RehearsalSession} from './rehearsal';
 import type {ModuleBindings} from '../../../shared/set-runtime/contract';
 export type {ModuleBindings} from '../../../shared/set-runtime/contract';
-export interface RuntimeReply {deployment:string|null;snapshot:Snapshot|null;result?:Result}
+export interface RuntimeReply {deployment:string|null;snapshot:Snapshot|null;result?:Result;serverNow?:number;controlProtocol?:number;controlFieldsProtocol?:number;setEpoch?:number;control?:import('../../../shared/set-runtime/control').ControlDefinition}
 export async function moduleCall(endpoint:string,room:string,method:'GET'|'POST',suffix='',body?:unknown):Promise<RuntimeReply>{
  const response=await guests.request(endpoint,method,`/v1/app/live/rooms/${encodeURIComponent(room)}/set-runtime${suffix}`,body);
  if(!response.available)throw Error('This workspace server does not support set modules yet.');
