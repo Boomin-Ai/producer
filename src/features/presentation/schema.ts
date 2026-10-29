@@ -78,6 +78,12 @@ const union = <C extends Codec<unknown>[]>(...codecs: C): Codec<Type<C[number]>>
   json: { anyOf: codecs.map(c => c.json) },
   read(v, p, d) {
     bounded(d, p);
+    // A known discriminator identifies the exact object shape. Preserve its
+    // nested error instead of losing it while trying unrelated node types.
+    if(v&&typeof v==='object'&&!Array.isArray(v)&&'type'in v){
+      const matching=codecs.filter(codec=>(codec.json.properties as Record<string,{const?:unknown}>|undefined)?.type?.const===(v as {type:unknown}).type);
+      if(matching.length===1)return matching[0].read(v,p,d) as Type<C[number]>;
+    }
     for (const codec of codecs) { try { return codec.read(v, p, d) as Type<C[number]>; } catch (e) { if (!(e instanceof PackageError)) throw e; } }
     return fail(p, 'Unsupported value or invalid fields.');
   },

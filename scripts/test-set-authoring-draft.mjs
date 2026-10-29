@@ -16,3 +16,7 @@ const show=model.generate({...request,requireShow:true});complete(reply(missingS
 model.editCandidate(JSON.stringify(doc));model.validate();assert.equal(model.snapshot().status,'ready','manual workflow uses same validator');
 assert.match(authoringBaseIssue({...doc,set:{...doc.set,assets:{image:{name:'Image',mime:'image/png',data:'data:image/png;base64,AA=='}}}}),/(media assets|features)/);
 console.log('PASS: isolated authoring validates candidates, fences canceled/edited requests, checks connection revision and required Shows, and retains manual import');
+
+const hung=new SetAuthoringDraft(()=>new Promise(()=>{}),10);await hung.generate(request);assert.equal(hung.snapshot().status,"error");assert.match(hung.snapshot().error,/timed out/);console.log("PASS: hung transport leaves generating state by deadline");
+
+const nativeFailure=new SetAuthoringDraft(async()=>{throw "Set draft validation failed: unknown style";});await nativeFailure.generate(request);assert.equal(nativeFailure.snapshot().error,"Set draft validation failed: unknown style");console.log("PASS: native string errors retain actionable server message");
