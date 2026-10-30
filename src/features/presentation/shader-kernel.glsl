@@ -13,14 +13,14 @@ vec4 shade(vec2 uv) {
   float angle=atan(p.y,p.x);
   float waveA=angle*harmonic-t*1.8,waveB=angle*(harmonic+2.0)+t*1.2,waveC=angle*(harmonic+4.0)-t*0.9;
   float wave=0.5+0.25*sin(waveA)+0.15*sin(waveB)+0.1*sin(waveC);
-  float amplitude=level*max(0.0,limit-inner-12.0)*0.65;
-  float contour=inner+4.0+amplitude*wave;
+  float amplitude=level*max(0.0,limit-inner-36.0)*0.95;
+  float contour=inner+11.0+amplitude*wave;
   float slope=amplitude*(0.25*harmonic*cos(waveA)+0.15*(harmonic+2.0)*cos(waveB)+0.1*(harmonic+4.0)*cos(waveC));
-  float distance=abs(radial-contour)/sqrt(1.0+pow(slope/max(contour,1.0),2.0))-(1.8+level*1.5);
+  float distance=abs(radial-contour)/sqrt(1.0+pow(slope/max(contour,1.0),2.0))-(8.0+level*6.0);
   float core=1.0-smoothstep(-0.75,0.75,distance);
-  float bloom=exp(-max(distance,0.0)/3.0)*clamp(glow,0.0,1.0)*level*0.7;
+  float bloom=exp(-max(distance,0.0)/5.0)*clamp(glow,0.0,1.0)*level*0.9;
   float coverage=clamp(core+(1.0-core)*bloom,0.0,1.0)*alpha*smoothstep(inner-2.0,inner,radial);
-  vec3 color=mix(a,mix(b,c,0.5+0.5*sin(angle-t*level*0.35)),0.65+level*0.35);
+  vec3 color=mix(a,mix(b,c,0.5+0.5*sin(angle-t*level*0.35)),0.85+level*0.15);
   return vec4(color*coverage,coverage);
  }
  // Voice level visualization: one analytical bar lookup, never a PCM/spectrum claim.
