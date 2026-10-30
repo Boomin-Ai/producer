@@ -1,6 +1,6 @@
 # Voice Studio reference Set
 
-`voice-studio.json` is an importable dev reference with landscape and portrait layouts, a host camera slot, editable title, and reusable `voiceBars` shader. It is not installed into saved rooms automatically.
+`voice-studio.json` is an importable dev reference with landscape and portrait layouts, a host camera slot, editable title, and reusable `voiceRing` shader. It is not installed into saved rooms automatically.
 
 The native renderer supplies a smoothed level from the strongest existing room microphone source, after its gain/mute handling. The Set does not open a microphone, record sound, or alter routing. With no microphone signal the bars remain at a small stationary baseline. This is a level-reactive graphic, not a PCM waveform or frequency spectrum.
 
@@ -17,7 +17,7 @@ Follow-up room-path verification: unified legacy and v2 preset validation to fix
 
 ## Center Stage controls
 
-Landscape and portrait now center a circular host camera over a wide voice-bar layer, leaving animated bars visible on either side. The camera framing remains centered. Sensitivity (0–2), Motion (0–4), and Glow (0–1) are authored numeric Set fields, available in the quick controls. They bind to trusted shader parameters and resolve into bounded numeric values before rendering. Glow is analytic light falloff around each bar, with no extra blur pass; at silence it adds no light.
+Landscape and portrait center a circular host camera inside a voice-reactive contour. The camera framing remains centered. Sensitivity (0–2), Motion (0–4), and Glow (0–1) are authored numeric Set fields, available in the quick controls. They bind to trusted shader parameters and resolve into bounded numeric values before rendering. Glow is analytic light falloff around each bar, with no extra blur pass; at silence it adds no light.
 
 The same camera, text, masks, and bounded shader layers can be recombined into other compositions. This is layout flexibility using trusted primitives, not arbitrary uploaded shader code. Browser microphone motion is simulated; native output follows the strongest already active room microphone after gain and mute handling.
 
@@ -25,4 +25,4 @@ Center Stage native verification: native build and normal v2 prepare/take pixel 
 
 ## Reactive camera border
 
-Voice Studio v1.2 uses `voiceRing`: a continuous thin circular rim with microphone-reactive radial bars growing outward around the host slot. The shader is centered on the camera with 90px padding; `radius` matches half the camera width. The center remains transparent and the camera is composited above the shader. Sensitivity, Motion, and Glow remain available. The original linear `voiceBars` preset is retained for other layouts. Browser GPU checks cover the empty center, stable idle border, and reactive pixels on all four sides. The native normal-room prepare/take probe passed with synthetic input (active pixel delta 4.32152, expired delta 0.0000564), without opening capture devices. Dev only.
+Voice Studio v1.3 uses `voiceRing`: one closed circular contour that develops smooth traveling waves with microphone level, then relaxes to a clean circle at silence. Integer angular harmonics keep its seam continuous; the stroke stays smooth and the glow follows it. The shader is centered on the camera with 90px padding; `radius` matches half the camera width. The center remains transparent and the camera is composited above the shader. Sensitivity, Motion, and Glow remain available. The original linear `voiceBars` preset is retained for other layouts. Browser GPU checks cover the empty center, stable idle border, reactive pixels on all four sides, moving voice waves, and uninterrupted coverage at every angle across multiple frames. The native normal-room prepare/take probe passed with synthetic input (active pixel delta 2.29887, expired delta 0.000668), without opening capture devices. Dev only.

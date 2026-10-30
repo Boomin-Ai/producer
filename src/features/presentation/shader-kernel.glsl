@@ -3,27 +3,24 @@
 vec4 shade(vec2 uv) {
  float t=clockTime*speed;
  vec3 a=paletteA.xyz,b=paletteB.xyz,c=paletteC.xyz;
- // Radial bars share the camera's center and grow outward from its edge.
+ // One closed contour; integer angular harmonics keep the seam connected.
  if(effectType>15.5) {
   vec2 p=(uv-0.5)*extent;
   float radial=length(p),limit=min(extent.x,extent.y)*0.5;
   float inner=min(radius,max(1.0,limit-12.0));
   float level=clamp(audioLevel*intensity,0.0,1.0);
-  float count=clamp(floor(frequency*64.0),16.0,96.0);
-  float angle=(atan(p.y,p.x)+3.14159265)/6.2831853;
-  float index=floor(angle*count),offset=(fract(angle*count)-0.5)*6.2831853/count;
-  float shape=0.5+0.25*sin(index*0.73+t*2.1)+0.25*sin(index*1.37-t*1.4);
-  float height=3.0+level*max(0.0,limit-inner-12.0)*(0.3+0.7*shape);
-  float halfWidth=max(1.0,inner*6.2831853/count*0.32);
-  float rounding=min(halfWidth,height*0.5);
-  vec2 q=abs(vec2(sin(offset)*radial,cos(offset)*radial-inner-height*0.5))-vec2(halfWidth-rounding,height*0.5-rounding);
-  float barDistance=length(max(q,vec2(0.0)))+min(max(q.x,q.y),0.0)-rounding;
-  float rimDistance=abs(radial-inner)-1.25;
-  float distance=min(barDistance,rimDistance);
+  float harmonic=clamp(floor(frequency*3.0+0.5),1.0,8.0);
+  float angle=atan(p.y,p.x);
+  float waveA=angle*harmonic-t*1.8,waveB=angle*(harmonic+2.0)+t*1.2,waveC=angle*(harmonic+4.0)-t*0.9;
+  float wave=0.5+0.25*sin(waveA)+0.15*sin(waveB)+0.1*sin(waveC);
+  float amplitude=level*max(0.0,limit-inner-12.0)*0.65;
+  float contour=inner+4.0+amplitude*wave;
+  float slope=amplitude*(0.25*harmonic*cos(waveA)+0.15*(harmonic+2.0)*cos(waveB)+0.1*(harmonic+4.0)*cos(waveC));
+  float distance=abs(radial-contour)/sqrt(1.0+pow(slope/max(contour,1.0),2.0))-(1.8+level*1.5);
   float core=1.0-smoothstep(-0.75,0.75,distance);
   float bloom=exp(-max(distance,0.0)/3.0)*clamp(glow,0.0,1.0)*level*0.7;
-  float coverage=clamp(core+(1.0-core)*bloom,0.0,1.0)*alpha;
-  vec3 color=mix(a,mix(b,c,0.5+0.5*sin(angle*6.2831853)),0.65+level*0.35);
+  float coverage=clamp(core+(1.0-core)*bloom,0.0,1.0)*alpha*smoothstep(inner-2.0,inner,radial);
+  vec3 color=mix(a,mix(b,c,0.5+0.5*sin(angle-t*level*0.35)),0.65+level*0.35);
   return vec4(color*coverage,coverage);
  }
  // Voice level visualization: one analytical bar lookup, never a PCM/spectrum claim.

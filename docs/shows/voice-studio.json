@@ -1,7 +1,7 @@
 {
   "schema": "producer.presentation/2",
   "id": "voice-studio",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "name": "Voice Studio",
   "set": {
     "initialLayout": "landscape",
