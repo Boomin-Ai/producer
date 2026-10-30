@@ -417,7 +417,7 @@ impl Drop for Prepared {
     }
 }
 unsafe fn shader_source(spec: &Shader, w: f32, h: f32) -> Result<Source, String> {
-    let data = serde_json::json!({"width":w,"height":h,"effect":spec.effect,"speed":spec.speed,"intensity":spec.intensity,"scale":spec.scale,"opacity":spec.opacity,"radius":spec.radius,"glow":spec.glow,"quality":spec.quality,"clock":spec.clock,"colorA":spec.colors[0],"colorB":spec.colors[1],"colorC":spec.colors[2]});
+    let data = serde_json::json!({"width":w,"height":h,"effect":spec.effect,"speed":spec.speed,"intensity":spec.intensity,"scale":spec.scale,"opacity":spec.opacity,"radius":spec.radius,"glow":spec.glow,"variant":spec.variant,"quality":spec.quality,"clock":spec.clock,"colorA":spec.colors[0],"colorB":spec.colors[1],"colorC":spec.colors[2]});
     let kernel = super::super::shaders::native_effect();
     let source = ffi::producer_shader_create(
         CString::new(data.to_string()).unwrap().as_ptr(),

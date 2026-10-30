@@ -1,5 +1,23 @@
 // Shared, trusted kernel for WebGL preview and native OBS/Metal output.
 // No imported code, texture sampling loops, or blur passes.
+// Bounded periodic contours; every style closes at the angular seam.
+float voiceWave(float a,float t,float h,float style) {
+ if(style<0.5)return 0.5+0.25*sin(a*h-t*1.8)+0.15*sin(a*(h+2.0)+t*1.2)+0.1*sin(a*(h+4.0)-t*0.9);
+ if(style<1.5)return 0.5+0.35*sin(a*3.0-t*1.4)*cos(a*2.0+t*0.7);
+ if(style<2.5)return pow(0.5+0.5*sin(a*18.0-t*2.0),3.0)*(0.65+0.35*sin(a*3.0+t));
+ if(style<3.5)return 0.5+0.3*sin(a*2.0-t)+0.18*sin(a*3.0+t*0.6);
+ if(style<4.5)return 0.45+0.35*cos(a*4.0-t*0.8)+0.18*sin(a*2.0+t*1.3);
+ if(style<5.5)return 0.5+0.25*sin(a*3.0+t)+0.2*sin(a*6.0-t*1.6);
+ if(style<6.5)return 0.5+0.4*sin(a*2.0-t)*cos(a*3.0+t*0.5);
+ if(style<7.5)return 0.5+0.4*sin(a*7.0-t*2.0);
+ if(style<8.5)return pow(0.5+0.5*cos(a*8.0-t*0.6),0.65);
+ if(style<9.5)return 0.2+0.65*pow(0.5+0.5*sin(a*13.0+t*2.0),6.0)+0.1*sin(a*3.0-t);
+ if(style<10.5)return 0.5+0.12*sin(a*2.0-t)+0.1*sin(a*11.0+t*0.5);
+ if(style<11.5)return 0.5+0.45*cos(a*2.0-t*0.7);
+ if(style<12.5){float pulse=exp(-pow(sin((a-t)*0.5)*7.0,2.0));return 0.25+pulse*(0.45+0.3*sin(a*16.0-t*16.0));}
+ if(style<13.5)return 0.5+0.2*sin(a*3.0-t*0.4)+0.15*cos(a*5.0+t*0.3)+0.12*sin(a*9.0-t*0.7);
+ return 0.5+0.3*cos(a*3.0-t)+0.18*cos(a*6.0-t*2.0);
+}
 vec4 shade(vec2 uv) {
  float t=clockTime*speed;
  vec3 a=paletteA.xyz,b=paletteB.xyz,c=paletteC.xyz;
@@ -11,12 +29,30 @@ vec4 shade(vec2 uv) {
   float level=clamp(audioLevel*intensity,0.0,1.0);
   float harmonic=clamp(floor(frequency*3.0+0.5),1.0,8.0);
   float angle=atan(p.y,p.x);
-  float waveA=angle*harmonic-t*1.8,waveB=angle*(harmonic+2.0)+t*1.2,waveC=angle*(harmonic+4.0)-t*0.9;
-  float wave=0.5+0.25*sin(waveA)+0.15*sin(waveB)+0.1*sin(waveC);
+  float style=floor(voiceStyle+0.5);
+  float wave=clamp(voiceWave(angle,t,harmonic,style),0.0,1.0);
   float amplitude=level*max(0.0,limit-inner-36.0)*0.95;
   float contour=inner+11.0+amplitude*wave;
-  float slope=amplitude*(0.25*harmonic*cos(waveA)+0.15*(harmonic+2.0)*cos(waveB)+0.1*(harmonic+4.0)*cos(waveC));
-  float distance=abs(radial-contour)/sqrt(1.0+pow(slope/max(contour,1.0),2.0))-(8.0+level*6.0);
+  float slope=amplitude*(voiceWave(angle+0.01,t,harmonic,style)-voiceWave(angle-0.01,t,harmonic,style))/0.02;
+  float thickness=8.0+level*6.0;
+  if(style>12.5&&style<13.5)thickness=10.0+level*13.0;
+  if(style>9.5&&style<10.5)thickness=2.5+level*2.0;
+  if(style>0.5&&style<1.5||style>5.5&&style<7.5)thickness=4.0+level*3.0;
+  float distance=abs(radial-contour)/sqrt(1.0+pow(slope/max(contour,1.0),2.0))-thickness;
+  // Multiple currents remain connected contours with the same camera center.
+  if(style>0.5&&style<1.5||style>5.5&&style<7.5){
+   float twin=inner+13.0+amplitude*clamp(voiceWave(angle,t+2.1,harmonic,style),0.0,1.0);
+   distance=min(distance,abs(radial-twin)-thickness*0.75);
+  }
+  if(style>4.5&&style<5.5||style>9.5&&style<10.5||style>13.5){
+   float ripple=inner+8.0+amplitude*wave*0.48;
+   distance=min(distance,abs(radial-ripple)-2.5-level*1.5);
+   distance=min(distance,abs(radial-(inner+6.0+amplitude*wave*0.22))-1.5-level);
+  }
+  if(style>2.5&&style<3.5||style>10.5&&style<11.5){
+   float orbit=inner+10.0+amplitude*(0.5+0.45*cos(angle*2.0+t));
+   distance=min(distance,abs(radial-orbit)-2.0-level*2.0);
+  }
   float core=1.0-smoothstep(-0.75,0.75,distance);
   float bloom=exp(-max(distance,0.0)/5.0)*clamp(glow,0.0,1.0)*level*0.9;
   float coverage=clamp(core+(1.0-core)*bloom,0.0,1.0)*alpha*smoothstep(inner-2.0,inner,radial);

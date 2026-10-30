@@ -126,6 +126,8 @@ pub struct Shader {
     pub radius: f32,
     #[serde(default)]
     pub glow:f32,
+    #[serde(default)]
+    pub variant:u32,
     pub quality: String,
     pub clock: String,
 }
@@ -396,6 +398,7 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
             || !number(s.opacity, 0., 1.)
             || !number(s.radius, 0., 960.)
             || !number(s.glow, 0., 1.)
+            || s.variant>14
             || !["low", "medium"].contains(&s.quality.as_str())
             || !["show", "segment"].contains(&s.clock.as_str())
         {

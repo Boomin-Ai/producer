@@ -6530,6 +6530,11 @@
                   "minimum": 0,
                   "maximum": 1
                 },
+                "variant": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 14
+                },
                 "bindings": {
                   "type": "object",
                   "properties": {

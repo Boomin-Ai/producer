@@ -1,0 +1,4901 @@
+{
+  "schema": "producer.presentation/2",
+  "id": "voice-gallery",
+  "version": "1.0.0",
+  "name": "Voice Collection · 15 Studies",
+  "set": {
+    "initialLayout": "style-1-landscape",
+    "values": {
+      "title": {
+        "type": "text",
+        "default": "THE VOICE COLLECTION",
+        "maxLength": 60
+      },
+      "sensitivity": {
+        "type": "number",
+        "default": 1.5,
+        "min": 0,
+        "max": 2
+      },
+      "motion": {
+        "type": "number",
+        "default": 1.6,
+        "min": 0,
+        "max": 4
+      },
+      "glow": {
+        "type": "number",
+        "default": 0.65,
+        "min": 0,
+        "max": 1
+      }
+    },
+    "feeds": {},
+    "slots": [
+      {
+        "id": "host",
+        "label": "Host camera"
+      }
+    ],
+    "components": {},
+    "controls": [
+      {
+        "id": "title",
+        "type": "text",
+        "label": "Collection title",
+        "key": "title"
+      },
+      {
+        "id": "sensitivity",
+        "type": "number",
+        "label": "Sensitivity",
+        "key": "sensitivity"
+      },
+      {
+        "id": "motion",
+        "type": "number",
+        "label": "Motion",
+        "key": "motion"
+      },
+      {
+        "id": "glow",
+        "type": "number",
+        "label": "Glow",
+        "key": "glow"
+      },
+      {
+        "id": "style-1-landscape",
+        "type": "button",
+        "label": "01 · Liquid Halo · Landscape",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-1-landscape"
+        }
+      },
+      {
+        "id": "style-1-portrait",
+        "type": "button",
+        "label": "01 · Liquid Halo · Portrait",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-1-portrait"
+        }
+      },
+      {
+        "id": "style-2-landscape",
+        "type": "button",
+        "label": "02 · Twin Current · Landscape",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-2-landscape"
+        }
+      },
+      {
+        "id": "style-2-portrait",
+        "type": "button",
+        "label": "02 · Twin Current · Portrait",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-2-portrait"
+        }
+      },
+      {
+        "id": "style-3-landscape",
+        "type": "button",
+        "label": "03 · Solar Corona · Landscape",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-3-landscape"
+        }
+      },
+      {
+        "id": "style-3-portrait",
+        "type": "button",
+        "label": "03 · Solar Corona · Portrait",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-3-portrait"
+        }
+      },
+      {
+        "id": "style-4-landscape",
+        "type": "button",
+        "label": "04 · Silk Orbit · Landscape",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-4-landscape"
+        }
+      },
+      {
+        "id": "style-4-portrait",
+        "type": "button",
+        "label": "04 · Silk Orbit · Portrait",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-4-portrait"
+        }
+      },
+      {
+        "id": "style-5-landscape",
+        "type": "button",
+        "label": "05 · Bass Bloom · Landscape",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-5-landscape"
+        }
+      },
+      {
+        "id": "style-5-portrait",
+        "type": "button",
+        "label": "05 · Bass Bloom · Portrait",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-5-portrait"
+        }
+      },
+      {
+        "id": "style-6-landscape",
+        "type": "button",
+        "label": "06 · Ripple Pool · Landscape",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-6-landscape"
+        }
+      },
+      {
+        "id": "style-6-portrait",
+        "type": "button",
+        "label": "06 · Ripple Pool · Portrait",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-6-portrait"
+        }
+      },
+      {
+        "id": "style-7-landscape",
+        "type": "button",
+        "label": "07 · Magnetic Field · Landscape",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-7-landscape"
+        }
+      },
+      {
+        "id": "style-7-portrait",
+        "type": "button",
+        "label": "07 · Magnetic Field · Portrait",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-7-portrait"
+        }
+      },
+      {
+        "id": "style-8-landscape",
+        "type": "button",
+        "label": "08 · Neon Braid · Landscape",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-8-landscape"
+        }
+      },
+      {
+        "id": "style-8-portrait",
+        "type": "button",
+        "label": "08 · Neon Braid · Portrait",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-8-portrait"
+        }
+      },
+      {
+        "id": "style-9-landscape",
+        "type": "button",
+        "label": "09 · Lotus Pulse · Landscape",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-9-landscape"
+        }
+      },
+      {
+        "id": "style-9-portrait",
+        "type": "button",
+        "label": "09 · Lotus Pulse · Portrait",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-9-portrait"
+        }
+      },
+      {
+        "id": "style-10-landscape",
+        "type": "button",
+        "label": "10 · Electric Crown · Landscape",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-10-landscape"
+        }
+      },
+      {
+        "id": "style-10-portrait",
+        "type": "button",
+        "label": "10 · Electric Crown · Portrait",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-10-portrait"
+        }
+      },
+      {
+        "id": "style-11-landscape",
+        "type": "button",
+        "label": "11 · Vinyl Groove · Landscape",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-11-landscape"
+        }
+      },
+      {
+        "id": "style-11-portrait",
+        "type": "button",
+        "label": "11 · Vinyl Groove · Portrait",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-11-portrait"
+        }
+      },
+      {
+        "id": "style-12-landscape",
+        "type": "button",
+        "label": "12 · Saturn Drift · Landscape",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-12-landscape"
+        }
+      },
+      {
+        "id": "style-12-portrait",
+        "type": "button",
+        "label": "12 · Saturn Drift · Portrait",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-12-portrait"
+        }
+      },
+      {
+        "id": "style-13-landscape",
+        "type": "button",
+        "label": "13 · Heartbeat Loop · Landscape",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-13-landscape"
+        }
+      },
+      {
+        "id": "style-13-portrait",
+        "type": "button",
+        "label": "13 · Heartbeat Loop · Portrait",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-13-portrait"
+        }
+      },
+      {
+        "id": "style-14-landscape",
+        "type": "button",
+        "label": "14 · Ink Aura · Landscape",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-14-landscape"
+        }
+      },
+      {
+        "id": "style-14-portrait",
+        "type": "button",
+        "label": "14 · Ink Aura · Portrait",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-14-portrait"
+        }
+      },
+      {
+        "id": "style-15-landscape",
+        "type": "button",
+        "label": "15 · Prism Echo · Landscape",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-15-landscape"
+        }
+      },
+      {
+        "id": "style-15-portrait",
+        "type": "button",
+        "label": "15 · Prism Echo · Portrait",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "style-15-portrait"
+        }
+      }
+    ],
+    "controlArrangement": {
+      "sections": [
+        {
+          "id": "visuals",
+          "label": "Voice visuals",
+          "controls": [
+            "set:sensitivity",
+            "set:motion",
+            "set:glow",
+            "set:title"
+          ]
+        },
+        {
+          "id": "landscape-1",
+          "label": "Landscape · 1–5",
+          "collapsed": false,
+          "controls": [
+            "set:style-1-landscape",
+            "set:style-2-landscape",
+            "set:style-3-landscape",
+            "set:style-4-landscape",
+            "set:style-5-landscape"
+          ]
+        },
+        {
+          "id": "landscape-2",
+          "label": "Landscape · 6–10",
+          "collapsed": true,
+          "controls": [
+            "set:style-6-landscape",
+            "set:style-7-landscape",
+            "set:style-8-landscape",
+            "set:style-9-landscape",
+            "set:style-10-landscape"
+          ]
+        },
+        {
+          "id": "landscape-3",
+          "label": "Landscape · 11–15",
+          "collapsed": true,
+          "controls": [
+            "set:style-11-landscape",
+            "set:style-12-landscape",
+            "set:style-13-landscape",
+            "set:style-14-landscape",
+            "set:style-15-landscape"
+          ]
+        },
+        {
+          "id": "portrait-1",
+          "label": "Portrait · 1–5",
+          "collapsed": true,
+          "controls": [
+            "set:style-1-portrait",
+            "set:style-2-portrait",
+            "set:style-3-portrait",
+            "set:style-4-portrait",
+            "set:style-5-portrait"
+          ]
+        },
+        {
+          "id": "portrait-2",
+          "label": "Portrait · 6–10",
+          "collapsed": true,
+          "controls": [
+            "set:style-6-portrait",
+            "set:style-7-portrait",
+            "set:style-8-portrait",
+            "set:style-9-portrait",
+            "set:style-10-portrait"
+          ]
+        },
+        {
+          "id": "portrait-3",
+          "label": "Portrait · 11–15",
+          "collapsed": true,
+          "controls": [
+            "set:style-11-portrait",
+            "set:style-12-portrait",
+            "set:style-13-portrait",
+            "set:style-14-portrait",
+            "set:style-15-portrait"
+          ]
+        }
+      ],
+      "minimized": [
+        "set:sensitivity",
+        "set:motion",
+        "set:glow"
+      ]
+    },
+    "layouts": [
+      {
+        "id": "style-1-landscape",
+        "label": "01 · Liquid Halo · Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1920,
+            "height": 1080,
+            "background": "#080e1b",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 540,
+                "top": 135,
+                "width": 840,
+                "height": 840
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 0,
+                "colors": [
+                  "#244a77",
+                  "#65f6dc",
+                  "#b0baff"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 310,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 35,
+                "width": 1800,
+                "height": 60,
+                "fontSize": 21,
+                "fontWeight": 500,
+                "color": "#65f6dc",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "LIQUID HALO",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 105,
+                "width": 1800,
+                "height": 100,
+                "fontSize": 54,
+                "fontWeight": 700,
+                "color": "#b0baff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 245,
+                "width": 620,
+                "height": 620
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#65f6dc",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Find your flow.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 925,
+                "width": 1800,
+                "height": 70,
+                "fontSize": 27,
+                "fontWeight": 500,
+                "color": "#b0baff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  01",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1010,
+                "width": 1800,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#65f6dc",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-1-portrait",
+        "label": "01 · Liquid Halo · Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1080,
+            "height": 1920,
+            "background": "#080e1b",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 100,
+                "top": 500,
+                "width": 880,
+                "height": 880
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 0,
+                "colors": [
+                  "#244a77",
+                  "#65f6dc",
+                  "#b0baff"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 330,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 130,
+                "width": 960,
+                "height": 60,
+                "fontSize": 24,
+                "fontWeight": 500,
+                "color": "#65f6dc",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "LIQUID HALO",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 260,
+                "width": 960,
+                "height": 100,
+                "fontSize": 64,
+                "fontWeight": 700,
+                "color": "#b0baff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 210,
+                "top": 610,
+                "width": 660,
+                "height": 660
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#65f6dc",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Find your flow.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1480,
+                "width": 960,
+                "height": 70,
+                "fontSize": 34,
+                "fontWeight": 500,
+                "color": "#b0baff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  01",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1750,
+                "width": 960,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#65f6dc",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-2-landscape",
+        "label": "02 · Twin Current · Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1920,
+            "height": 1080,
+            "background": "#071a1b",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 540,
+                "top": 135,
+                "width": 840,
+                "height": 840
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 1,
+                "colors": [
+                  "#135d62",
+                  "#65fff0",
+                  "#efffba"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 310,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 35,
+                "width": 1800,
+                "height": 60,
+                "fontSize": 21,
+                "fontWeight": 500,
+                "color": "#65fff0",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Twin Current",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 105,
+                "width": 1800,
+                "height": 100,
+                "fontSize": 54,
+                "fontWeight": 500,
+                "color": "#efffba",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 245,
+                "width": 620,
+                "height": 620
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#65fff0",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Two currents. One voice.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 925,
+                "width": 1800,
+                "height": 70,
+                "fontSize": 27,
+                "fontWeight": 500,
+                "color": "#efffba",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  02",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1010,
+                "width": 1800,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#65fff0",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-2-portrait",
+        "label": "02 · Twin Current · Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1080,
+            "height": 1920,
+            "background": "#071a1b",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 100,
+                "top": 500,
+                "width": 880,
+                "height": 880
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 1,
+                "colors": [
+                  "#135d62",
+                  "#65fff0",
+                  "#efffba"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 330,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 130,
+                "width": 960,
+                "height": 60,
+                "fontSize": 24,
+                "fontWeight": 500,
+                "color": "#65fff0",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Twin Current",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 260,
+                "width": 960,
+                "height": 100,
+                "fontSize": 64,
+                "fontWeight": 500,
+                "color": "#efffba",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 210,
+                "top": 610,
+                "width": 660,
+                "height": 660
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#65fff0",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Two currents. One voice.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1480,
+                "width": 960,
+                "height": 70,
+                "fontSize": 34,
+                "fontWeight": 500,
+                "color": "#efffba",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  02",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1750,
+                "width": 960,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#65fff0",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-3-landscape",
+        "label": "03 · Solar Corona · Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1920,
+            "height": 1080,
+            "background": "#190e0b",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 540,
+                "top": 135,
+                "width": 840,
+                "height": 840
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 2,
+                "colors": [
+                  "#8c2b13",
+                  "#ffad38",
+                  "#fff0ad"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 310,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 35,
+                "width": 1800,
+                "height": 60,
+                "fontSize": 21,
+                "fontWeight": 500,
+                "color": "#ffad38",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Solar Corona",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 105,
+                "width": 1800,
+                "height": 100,
+                "fontSize": 54,
+                "fontWeight": 700,
+                "color": "#fff0ad",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 245,
+                "width": 620,
+                "height": 620
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#ffad38",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Bring the heat.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 925,
+                "width": 1800,
+                "height": 70,
+                "fontSize": 27,
+                "fontWeight": 500,
+                "color": "#fff0ad",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  03",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1010,
+                "width": 1800,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#ffad38",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-3-portrait",
+        "label": "03 · Solar Corona · Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1080,
+            "height": 1920,
+            "background": "#190e0b",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 100,
+                "top": 500,
+                "width": 880,
+                "height": 880
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 2,
+                "colors": [
+                  "#8c2b13",
+                  "#ffad38",
+                  "#fff0ad"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 330,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 130,
+                "width": 960,
+                "height": 60,
+                "fontSize": 24,
+                "fontWeight": 500,
+                "color": "#ffad38",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Solar Corona",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 260,
+                "width": 960,
+                "height": 100,
+                "fontSize": 64,
+                "fontWeight": 700,
+                "color": "#fff0ad",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 210,
+                "top": 610,
+                "width": 660,
+                "height": 660
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#ffad38",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Bring the heat.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1480,
+                "width": 960,
+                "height": 70,
+                "fontSize": 34,
+                "fontWeight": 500,
+                "color": "#fff0ad",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  03",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1750,
+                "width": 960,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#ffad38",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-4-landscape",
+        "label": "04 · Silk Orbit · Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1920,
+            "height": 1080,
+            "background": "#170d22",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 540,
+                "top": 135,
+                "width": 840,
+                "height": 840
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 3,
+                "colors": [
+                  "#663c83",
+                  "#edb1f3",
+                  "#fce9dc"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 310,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 35,
+                "width": 1800,
+                "height": 60,
+                "fontSize": 21,
+                "fontWeight": 500,
+                "color": "#edb1f3",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "SILK ORBIT",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 105,
+                "width": 1800,
+                "height": 100,
+                "fontSize": 54,
+                "fontWeight": 700,
+                "color": "#fce9dc",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 245,
+                "width": 620,
+                "height": 620
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#edb1f3",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Soft touch. Strong presence.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 925,
+                "width": 1800,
+                "height": 70,
+                "fontSize": 27,
+                "fontWeight": 500,
+                "color": "#fce9dc",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  04",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1010,
+                "width": 1800,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#edb1f3",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-4-portrait",
+        "label": "04 · Silk Orbit · Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1080,
+            "height": 1920,
+            "background": "#170d22",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 100,
+                "top": 500,
+                "width": 880,
+                "height": 880
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 3,
+                "colors": [
+                  "#663c83",
+                  "#edb1f3",
+                  "#fce9dc"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 330,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 130,
+                "width": 960,
+                "height": 60,
+                "fontSize": 24,
+                "fontWeight": 500,
+                "color": "#edb1f3",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "SILK ORBIT",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 260,
+                "width": 960,
+                "height": 100,
+                "fontSize": 64,
+                "fontWeight": 700,
+                "color": "#fce9dc",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 210,
+                "top": 610,
+                "width": 660,
+                "height": 660
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#edb1f3",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Soft touch. Strong presence.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1480,
+                "width": 960,
+                "height": 70,
+                "fontSize": 34,
+                "fontWeight": 500,
+                "color": "#fce9dc",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  04",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1750,
+                "width": 960,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#edb1f3",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-5-landscape",
+        "label": "05 · Bass Bloom · Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1920,
+            "height": 1080,
+            "background": "#130c1a",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 540,
+                "top": 135,
+                "width": 840,
+                "height": 840
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 4,
+                "colors": [
+                  "#622460",
+                  "#fb69c8",
+                  "#ffd1e6"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 310,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 35,
+                "width": 1800,
+                "height": 60,
+                "fontSize": 21,
+                "fontWeight": 500,
+                "color": "#fb69c8",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Bass Bloom",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 105,
+                "width": 1800,
+                "height": 100,
+                "fontSize": 54,
+                "fontWeight": 500,
+                "color": "#ffd1e6",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 245,
+                "width": 620,
+                "height": 620
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#fb69c8",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Let it bloom.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 925,
+                "width": 1800,
+                "height": 70,
+                "fontSize": 27,
+                "fontWeight": 500,
+                "color": "#ffd1e6",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  05",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1010,
+                "width": 1800,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#fb69c8",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-5-portrait",
+        "label": "05 · Bass Bloom · Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1080,
+            "height": 1920,
+            "background": "#130c1a",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 100,
+                "top": 500,
+                "width": 880,
+                "height": 880
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 4,
+                "colors": [
+                  "#622460",
+                  "#fb69c8",
+                  "#ffd1e6"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 330,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 130,
+                "width": 960,
+                "height": 60,
+                "fontSize": 24,
+                "fontWeight": 500,
+                "color": "#fb69c8",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Bass Bloom",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 260,
+                "width": 960,
+                "height": 100,
+                "fontSize": 64,
+                "fontWeight": 500,
+                "color": "#ffd1e6",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 210,
+                "top": 610,
+                "width": 660,
+                "height": 660
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#fb69c8",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Let it bloom.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1480,
+                "width": 960,
+                "height": 70,
+                "fontSize": 34,
+                "fontWeight": 500,
+                "color": "#ffd1e6",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  05",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1750,
+                "width": 960,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#fb69c8",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-6-landscape",
+        "label": "06 · Ripple Pool · Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1920,
+            "height": 1080,
+            "background": "#071722",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 540,
+                "top": 135,
+                "width": 840,
+                "height": 840
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 5,
+                "colors": [
+                  "#175b8c",
+                  "#62cfff",
+                  "#d9f6ff"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 310,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 35,
+                "width": 1800,
+                "height": 60,
+                "fontSize": 21,
+                "fontWeight": 500,
+                "color": "#62cfff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Ripple Pool",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 105,
+                "width": 1800,
+                "height": 100,
+                "fontSize": 54,
+                "fontWeight": 700,
+                "color": "#d9f6ff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 245,
+                "width": 620,
+                "height": 620
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#62cfff",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Every word makes waves.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 925,
+                "width": 1800,
+                "height": 70,
+                "fontSize": 27,
+                "fontWeight": 500,
+                "color": "#d9f6ff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  06",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1010,
+                "width": 1800,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#62cfff",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-6-portrait",
+        "label": "06 · Ripple Pool · Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1080,
+            "height": 1920,
+            "background": "#071722",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 100,
+                "top": 500,
+                "width": 880,
+                "height": 880
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 5,
+                "colors": [
+                  "#175b8c",
+                  "#62cfff",
+                  "#d9f6ff"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 330,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 130,
+                "width": 960,
+                "height": 60,
+                "fontSize": 24,
+                "fontWeight": 500,
+                "color": "#62cfff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Ripple Pool",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 260,
+                "width": 960,
+                "height": 100,
+                "fontSize": 64,
+                "fontWeight": 700,
+                "color": "#d9f6ff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 210,
+                "top": 610,
+                "width": 660,
+                "height": 660
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#62cfff",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Every word makes waves.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1480,
+                "width": 960,
+                "height": 70,
+                "fontSize": 34,
+                "fontWeight": 500,
+                "color": "#d9f6ff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  06",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1750,
+                "width": 960,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#62cfff",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-7-landscape",
+        "label": "07 · Magnetic Field · Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1920,
+            "height": 1080,
+            "background": "#091710",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 540,
+                "top": 135,
+                "width": 840,
+                "height": 840
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 6,
+                "colors": [
+                  "#215f35",
+                  "#84f79a",
+                  "#f1ffd1"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 310,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 35,
+                "width": 1800,
+                "height": 60,
+                "fontSize": 21,
+                "fontWeight": 500,
+                "color": "#84f79a",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "MAGNETIC FIELD",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 105,
+                "width": 1800,
+                "height": 100,
+                "fontSize": 54,
+                "fontWeight": 700,
+                "color": "#f1ffd1",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 245,
+                "width": 620,
+                "height": 620
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#84f79a",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Draw them in.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 925,
+                "width": 1800,
+                "height": 70,
+                "fontSize": 27,
+                "fontWeight": 500,
+                "color": "#f1ffd1",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  07",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1010,
+                "width": 1800,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#84f79a",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-7-portrait",
+        "label": "07 · Magnetic Field · Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1080,
+            "height": 1920,
+            "background": "#091710",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 100,
+                "top": 500,
+                "width": 880,
+                "height": 880
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 6,
+                "colors": [
+                  "#215f35",
+                  "#84f79a",
+                  "#f1ffd1"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 330,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 130,
+                "width": 960,
+                "height": 60,
+                "fontSize": 24,
+                "fontWeight": 500,
+                "color": "#84f79a",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "MAGNETIC FIELD",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 260,
+                "width": 960,
+                "height": 100,
+                "fontSize": 64,
+                "fontWeight": 700,
+                "color": "#f1ffd1",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 210,
+                "top": 610,
+                "width": 660,
+                "height": 660
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#84f79a",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Draw them in.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1480,
+                "width": 960,
+                "height": 70,
+                "fontSize": 34,
+                "fontWeight": 500,
+                "color": "#f1ffd1",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  07",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1750,
+                "width": 960,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#84f79a",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-8-landscape",
+        "label": "08 · Neon Braid · Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1920,
+            "height": 1080,
+            "background": "#100c26",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 540,
+                "top": 135,
+                "width": 840,
+                "height": 840
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 7,
+                "colors": [
+                  "#5c24b5",
+                  "#ba75ff",
+                  "#5df9e6"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 310,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 35,
+                "width": 1800,
+                "height": 60,
+                "fontSize": 21,
+                "fontWeight": 500,
+                "color": "#ba75ff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Neon Braid",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 105,
+                "width": 1800,
+                "height": 100,
+                "fontSize": 54,
+                "fontWeight": 500,
+                "color": "#5df9e6",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 245,
+                "width": 620,
+                "height": 620
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#ba75ff",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Stay connected.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 925,
+                "width": 1800,
+                "height": 70,
+                "fontSize": 27,
+                "fontWeight": 500,
+                "color": "#5df9e6",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  08",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1010,
+                "width": 1800,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#ba75ff",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-8-portrait",
+        "label": "08 · Neon Braid · Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1080,
+            "height": 1920,
+            "background": "#100c26",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 100,
+                "top": 500,
+                "width": 880,
+                "height": 880
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 7,
+                "colors": [
+                  "#5c24b5",
+                  "#ba75ff",
+                  "#5df9e6"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 330,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 130,
+                "width": 960,
+                "height": 60,
+                "fontSize": 24,
+                "fontWeight": 500,
+                "color": "#ba75ff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Neon Braid",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 260,
+                "width": 960,
+                "height": 100,
+                "fontSize": 64,
+                "fontWeight": 500,
+                "color": "#5df9e6",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 210,
+                "top": 610,
+                "width": 660,
+                "height": 660
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#ba75ff",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Stay connected.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1480,
+                "width": 960,
+                "height": 70,
+                "fontSize": 34,
+                "fontWeight": 500,
+                "color": "#5df9e6",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  08",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1750,
+                "width": 960,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#ba75ff",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-9-landscape",
+        "label": "09 · Lotus Pulse · Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1920,
+            "height": 1080,
+            "background": "#1c101b",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 540,
+                "top": 135,
+                "width": 840,
+                "height": 840
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 8,
+                "colors": [
+                  "#88486a",
+                  "#f7b9d3",
+                  "#fff1db"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 310,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 35,
+                "width": 1800,
+                "height": 60,
+                "fontSize": 21,
+                "fontWeight": 500,
+                "color": "#f7b9d3",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Lotus Pulse",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 105,
+                "width": 1800,
+                "height": 100,
+                "fontSize": 54,
+                "fontWeight": 700,
+                "color": "#fff1db",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 245,
+                "width": 620,
+                "height": 620
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#f7b9d3",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Open up.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 925,
+                "width": 1800,
+                "height": 70,
+                "fontSize": 27,
+                "fontWeight": 500,
+                "color": "#fff1db",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  09",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1010,
+                "width": 1800,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#f7b9d3",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-9-portrait",
+        "label": "09 · Lotus Pulse · Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1080,
+            "height": 1920,
+            "background": "#1c101b",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 100,
+                "top": 500,
+                "width": 880,
+                "height": 880
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 8,
+                "colors": [
+                  "#88486a",
+                  "#f7b9d3",
+                  "#fff1db"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 330,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 130,
+                "width": 960,
+                "height": 60,
+                "fontSize": 24,
+                "fontWeight": 500,
+                "color": "#f7b9d3",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Lotus Pulse",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 260,
+                "width": 960,
+                "height": 100,
+                "fontSize": 64,
+                "fontWeight": 700,
+                "color": "#fff1db",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 210,
+                "top": 610,
+                "width": 660,
+                "height": 660
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#f7b9d3",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Open up.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1480,
+                "width": 960,
+                "height": 70,
+                "fontSize": 34,
+                "fontWeight": 500,
+                "color": "#fff1db",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  09",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1750,
+                "width": 960,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#f7b9d3",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-10-landscape",
+        "label": "10 · Electric Crown · Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1920,
+            "height": 1080,
+            "background": "#0c1023",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 540,
+                "top": 135,
+                "width": 840,
+                "height": 840
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 9,
+                "colors": [
+                  "#334eb1",
+                  "#7aa7ff",
+                  "#e2f0ff"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 310,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 35,
+                "width": 1800,
+                "height": 60,
+                "fontSize": 21,
+                "fontWeight": 500,
+                "color": "#7aa7ff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "ELECTRIC CROWN",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 105,
+                "width": 1800,
+                "height": 100,
+                "fontSize": 54,
+                "fontWeight": 700,
+                "color": "#e2f0ff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 245,
+                "width": 620,
+                "height": 620
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#7aa7ff",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Own the room.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 925,
+                "width": 1800,
+                "height": 70,
+                "fontSize": 27,
+                "fontWeight": 500,
+                "color": "#e2f0ff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  10",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1010,
+                "width": 1800,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#7aa7ff",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-10-portrait",
+        "label": "10 · Electric Crown · Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1080,
+            "height": 1920,
+            "background": "#0c1023",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 100,
+                "top": 500,
+                "width": 880,
+                "height": 880
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 9,
+                "colors": [
+                  "#334eb1",
+                  "#7aa7ff",
+                  "#e2f0ff"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 330,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 130,
+                "width": 960,
+                "height": 60,
+                "fontSize": 24,
+                "fontWeight": 500,
+                "color": "#7aa7ff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "ELECTRIC CROWN",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 260,
+                "width": 960,
+                "height": 100,
+                "fontSize": 64,
+                "fontWeight": 700,
+                "color": "#e2f0ff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 210,
+                "top": 610,
+                "width": 660,
+                "height": 660
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#7aa7ff",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Own the room.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1480,
+                "width": 960,
+                "height": 70,
+                "fontSize": 34,
+                "fontWeight": 500,
+                "color": "#e2f0ff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  10",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1750,
+                "width": 960,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#7aa7ff",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-11-landscape",
+        "label": "11 · Vinyl Groove · Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1920,
+            "height": 1080,
+            "background": "#1b1510",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 540,
+                "top": 135,
+                "width": 840,
+                "height": 840
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 10,
+                "colors": [
+                  "#715632",
+                  "#deb96b",
+                  "#fff0c9"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 310,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 35,
+                "width": 1800,
+                "height": 60,
+                "fontSize": 21,
+                "fontWeight": 500,
+                "color": "#deb96b",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Vinyl Groove",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 105,
+                "width": 1800,
+                "height": 100,
+                "fontSize": 54,
+                "fontWeight": 500,
+                "color": "#fff0c9",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 245,
+                "width": 620,
+                "height": 620
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#deb96b",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Keep the conversation spinning.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 925,
+                "width": 1800,
+                "height": 70,
+                "fontSize": 27,
+                "fontWeight": 500,
+                "color": "#fff0c9",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  11",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1010,
+                "width": 1800,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#deb96b",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-11-portrait",
+        "label": "11 · Vinyl Groove · Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1080,
+            "height": 1920,
+            "background": "#1b1510",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 100,
+                "top": 500,
+                "width": 880,
+                "height": 880
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 10,
+                "colors": [
+                  "#715632",
+                  "#deb96b",
+                  "#fff0c9"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 330,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 130,
+                "width": 960,
+                "height": 60,
+                "fontSize": 24,
+                "fontWeight": 500,
+                "color": "#deb96b",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Vinyl Groove",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 260,
+                "width": 960,
+                "height": 100,
+                "fontSize": 64,
+                "fontWeight": 500,
+                "color": "#fff0c9",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 210,
+                "top": 610,
+                "width": 660,
+                "height": 660
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#deb96b",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Keep the conversation spinning.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1480,
+                "width": 960,
+                "height": 70,
+                "fontSize": 34,
+                "fontWeight": 500,
+                "color": "#fff0c9",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  11",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1750,
+                "width": 960,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#deb96b",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-12-landscape",
+        "label": "12 · Saturn Drift · Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1920,
+            "height": 1080,
+            "background": "#0e1420",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 540,
+                "top": 135,
+                "width": 840,
+                "height": 840
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 11,
+                "colors": [
+                  "#455e79",
+                  "#c5d4ed",
+                  "#f9b6a3"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 310,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 35,
+                "width": 1800,
+                "height": 60,
+                "fontSize": 21,
+                "fontWeight": 500,
+                "color": "#c5d4ed",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Saturn Drift",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 105,
+                "width": 1800,
+                "height": 100,
+                "fontSize": 54,
+                "fontWeight": 700,
+                "color": "#f9b6a3",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 245,
+                "width": 620,
+                "height": 620
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#c5d4ed",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "A world of your own.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 925,
+                "width": 1800,
+                "height": 70,
+                "fontSize": 27,
+                "fontWeight": 500,
+                "color": "#f9b6a3",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  12",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1010,
+                "width": 1800,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#c5d4ed",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-12-portrait",
+        "label": "12 · Saturn Drift · Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1080,
+            "height": 1920,
+            "background": "#0e1420",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 100,
+                "top": 500,
+                "width": 880,
+                "height": 880
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 11,
+                "colors": [
+                  "#455e79",
+                  "#c5d4ed",
+                  "#f9b6a3"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 330,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 130,
+                "width": 960,
+                "height": 60,
+                "fontSize": 24,
+                "fontWeight": 500,
+                "color": "#c5d4ed",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Saturn Drift",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 260,
+                "width": 960,
+                "height": 100,
+                "fontSize": 64,
+                "fontWeight": 700,
+                "color": "#f9b6a3",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 210,
+                "top": 610,
+                "width": 660,
+                "height": 660
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#c5d4ed",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "A world of your own.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1480,
+                "width": 960,
+                "height": 70,
+                "fontSize": 34,
+                "fontWeight": 500,
+                "color": "#f9b6a3",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  12",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1750,
+                "width": 960,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#c5d4ed",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-13-landscape",
+        "label": "13 · Heartbeat Loop · Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1920,
+            "height": 1080,
+            "background": "#200c12",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 540,
+                "top": 135,
+                "width": 840,
+                "height": 840
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 12,
+                "colors": [
+                  "#8a2339",
+                  "#ff718c",
+                  "#ffd1c1"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 310,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 35,
+                "width": 1800,
+                "height": 60,
+                "fontSize": 21,
+                "fontWeight": 500,
+                "color": "#ff718c",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "HEARTBEAT LOOP",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 105,
+                "width": 1800,
+                "height": 100,
+                "fontSize": 54,
+                "fontWeight": 700,
+                "color": "#ffd1c1",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 245,
+                "width": 620,
+                "height": 620
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#ff718c",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Feel every moment.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 925,
+                "width": 1800,
+                "height": 70,
+                "fontSize": 27,
+                "fontWeight": 500,
+                "color": "#ffd1c1",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  13",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1010,
+                "width": 1800,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#ff718c",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-13-portrait",
+        "label": "13 · Heartbeat Loop · Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1080,
+            "height": 1920,
+            "background": "#200c12",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 100,
+                "top": 500,
+                "width": 880,
+                "height": 880
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 12,
+                "colors": [
+                  "#8a2339",
+                  "#ff718c",
+                  "#ffd1c1"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 330,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 130,
+                "width": 960,
+                "height": 60,
+                "fontSize": 24,
+                "fontWeight": 500,
+                "color": "#ff718c",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "HEARTBEAT LOOP",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 260,
+                "width": 960,
+                "height": 100,
+                "fontSize": 64,
+                "fontWeight": 700,
+                "color": "#ffd1c1",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 210,
+                "top": 610,
+                "width": 660,
+                "height": 660
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#ff718c",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Feel every moment.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1480,
+                "width": 960,
+                "height": 70,
+                "fontSize": 34,
+                "fontWeight": 500,
+                "color": "#ffd1c1",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  13",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1750,
+                "width": 960,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#ff718c",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-14-landscape",
+        "label": "14 · Ink Aura · Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1920,
+            "height": 1080,
+            "background": "#14121c",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 540,
+                "top": 135,
+                "width": 840,
+                "height": 840
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 13,
+                "colors": [
+                  "#50495f",
+                  "#c1b2d9",
+                  "#f3e9ff"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 310,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 35,
+                "width": 1800,
+                "height": 60,
+                "fontSize": 21,
+                "fontWeight": 500,
+                "color": "#c1b2d9",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Ink Aura",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 105,
+                "width": 1800,
+                "height": 100,
+                "fontSize": 54,
+                "fontWeight": 500,
+                "color": "#f3e9ff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 245,
+                "width": 620,
+                "height": 620
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#c1b2d9",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Leave your mark.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 925,
+                "width": 1800,
+                "height": 70,
+                "fontSize": 27,
+                "fontWeight": 500,
+                "color": "#f3e9ff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  14",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1010,
+                "width": 1800,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#c1b2d9",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-14-portrait",
+        "label": "14 · Ink Aura · Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1080,
+            "height": 1920,
+            "background": "#14121c",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 100,
+                "top": 500,
+                "width": 880,
+                "height": 880
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 13,
+                "colors": [
+                  "#50495f",
+                  "#c1b2d9",
+                  "#f3e9ff"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 330,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 130,
+                "width": 960,
+                "height": 60,
+                "fontSize": 24,
+                "fontWeight": 500,
+                "color": "#c1b2d9",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Ink Aura",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 260,
+                "width": 960,
+                "height": 100,
+                "fontSize": 64,
+                "fontWeight": 500,
+                "color": "#f3e9ff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 210,
+                "top": 610,
+                "width": 660,
+                "height": 660
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#c1b2d9",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Leave your mark.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1480,
+                "width": 960,
+                "height": 70,
+                "fontSize": 34,
+                "fontWeight": 500,
+                "color": "#f3e9ff",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  14",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1750,
+                "width": 960,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#c1b2d9",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-15-landscape",
+        "label": "15 · Prism Echo · Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1920,
+            "height": 1080,
+            "background": "#101626",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 540,
+                "top": 135,
+                "width": 840,
+                "height": 840
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 14,
+                "colors": [
+                  "#3c55a0",
+                  "#89e8f5",
+                  "#f2a2e9"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 310,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 35,
+                "width": 1800,
+                "height": 60,
+                "fontSize": 21,
+                "fontWeight": 500,
+                "color": "#89e8f5",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Prism Echo",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 105,
+                "width": 1800,
+                "height": 100,
+                "fontSize": 54,
+                "fontWeight": 700,
+                "color": "#f2a2e9",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 650,
+                "top": 245,
+                "width": 620,
+                "height": 620
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#89e8f5",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Make yourself heard.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 925,
+                "width": 1800,
+                "height": 70,
+                "fontSize": 27,
+                "fontWeight": 500,
+                "color": "#f2a2e9",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  15",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1010,
+                "width": 1800,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#89e8f5",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "style-15-portrait",
+        "label": "15 · Prism Echo · Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "gallery-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1080,
+            "height": 1920,
+            "background": "#101626",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-visual",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 100,
+                "top": 500,
+                "width": 880,
+                "height": 880
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 14,
+                "colors": [
+                  "#3c55a0",
+                  "#89e8f5",
+                  "#f2a2e9"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 330,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "collection",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 130,
+                "width": 960,
+                "height": 60,
+                "fontSize": 24,
+                "fontWeight": 500,
+                "color": "#89e8f5",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "style-title",
+              "type": "text",
+              "text": "Prism Echo",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 260,
+                "width": 960,
+                "height": 100,
+                "fontSize": 64,
+                "fontWeight": 700,
+                "color": "#f2a2e9",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 210,
+                "top": 610,
+                "width": 660,
+                "height": 660
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 2,
+                "outlineColor": "#89e8f5",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "tagline",
+              "type": "text",
+              "text": "Make yourself heard.",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1480,
+                "width": 960,
+                "height": 70,
+                "fontSize": 34,
+                "fontWeight": 500,
+                "color": "#f2a2e9",
+                "textAlign": "center"
+              }
+            },
+            {
+              "id": "edition",
+              "type": "text",
+              "text": "LIVE SESSIONS  /  15",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 1750,
+                "width": 960,
+                "height": 44,
+                "fontSize": 18,
+                "fontWeight": 500,
+                "color": "#89e8f5",
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
