@@ -1,0 +1,520 @@
+{
+  "schema": "producer.presentation/2",
+  "id": "attention-signal",
+  "version": "1.0.0",
+  "name": "Attention Is Currency · Signal",
+  "set": {
+    "initialLayout": "landscape",
+    "values": {
+      "topic": {
+        "type": "text",
+        "default": "THE COST OF ATTENTION",
+        "maxLength": 60
+      },
+      "host": {
+        "type": "text",
+        "default": "KLEVELAND",
+        "maxLength": 40
+      },
+      "sensitivity": {
+        "type": "number",
+        "default": 0.85,
+        "min": 0,
+        "max": 2
+      },
+      "motion": {
+        "type": "number",
+        "default": 0.6,
+        "min": 0,
+        "max": 4
+      }
+    },
+    "feeds": {},
+    "slots": [
+      {
+        "id": "host",
+        "label": "Host camera"
+      }
+    ],
+    "components": {},
+    "controls": [
+      {
+        "id": "topic",
+        "type": "text",
+        "label": "Topic headline",
+        "key": "topic"
+      },
+      {
+        "id": "host",
+        "type": "text",
+        "label": "Host name",
+        "key": "host"
+      },
+      {
+        "id": "sensitivity",
+        "type": "number",
+        "label": "Sensitivity",
+        "key": "sensitivity"
+      },
+      {
+        "id": "motion",
+        "type": "number",
+        "label": "Motion",
+        "key": "motion"
+      },
+      {
+        "id": "landscape",
+        "type": "button",
+        "label": "Cover · Landscape",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "landscape"
+        }
+      },
+      {
+        "id": "portrait",
+        "type": "button",
+        "label": "Cover · Portrait",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "portrait"
+        }
+      }
+    ],
+    "controlArrangement": {
+      "sections": [
+        {
+          "id": "editorial",
+          "label": "On the cover",
+          "controls": [
+            "set:topic",
+            "set:host"
+          ]
+        },
+        {
+          "id": "signal",
+          "label": "Voice motion",
+          "controls": [
+            "set:sensitivity",
+            "set:motion"
+          ]
+        },
+        {
+          "id": "format",
+          "label": "Format",
+          "controls": [
+            "set:landscape",
+            "set:portrait"
+          ]
+        }
+      ],
+      "minimized": [
+        "set:topic",
+        "set:landscape",
+        "set:portrait"
+      ]
+    },
+    "layouts": [
+      {
+        "id": "landscape",
+        "label": "Cover · Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "cover",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1920,
+            "height": 1080,
+            "background": "#0b0b0c",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-contour",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 70,
+                "top": 175,
+                "width": 830,
+                "height": 830
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 0,
+                "colors": [
+                  "#f4f4f2",
+                  "#f4f4f2",
+                  "#f4f4f2"
+                ],
+                "speed": 0.6,
+                "intensity": 0.85,
+                "scale": 0.4,
+                "opacity": 1,
+                "radius": 325,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  }
+                }
+              }
+            },
+            {
+              "id": "masthead",
+              "type": "text",
+              "text": "ATTN",
+              "styles": {
+                "position": "absolute",
+                "left": 78,
+                "top": 30,
+                "width": 830,
+                "height": 205,
+                "fontSize": 180,
+                "fontWeight": 800,
+                "color": "#f4f4f2"
+              }
+            },
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "IS CURRENCY",
+              "styles": {
+                "position": "absolute",
+                "left": 1020,
+                "top": 96,
+                "width": 750,
+                "height": 76,
+                "fontSize": 54,
+                "fontWeight": 700,
+                "color": "#f4f4f2"
+              }
+            },
+            {
+              "id": "top-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 80,
+                "top": 232,
+                "width": 1760,
+                "height": 2,
+                "background": "#444446"
+              },
+              "children": []
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 160,
+                "top": 265,
+                "width": 650,
+                "height": 650
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 0,
+                "outlineColor": "#f4f4f2",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "section",
+              "type": "text",
+              "text": "MONEY / CULTURE / MUSIC",
+              "styles": {
+                "position": "absolute",
+                "left": 1035,
+                "top": 330,
+                "width": 760,
+                "height": 60,
+                "fontSize": 25,
+                "fontWeight": 500,
+                "color": "#99999e"
+              }
+            },
+            {
+              "id": "topic",
+              "type": "text",
+              "text": {
+                "get": "values.topic"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 1030,
+                "top": 410,
+                "width": 790,
+                "height": 250,
+                "fontSize": 86,
+                "fontWeight": 600,
+                "color": "#f4f4f2"
+              }
+            },
+            {
+              "id": "bottom-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 1035,
+                "top": 765,
+                "width": 730,
+                "height": 2,
+                "background": "#444446"
+              },
+              "children": []
+            },
+            {
+              "id": "byline",
+              "type": "text",
+              "text": "WITH",
+              "styles": {
+                "position": "absolute",
+                "left": 1035,
+                "top": 805,
+                "width": 250,
+                "height": 45,
+                "fontSize": 22,
+                "fontWeight": 500,
+                "color": "#99999e"
+              }
+            },
+            {
+              "id": "host-name",
+              "type": "text",
+              "text": {
+                "get": "values.host"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 1035,
+                "top": 854,
+                "width": 730,
+                "height": 65,
+                "fontSize": 38,
+                "fontWeight": 600,
+                "color": "#f4f4f2"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "portrait",
+        "label": "Cover · Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "cover",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1080,
+            "height": 1920,
+            "background": "#0b0b0c",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-contour",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 80,
+                "top": 460,
+                "width": 920,
+                "height": 920
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 0,
+                "colors": [
+                  "#f4f4f2",
+                  "#f4f4f2",
+                  "#f4f4f2"
+                ],
+                "speed": 0.6,
+                "intensity": 0.85,
+                "scale": 0.4,
+                "opacity": 1,
+                "radius": 370,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  }
+                }
+              }
+            },
+            {
+              "id": "masthead",
+              "type": "text",
+              "text": "ATTN",
+              "styles": {
+                "position": "absolute",
+                "left": 62,
+                "top": 90,
+                "width": 950,
+                "height": 285,
+                "fontSize": 242,
+                "fontWeight": 800,
+                "color": "#f4f4f2"
+              }
+            },
+            {
+              "id": "brand",
+              "type": "text",
+              "text": "IS CURRENCY",
+              "styles": {
+                "position": "absolute",
+                "left": 74,
+                "top": 350,
+                "width": 900,
+                "height": 85,
+                "fontSize": 46,
+                "fontWeight": 700,
+                "color": "#f4f4f2"
+              }
+            },
+            {
+              "id": "top-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 74,
+                "top": 445,
+                "width": 932,
+                "height": 2,
+                "background": "#444446"
+              },
+              "children": []
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 170,
+                "top": 550,
+                "width": 740,
+                "height": 740
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "circle",
+                "cornerRadius": 0,
+                "outlineWidth": 0,
+                "outlineColor": "#f4f4f2",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "section",
+              "type": "text",
+              "text": "MONEY / CULTURE / MUSIC",
+              "styles": {
+                "position": "absolute",
+                "left": 76,
+                "top": 1420,
+                "width": 928,
+                "height": 60,
+                "fontSize": 27,
+                "fontWeight": 500,
+                "color": "#99999e"
+              }
+            },
+            {
+              "id": "topic",
+              "type": "text",
+              "text": {
+                "get": "values.topic"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 76,
+                "top": 1480,
+                "width": 928,
+                "height": 200,
+                "fontSize": 76,
+                "fontWeight": 600,
+                "color": "#f4f4f2"
+              }
+            },
+            {
+              "id": "bottom-rule",
+              "type": "box",
+              "styles": {
+                "position": "absolute",
+                "left": 76,
+                "top": 1720,
+                "width": 928,
+                "height": 2,
+                "background": "#444446"
+              },
+              "children": []
+            },
+            {
+              "id": "byline",
+              "type": "text",
+              "text": "WITH",
+              "styles": {
+                "position": "absolute",
+                "left": 76,
+                "top": 1750,
+                "width": 250,
+                "height": 45,
+                "fontSize": 22,
+                "fontWeight": 500,
+                "color": "#99999e"
+              }
+            },
+            {
+              "id": "host-name",
+              "type": "text",
+              "text": {
+                "get": "values.host"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 76,
+                "top": 1800,
+                "width": 900,
+                "height": 65,
+                "fontSize": 42,
+                "fontWeight": 600,
+                "color": "#f4f4f2"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
