@@ -16,6 +16,13 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: bun run test:presentation
+      - run: bun run test:module-push
+      - run: bun run test:set-control
+      - run: bun run test:room-set-control
+      - run: bun run test:control-arrangements
+      - run: bun run test:module-arrangements
+      - run: bun run test:package-validation
+      - run: bun run test:set-authoring
       - run: bun run test:module-runtime
       - run: node scripts/test-just-facts-show.mjs
       - run: node scripts/test-atmosphere.mjs

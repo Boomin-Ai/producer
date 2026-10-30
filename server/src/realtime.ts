@@ -264,7 +264,7 @@ export class RealtimeHub {
           this.sendToRoles(["host"],{type:"scene.cut",scene_id:verdict.scene_id,transition:verdict.transition,from:state.userId,server_now:Date.now()});
           ws.send(JSON.stringify({type:"scene.cut.ok",scene_id:verdict.scene_id,command_protocol:1,server_now:Date.now()}));return;
         }
-        const host = this.state.getWebSockets().find((other) => (other.deserializeAttachment() as SocketState | null)?.publisherId === current.publisher);
+        const host = this.state.getWebSockets().find((other) => other.readyState === 1 && (other.deserializeAttachment() as SocketState | null)?.publisherId === current.publisher);
         if (!host) throw new RoomCommandError("host_unavailable", 503);
         const command = await this.commands.submit({ command_id: msg.command_id ?? crypto.randomUUID(), scene_id: verdict.scene_id, from: state.userId }, Date.now());
         if (command.status === "accepted") host.send(JSON.stringify({ type: "scene.cut", ...command, server_now: Date.now() }));

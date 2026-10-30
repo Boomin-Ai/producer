@@ -1,3 +1,5 @@
+import {authorSet,parseSetAuthoringInput,AUTHORING_BASE_BYTES} from './setAuthoring';
+import {dataAdapterRegistry} from './registry';
 import {readObjects,cachedObject,writeObjects,type CachePolicy} from './objectCache';
 import {weatherLocationKey} from '../../../shared/set-runtime/weather';
 import {Hono} from 'hono';
@@ -5,7 +7,7 @@ import type {Env} from '../env';
 import {requirePrimary,type TokenClass} from '../auth';
 import {ApiError} from '../errors';
 import {encryptSecret,decryptSecret} from '../crypto';
-import {agent,weather,testConnection,parseConnection,identity,weatherLocations,weatherRequest,ProviderError,type Connection,type WeatherResult} from './providers';
+import {agent,weather,validateWeatherResult,testConnection,parseConnection,identity,weatherLocations,weatherRequest,ProviderError,type Connection,type WeatherResult} from './providers';
 type Row={id:string;config:string;secret_enc:string|null;revision:number;status:string;error:string;tested_at:number|null;last_request_at:number;last_result:string|null;last_result_at:number|null};
 export const dataIntegrationRoutes=new Hono<{Bindings:Env;Variables:{tokenClass:TokenClass}}>();
 dataIntegrationRoutes.use('*',async(c,next)=>{requirePrimary(c.get('tokenClass'));await next();});
@@ -14,11 +16,11 @@ dataIntegrationRoutes.onError((error,c)=>{
  if(error instanceof ProviderError)return c.json({error:{code:error.code,message:error.message}},error.code==='invalid_request'?400:502);
  return c.json({error:{code:'integration_failed',message:'The integration request could not complete.'}},500);
 });
-async function input(req:{text:()=>Promise<string>}){const raw=await req.text();if(raw.length>20000)throw new ApiError(413,'request_too_large','Integration request exceeds its budget');try{const v=JSON.parse(raw);if(!v||typeof v!=='object'||Array.isArray(v))throw Error();return v as Record<string,unknown>;}catch{throw new ApiError(400,'invalid_request','JSON object required');}}
+async function input(req:{text:()=>Promise<string>},maxBytes=20000){const raw=await req.text();if(raw.length>maxBytes||new TextEncoder().encode(raw).byteLength>maxBytes)throw new ApiError(413,'request_too_large','Integration request exceeds its budget');try{const v=JSON.parse(raw);if(!v||typeof v!=='object'||Array.isArray(v))throw Error();return v as Record<string,unknown>;}catch{throw new ApiError(400,'invalid_request','JSON object required');}}
 async function load(env:Env,id:string){const row=await env.DB.prepare('SELECT * FROM data_integrations WHERE id = ?1').bind(identity(id)).first<Row>();if(!row)throw new ApiError(404,'connection_not_found','Saved data connection not found');return row;}
 const publicRow=(r:Row)=>({connection:parseConnection(JSON.parse(r.config)),revision:r.revision,status:r.status,error:r.error,testedAt:r.tested_at,hasSecret:!!r.secret_enc});
 async function secret(env:Env,row:Row){if(!row.secret_enc)return undefined;if(!env.TOKEN_ENCRYPTION_KEY)throw new ApiError(503,'encryption_unconfigured','The workspace server must configure TOKEN_ENCRYPTION_KEY');return decryptSecret(row.secret_enc,env.TOKEN_ENCRYPTION_KEY);}
-dataIntegrationRoutes.get('/',async c=>{const rows=await c.env.DB.prepare('SELECT * FROM data_integrations ORDER BY updated_at DESC, id').all<Row>();return c.json({connections:(rows.results??[]).map(publicRow),capabilities:['data.weather@1','data.agent@1']});});
+dataIntegrationRoutes.get('/',async c=>{const rows=await c.env.DB.prepare('SELECT * FROM data_integrations ORDER BY updated_at DESC, id').all<Row>();return c.json({connections:(rows.results??[]).map(publicRow),capabilities:dataAdapterRegistry.capabilities(),adapters:dataAdapterRegistry.catalog()});});
 dataIntegrationRoutes.get('/locations',async c=>c.json({locations:await weatherLocations(c.req.query('query'))}));
 dataIntegrationRoutes.post('/',async c=>{
  const body=await input(c.req);if(Object.keys(body).some(k=>!['connection','apiKey','expectedRevision'].includes(k)))throw new ApiError(400,'invalid_request','Unknown connection field');const connection=parseConnection(body.connection);
@@ -52,7 +54,7 @@ export async function querySavedConnection(env:Env,id:string,expectedRevision:nu
  }
  const key=weatherLocationKey(weatherRequest(connection,inputValue),connection.units),policy:CachePolicy={freshMs:connection.pollSeconds*1000,staleMs:1800000,maxEntries:16,maxBytes:256*1024};
  const cached=cachedObject(readObjects<WeatherResult>(row.last_result,row.last_result_at),key,policy,Date.now());
- const reply=(entry:NonNullable<typeof cached>,hit:boolean):WeatherReply=>({connectionId:row.id,connectionRevision:row.revision,result:entry.value,cached:hit,stale:entry.stale,cache:{fetchedAt:entry.fetchedAt,expiresAt:entry.expiresAt}});
+ const reply=(entry:NonNullable<typeof cached>,hit:boolean):WeatherReply=>({connectionId:row.id,connectionRevision:row.revision,result:validateWeatherResult(entry.value),cached:hit,stale:entry.stale,cache:{fetchedAt:entry.fetchedAt,expiresAt:entry.expiresAt}});
  if(cached&&!cached.stale&&!options.refresh)return reply(cached,true);
  let flights=weatherFlights.get(env.DB);if(!flights){flights=new Map();weatherFlights.set(env.DB,flights);}
  const flightKey=JSON.stringify([row.id,row.revision,key]),existing=flights.get(flightKey);if(existing)return existing;
@@ -83,4 +85,20 @@ export async function savedConnection(env:Env,id:string){return publicRow(await 
 dataIntegrationRoutes.post('/:id/query',async c=>{
  const body=await input(c.req);if(Object.keys(body).some(k=>!['expectedRevision','input','refresh'].includes(k))||typeof body.expectedRevision!=='number'||body.refresh!==undefined&&typeof body.refresh!=='boolean')throw new ApiError(400,'invalid_request','Invalid query fields');
  return c.json(await querySavedConnection(c.env,c.req.param('id'),body.expectedRevision,body.input,{refresh:body.refresh===true}));
+});
+
+/** Explicit one-shot authoring; never installs a package or mutates room output. */
+dataIntegrationRoutes.post('/:id/author-set',async c=>{
+ const body=await input(c.req,AUTHORING_BASE_BYTES+20000);
+ if(Object.keys(body).some(key=>!['expectedRevision','prompt','package'].includes(key))||!Number.isSafeInteger(body.expectedRevision)||(body.expectedRevision as number)<1)throw new ApiError(400,'invalid_request','Expected connection revision and prompt required');
+ const request=parseSetAuthoringInput({prompt:body.prompt,...(body.package!==undefined?{package:body.package}:{})});
+ const row=await load(c.env,c.req.param('id')),connection=parseConnection(JSON.parse(row.config));
+ if(row.revision!==body.expectedRevision)throw new ApiError(409,'revision_conflict','Connection settings changed. Refresh the saved connection.');
+ if(connection.kind!=='agent'||connection.provider!=='anthropic')throw new ApiError(400,'invalid_request','Select a saved Claude connection for Set authoring.');
+ c.req.raw.signal.throwIfAborted();
+ const apiKey=await secret(c.env,row);if(!apiKey)throw new ApiError(400,'provider_auth','The saved Claude connection has no API key.');
+ await reserve(c.env,row,2000);
+ const result=await authorSet(connection,apiKey,request,{signal:c.req.raw.signal});
+ if((await load(c.env,row.id)).revision!==row.revision)throw new ApiError(409,'revision_conflict','Connection changed while the Set draft was being generated.');
+ return c.json({connectionId:row.id,connectionRevision:row.revision,...result});
 });

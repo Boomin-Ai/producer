@@ -66,7 +66,7 @@ export function boominAudienceUrl(interactionId: string, appUrl = BOOMIN_APP_URL
 /** The channels a Producer holds on the room DO. `interactions:control` is
  *  refused by the hub unless the ticket's `can.interactions` is true (a mod
  *  has it; a viewer does not) — the refusal is a harmless error frame. */
-export const BOOMIN_ROOM_CHANNELS = ["stage", "contributions", "interactions", "interactions:control"] as const;
+export const BOOMIN_ROOM_CHANNELS = ["stage", "contributions", "interactions", "interactions:control", "set:operator"] as const;
 
 export interface ContributionFrame {
   type: "contribution.opened" | "contribution.closed";

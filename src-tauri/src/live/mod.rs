@@ -4,6 +4,8 @@
 
 pub mod animation;
 pub mod bridge;
+#[cfg(have_engine)]
+mod callback_diagnostics;
 pub mod commands;
 pub mod creds;
 #[cfg(all(have_engine, target_os = "macos", feature = "portrait-camera-dev"))]

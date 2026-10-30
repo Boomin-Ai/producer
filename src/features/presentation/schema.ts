@@ -1,4 +1,5 @@
 import {validateMask,validateBackdrop} from './visualEffects';
+import {arrangementCatalog} from './controlArrangements';
 import {parseWorld,WORLD_SCHEMA,type Scene3dWorld} from './scene3d/contract.mjs';
 import {parseRuntimeDefinition,type RuntimeDefinition} from '../../../shared/set-runtime/contract';
 import {runtimeSchemaBody,runtimeSchemaDefs} from '../../../shared/set-runtime/jsonSchema';
@@ -77,6 +78,12 @@ const union = <C extends Codec<unknown>[]>(...codecs: C): Codec<Type<C[number]>>
   json: { anyOf: codecs.map(c => c.json) },
   read(v, p, d) {
     bounded(d, p);
+    // A known discriminator identifies the exact object shape. Preserve its
+    // nested error instead of losing it while trying unrelated node types.
+    if(v&&typeof v==='object'&&!Array.isArray(v)&&'type'in v){
+      const matching=codecs.filter(codec=>(codec.json.properties as Record<string,{const?:unknown}>|undefined)?.type?.const===(v as {type:unknown}).type);
+      if(matching.length===1)return matching[0].read(v,p,d) as Type<C[number]>;
+    }
     for (const codec of codecs) { try { return codec.read(v, p, d) as Type<C[number]>; } catch (e) { if (!(e instanceof PackageError)) throw e; } }
     return fail(p, 'Unsupported value or invalid fields.');
   },
@@ -177,6 +184,8 @@ const control = union(
   object({ id, type: literal('number'), label: string(80), key: id, when: optional(binding) }),
 );
 export type SetControl = Type<typeof control>;
+const controlReference=string(210,'^(builtin:layout|set:[a-zA-Z][a-zA-Z0-9_-]{0,63}|module:[a-zA-Z][a-zA-Z0-9_-]{0,63}:([a-zA-Z][a-zA-Z0-9_-]{0,63}|\\$(lifecycle|weather-location|behavior-tools)))$');
+const controlArrangement=object({sections:array(object({id,label:string(80),controls:array(controlReference,256),collapsed:optional(boolean)}),64),minimized:array(controlReference,64)});
 const show = object({ id, version: string(32), initialPhase: id,
   phases: array(object({ id, label: string(80), layoutId: id, next: optional(id), collectMs: optional(number(1000, 3_600_000)) }), 16),
   choices: defaulted(array(object({ id, label: string(80) }), 6), []),
@@ -188,7 +197,7 @@ const codec = object({
     feeds: dictionary(valueDefinition), slots: array(object({ id, label: string(80) }), 8),
     components: dictionary(object({ props: dictionary(scalar), root: ref('node', () => node) }), 16),
     layouts: array(object({ id, label: string(80), width: number(320, 1920), height: number(320, 1920), root: ref('node', () => node),animation:optional(animation) }), 32),
-    controls: array(control, 40),
+    controls: array(control, 40),controlArrangement:optional(controlArrangement),
   }), show: optional(show),
 });
 export type PresentationPackage = Type<typeof codec>;
@@ -198,6 +207,15 @@ export const presentationJsonSchema = { $schema: 'https://json-schema.org/draft/
 
 export function parsePackage(value: unknown): PresentationPackage {
   const doc = codec.read(value, '$', 0);
+  if(doc.set.controlArrangement){
+    const known=new Set(arrangementCatalog(doc).controls.map(c=>c.id));
+    const sections=new Set<string>(),placed=new Set<string>(),minimized=new Set<string>();
+    for(const section of doc.set.controlArrangement.sections){
+      if(sections.has(section.id)||!section.label.trim())fail('$.set.controlArrangement.sections','Duplicate section or empty label.');sections.add(section.id);
+      for(const ref of section.controls){if(!known.has(ref)||placed.has(ref))fail('$.set.controlArrangement.sections','Unknown or repeated control reference.');placed.add(ref);}
+    }
+    for(const ref of doc.set.controlArrangement.minimized){if(!known.has(ref)||minimized.has(ref))fail('$.set.controlArrangement.minimized','Unknown or repeated control reference.');minimized.add(ref);}
+  }
   const decorative = new Set(['background','color','border','borderRadius','boxShadow','fontSize','fontWeight','letterSpacing','textAlign','lineHeight','fontFamily','fontStyle','textTransform','textShadow','whiteSpace','wordSpacing','backgroundSize','backgroundPosition']);
   for(const preset of Object.values(doc.set.styles??{})) for(const key of Object.keys(preset)) if(!decorative.has(key)) fail('$.set.styles',`Style presets cannot change geometry or compositing: ${key}.`);
   if (new TextEncoder().encode(JSON.stringify(doc)).length > PACKAGE_BYTES) fail('$','Set package exceeds 40 MB.');

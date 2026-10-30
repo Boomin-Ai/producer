@@ -257,6 +257,7 @@ export interface ModBoardProps {
   /** The vote card (VoteHostCard) — passed only when the seat may run votes. */
   vote?: ReactNode;
   chat?: ReactNode;
+  setControls?: ReactNode;
   voteLive?: boolean;
   /** PEOPLE — the GuestPanel element, built by the caller with its own handlers. */
   people: ReactNode;
@@ -274,17 +275,17 @@ export interface ModBoardProps {
 }
 
 export function ModBoard(p: ModBoardProps) {
-  const [tab, setTab] = useState<"people" | "interactions" | "chat">("people");
+  const [tab, setTab] = useState<"people" | "interactions" | "chat" | "set">("people");
   useEffect(() => {
-    if (tab === 'interactions' && !p.vote || tab === 'chat' && !p.chat) setTab('people');
-  }, [tab, p.vote, p.chat]);
+    if (tab === 'interactions' && !p.vote || tab === 'chat' && !p.chat || tab === 'set' && !p.setControls) setTab('people');
+  }, [tab, p.vote, p.chat, p.setControls]);
   return <div className="modboard mb-workspace">
     <main className="mb-production">
       <HostOutput program={p.program} pending={p.pending} boomin={p.boomin} title={p.title} online={p.online} />
       <section className="mb-scene-section"><h3 className="mb-h">Scenes</h3><ScenePads scenes={p.scenes} canCut={p.access.can.scene && !p.pending} onCut={p.onCut} pending={p.pending} /></section>
       <section className="mb-operations">
-        <nav className="mb-tabs" aria-label="Room controls"><button className={tab === "people" ? "active" : ""} onClick={() => setTab("people")}>People</button>{p.vote && <button className={tab === "interactions" ? "active" : ""} onClick={() => setTab("interactions")}>Interactions{p.voteLive ? " · active" : ""}</button>}{p.chat && <button className={tab === "chat" ? "active" : ""} onClick={() => setTab("chat")}>Chat</button>}</nav>
-        <div className="mb-operation-content">{tab === "people" ? p.people : tab === "chat" ? p.chat : p.vote}</div>
+        <nav className="mb-tabs" aria-label="Room controls">{p.setControls && <button className={tab === "set" ? "active" : ""} onClick={() => setTab("set")}>Set</button>}<button className={tab === "people" ? "active" : ""} onClick={() => setTab("people")}>People</button>{p.vote && <button className={tab === "interactions" ? "active" : ""} onClick={() => setTab("interactions")}>Interactions{p.voteLive ? " · active" : ""}</button>}{p.chat && <button className={tab === "chat" ? "active" : ""} onClick={() => setTab("chat")}>Chat</button>}</nav>
+        <div className="mb-operation-content">{tab === "set" ? p.setControls : tab === "people" ? p.people : tab === "chat" ? p.chat : p.vote}</div>
       </section>
     </main>
     <aside className="mb-source-sidebar"><h3 className="mb-h">My Sources</h3><p className="mb-source-explanation">Choose what to send. Add camera and screen sources to the host’s current scene.</p><MyFeeds feeds={p.feeds} media={p.media} sourceStates={p.sourceStates ?? []} pendingSources={p.pendingSources ?? new Set()} onThrowUp={p.onThrowUp} onSourceMute={p.onSourceMute} boomin={p.boomin} /></aside>

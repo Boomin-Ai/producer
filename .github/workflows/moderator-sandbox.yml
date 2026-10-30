@@ -1,0 +1,36 @@
+name: Moderator control-plane sandbox
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  headless-authority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: npm ci
+        working-directory: server
+      - name: Run real hub logic with synthetic storage and sockets
+        run: npm run test:moderator -- --reporter=default --reporter=json --outputFile=moderator-results.json
+        working-directory: server
+      - name: Record test scope
+        if: always()
+        run: |
+          echo 'Control-plane regression tests only. Synthetic sockets/storage and host acknowledgements.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No Cloudflare deployment, production credentials, native renderer, camera, or streaming output.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: moderator-control-plane-results
+          path: server/moderator-results.json
+          if-no-files-found: warn
+          retention-days: 14

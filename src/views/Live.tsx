@@ -1,3 +1,6 @@
+import {PresentationRelay} from "../features/presentation/presentationRelay";
+import {RoomSetControls} from "../features/presentation/RoomSetControls";
+import {modulePushPublisher} from '../features/presentation/modulePush';
 import {useSetModules} from '../features/presentation/useSetModules';
 import {invoke} from "@tauri-apps/api/core";
 import { admitGuestThroughTransport, revokeGuestAndConfirm } from "../lib/guestAdmission";
@@ -4468,7 +4471,10 @@ export function LiveView({
     writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,...(moduleBindings?{moduleBindings}:{}),package:doc,bindings:setOutput.bindings,framing:setOutput.framing}});
   };
   const setWorkspaceState=useSyncExternalStore(setRehearsal.subscribe,setRehearsal.snapshot);
-  useSetModules(setRehearsal,endpointRef.current??activeEndpointId()??undefined,cfg.server_room_id??undefined,!!setOutput.active,setWorkspaceState.workspaceMode,cfg.presentation?.moduleBindings??{});
+  const presentationRelay=useMemo(()=>new PresentationRelay(roomId??""),[roomId]);
+  const presentedSession=useRef(setRehearsal);presentedSession.current=setRehearsal;
+  useEffect(()=>{if(!isHost||!boominRoom)return;const observe=(event:Event)=>presentationRelay.observe((event as CustomEvent).detail,presentedSession.current.moduleSnapshot(),frame=>controlRef.current?.send(frame)??false);window.addEventListener("producer:module-presented",observe);window.addEventListener("producer:module-presentation-failed",observe);return()=>{window.removeEventListener("producer:module-presented",observe);window.removeEventListener("producer:module-presentation-failed",observe);};},[isHost,boominRoom,presentationRelay]);
+  useSetModules(setRehearsal,endpointRef.current??activeEndpointId()??undefined,cfg.server_room_id??undefined,!!setOutput.active,setWorkspaceState.workspaceMode,cfg.presentation?.moduleBindings??{},isHost);
   const [setHostName,setSetHostName]=useState('');
   useEffect(()=>{let cancelled=false;setSetHostName('');const endpoint=endpointRef.current ?? activeEndpointId();if(isHost&&endpoint)void fetchMe(endpoint).then(me=>{if(!cancelled)setSetHostName(me.name?.trim() ?? '');}).catch(()=>{});return()=>{cancelled=true;};},[roomId,isHost]);
   const setSourceNames:Record<string,string>={};
@@ -5518,6 +5524,7 @@ export function LiveView({
     sceneOrderRef.current = { epoch: 0, sequence: 0 };
     controlHasSnapshot.current = false;
     let link: RoomControlLink | null = null;
+    let modulePublisher:ReturnType<typeof modulePushPublisher>|undefined;
     let alive = true;
     let votesRequest = 0;
     votesRef.current.clear();
@@ -5536,6 +5543,7 @@ export function LiveView({
       const ep = await resolveActiveEndpoint().catch(() => null);
       if (!ep || !alive) return;
       const boomin = isBoomin(ep);
+      if(boomin)modulePublisher=modulePushPublisher(ep.id,sid);
       link = new RoomControlLink({
         origin: new URL(ep.base_url).origin,
         // On Boomin `controlSession` mints the room-channel ticket (api #392)
@@ -5551,6 +5559,8 @@ export function LiveView({
         parse: boomin ? parseBoominFrame : undefined,
         renewAfterMs: 105_000,
         onFrame: (frame: ControlFrame) => {
+          modulePublisher?.frame(frame as unknown as Record<string,unknown>);
+          if(frame.type==="scene.published"&&roomRoleRef.current==="host")presentationRelay.flush(value=>link?.send(value)??false,presentedSession.current.moduleSnapshot(),true);
           if (["error", "audience.error", "scene.state", "scene.published", "room.sources"].includes(frame.type)) {
             const info = frame as Record<string, unknown>;
             if (frame.type !== "room.sources" || info.epoch !== sourceLogEpoch) {
@@ -5723,7 +5733,7 @@ export function LiveView({
             if (cut.command_id) link?.acknowledge(cut.command_id, applied === true ? "applied" : "failed", applied === true ? undefined : "Scene could not be applied by the production engine");
           });
         },
-        onClose: () => { logControl("closed"); votesRequest++; for (const sender of audienceSenders.current.values()) sender.stop(); audienceSenders.current.clear(); },
+        onClose: () => { modulePublisher?.offline(); logControl("closed"); votesRequest++; for (const sender of audienceSenders.current.values()) sender.stop(); audienceSenders.current.clear(); },
         onOpen: () => {
           logControl("opened", { role: roomRoleRef.current, scenes: scenesRef.current.length });
           setAudienceError(null);
@@ -5750,6 +5760,7 @@ export function LiveView({
     return () => {
       alive = false;
       link?.stop();
+      modulePublisher?.close();
       for (const sender of audienceSenders.current.values()) sender.stop();
       audienceSenders.current.clear();
       if (controlRef.current === link) controlRef.current = null;
@@ -6827,7 +6838,7 @@ export function LiveView({
   const panelBody = (id: PanelId) => {
     switch (id) {
       case "setControls":
-        return <SetControlsPanel endpoint={endpointRef.current??activeEndpointId()??undefined} serverRoomId={cfg.server_room_id??undefined} moduleBindings={cfg.presentation?.moduleBindings} voting={roomAccess.can.interactions?<SetRoomVoting vote={vote} savedVotes={savedVotes} onSelectVote={selectSavedVote} onOpen={openVote} onTransition={(action,hold)=>void transitionVote(action,hold)}/>:undefined} sourceNames={setSourceNames} onFieldEdit={editSetField} session={setRehearsal} output={setOutput} blocked={!docApplied}
+        return <SetControlsPanel preferenceRoomId={roomId??undefined} endpoint={endpointRef.current??activeEndpointId()??undefined} serverRoomId={cfg.server_room_id??undefined} moduleBindings={cfg.presentation?.moduleBindings} voting={roomAccess.can.interactions?<SetRoomVoting vote={vote} savedVotes={savedVotes} onSelectVote={selectSavedVote} onOpen={openVote} onTransition={(action,hold)=>void transitionVote(action,hold)}/>:undefined} sourceNames={setSourceNames} onFieldEdit={editSetField} session={setRehearsal} output={setOutput} blocked={!docApplied}
           blockedReason={!docApplied ? "Waiting for the room to finish loading." : undefined}
           onChange={changeSet} />;
       case "dj":
@@ -8647,6 +8658,7 @@ export function LiveView({
           onCut={(id) => void cutHostScene(id)}
           vote={roomAccess.can.interactions ? panelBody("vote") : undefined}
           chat={panelBody("chat")}
+          setControls={!accessPending&&boominRoom&&roomAccess.can.control&&cfg.server_room_id&&(endpointRef.current??activeEndpointId())?<RoomSetControls endpoint={(endpointRef.current??activeEndpointId())!} room={cfg.server_room_id}/>:undefined}
           voteLive={!!vote && vote.state !== "closed" && vote.state !== "cancelled"}
           people={panelBody("guests")}
           grants={myGrants}

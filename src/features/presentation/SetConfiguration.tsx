@@ -1,3 +1,4 @@
+import {parsePackageText} from './validation';
 import {SetPicker} from './SetPicker';
 import {MediaAssetsDialog} from './MediaAssetsDialog';
 import {ipc} from '../../lib/ipc';
@@ -24,7 +25,7 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
   const [selectedFile,setSelectedFile]=useState('');
   const refreshLibrary=async()=>{try{setLibrary(await ipc.setLibraryList());}catch(e){setError(String(e));}};
   useEffect(()=>{void refreshLibrary();},[session.package.id]);
-  const loadLibrary=async(file:string)=>{try{const next=new RehearsalSession(JSON.parse(await ipc.setLibraryRead(file)),undefined,'prepare');onChange(next.package);setSelectedFile(file);setError('');}catch(e){setError(String(e));}};
+  const loadLibrary=async(file:string)=>{try{const next=new RehearsalSession(parsePackageText(await ipc.setLibraryRead(file)),undefined,'prepare');onChange(next.package);setSelectedFile(file);setError('');}catch(e){setError(String(e));}};
   const saveImported=async(doc:PresentationPackage)=>{await ipc.setLibrarySave(JSON.stringify(doc));await refreshLibrary();};
   const [media,setMedia]=useState(false);
   const [help, setHelp] = useState(false);
@@ -34,7 +35,7 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
     if (!input) return;
     try {
       if (input.size > PACKAGE_BYTES) throw new Error('Set package exceeds 40 MB.');
-      const next = new RehearsalSession(JSON.parse(await input.text()), undefined, 'prepare');
+      const next = new RehearsalSession(parsePackageText(await input.text()), undefined, 'prepare');
       await saveImported(next.package);setSelectedFile('');
       onChange(next.package); setError('');
     } catch (e) { setError(e instanceof Error ? e.message : 'Unable to import set.'); }
@@ -42,7 +43,7 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
   }
   const choices=useMemo(()=>[
     ...BUILTIN_SETS.map(doc=>({value:`builtin:${doc.id}`,label:doc.name,group:'Built-in sets',load:async()=>doc})),
-    ...library.map(entry=>({value:`file:${entry.file}`,label:entry.name+(library.filter(other=>other.name===entry.name).length>1?` · ${entry.file}`:''),group:'Saved sets',load:async()=>JSON.parse(await ipc.setLibraryRead(entry.file)) as PresentationPackage})),
+    ...library.map(entry=>({value:`file:${entry.file}`,label:entry.name+(library.filter(other=>other.name===entry.name).length>1?` · ${entry.file}`:''),group:'Saved sets',load:async()=>parsePackageText(await ipc.setLibraryRead(entry.file))})),
     ...(!BUILTIN_SETS.map(doc=>doc.id).includes(session.package.id)&&!library.some(entry=>entry.id===session.package.id)?[{value:'imported',label:session.package.name,group:'Current set',load:async()=>session.package}]:[]),
   ],[library,session.package]);
   return <>
@@ -56,6 +57,7 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
       </div>
       <button ref={trigger} type="button" popoverTarget={filesId} onClick={e=>{const r=e.currentTarget.getBoundingClientRect();setPosition({left:Math.max(8,Math.min(r.left,innerWidth-228)),top:r.bottom+6});}}>Files ▾</button>
       <div id={filesId} popover="auto" className="set-configuration-popover set-files-popover" style={{left:position.left,top:position.top}}>
+        <button onClick={()=>{document.getElementById(filesId)?.hidePopover();edit('edit-set');}}>Generate Set draft</button>
         <button onClick={()=>{document.getElementById(filesId)?.hidePopover();setError('');file.current?.click();}}>Import set</button>
         <button onClick={()=>{document.getElementById(filesId)?.hidePopover();edit('export');}}>Export set</button>
         <button onClick={()=>{document.getElementById(filesId)?.hidePopover();setMedia(true);}}>Media assets</button>

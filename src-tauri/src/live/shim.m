@@ -29,13 +29,12 @@ static NSRect frame_from_css(NSView *content, double x, double y, double w, doub
     NSView *web = find_webview(content);
     if (web) {
         NSRect bounds = web.bounds;
-        // A full-size-content WKWebView includes the titlebar in its native
-        // bounds, while WebKit's default DOM viewport excludes the safe area.
-        // Match that viewport origin before converting to the parent view.
-        NSEdgeInsets inset = web.safeAreaInsets;
-        NSRect local = NSMakeRect(NSMinX(bounds) + inset.left + x,
-            web.isFlipped ? NSMinY(bounds) + inset.top + y
-                          : NSMaxY(bounds) - inset.top - y - h, w, h);
+        // convertRect already accounts for the webview's position beneath
+        // window chrome. Adding safeAreaInsets here shifts native video away
+        // from the measured DOM frame (and can draw below its bottom edge).
+        NSRect local = NSMakeRect(NSMinX(bounds) + x,
+            web.isFlipped ? NSMinY(bounds) + y
+                          : NSMaxY(bounds) - y - h, w, h);
         return [content convertRect:local fromView:web];
     }
     NSRect bounds = content.bounds;

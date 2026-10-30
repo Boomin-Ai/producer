@@ -1,5 +1,6 @@
 import {SetRuntime,type Snapshot as ModuleSnapshot,type Command as ModuleCommand,type Result as ModuleResult} from '../../../shared/set-runtime/runtime';
 import {runtimeFields} from '../../../shared/set-runtime/projection';
+import type {ControlCommand} from '../../../shared/set-runtime/control';
 let moduleEpoch=Date.now();
 import {enterMedia,mediaPosition,layoutMedia,playable,type MediaTransport,type PlaybackConfig} from './playback';
 import {outputProjection} from './projection';
@@ -19,6 +20,8 @@ export interface RehearsalState {
   modules:Record<string,Record<string,Scalar>>;
   moduleConnection:'private'|'simulation'|'connecting'|'live'|'error';
   moduleError:string;
+  controlPending?:boolean;
+  controlError?:string;
   media?:Record<string,MediaTransport>;
   animationClock?:AnimationClock;
   layoutMotion?:AnimationTrack[];
@@ -83,6 +86,15 @@ export class RehearsalSession {
   private stopModules?:()=>void;
   private liveModules?:ModuleSnapshot;
   private moduleTransport?:((command:ModuleCommand)=>Promise<ModuleResult>);
+  private controlTransport?:((command:ControlCommand)=>Promise<ModuleResult>);
+  private controlled=false;
+  private controlGeneration=0;
+  private controlClock?:{positionMs:number;anchorMs:number;running:boolean};
+  attachControlTransport=(send:typeof this.controlTransport,enabled=this.controlled)=>{
+    if(!send||enabled!==this.controlled){this.controlGeneration++;if(this.state?.controlPending){this.state=freeze({...this.state,controlPending:false});this.emit();}}
+    this.controlTransport=send;this.controlled=enabled;
+  };
+  hasRoomControl=()=>this.workspaceMode==='live'&&this.controlled;
   private voters = new Map<string, string>();
   private listeners = new Set<() => void>();
   private reactionTimes = new Map<string, number>();
@@ -123,6 +135,7 @@ export class RehearsalSession {
     this.workspaceMode = 'prepare'; this.freshBoundary(); this.preparation = undefined; return true;
   };
   private freshBoundary() {
+    this.attachControlTransport(undefined,false);
     this.voters.clear(); this.reactionTimes.clear(); this.heatEvents = [];
     this.sandboxId = `rehearsal-${crypto.randomUUID()}`;
     this.stopModules?.();this.moduleRuntime.shutdown();this.liveModules=undefined;this.moduleTransport=undefined;this.moduleLifecycleTransport=undefined;this.moduleRuntime=this.createModules();this.state = freeze(this.initial());this.observeModules();this.syncModuleLifecycle();this.emit();
@@ -155,10 +168,41 @@ export class RehearsalSession {
     if(this.state.moduleConnection===moduleConnection&&this.state.moduleError===error)return;
     this.state=freeze({...this.state,moduleConnection,moduleError:error});this.emit();
   };
-  receiveModuleSnapshot=(snapshot:ModuleSnapshot)=>{
+  receiveModuleSnapshot=(snapshot:ModuleSnapshot,serverNow?:number)=>{
     if(this.workspaceMode!=='live')return;
     if(this.liveModules&&(snapshot.setEpoch<this.liveModules.setEpoch||snapshot.setEpoch===this.liveModules.setEpoch&&snapshot.revision<=this.liveModules.revision))return;
-    this.liveModules=freeze(structuredClone(snapshot));this.state=freeze({...this.state,moduleCommit:{setEpoch:this.liveModules.setEpoch,revision:this.liveModules.revision},modules:runtimeFields(this.liveModules,this.package.runtime),revision:this.state.revision+1});this.applyModuleView(this.liveModules);this.emit();
+    const oldControl=this.liveModules?.control;
+    const next=structuredClone(this.state);
+    if(snapshot.control){
+      const control=snapshot.control,show=control.show;
+      if(!this.package.set.layouts.some(l=>l.id===control.layoutId)||this.package.show&&!this.package.show.phases.some(p=>p.id===show.phase))throw Error('Room Set configuration does not match this renderer');
+      if(control.values!==undefined){
+        if(!control.values||typeof control.values!=='object'||Array.isArray(control.values)||Object.keys(control.values).length!==Object.keys(this.package.set.values).length)throw Error('Room Set fields do not match this renderer');
+        const values:Record<string,Scalar>={};
+        for(const [key,def] of Object.entries(this.package.set.values)){
+          if(!Object.prototype.hasOwnProperty.call(control.values,key))throw Error('Room Set field missing: '+key);
+          values[key]=validateValue(def,control.values[key],key);
+        }
+        next.values=values;
+      }
+      this.controlled=true;
+      // Field-only commits must not restart media, clocks or a layout morph.
+      if(!oldControl||oldControl.layoutId!==control.layoutId||oldControl.visible!==control.visible||JSON.stringify(oldControl.show)!==JSON.stringify(show)){
+        const now=Date.now(),wasPaused=next.paused,wasRunning=next.running,oldLayout=next.layoutId;
+        next.layoutId=control.layoutId;next.running=show.status!=='stopped';next.paused=show.status==='paused';next.show.phase=show.phase;
+        next.elapsedMs=show.positionMs+(show.status==='running'&&Number.isFinite(serverNow)?Math.max(0,serverNow!-show.anchorMs):0);
+        this.controlClock={positionMs:next.elapsedMs,anchorMs:now,running:show.status==='running'};
+        const changedSegment=oldControl?.show.phase!==show.phase||oldControl?.show.run!==show.run;
+        if(next.animationClock){const position=clockPosition(next.animationClock,now);next.animationClock={running:(!this.package.show||next.running)&&!next.paused,positionMs:next.elapsedMs,segmentMs:changedSegment||oldLayout!==next.layoutId?0:position.segmentMs,anchorMs:now};}
+        delete next.layoutMotion;delete next.layoutMotionId;delete next.layoutMotions;
+        const transition=this.package.set.layouts.find(l=>l.id===next.layoutId)?.animation?.transition;
+        if(oldLayout!==next.layoutId&&transition?.type==='morph'&&transition.durationMs>0&&!next.paused){next.layoutMotionId=next.layoutId;next.layoutMotion=layoutTransition(outputProjection(this.package,this.state),outputProjection(this.package,next),transition.durationMs,now);}
+        next.media??={};enterMedia(this.package,oldControl?.show.run!==show.run?undefined:oldLayout,next.layoutId,next.media,now,this.state,next);
+        if(next.paused||wasRunning&&!next.running)for(const [id,t]of Object.entries(next.media))next.media[id]={playing:false,positionMs:mediaPosition(t,now),anchorMs:now,resumeAfterPause:next.paused&&t.playing};
+        else if(wasPaused)for(const [id,t]of Object.entries(next.media))if(t.resumeAfterPause)next.media[id]={playing:true,positionMs:t.positionMs,anchorMs:now};
+      }
+    }
+    this.liveModules=freeze(structuredClone(snapshot));this.state=freeze({...next,moduleCommit:{setEpoch:this.liveModules.setEpoch,revision:this.liveModules.revision},modules:runtimeFields(this.liveModules,this.package.runtime),revision:this.state.revision+1});if(!snapshot.control)this.applyModuleView(this.liveModules);this.emit();
   };
   sendModule=async(module:string,op:string,input:Record<string,Scalar>={},participant?:string):Promise<ModuleResult>=>{
     const snapshot=this.moduleSnapshot(),target=snapshot.modules[module];
@@ -204,6 +248,29 @@ export class RehearsalSession {
   };
   subscribe = (fn: () => void) => { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; };
   send(event: SimulationEvent): boolean {
+    if(this.hasRoomControl()){
+      if(event.type==='tick'){if(this.controlClock?.running){this.state=freeze({...this.state,elapsedMs:this.controlClock.positionMs+Math.max(0,Date.now()-this.controlClock.anchorMs)});this.emit();}return false;}
+      let op:ControlCommand['op']|undefined,input:ControlCommand['input'];
+      if(event.type==='control'&&['layout.select','show.start','show.next','show.previous'].includes(event.action.type)){op=event.action.type as ControlCommand['op'];if(event.action.type==='layout.select')input={layoutId:event.action.layoutId};}
+      else if(event.type==='pause')op=event.paused?'show.pause':'show.resume';
+      else if(event.type==='stop')op='show.stop';
+      else if(event.type==='field'){op='field.set';input={key:event.key,value:event.value};}
+      else if(event.type==='control'&&event.action.type==='value.set'){op='field.set';input={key:event.action.key,value:event.action.value};}
+      if(op){
+        if(op==='field.set'){
+          try{const key=input!.key!;if(!Object.prototype.hasOwnProperty.call(this.package.set.values,key))throw Error('Unknown Set field');validateValue(this.package.set.values[key],input!.value,key);}
+          catch(error){this.state=freeze({...this.state,controlError:error instanceof Error?error.message:String(error)});this.emit();return false;}
+        }
+        if(!this.controlTransport||this.state.controlPending)return false;
+        const snapshot=this.moduleSnapshot(),generation=this.controlGeneration,send=this.controlTransport;
+        this.state=freeze({...this.state,controlPending:true,controlError:''});this.emit();
+        void send({id:crypto.randomUUID(),setEpoch:snapshot.setEpoch,expectedRevision:snapshot.revision,op,...(input?{input}:{})}).then(result=>{if(result.status==='rejected')throw Error(result.error);}).catch(error=>{if(generation===this.controlGeneration){this.state=freeze({...this.state,controlError:error instanceof Error?error.message:String(error)});}}).finally(()=>{if(generation===this.controlGeneration){this.state=freeze({...this.state,controlPending:false});this.emit();}});
+        return true;
+      }
+      // Live time is projected from the committed anchor; a UI timer cannot
+      // advance server state or produce local-only Show navigation.
+      if(['tick','seek','reset','segment.select'].includes(event.type)||event.type==='control'&&event.action.type.startsWith('show.'))return false;
+    }
     const next = structuredClone(this.state);
     const log = (message: string) => { next.trace = [...next.trace.slice(-29), { at: next.elapsedMs, message }]; };
     try {

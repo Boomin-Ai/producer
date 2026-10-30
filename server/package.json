@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "guest:build": "npm --prefix guest run build",
     "guest:typecheck": "npm --prefix guest run typecheck",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:moderator": "vitest run test/moderator-headless.test.ts test/hub.test.ts test/room-commands.test.ts test/room-actions.test.ts test/room-sources-hub.test.ts"
   },
   "dependencies": {
     "hono": "^4.6.0"
