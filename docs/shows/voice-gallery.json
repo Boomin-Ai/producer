@@ -1,10 +1,10 @@
 {
   "schema": "producer.presentation/2",
   "id": "voice-gallery",
-  "version": "1.0.0",
-  "name": "Voice Collection · 15 Studies",
+  "version": "2.0.0",
+  "name": "Voice Collection · 15 Compositions",
   "set": {
-    "initialLayout": "style-1-landscape",
+    "initialLayout": "style-2-landscape",
     "values": {
       "title": {
         "type": "text",
@@ -66,7 +66,7 @@
       {
         "id": "style-1-landscape",
         "type": "button",
-        "label": "01 · Liquid Halo · Landscape",
+        "label": "01 · Halo Portrait · Landscape",
         "action": {
           "type": "layout.select",
           "layoutId": "style-1-landscape"
@@ -75,7 +75,7 @@
       {
         "id": "style-1-portrait",
         "type": "button",
-        "label": "01 · Liquid Halo · Portrait",
+        "label": "01 · Halo Portrait · Portrait",
         "action": {
           "type": "layout.select",
           "layoutId": "style-1-portrait"
@@ -84,7 +84,7 @@
       {
         "id": "style-2-landscape",
         "type": "button",
-        "label": "02 · Twin Current · Landscape",
+        "label": "02 · Broadcast Line · Landscape",
         "action": {
           "type": "layout.select",
           "layoutId": "style-2-landscape"
@@ -93,7 +93,7 @@
       {
         "id": "style-2-portrait",
         "type": "button",
-        "label": "02 · Twin Current · Portrait",
+        "label": "02 · Broadcast Line · Portrait",
         "action": {
           "type": "layout.select",
           "layoutId": "style-2-portrait"
@@ -102,7 +102,7 @@
       {
         "id": "style-3-landscape",
         "type": "button",
-        "label": "03 · Solar Corona · Landscape",
+        "label": "03 · Twin Towers · Landscape",
         "action": {
           "type": "layout.select",
           "layoutId": "style-3-landscape"
@@ -111,7 +111,7 @@
       {
         "id": "style-3-portrait",
         "type": "button",
-        "label": "03 · Solar Corona · Portrait",
+        "label": "03 · Twin Towers · Portrait",
         "action": {
           "type": "layout.select",
           "layoutId": "style-3-portrait"
@@ -120,7 +120,7 @@
       {
         "id": "style-4-landscape",
         "type": "button",
-        "label": "04 · Silk Orbit · Landscape",
+        "label": "04 · Sidecar Studio · Landscape",
         "action": {
           "type": "layout.select",
           "layoutId": "style-4-landscape"
@@ -129,7 +129,7 @@
       {
         "id": "style-4-portrait",
         "type": "button",
-        "label": "04 · Silk Orbit · Portrait",
+        "label": "04 · Sidecar Studio · Portrait",
         "action": {
           "type": "layout.select",
           "layoutId": "style-4-portrait"
@@ -138,7 +138,7 @@
       {
         "id": "style-5-landscape",
         "type": "button",
-        "label": "05 · Bass Bloom · Landscape",
+        "label": "05 · Cinema Rails · Landscape",
         "action": {
           "type": "layout.select",
           "layoutId": "style-5-landscape"
@@ -147,7 +147,7 @@
       {
         "id": "style-5-portrait",
         "type": "button",
-        "label": "05 · Bass Bloom · Portrait",
+        "label": "05 · Cinema Rails · Portrait",
         "action": {
           "type": "layout.select",
           "layoutId": "style-5-portrait"
@@ -156,7 +156,7 @@
       {
         "id": "style-6-landscape",
         "type": "button",
-        "label": "06 · Ripple Pool · Landscape",
+        "label": "06 · Sound Below · Landscape",
         "action": {
           "type": "layout.select",
           "layoutId": "style-6-landscape"
@@ -165,7 +165,7 @@
       {
         "id": "style-6-portrait",
         "type": "button",
-        "label": "06 · Ripple Pool · Portrait",
+        "label": "06 · Sound Below · Portrait",
         "action": {
           "type": "layout.select",
           "layoutId": "style-6-portrait"
@@ -174,7 +174,7 @@
       {
         "id": "style-7-landscape",
         "type": "button",
-        "label": "07 · Magnetic Field · Landscape",
+        "label": "07 · Right of Reply · Landscape",
         "action": {
           "type": "layout.select",
           "layoutId": "style-7-landscape"
@@ -183,7 +183,7 @@
       {
         "id": "style-7-portrait",
         "type": "button",
-        "label": "07 · Magnetic Field · Portrait",
+        "label": "07 · Right of Reply · Portrait",
         "action": {
           "type": "layout.select",
           "layoutId": "style-7-portrait"
@@ -192,7 +192,7 @@
       {
         "id": "style-8-landscape",
         "type": "button",
-        "label": "08 · Neon Braid · Landscape",
+        "label": "08 · Corner Lights · Landscape",
         "action": {
           "type": "layout.select",
           "layoutId": "style-8-landscape"
@@ -201,7 +201,7 @@
       {
         "id": "style-8-portrait",
         "type": "button",
-        "label": "08 · Neon Braid · Portrait",
+        "label": "08 · Corner Lights · Portrait",
         "action": {
           "type": "layout.select",
           "layoutId": "style-8-portrait"
@@ -210,7 +210,7 @@
       {
         "id": "style-9-landscape",
         "type": "button",
-        "label": "09 · Lotus Pulse · Landscape",
+        "label": "09 · Lower Third · Landscape",
         "action": {
           "type": "layout.select",
           "layoutId": "style-9-landscape"
@@ -219,7 +219,7 @@
       {
         "id": "style-9-portrait",
         "type": "button",
-        "label": "09 · Lotus Pulse · Portrait",
+        "label": "09 · Lower Third · Portrait",
         "action": {
           "type": "layout.select",
           "layoutId": "style-9-portrait"
@@ -228,7 +228,7 @@
       {
         "id": "style-10-landscape",
         "type": "button",
-        "label": "10 · Electric Crown · Landscape",
+        "label": "10 · Orbital Stack · Landscape",
         "action": {
           "type": "layout.select",
           "layoutId": "style-10-landscape"
@@ -237,7 +237,7 @@
       {
         "id": "style-10-portrait",
         "type": "button",
-        "label": "10 · Electric Crown · Portrait",
+        "label": "10 · Orbital Stack · Portrait",
         "action": {
           "type": "layout.select",
           "layoutId": "style-10-portrait"
@@ -246,7 +246,7 @@
       {
         "id": "style-11-landscape",
         "type": "button",
-        "label": "11 · Vinyl Groove · Landscape",
+        "label": "11 · Audio Canopy · Landscape",
         "action": {
           "type": "layout.select",
           "layoutId": "style-11-landscape"
@@ -255,7 +255,7 @@
       {
         "id": "style-11-portrait",
         "type": "button",
-        "label": "11 · Vinyl Groove · Portrait",
+        "label": "11 · Audio Canopy · Portrait",
         "action": {
           "type": "layout.select",
           "layoutId": "style-11-portrait"
@@ -264,7 +264,7 @@
       {
         "id": "style-12-landscape",
         "type": "button",
-        "label": "12 · Saturn Drift · Landscape",
+        "label": "12 · Split Signal · Landscape",
         "action": {
           "type": "layout.select",
           "layoutId": "style-12-landscape"
@@ -273,7 +273,7 @@
       {
         "id": "style-12-portrait",
         "type": "button",
-        "label": "12 · Saturn Drift · Portrait",
+        "label": "12 · Split Signal · Portrait",
         "action": {
           "type": "layout.select",
           "layoutId": "style-12-portrait"
@@ -282,7 +282,7 @@
       {
         "id": "style-13-landscape",
         "type": "button",
-        "label": "13 · Heartbeat Loop · Landscape",
+        "label": "13 · Spotlight Badge · Landscape",
         "action": {
           "type": "layout.select",
           "layoutId": "style-13-landscape"
@@ -291,7 +291,7 @@
       {
         "id": "style-13-portrait",
         "type": "button",
-        "label": "13 · Heartbeat Loop · Portrait",
+        "label": "13 · Spotlight Badge · Portrait",
         "action": {
           "type": "layout.select",
           "layoutId": "style-13-portrait"
@@ -300,7 +300,7 @@
       {
         "id": "style-14-landscape",
         "type": "button",
-        "label": "14 · Ink Aura · Landscape",
+        "label": "14 · Crossfade · Landscape",
         "action": {
           "type": "layout.select",
           "layoutId": "style-14-landscape"
@@ -309,7 +309,7 @@
       {
         "id": "style-14-portrait",
         "type": "button",
-        "label": "14 · Ink Aura · Portrait",
+        "label": "14 · Crossfade · Portrait",
         "action": {
           "type": "layout.select",
           "layoutId": "style-14-portrait"
@@ -318,7 +318,7 @@
       {
         "id": "style-15-landscape",
         "type": "button",
-        "label": "15 · Prism Echo · Landscape",
+        "label": "15 · The Sound Desk · Landscape",
         "action": {
           "type": "layout.select",
           "layoutId": "style-15-landscape"
@@ -327,7 +327,7 @@
       {
         "id": "style-15-portrait",
         "type": "button",
-        "label": "15 · Prism Echo · Portrait",
+        "label": "15 · The Sound Desk · Portrait",
         "action": {
           "type": "layout.select",
           "layoutId": "style-15-portrait"
@@ -428,7 +428,7 @@
     "layouts": [
       {
         "id": "style-1-landscape",
-        "label": "01 · Liquid Halo · Landscape",
+        "label": "01 · Halo Portrait · Landscape",
         "width": 1920,
         "height": 1080,
         "root": {
@@ -443,14 +443,14 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 540,
-                "top": 135,
-                "width": 840,
-                "height": 840
+                "left": 604,
+                "top": 184,
+                "width": 712,
+                "height": 712
               },
               "shader": {
                 "effect": "voiceRing",
@@ -462,9 +462,9 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 0.6,
                 "opacity": 1,
-                "radius": 310,
+                "radius": 281,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -489,28 +489,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 35,
-                "width": 1800,
-                "height": 60,
-                "fontSize": 21,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 38,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 20,
+                "fontWeight": 600,
                 "color": "#65f6dc",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "LIQUID HALO",
+              "text": "01 / Halo Portrait",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 105,
-                "width": 1800,
-                "height": 100,
-                "fontSize": 54,
-                "fontWeight": 700,
+                "left": 96,
+                "top": 103,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 42,
+                "fontWeight": 600,
                 "color": "#b0baff",
                 "textAlign": "center"
               }
@@ -521,10 +521,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 650,
-                "top": 245,
-                "width": 620,
-                "height": 620
+                "left": 679,
+                "top": 259,
+                "width": 562,
+                "height": 562
               },
               "framing": {
                 "mode": "fill",
@@ -533,7 +533,7 @@
               },
               "appearance": {
                 "shape": "circle",
-                "cornerRadius": 0,
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#65f6dc",
                 "grayscale": 0,
@@ -543,32 +543,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Find your flow.",
+              "text": "One voice. All eyes.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 925,
-                "width": 1800,
+                "left": 96,
+                "top": 994,
+                "width": 1728,
                 "height": 70,
-                "fontSize": 27,
-                "fontWeight": 500,
+                "fontSize": 24,
+                "fontWeight": 600,
                 "color": "#b0baff",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  01",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1010,
-                "width": 1800,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#65f6dc",
                 "textAlign": "center"
               }
             }
@@ -577,7 +561,7 @@
       },
       {
         "id": "style-1-portrait",
-        "label": "01 · Liquid Halo · Portrait",
+        "label": "01 · Halo Portrait · Portrait",
         "width": 1080,
         "height": 1920,
         "root": {
@@ -592,14 +576,14 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 100,
-                "top": 500,
-                "width": 880,
-                "height": 880
+                "left": 288,
+                "top": 708,
+                "width": 504,
+                "height": 504
               },
               "shader": {
                 "effect": "voiceRing",
@@ -611,9 +595,9 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 0.6,
                 "opacity": 1,
-                "radius": 330,
+                "radius": 162,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -638,28 +622,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 130,
-                "width": 960,
-                "height": 60,
-                "fontSize": 24,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 67,
+                "width": 972,
+                "height": 125,
+                "fontSize": 23,
+                "fontWeight": 600,
                 "color": "#65f6dc",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "LIQUID HALO",
+              "text": "01 / Halo Portrait",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 260,
-                "width": 960,
-                "height": 100,
-                "fontSize": 64,
-                "fontWeight": 700,
+                "left": 54,
+                "top": 182,
+                "width": 972,
+                "height": 125,
+                "fontSize": 48,
+                "fontWeight": 600,
                 "color": "#b0baff",
                 "textAlign": "center"
               }
@@ -670,10 +654,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 210,
-                "top": 610,
-                "width": 660,
-                "height": 660
+                "left": 378,
+                "top": 798,
+                "width": 324,
+                "height": 324
               },
               "framing": {
                 "mode": "fill",
@@ -682,7 +666,7 @@
               },
               "appearance": {
                 "shape": "circle",
-                "cornerRadius": 0,
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#65f6dc",
                 "grayscale": 0,
@@ -692,32 +676,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Find your flow.",
+              "text": "One voice. All eyes.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 1480,
-                "width": 960,
-                "height": 70,
-                "fontSize": 34,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 1766,
+                "width": 972,
+                "height": 125,
+                "fontSize": 28,
+                "fontWeight": 600,
                 "color": "#b0baff",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  01",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1750,
-                "width": 960,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#65f6dc",
                 "textAlign": "center"
               }
             }
@@ -726,7 +694,7 @@
       },
       {
         "id": "style-2-landscape",
-        "label": "02 · Twin Current · Landscape",
+        "label": "02 · Broadcast Line · Landscape",
         "width": 1920,
         "height": 1080,
         "root": {
@@ -741,18 +709,17 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 540,
-                "top": 135,
-                "width": 840,
-                "height": 840
+                "left": 134,
+                "top": 853,
+                "width": 1651,
+                "height": 130
               },
               "shader": {
-                "effect": "voiceRing",
-                "variant": 1,
+                "effect": "voiceBars",
                 "colors": [
                   "#135d62",
                   "#65fff0",
@@ -760,9 +727,9 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 1.8,
                 "opacity": 1,
-                "radius": 310,
+                "radius": 20,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -787,28 +754,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 35,
-                "width": 1800,
-                "height": 60,
-                "fontSize": 21,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 38,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 20,
+                "fontWeight": 600,
                 "color": "#65fff0",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Twin Current",
+              "text": "02 / Broadcast Line",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 105,
-                "width": 1800,
-                "height": 100,
-                "fontSize": 54,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 103,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 42,
+                "fontWeight": 600,
                 "color": "#efffba",
                 "textAlign": "center"
               }
@@ -819,10 +786,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 650,
-                "top": 245,
-                "width": 620,
-                "height": 620
+                "left": 192,
+                "top": 216,
+                "width": 1536,
+                "height": 605
               },
               "framing": {
                 "mode": "fill",
@@ -830,8 +797,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#65fff0",
                 "grayscale": 0,
@@ -841,32 +808,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Two currents. One voice.",
+              "text": "The conversation, uninterrupted.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 925,
-                "width": 1800,
+                "left": 96,
+                "top": 994,
+                "width": 1728,
                 "height": 70,
-                "fontSize": 27,
-                "fontWeight": 500,
+                "fontSize": 24,
+                "fontWeight": 600,
                 "color": "#efffba",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  02",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1010,
-                "width": 1800,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#65fff0",
                 "textAlign": "center"
               }
             }
@@ -875,7 +826,7 @@
       },
       {
         "id": "style-2-portrait",
-        "label": "02 · Twin Current · Portrait",
+        "label": "02 · Broadcast Line · Portrait",
         "width": 1080,
         "height": 1920,
         "root": {
@@ -890,18 +841,17 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 100,
-                "top": 500,
-                "width": 880,
-                "height": 880
+                "left": 76,
+                "top": 1517,
+                "width": 929,
+                "height": 230
               },
               "shader": {
-                "effect": "voiceRing",
-                "variant": 1,
+                "effect": "voiceBars",
                 "colors": [
                   "#135d62",
                   "#65fff0",
@@ -909,9 +859,9 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 1.8,
                 "opacity": 1,
-                "radius": 330,
+                "radius": 20,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -936,28 +886,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 130,
-                "width": 960,
-                "height": 60,
-                "fontSize": 24,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 67,
+                "width": 972,
+                "height": 125,
+                "fontSize": 23,
+                "fontWeight": 600,
                 "color": "#65fff0",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Twin Current",
+              "text": "02 / Broadcast Line",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 260,
-                "width": 960,
-                "height": 100,
-                "fontSize": 64,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 182,
+                "width": 972,
+                "height": 125,
+                "fontSize": 48,
+                "fontWeight": 600,
                 "color": "#efffba",
                 "textAlign": "center"
               }
@@ -968,10 +918,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 210,
-                "top": 610,
-                "width": 660,
-                "height": 660
+                "left": 108,
+                "top": 384,
+                "width": 864,
+                "height": 1075
               },
               "framing": {
                 "mode": "fill",
@@ -979,8 +929,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#65fff0",
                 "grayscale": 0,
@@ -990,32 +940,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Two currents. One voice.",
+              "text": "The conversation, uninterrupted.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 1480,
-                "width": 960,
-                "height": 70,
-                "fontSize": 34,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 1766,
+                "width": 972,
+                "height": 125,
+                "fontSize": 28,
+                "fontWeight": 600,
                 "color": "#efffba",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  02",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1750,
-                "width": 960,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#65fff0",
                 "textAlign": "center"
               }
             }
@@ -1024,7 +958,7 @@
       },
       {
         "id": "style-3-landscape",
-        "label": "03 · Solar Corona · Landscape",
+        "label": "03 · Twin Towers · Landscape",
         "width": 1920,
         "height": 1080,
         "root": {
@@ -1039,18 +973,17 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 540,
-                "top": 135,
-                "width": 840,
-                "height": 840
+                "left": 346,
+                "top": 238,
+                "width": 192,
+                "height": 605
               },
               "shader": {
-                "effect": "voiceRing",
-                "variant": 2,
+                "effect": "voiceBars",
                 "colors": [
                   "#8c2b13",
                   "#ffad38",
@@ -1058,9 +991,47 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 0.4,
                 "opacity": 1,
-                "radius": 310,
+                "radius": 20,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-1",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 1382,
+                "top": 238,
+                "width": 192,
+                "height": 605
+              },
+              "shader": {
+                "effect": "voiceBars",
+                "colors": [
+                  "#8c2b13",
+                  "#ffad38",
+                  "#fff0ad"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 0.4,
+                "opacity": 1,
+                "radius": 20,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -1085,28 +1056,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 35,
-                "width": 1800,
-                "height": 60,
-                "fontSize": 21,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 38,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 20,
+                "fontWeight": 600,
                 "color": "#ffad38",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Solar Corona",
+              "text": "03 / Twin Towers",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 105,
-                "width": 1800,
-                "height": 100,
-                "fontSize": 54,
-                "fontWeight": 700,
+                "left": 96,
+                "top": 103,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 42,
+                "fontWeight": 600,
                 "color": "#fff0ad",
                 "textAlign": "center"
               }
@@ -1117,10 +1088,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 650,
-                "top": 245,
-                "width": 620,
-                "height": 620
+                "left": 672,
+                "top": 184,
+                "width": 576,
+                "height": 713
               },
               "framing": {
                 "mode": "fill",
@@ -1128,8 +1099,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 288,
                 "outlineWidth": 2,
                 "outlineColor": "#ffad38",
                 "grayscale": 0,
@@ -1139,32 +1110,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Bring the heat.",
+              "text": "Stand in the sound.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 925,
-                "width": 1800,
+                "left": 96,
+                "top": 994,
+                "width": 1728,
                 "height": 70,
-                "fontSize": 27,
-                "fontWeight": 500,
+                "fontSize": 24,
+                "fontWeight": 600,
                 "color": "#fff0ad",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  03",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1010,
-                "width": 1800,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#ffad38",
                 "textAlign": "center"
               }
             }
@@ -1173,7 +1128,7 @@
       },
       {
         "id": "style-3-portrait",
-        "label": "03 · Solar Corona · Portrait",
+        "label": "03 · Twin Towers · Portrait",
         "width": 1080,
         "height": 1920,
         "root": {
@@ -1188,18 +1143,17 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 100,
-                "top": 500,
-                "width": 880,
-                "height": 880
+                "left": 194,
+                "top": 422,
+                "width": 108,
+                "height": 1075
               },
               "shader": {
-                "effect": "voiceRing",
-                "variant": 2,
+                "effect": "voiceBars",
                 "colors": [
                   "#8c2b13",
                   "#ffad38",
@@ -1207,9 +1161,47 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 0.4,
                 "opacity": 1,
-                "radius": 330,
+                "radius": 20,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-1",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 778,
+                "top": 422,
+                "width": 108,
+                "height": 1075
+              },
+              "shader": {
+                "effect": "voiceBars",
+                "colors": [
+                  "#8c2b13",
+                  "#ffad38",
+                  "#fff0ad"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 0.4,
+                "opacity": 1,
+                "radius": 20,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -1234,28 +1226,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 130,
-                "width": 960,
-                "height": 60,
-                "fontSize": 24,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 67,
+                "width": 972,
+                "height": 125,
+                "fontSize": 23,
+                "fontWeight": 600,
                 "color": "#ffad38",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Solar Corona",
+              "text": "03 / Twin Towers",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 260,
-                "width": 960,
-                "height": 100,
-                "fontSize": 64,
-                "fontWeight": 700,
+                "left": 54,
+                "top": 182,
+                "width": 972,
+                "height": 125,
+                "fontSize": 48,
+                "fontWeight": 600,
                 "color": "#fff0ad",
                 "textAlign": "center"
               }
@@ -1266,10 +1258,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 210,
-                "top": 610,
-                "width": 660,
-                "height": 660
+                "left": 378,
+                "top": 326,
+                "width": 324,
+                "height": 1267
               },
               "framing": {
                 "mode": "fill",
@@ -1277,8 +1269,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 162,
                 "outlineWidth": 2,
                 "outlineColor": "#ffad38",
                 "grayscale": 0,
@@ -1288,32 +1280,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Bring the heat.",
+              "text": "Stand in the sound.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 1480,
-                "width": 960,
-                "height": 70,
-                "fontSize": 34,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 1766,
+                "width": 972,
+                "height": 125,
+                "fontSize": 28,
+                "fontWeight": 600,
                 "color": "#fff0ad",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  03",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1750,
-                "width": 960,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#ffad38",
                 "textAlign": "center"
               }
             }
@@ -1322,7 +1298,7 @@
       },
       {
         "id": "style-4-landscape",
-        "label": "04 · Silk Orbit · Landscape",
+        "label": "04 · Sidecar Studio · Landscape",
         "width": 1920,
         "height": 1080,
         "root": {
@@ -1337,18 +1313,17 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 540,
-                "top": 135,
-                "width": 840,
-                "height": 840
+                "left": 1171,
+                "top": 270,
+                "width": 614,
+                "height": 140
               },
               "shader": {
-                "effect": "voiceRing",
-                "variant": 3,
+                "effect": "voiceBars",
                 "colors": [
                   "#663c83",
                   "#edb1f3",
@@ -1356,9 +1331,85 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 2.5,
                 "opacity": 1,
-                "radius": 310,
+                "radius": 20,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-1",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 1171,
+                "top": 475,
+                "width": 614,
+                "height": 140
+              },
+              "shader": {
+                "effect": "voiceBars",
+                "colors": [
+                  "#663c83",
+                  "#edb1f3",
+                  "#fce9dc"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 2.5,
+                "opacity": 1,
+                "radius": 20,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-2",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 1171,
+                "top": 680,
+                "width": 614,
+                "height": 140
+              },
+              "shader": {
+                "effect": "voiceBars",
+                "colors": [
+                  "#663c83",
+                  "#edb1f3",
+                  "#fce9dc"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 2.5,
+                "opacity": 1,
+                "radius": 20,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -1383,28 +1434,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 35,
-                "width": 1800,
-                "height": 60,
-                "fontSize": 21,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 38,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 20,
+                "fontWeight": 600,
                 "color": "#edb1f3",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "SILK ORBIT",
+              "text": "04 / Sidecar Studio",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 105,
-                "width": 1800,
-                "height": 100,
-                "fontSize": 54,
-                "fontWeight": 700,
+                "left": 96,
+                "top": 103,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 42,
+                "fontWeight": 600,
                 "color": "#fce9dc",
                 "textAlign": "center"
               }
@@ -1415,10 +1466,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 650,
-                "top": 245,
-                "width": 620,
-                "height": 620
+                "left": 134,
+                "top": 248,
+                "width": 922,
+                "height": 626
               },
               "framing": {
                 "mode": "fill",
@@ -1426,8 +1477,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#edb1f3",
                 "grayscale": 0,
@@ -1437,32 +1488,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Soft touch. Strong presence.",
+              "text": "Room for every thought.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 925,
-                "width": 1800,
+                "left": 96,
+                "top": 994,
+                "width": 1728,
                 "height": 70,
-                "fontSize": 27,
-                "fontWeight": 500,
+                "fontSize": 24,
+                "fontWeight": 600,
                 "color": "#fce9dc",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  04",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1010,
-                "width": 1800,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#edb1f3",
                 "textAlign": "center"
               }
             }
@@ -1471,7 +1506,7 @@
       },
       {
         "id": "style-4-portrait",
-        "label": "04 · Silk Orbit · Portrait",
+        "label": "04 · Sidecar Studio · Portrait",
         "width": 1080,
         "height": 1920,
         "root": {
@@ -1486,18 +1521,17 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 100,
-                "top": 500,
-                "width": 880,
-                "height": 880
+                "left": 659,
+                "top": 480,
+                "width": 346,
+                "height": 250
               },
               "shader": {
-                "effect": "voiceRing",
-                "variant": 3,
+                "effect": "voiceBars",
                 "colors": [
                   "#663c83",
                   "#edb1f3",
@@ -1505,9 +1539,85 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 2.5,
                 "opacity": 1,
-                "radius": 330,
+                "radius": 20,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-1",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 659,
+                "top": 845,
+                "width": 346,
+                "height": 250
+              },
+              "shader": {
+                "effect": "voiceBars",
+                "colors": [
+                  "#663c83",
+                  "#edb1f3",
+                  "#fce9dc"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 2.5,
+                "opacity": 1,
+                "radius": 20,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-2",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 659,
+                "top": 1210,
+                "width": 346,
+                "height": 250
+              },
+              "shader": {
+                "effect": "voiceBars",
+                "colors": [
+                  "#663c83",
+                  "#edb1f3",
+                  "#fce9dc"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 2.5,
+                "opacity": 1,
+                "radius": 20,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -1532,28 +1642,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 130,
-                "width": 960,
-                "height": 60,
-                "fontSize": 24,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 67,
+                "width": 972,
+                "height": 125,
+                "fontSize": 23,
+                "fontWeight": 600,
                 "color": "#edb1f3",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "SILK ORBIT",
+              "text": "04 / Sidecar Studio",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 260,
-                "width": 960,
-                "height": 100,
-                "fontSize": 64,
-                "fontWeight": 700,
+                "left": 54,
+                "top": 182,
+                "width": 972,
+                "height": 125,
+                "fontSize": 48,
+                "fontWeight": 600,
                 "color": "#fce9dc",
                 "textAlign": "center"
               }
@@ -1564,10 +1674,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 210,
-                "top": 610,
-                "width": 660,
-                "height": 660
+                "left": 76,
+                "top": 442,
+                "width": 518,
+                "height": 1114
               },
               "framing": {
                 "mode": "fill",
@@ -1575,8 +1685,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#edb1f3",
                 "grayscale": 0,
@@ -1586,32 +1696,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Soft touch. Strong presence.",
+              "text": "Room for every thought.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 1480,
-                "width": 960,
-                "height": 70,
-                "fontSize": 34,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 1766,
+                "width": 972,
+                "height": 125,
+                "fontSize": 28,
+                "fontWeight": 600,
                 "color": "#fce9dc",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  04",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1750,
-                "width": 960,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#edb1f3",
                 "textAlign": "center"
               }
             }
@@ -1620,7 +1714,7 @@
       },
       {
         "id": "style-5-landscape",
-        "label": "05 · Bass Bloom · Landscape",
+        "label": "05 · Cinema Rails · Landscape",
         "width": 1920,
         "height": 1080,
         "root": {
@@ -1635,18 +1729,17 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 540,
-                "top": 135,
-                "width": 840,
-                "height": 840
+                "left": 115,
+                "top": 151,
+                "width": 1690,
+                "height": 108
               },
               "shader": {
-                "effect": "voiceRing",
-                "variant": 4,
+                "effect": "voiceBars",
                 "colors": [
                   "#622460",
                   "#fb69c8",
@@ -1654,9 +1747,47 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 1.2,
                 "opacity": 1,
-                "radius": 310,
+                "radius": 20,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-1",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 115,
+                "top": 821,
+                "width": 1690,
+                "height": 108
+              },
+              "shader": {
+                "effect": "voiceBars",
+                "colors": [
+                  "#622460",
+                  "#fb69c8",
+                  "#ffd1e6"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1.2,
+                "opacity": 1,
+                "radius": 20,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -1681,28 +1812,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 35,
-                "width": 1800,
-                "height": 60,
-                "fontSize": 21,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 38,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 20,
+                "fontWeight": 600,
                 "color": "#fb69c8",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Bass Bloom",
+              "text": "05 / Cinema Rails",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 105,
-                "width": 1800,
-                "height": 100,
-                "fontSize": 54,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 103,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 42,
+                "fontWeight": 600,
                 "color": "#ffd1e6",
                 "textAlign": "center"
               }
@@ -1713,10 +1844,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 650,
-                "top": 245,
-                "width": 620,
-                "height": 620
+                "left": 173,
+                "top": 281,
+                "width": 1574,
+                "height": 518
               },
               "framing": {
                 "mode": "fill",
@@ -1724,8 +1855,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#fb69c8",
                 "grayscale": 0,
@@ -1735,32 +1866,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Let it bloom.",
+              "text": "Your voice, widescreen.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 925,
-                "width": 1800,
+                "left": 96,
+                "top": 994,
+                "width": 1728,
                 "height": 70,
-                "fontSize": 27,
-                "fontWeight": 500,
+                "fontSize": 24,
+                "fontWeight": 600,
                 "color": "#ffd1e6",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  05",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1010,
-                "width": 1800,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#fb69c8",
                 "textAlign": "center"
               }
             }
@@ -1769,7 +1884,7 @@
       },
       {
         "id": "style-5-portrait",
-        "label": "05 · Bass Bloom · Portrait",
+        "label": "05 · Cinema Rails · Portrait",
         "width": 1080,
         "height": 1920,
         "root": {
@@ -1784,18 +1899,17 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 100,
-                "top": 500,
-                "width": 880,
-                "height": 880
+                "left": 65,
+                "top": 269,
+                "width": 950,
+                "height": 192
               },
               "shader": {
-                "effect": "voiceRing",
-                "variant": 4,
+                "effect": "voiceBars",
                 "colors": [
                   "#622460",
                   "#fb69c8",
@@ -1803,9 +1917,47 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 1.2,
                 "opacity": 1,
-                "radius": 330,
+                "radius": 20,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-1",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 65,
+                "top": 1459,
+                "width": 950,
+                "height": 192
+              },
+              "shader": {
+                "effect": "voiceBars",
+                "colors": [
+                  "#622460",
+                  "#fb69c8",
+                  "#ffd1e6"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1.2,
+                "opacity": 1,
+                "radius": 20,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -1830,28 +1982,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 130,
-                "width": 960,
-                "height": 60,
-                "fontSize": 24,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 67,
+                "width": 972,
+                "height": 125,
+                "fontSize": 23,
+                "fontWeight": 600,
                 "color": "#fb69c8",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Bass Bloom",
+              "text": "05 / Cinema Rails",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 260,
-                "width": 960,
-                "height": 100,
-                "fontSize": 64,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 182,
+                "width": 972,
+                "height": 125,
+                "fontSize": 48,
+                "fontWeight": 600,
                 "color": "#ffd1e6",
                 "textAlign": "center"
               }
@@ -1862,10 +2014,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 210,
-                "top": 610,
-                "width": 660,
-                "height": 660
+                "left": 97,
+                "top": 499,
+                "width": 886,
+                "height": 922
               },
               "framing": {
                 "mode": "fill",
@@ -1873,8 +2025,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#fb69c8",
                 "grayscale": 0,
@@ -1884,32 +2036,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Let it bloom.",
+              "text": "Your voice, widescreen.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 1480,
-                "width": 960,
-                "height": 70,
-                "fontSize": 34,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 1766,
+                "width": 972,
+                "height": 125,
+                "fontSize": 28,
+                "fontWeight": 600,
                 "color": "#ffd1e6",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  05",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1750,
-                "width": 960,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#fb69c8",
                 "textAlign": "center"
               }
             }
@@ -1918,7 +2054,7 @@
       },
       {
         "id": "style-6-landscape",
-        "label": "06 · Ripple Pool · Landscape",
+        "label": "06 · Sound Below · Landscape",
         "width": 1920,
         "height": 1080,
         "root": {
@@ -1933,18 +2069,17 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 540,
-                "top": 135,
-                "width": 840,
-                "height": 840
+                "left": 192,
+                "top": 616,
+                "width": 1536,
+                "height": 313
               },
               "shader": {
-                "effect": "voiceRing",
-                "variant": 5,
+                "effect": "voiceBars",
                 "colors": [
                   "#175b8c",
                   "#62cfff",
@@ -1952,9 +2087,9 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 0.7,
                 "opacity": 1,
-                "radius": 310,
+                "radius": 20,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -1979,28 +2114,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 35,
-                "width": 1800,
-                "height": 60,
-                "fontSize": 21,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 38,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 20,
+                "fontWeight": 600,
                 "color": "#62cfff",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Ripple Pool",
+              "text": "06 / Sound Below",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 105,
-                "width": 1800,
-                "height": 100,
-                "fontSize": 54,
-                "fontWeight": 700,
+                "left": 96,
+                "top": 103,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 42,
+                "fontWeight": 600,
                 "color": "#d9f6ff",
                 "textAlign": "center"
               }
@@ -2011,10 +2146,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 650,
-                "top": 245,
-                "width": 620,
-                "height": 620
+                "left": 518,
+                "top": 162,
+                "width": 883,
+                "height": 389
               },
               "framing": {
                 "mode": "fill",
@@ -2022,8 +2157,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#62cfff",
                 "grayscale": 0,
@@ -2033,32 +2168,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Every word makes waves.",
+              "text": "Let the sound take the floor.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 925,
-                "width": 1800,
+                "left": 96,
+                "top": 994,
+                "width": 1728,
                 "height": 70,
-                "fontSize": 27,
-                "fontWeight": 500,
+                "fontSize": 24,
+                "fontWeight": 600,
                 "color": "#d9f6ff",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  06",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1010,
-                "width": 1800,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#62cfff",
                 "textAlign": "center"
               }
             }
@@ -2067,7 +2186,7 @@
       },
       {
         "id": "style-6-portrait",
-        "label": "06 · Ripple Pool · Portrait",
+        "label": "06 · Sound Below · Portrait",
         "width": 1080,
         "height": 1920,
         "root": {
@@ -2082,18 +2201,17 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 100,
-                "top": 500,
-                "width": 880,
-                "height": 880
+                "left": 108,
+                "top": 1094,
+                "width": 864,
+                "height": 557
               },
               "shader": {
-                "effect": "voiceRing",
-                "variant": 5,
+                "effect": "voiceBars",
                 "colors": [
                   "#175b8c",
                   "#62cfff",
@@ -2101,9 +2219,9 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 0.7,
                 "opacity": 1,
-                "radius": 330,
+                "radius": 20,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -2128,28 +2246,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 130,
-                "width": 960,
-                "height": 60,
-                "fontSize": 24,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 67,
+                "width": 972,
+                "height": 125,
+                "fontSize": 23,
+                "fontWeight": 600,
                 "color": "#62cfff",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Ripple Pool",
+              "text": "06 / Sound Below",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 260,
-                "width": 960,
-                "height": 100,
-                "fontSize": 64,
-                "fontWeight": 700,
+                "left": 54,
+                "top": 182,
+                "width": 972,
+                "height": 125,
+                "fontSize": 48,
+                "fontWeight": 600,
                 "color": "#d9f6ff",
                 "textAlign": "center"
               }
@@ -2160,10 +2278,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 210,
-                "top": 610,
-                "width": 660,
-                "height": 660
+                "left": 292,
+                "top": 288,
+                "width": 497,
+                "height": 691
               },
               "framing": {
                 "mode": "fill",
@@ -2171,8 +2289,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#62cfff",
                 "grayscale": 0,
@@ -2182,32 +2300,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Every word makes waves.",
+              "text": "Let the sound take the floor.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 1480,
-                "width": 960,
-                "height": 70,
-                "fontSize": 34,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 1766,
+                "width": 972,
+                "height": 125,
+                "fontSize": 28,
+                "fontWeight": 600,
                 "color": "#d9f6ff",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  06",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1750,
-                "width": 960,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#62cfff",
                 "textAlign": "center"
               }
             }
@@ -2216,7 +2318,7 @@
       },
       {
         "id": "style-7-landscape",
-        "label": "07 · Magnetic Field · Landscape",
+        "label": "07 · Right of Reply · Landscape",
         "width": 1920,
         "height": 1080,
         "root": {
@@ -2231,18 +2333,18 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 540,
-                "top": 135,
-                "width": 840,
-                "height": 840
+                "left": 339,
+                "top": 313,
+                "width": 454,
+                "height": 454
               },
               "shader": {
                 "effect": "voiceRing",
-                "variant": 6,
+                "variant": 2,
                 "colors": [
                   "#215f35",
                   "#84f79a",
@@ -2250,9 +2352,9 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 1.4,
                 "opacity": 1,
-                "radius": 310,
+                "radius": 122.58000000000001,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -2277,28 +2379,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 35,
-                "width": 1800,
-                "height": 60,
-                "fontSize": 21,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 38,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 20,
+                "fontWeight": 600,
                 "color": "#84f79a",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "MAGNETIC FIELD",
+              "text": "07 / Right of Reply",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 105,
-                "width": 1800,
-                "height": 100,
-                "fontSize": 54,
-                "fontWeight": 700,
+                "left": 96,
+                "top": 103,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 42,
+                "fontWeight": 600,
                 "color": "#f1ffd1",
                 "textAlign": "center"
               }
@@ -2309,10 +2411,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 650,
-                "top": 245,
-                "width": 620,
-                "height": 620
+                "left": 1152,
+                "top": 248,
+                "width": 634,
+                "height": 616
               },
               "framing": {
                 "mode": "fill",
@@ -2320,8 +2422,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#84f79a",
                 "grayscale": 0,
@@ -2331,32 +2433,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Draw them in.",
+              "text": "Make a statement.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 925,
-                "width": 1800,
+                "left": 96,
+                "top": 994,
+                "width": 1728,
                 "height": 70,
-                "fontSize": 27,
-                "fontWeight": 500,
+                "fontSize": 24,
+                "fontWeight": 600,
                 "color": "#f1ffd1",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  07",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1010,
-                "width": 1800,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#84f79a",
                 "textAlign": "center"
               }
             }
@@ -2365,7 +2451,7 @@
       },
       {
         "id": "style-7-portrait",
-        "label": "07 · Magnetic Field · Portrait",
+        "label": "07 · Right of Reply · Portrait",
         "width": 1080,
         "height": 1920,
         "root": {
@@ -2380,18 +2466,18 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 100,
-                "top": 500,
-                "width": 880,
-                "height": 880
+                "left": 76,
+                "top": 717,
+                "width": 486,
+                "height": 486
               },
               "shader": {
                 "effect": "voiceRing",
-                "variant": 6,
+                "variant": 2,
                 "colors": [
                   "#215f35",
                   "#84f79a",
@@ -2399,9 +2485,9 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 1.4,
                 "opacity": 1,
-                "radius": 330,
+                "radius": 131.22,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -2426,28 +2512,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 130,
-                "width": 960,
-                "height": 60,
-                "fontSize": 24,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 67,
+                "width": 972,
+                "height": 125,
+                "fontSize": 23,
+                "fontWeight": 600,
                 "color": "#84f79a",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "MAGNETIC FIELD",
+              "text": "07 / Right of Reply",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 260,
-                "width": 960,
-                "height": 100,
-                "fontSize": 64,
-                "fontWeight": 700,
+                "left": 54,
+                "top": 182,
+                "width": 972,
+                "height": 125,
+                "fontSize": 48,
+                "fontWeight": 600,
                 "color": "#f1ffd1",
                 "textAlign": "center"
               }
@@ -2458,10 +2544,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 210,
-                "top": 610,
-                "width": 660,
-                "height": 660
+                "left": 648,
+                "top": 442,
+                "width": 356,
+                "height": 1094
               },
               "framing": {
                 "mode": "fill",
@@ -2469,8 +2555,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#84f79a",
                 "grayscale": 0,
@@ -2480,32 +2566,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Draw them in.",
+              "text": "Make a statement.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 1480,
-                "width": 960,
-                "height": 70,
-                "fontSize": 34,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 1766,
+                "width": 972,
+                "height": 125,
+                "fontSize": 28,
+                "fontWeight": 600,
                 "color": "#f1ffd1",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  07",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1750,
-                "width": 960,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#84f79a",
                 "textAlign": "center"
               }
             }
@@ -2514,7 +2584,7 @@
       },
       {
         "id": "style-8-landscape",
-        "label": "08 · Neon Braid · Landscape",
+        "label": "08 · Corner Lights · Landscape",
         "width": 1920,
         "height": 1080,
         "root": {
@@ -2529,18 +2599,18 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 540,
-                "top": 135,
-                "width": 840,
-                "height": 840
+                "left": 522.5,
+                "top": 227,
+                "width": 281,
+                "height": 281
               },
               "shader": {
                 "effect": "voiceRing",
-                "variant": 7,
+                "variant": 8,
                 "colors": [
                   "#5c24b5",
                   "#ba75ff",
@@ -2548,9 +2618,126 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 0.8,
                 "opacity": 1,
-                "radius": 310,
+                "radius": 75.87,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-1",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 1117.5,
+                "top": 227,
+                "width": 281,
+                "height": 281
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 8,
+                "colors": [
+                  "#5c24b5",
+                  "#ba75ff",
+                  "#5df9e6"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 0.8,
+                "opacity": 1,
+                "radius": 75.87,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-2",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 522.5,
+                "top": 572,
+                "width": 281,
+                "height": 281
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 8,
+                "colors": [
+                  "#5c24b5",
+                  "#ba75ff",
+                  "#5df9e6"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 0.8,
+                "opacity": 1,
+                "radius": 75.87,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-3",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 1117.5,
+                "top": 572,
+                "width": 281,
+                "height": 281
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 8,
+                "colors": [
+                  "#5c24b5",
+                  "#ba75ff",
+                  "#5df9e6"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 0.8,
+                "opacity": 1,
+                "radius": 75.87,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -2575,28 +2762,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 35,
-                "width": 1800,
-                "height": 60,
-                "fontSize": 21,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 38,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 20,
+                "fontWeight": 600,
                 "color": "#ba75ff",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Neon Braid",
+              "text": "08 / Corner Lights",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 105,
-                "width": 1800,
-                "height": 100,
-                "fontSize": 54,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 103,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 42,
+                "fontWeight": 600,
                 "color": "#5df9e6",
                 "textAlign": "center"
               }
@@ -2607,10 +2794,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 650,
-                "top": 245,
-                "width": 620,
-                "height": 620
+                "left": 653,
+                "top": 356,
+                "width": 614,
+                "height": 367
               },
               "framing": {
                 "mode": "fill",
@@ -2618,8 +2805,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#ba75ff",
                 "grayscale": 0,
@@ -2629,32 +2816,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Stay connected.",
+              "text": "Four corners. One presence.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 925,
-                "width": 1800,
+                "left": 96,
+                "top": 994,
+                "width": 1728,
                 "height": 70,
-                "fontSize": 27,
-                "fontWeight": 500,
+                "fontSize": 24,
+                "fontWeight": 600,
                 "color": "#5df9e6",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  08",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1010,
-                "width": 1800,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#ba75ff",
                 "textAlign": "center"
               }
             }
@@ -2663,7 +2834,7 @@
       },
       {
         "id": "style-8-portrait",
-        "label": "08 · Neon Braid · Portrait",
+        "label": "08 · Corner Lights · Portrait",
         "width": 1080,
         "height": 1920,
         "root": {
@@ -2678,18 +2849,18 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 100,
-                "top": 500,
-                "width": 880,
-                "height": 880
+                "left": 248,
+                "top": 528.5,
+                "width": 248,
+                "height": 248
               },
               "shader": {
                 "effect": "voiceRing",
-                "variant": 7,
+                "variant": 8,
                 "colors": [
                   "#5c24b5",
                   "#ba75ff",
@@ -2697,9 +2868,126 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 0.8,
                 "opacity": 1,
-                "radius": 330,
+                "radius": 66.96000000000001,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-1",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 583,
+                "top": 528.5,
+                "width": 248,
+                "height": 248
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 8,
+                "colors": [
+                  "#5c24b5",
+                  "#ba75ff",
+                  "#5df9e6"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 0.8,
+                "opacity": 1,
+                "radius": 66.96000000000001,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-2",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 248,
+                "top": 1143.5,
+                "width": 248,
+                "height": 248
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 8,
+                "colors": [
+                  "#5c24b5",
+                  "#ba75ff",
+                  "#5df9e6"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 0.8,
+                "opacity": 1,
+                "radius": 66.96000000000001,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-3",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 583,
+                "top": 1143.5,
+                "width": 248,
+                "height": 248
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 8,
+                "colors": [
+                  "#5c24b5",
+                  "#ba75ff",
+                  "#5df9e6"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 0.8,
+                "opacity": 1,
+                "radius": 66.96000000000001,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -2724,28 +3012,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 130,
-                "width": 960,
-                "height": 60,
-                "fontSize": 24,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 67,
+                "width": 972,
+                "height": 125,
+                "fontSize": 23,
+                "fontWeight": 600,
                 "color": "#ba75ff",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Neon Braid",
+              "text": "08 / Corner Lights",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 260,
-                "width": 960,
-                "height": 100,
-                "fontSize": 64,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 182,
+                "width": 972,
+                "height": 125,
+                "fontSize": 48,
+                "fontWeight": 600,
                 "color": "#5df9e6",
                 "textAlign": "center"
               }
@@ -2756,10 +3044,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 210,
-                "top": 610,
-                "width": 660,
-                "height": 660
+                "left": 367,
+                "top": 634,
+                "width": 346,
+                "height": 653
               },
               "framing": {
                 "mode": "fill",
@@ -2767,8 +3055,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#ba75ff",
                 "grayscale": 0,
@@ -2778,32 +3066,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Stay connected.",
+              "text": "Four corners. One presence.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 1480,
-                "width": 960,
-                "height": 70,
-                "fontSize": 34,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 1766,
+                "width": 972,
+                "height": 125,
+                "fontSize": 28,
+                "fontWeight": 600,
                 "color": "#5df9e6",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  08",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1750,
-                "width": 960,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#ba75ff",
                 "textAlign": "center"
               }
             }
@@ -2812,7 +3084,7 @@
       },
       {
         "id": "style-9-landscape",
-        "label": "09 · Lotus Pulse · Landscape",
+        "label": "09 · Lower Third · Landscape",
         "width": 1920,
         "height": 1080,
         "root": {
@@ -2827,18 +3099,17 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 540,
-                "top": 135,
-                "width": 840,
-                "height": 840
+                "left": 730,
+                "top": 659,
+                "width": 1037,
+                "height": 227
               },
               "shader": {
-                "effect": "voiceRing",
-                "variant": 8,
+                "effect": "voiceBars",
                 "colors": [
                   "#88486a",
                   "#f7b9d3",
@@ -2846,9 +3117,9 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 2,
                 "opacity": 1,
-                "radius": 310,
+                "radius": 20,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -2873,28 +3144,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 35,
-                "width": 1800,
-                "height": 60,
-                "fontSize": 21,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 38,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 20,
+                "fontWeight": 600,
                 "color": "#f7b9d3",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Lotus Pulse",
+              "text": "09 / Lower Third",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 105,
-                "width": 1800,
-                "height": 100,
-                "fontSize": 54,
-                "fontWeight": 700,
+                "left": 96,
+                "top": 103,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 42,
+                "fontWeight": 600,
                 "color": "#fff1db",
                 "textAlign": "center"
               }
@@ -2905,10 +3176,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 650,
-                "top": 245,
-                "width": 620,
-                "height": 620
+                "left": 238.5,
+                "top": 637,
+                "width": 292,
+                "height": 292
               },
               "framing": {
                 "mode": "fill",
@@ -2917,7 +3188,7 @@
               },
               "appearance": {
                 "shape": "circle",
-                "cornerRadius": 0,
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#f7b9d3",
                 "grayscale": 0,
@@ -2927,32 +3198,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Open up.",
+              "text": "Keep the room moving.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 925,
-                "width": 1800,
+                "left": 96,
+                "top": 994,
+                "width": 1728,
                 "height": 70,
-                "fontSize": 27,
-                "fontWeight": 500,
+                "fontSize": 24,
+                "fontWeight": 600,
                 "color": "#fff1db",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  09",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1010,
-                "width": 1800,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#f7b9d3",
                 "textAlign": "center"
               }
             }
@@ -2961,7 +3216,7 @@
       },
       {
         "id": "style-9-portrait",
-        "label": "09 · Lotus Pulse · Portrait",
+        "label": "09 · Lower Third · Portrait",
         "width": 1080,
         "height": 1920,
         "root": {
@@ -2976,18 +3231,17 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 100,
-                "top": 500,
-                "width": 880,
-                "height": 880
+                "left": 410,
+                "top": 1171,
+                "width": 583,
+                "height": 403
               },
               "shader": {
-                "effect": "voiceRing",
-                "variant": 8,
+                "effect": "voiceBars",
                 "colors": [
                   "#88486a",
                   "#f7b9d3",
@@ -2995,9 +3249,9 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 2,
                 "opacity": 1,
-                "radius": 330,
+                "radius": 20,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -3022,28 +3276,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 130,
-                "width": 960,
-                "height": 60,
-                "fontSize": 24,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 67,
+                "width": 972,
+                "height": 125,
+                "fontSize": 23,
+                "fontWeight": 600,
                 "color": "#f7b9d3",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Lotus Pulse",
+              "text": "09 / Lower Third",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 260,
-                "width": 960,
-                "height": 100,
-                "fontSize": 64,
-                "fontWeight": 700,
+                "left": 54,
+                "top": 182,
+                "width": 972,
+                "height": 125,
+                "fontSize": 48,
+                "fontWeight": 600,
                 "color": "#fff1db",
                 "textAlign": "center"
               }
@@ -3054,10 +3308,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 210,
-                "top": 610,
-                "width": 660,
-                "height": 660
+                "left": 86,
+                "top": 1262.5,
+                "width": 259,
+                "height": 259
               },
               "framing": {
                 "mode": "fill",
@@ -3066,7 +3320,7 @@
               },
               "appearance": {
                 "shape": "circle",
-                "cornerRadius": 0,
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#f7b9d3",
                 "grayscale": 0,
@@ -3076,32 +3330,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Open up.",
+              "text": "Keep the room moving.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 1480,
-                "width": 960,
-                "height": 70,
-                "fontSize": 34,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 1766,
+                "width": 972,
+                "height": 125,
+                "fontSize": 28,
+                "fontWeight": 600,
                 "color": "#fff1db",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  09",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1750,
-                "width": 960,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#f7b9d3",
                 "textAlign": "center"
               }
             }
@@ -3110,7 +3348,7 @@
       },
       {
         "id": "style-10-landscape",
-        "label": "10 · Electric Crown · Landscape",
+        "label": "10 · Orbital Stack · Landscape",
         "width": 1920,
         "height": 1080,
         "root": {
@@ -3125,18 +3363,18 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 540,
-                "top": 135,
-                "width": 840,
-                "height": 840
+                "left": 552.5,
+                "top": 227,
+                "width": 605,
+                "height": 605
               },
               "shader": {
                 "effect": "voiceRing",
-                "variant": 9,
+                "variant": 1,
                 "colors": [
                   "#334eb1",
                   "#7aa7ff",
@@ -3144,9 +3382,87 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
-                "opacity": 1,
-                "radius": 310,
+                "scale": 1.1,
+                "opacity": 0.7,
+                "radius": 163.35000000000002,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-1",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 820.5,
+                "top": 227,
+                "width": 605,
+                "height": 605
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 11,
+                "colors": [
+                  "#334eb1",
+                  "#7aa7ff",
+                  "#e2f0ff"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1.1,
+                "opacity": 0.7,
+                "radius": 163.35000000000002,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-2",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 705.5,
+                "top": 324,
+                "width": 605,
+                "height": 605
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 3,
+                "colors": [
+                  "#334eb1",
+                  "#7aa7ff",
+                  "#e2f0ff"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1.1,
+                "opacity": 0.7,
+                "radius": 163.35000000000002,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -3171,28 +3487,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 35,
-                "width": 1800,
-                "height": 60,
-                "fontSize": 21,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 38,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 20,
+                "fontWeight": 600,
                 "color": "#7aa7ff",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "ELECTRIC CROWN",
+              "text": "10 / Orbital Stack",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 105,
-                "width": 1800,
-                "height": 100,
-                "fontSize": 54,
-                "fontWeight": 700,
+                "left": 96,
+                "top": 103,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 42,
+                "fontWeight": 600,
                 "color": "#e2f0ff",
                 "textAlign": "center"
               }
@@ -3203,10 +3519,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 650,
-                "top": 245,
-                "width": 620,
-                "height": 620
+                "left": 782,
+                "top": 367,
+                "width": 356,
+                "height": 356
               },
               "framing": {
                 "mode": "fill",
@@ -3215,7 +3531,7 @@
               },
               "appearance": {
                 "shape": "circle",
-                "cornerRadius": 0,
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#7aa7ff",
                 "grayscale": 0,
@@ -3225,32 +3541,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Own the room.",
+              "text": "In your orbit.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 925,
-                "width": 1800,
+                "left": 96,
+                "top": 994,
+                "width": 1728,
                 "height": 70,
-                "fontSize": 27,
-                "fontWeight": 500,
+                "fontSize": 24,
+                "fontWeight": 600,
                 "color": "#e2f0ff",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  10",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1010,
-                "width": 1800,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#7aa7ff",
                 "textAlign": "center"
               }
             }
@@ -3259,7 +3559,7 @@
       },
       {
         "id": "style-10-portrait",
-        "label": "10 · Electric Crown · Portrait",
+        "label": "10 · Orbital Stack · Portrait",
         "width": 1080,
         "height": 1920,
         "root": {
@@ -3274,18 +3574,18 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 100,
-                "top": 500,
-                "width": 880,
-                "height": 880
+                "left": 248,
+                "top": 708.5,
+                "width": 464,
+                "height": 464
               },
               "shader": {
                 "effect": "voiceRing",
-                "variant": 9,
+                "variant": 1,
                 "colors": [
                   "#334eb1",
                   "#7aa7ff",
@@ -3293,9 +3593,87 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
-                "opacity": 1,
-                "radius": 330,
+                "scale": 1.1,
+                "opacity": 0.7,
+                "radius": 125.28,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-1",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 400,
+                "top": 708.5,
+                "width": 464,
+                "height": 464
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 11,
+                "colors": [
+                  "#334eb1",
+                  "#7aa7ff",
+                  "#e2f0ff"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1.1,
+                "opacity": 0.7,
+                "radius": 125.28,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-2",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 335,
+                "top": 881.5,
+                "width": 464,
+                "height": 464
+              },
+              "shader": {
+                "effect": "voiceRing",
+                "variant": 3,
+                "colors": [
+                  "#334eb1",
+                  "#7aa7ff",
+                  "#e2f0ff"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 1.1,
+                "opacity": 0.7,
+                "radius": 125.28,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -3320,28 +3698,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 130,
-                "width": 960,
-                "height": 60,
-                "fontSize": 24,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 67,
+                "width": 972,
+                "height": 125,
+                "fontSize": 23,
+                "fontWeight": 600,
                 "color": "#7aa7ff",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "ELECTRIC CROWN",
+              "text": "10 / Orbital Stack",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 260,
-                "width": 960,
-                "height": 100,
-                "fontSize": 64,
-                "fontWeight": 700,
+                "left": 54,
+                "top": 182,
+                "width": 972,
+                "height": 125,
+                "fontSize": 48,
+                "fontWeight": 600,
                 "color": "#e2f0ff",
                 "textAlign": "center"
               }
@@ -3352,10 +3730,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 210,
-                "top": 610,
-                "width": 660,
-                "height": 660
+                "left": 421,
+                "top": 851,
+                "width": 238,
+                "height": 238
               },
               "framing": {
                 "mode": "fill",
@@ -3364,7 +3742,7 @@
               },
               "appearance": {
                 "shape": "circle",
-                "cornerRadius": 0,
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#7aa7ff",
                 "grayscale": 0,
@@ -3374,32 +3752,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Own the room.",
+              "text": "In your orbit.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 1480,
-                "width": 960,
-                "height": 70,
-                "fontSize": 34,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 1766,
+                "width": 972,
+                "height": 125,
+                "fontSize": 28,
+                "fontWeight": 600,
                 "color": "#e2f0ff",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  10",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1750,
-                "width": 960,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#7aa7ff",
                 "textAlign": "center"
               }
             }
@@ -3408,7 +3770,7 @@
       },
       {
         "id": "style-11-landscape",
-        "label": "11 · Vinyl Groove · Landscape",
+        "label": "11 · Audio Canopy · Landscape",
         "width": 1920,
         "height": 1080,
         "root": {
@@ -3423,18 +3785,17 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 540,
-                "top": 135,
-                "width": 840,
-                "height": 840
+                "left": 230,
+                "top": 194,
+                "width": 1459,
+                "height": 270
               },
               "shader": {
-                "effect": "voiceRing",
-                "variant": 10,
+                "effect": "voiceBars",
                 "colors": [
                   "#715632",
                   "#deb96b",
@@ -3442,9 +3803,9 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 3,
                 "opacity": 1,
-                "radius": 310,
+                "radius": 20,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -3469,28 +3830,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 35,
-                "width": 1800,
-                "height": 60,
-                "fontSize": 21,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 38,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 20,
+                "fontWeight": 600,
                 "color": "#deb96b",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Vinyl Groove",
+              "text": "11 / Audio Canopy",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 105,
-                "width": 1800,
-                "height": 100,
-                "fontSize": 54,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 103,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 42,
+                "fontWeight": 600,
                 "color": "#fff0c9",
                 "textAlign": "center"
               }
@@ -3501,10 +3862,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 650,
-                "top": 245,
-                "width": 620,
-                "height": 620
+                "left": 595,
+                "top": 529,
+                "width": 730,
+                "height": 400
               },
               "framing": {
                 "mode": "fill",
@@ -3512,8 +3873,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#deb96b",
                 "grayscale": 0,
@@ -3523,32 +3884,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Keep the conversation spinning.",
+              "text": "A voice worth following.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 925,
-                "width": 1800,
+                "left": 96,
+                "top": 994,
+                "width": 1728,
                 "height": 70,
-                "fontSize": 27,
-                "fontWeight": 500,
+                "fontSize": 24,
+                "fontWeight": 600,
                 "color": "#fff0c9",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  11",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1010,
-                "width": 1800,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#deb96b",
                 "textAlign": "center"
               }
             }
@@ -3557,7 +3902,7 @@
       },
       {
         "id": "style-11-portrait",
-        "label": "11 · Vinyl Groove · Portrait",
+        "label": "11 · Audio Canopy · Portrait",
         "width": 1080,
         "height": 1920,
         "root": {
@@ -3572,18 +3917,17 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 100,
-                "top": 500,
-                "width": 880,
-                "height": 880
+                "left": 130,
+                "top": 346,
+                "width": 821,
+                "height": 480
               },
               "shader": {
-                "effect": "voiceRing",
-                "variant": 10,
+                "effect": "voiceBars",
                 "colors": [
                   "#715632",
                   "#deb96b",
@@ -3591,9 +3935,9 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 3,
                 "opacity": 1,
-                "radius": 330,
+                "radius": 20,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -3618,28 +3962,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 130,
-                "width": 960,
-                "height": 60,
-                "fontSize": 24,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 67,
+                "width": 972,
+                "height": 125,
+                "fontSize": 23,
+                "fontWeight": 600,
                 "color": "#deb96b",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Vinyl Groove",
+              "text": "11 / Audio Canopy",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 260,
-                "width": 960,
-                "height": 100,
-                "fontSize": 64,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 182,
+                "width": 972,
+                "height": 125,
+                "fontSize": 48,
+                "fontWeight": 600,
                 "color": "#fff0c9",
                 "textAlign": "center"
               }
@@ -3650,10 +3994,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 210,
-                "top": 610,
-                "width": 660,
-                "height": 660
+                "left": 335,
+                "top": 941,
+                "width": 410,
+                "height": 710
               },
               "framing": {
                 "mode": "fill",
@@ -3661,8 +4005,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#deb96b",
                 "grayscale": 0,
@@ -3672,32 +4016,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Keep the conversation spinning.",
+              "text": "A voice worth following.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 1480,
-                "width": 960,
-                "height": 70,
-                "fontSize": 34,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 1766,
+                "width": 972,
+                "height": 125,
+                "fontSize": 28,
+                "fontWeight": 600,
                 "color": "#fff0c9",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  11",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1750,
-                "width": 960,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#deb96b",
                 "textAlign": "center"
               }
             }
@@ -3706,7 +4034,7 @@
       },
       {
         "id": "style-12-landscape",
-        "label": "12 · Saturn Drift · Landscape",
+        "label": "12 · Split Signal · Landscape",
         "width": 1920,
         "height": 1080,
         "root": {
@@ -3721,18 +4049,17 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 540,
-                "top": 135,
-                "width": 840,
-                "height": 840
+                "left": 998,
+                "top": 205,
+                "width": 250,
+                "height": 680
               },
               "shader": {
-                "effect": "voiceRing",
-                "variant": 11,
+                "effect": "voiceBars",
                 "colors": [
                   "#455e79",
                   "#c5d4ed",
@@ -3740,9 +4067,47 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 0.5,
                 "opacity": 1,
-                "radius": 310,
+                "radius": 20,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-1",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 1402,
+                "top": 205,
+                "width": 250,
+                "height": 680
+              },
+              "shader": {
+                "effect": "voiceBars",
+                "colors": [
+                  "#455e79",
+                  "#c5d4ed",
+                  "#f9b6a3"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 0.5,
+                "opacity": 1,
+                "radius": 20,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -3767,28 +4132,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 35,
-                "width": 1800,
-                "height": 60,
-                "fontSize": 21,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 38,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 20,
+                "fontWeight": 600,
                 "color": "#c5d4ed",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Saturn Drift",
+              "text": "12 / Split Signal",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 105,
-                "width": 1800,
-                "height": 100,
-                "fontSize": 54,
-                "fontWeight": 700,
+                "left": 96,
+                "top": 103,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 42,
+                "fontWeight": 600,
                 "color": "#f9b6a3",
                 "textAlign": "center"
               }
@@ -3799,10 +4164,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 650,
-                "top": 245,
-                "width": 620,
-                "height": 620
+                "left": 192,
+                "top": 205,
+                "width": 634,
+                "height": 680
               },
               "framing": {
                 "mode": "fill",
@@ -3810,8 +4175,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#c5d4ed",
                 "grayscale": 0,
@@ -3821,32 +4186,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "A world of your own.",
+              "text": "Across the divide.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 925,
-                "width": 1800,
+                "left": 96,
+                "top": 994,
+                "width": 1728,
                 "height": 70,
-                "fontSize": 27,
-                "fontWeight": 500,
+                "fontSize": 24,
+                "fontWeight": 600,
                 "color": "#f9b6a3",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  12",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1010,
-                "width": 1800,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#c5d4ed",
                 "textAlign": "center"
               }
             }
@@ -3855,7 +4204,7 @@
       },
       {
         "id": "style-12-portrait",
-        "label": "12 · Saturn Drift · Portrait",
+        "label": "12 · Split Signal · Portrait",
         "width": 1080,
         "height": 1920,
         "root": {
@@ -3870,18 +4219,17 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 100,
-                "top": 500,
-                "width": 880,
-                "height": 880
+                "left": 562,
+                "top": 365,
+                "width": 140,
+                "height": 1210
               },
               "shader": {
-                "effect": "voiceRing",
-                "variant": 11,
+                "effect": "voiceBars",
                 "colors": [
                   "#455e79",
                   "#c5d4ed",
@@ -3889,9 +4237,47 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 0.5,
                 "opacity": 1,
-                "radius": 330,
+                "radius": 20,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-1",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 788,
+                "top": 365,
+                "width": 140,
+                "height": 1210
+              },
+              "shader": {
+                "effect": "voiceBars",
+                "colors": [
+                  "#455e79",
+                  "#c5d4ed",
+                  "#f9b6a3"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 0.5,
+                "opacity": 1,
+                "radius": 20,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -3916,28 +4302,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 130,
-                "width": 960,
-                "height": 60,
-                "fontSize": 24,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 67,
+                "width": 972,
+                "height": 125,
+                "fontSize": 23,
+                "fontWeight": 600,
                 "color": "#c5d4ed",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Saturn Drift",
+              "text": "12 / Split Signal",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 260,
-                "width": 960,
-                "height": 100,
-                "fontSize": 64,
-                "fontWeight": 700,
+                "left": 54,
+                "top": 182,
+                "width": 972,
+                "height": 125,
+                "fontSize": 48,
+                "fontWeight": 600,
                 "color": "#f9b6a3",
                 "textAlign": "center"
               }
@@ -3948,10 +4334,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 210,
-                "top": 610,
-                "width": 660,
-                "height": 660
+                "left": 108,
+                "top": 365,
+                "width": 356,
+                "height": 1210
               },
               "framing": {
                 "mode": "fill",
@@ -3959,8 +4345,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#c5d4ed",
                 "grayscale": 0,
@@ -3970,32 +4356,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "A world of your own.",
+              "text": "Across the divide.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 1480,
-                "width": 960,
-                "height": 70,
-                "fontSize": 34,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 1766,
+                "width": 972,
+                "height": 125,
+                "fontSize": 28,
+                "fontWeight": 600,
                 "color": "#f9b6a3",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  12",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1750,
-                "width": 960,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#c5d4ed",
                 "textAlign": "center"
               }
             }
@@ -4004,7 +4374,7 @@
       },
       {
         "id": "style-13-landscape",
-        "label": "13 · Heartbeat Loop · Landscape",
+        "label": "13 · Spotlight Badge · Landscape",
         "width": 1920,
         "height": 1080,
         "root": {
@@ -4019,14 +4389,14 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 540,
-                "top": 135,
-                "width": 840,
-                "height": 840
+                "left": 398,
+                "top": 238,
+                "width": 605,
+                "height": 605
               },
               "shader": {
                 "effect": "voiceRing",
@@ -4038,9 +4408,9 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 1.7,
                 "opacity": 1,
-                "radius": 310,
+                "radius": 163.35000000000002,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -4065,28 +4435,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 35,
-                "width": 1800,
-                "height": 60,
-                "fontSize": 21,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 38,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 20,
+                "fontWeight": 600,
                 "color": "#ff718c",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "HEARTBEAT LOOP",
+              "text": "13 / Spotlight Badge",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 105,
-                "width": 1800,
-                "height": 100,
-                "fontSize": 54,
-                "fontWeight": 700,
+                "left": 96,
+                "top": 103,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 42,
+                "fontWeight": 600,
                 "color": "#ffd1c1",
                 "textAlign": "center"
               }
@@ -4097,10 +4467,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 650,
-                "top": 245,
-                "width": 620,
-                "height": 620
+                "left": 1327.5,
+                "top": 648,
+                "width": 302,
+                "height": 302
               },
               "framing": {
                 "mode": "fill",
@@ -4109,7 +4479,7 @@
               },
               "appearance": {
                 "shape": "circle",
-                "cornerRadius": 0,
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#ff718c",
                 "grayscale": 0,
@@ -4119,32 +4489,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Feel every moment.",
+              "text": "Make every beat count.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 925,
-                "width": 1800,
+                "left": 96,
+                "top": 994,
+                "width": 1728,
                 "height": 70,
-                "fontSize": 27,
-                "fontWeight": 500,
+                "fontSize": 24,
+                "fontWeight": 600,
                 "color": "#ffd1c1",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  13",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1010,
-                "width": 1800,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#ff718c",
                 "textAlign": "center"
               }
             }
@@ -4153,7 +4507,7 @@
       },
       {
         "id": "style-13-portrait",
-        "label": "13 · Heartbeat Loop · Portrait",
+        "label": "13 · Spotlight Badge · Portrait",
         "width": 1080,
         "height": 1920,
         "root": {
@@ -4168,14 +4522,14 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 100,
-                "top": 500,
-                "width": 880,
-                "height": 880
+                "left": 130,
+                "top": 695,
+                "width": 529,
+                "height": 529
               },
               "shader": {
                 "effect": "voiceRing",
@@ -4187,9 +4541,9 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 1.7,
                 "opacity": 1,
-                "radius": 330,
+                "radius": 142.83,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -4214,28 +4568,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 130,
-                "width": 960,
-                "height": 60,
-                "fontSize": 24,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 67,
+                "width": 972,
+                "height": 125,
+                "fontSize": 23,
+                "fontWeight": 600,
                 "color": "#ff718c",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "HEARTBEAT LOOP",
+              "text": "13 / Spotlight Badge",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 260,
-                "width": 960,
-                "height": 100,
-                "fontSize": 64,
-                "fontWeight": 700,
+                "left": 54,
+                "top": 182,
+                "width": 972,
+                "height": 125,
+                "fontSize": 48,
+                "fontWeight": 600,
                 "color": "#ffd1c1",
                 "textAlign": "center"
               }
@@ -4246,10 +4600,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 210,
-                "top": 610,
-                "width": 660,
-                "height": 660
+                "left": 702,
+                "top": 1291.5,
+                "width": 259,
+                "height": 259
               },
               "framing": {
                 "mode": "fill",
@@ -4258,7 +4612,7 @@
               },
               "appearance": {
                 "shape": "circle",
-                "cornerRadius": 0,
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#ff718c",
                 "grayscale": 0,
@@ -4268,32 +4622,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Feel every moment.",
+              "text": "Make every beat count.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 1480,
-                "width": 960,
-                "height": 70,
-                "fontSize": 34,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 1766,
+                "width": 972,
+                "height": 125,
+                "fontSize": 28,
+                "fontWeight": 600,
                 "color": "#ffd1c1",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  13",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1750,
-                "width": 960,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#ff718c",
                 "textAlign": "center"
               }
             }
@@ -4302,7 +4640,7 @@
       },
       {
         "id": "style-14-landscape",
-        "label": "14 · Ink Aura · Landscape",
+        "label": "14 · Crossfade · Landscape",
         "width": 1920,
         "height": 1080,
         "root": {
@@ -4317,14 +4655,90 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 540,
-                "top": 135,
-                "width": 840,
-                "height": 840
+                "left": 173,
+                "top": 292,
+                "width": 518,
+                "height": 184
+              },
+              "shader": {
+                "effect": "voiceBars",
+                "colors": [
+                  "#50495f",
+                  "#c1b2d9",
+                  "#f3e9ff"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 2.2,
+                "opacity": 1,
+                "radius": 20,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-1",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 1229,
+                "top": 616,
+                "width": 518,
+                "height": 184
+              },
+              "shader": {
+                "effect": "voiceBars",
+                "colors": [
+                  "#50495f",
+                  "#c1b2d9",
+                  "#f3e9ff"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 2.2,
+                "opacity": 1,
+                "radius": 20,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-2",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 862.5,
+                "top": 151,
+                "width": 194,
+                "height": 194
               },
               "shader": {
                 "effect": "voiceRing",
@@ -4336,9 +4750,9 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 2.2,
                 "opacity": 1,
-                "radius": 310,
+                "radius": 52.38,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -4363,28 +4777,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 35,
-                "width": 1800,
-                "height": 60,
-                "fontSize": 21,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 38,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 20,
+                "fontWeight": 600,
                 "color": "#c1b2d9",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Ink Aura",
+              "text": "14 / Crossfade",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 105,
-                "width": 1800,
-                "height": 100,
-                "fontSize": 54,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 103,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 42,
+                "fontWeight": 600,
                 "color": "#f3e9ff",
                 "textAlign": "center"
               }
@@ -4395,10 +4809,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 650,
-                "top": 245,
-                "width": 620,
-                "height": 620
+                "left": 730,
+                "top": 410,
+                "width": 461,
+                "height": 292
               },
               "framing": {
                 "mode": "fill",
@@ -4406,8 +4820,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#c1b2d9",
                 "grayscale": 0,
@@ -4417,32 +4831,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Leave your mark.",
+              "text": "Find a new angle.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 925,
-                "width": 1800,
+                "left": 96,
+                "top": 994,
+                "width": 1728,
                 "height": 70,
-                "fontSize": 27,
-                "fontWeight": 500,
+                "fontSize": 24,
+                "fontWeight": 600,
                 "color": "#f3e9ff",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  14",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1010,
-                "width": 1800,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#c1b2d9",
                 "textAlign": "center"
               }
             }
@@ -4451,7 +4849,7 @@
       },
       {
         "id": "style-14-portrait",
-        "label": "14 · Ink Aura · Portrait",
+        "label": "14 · Crossfade · Portrait",
         "width": 1080,
         "height": 1920,
         "root": {
@@ -4466,14 +4864,90 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 100,
-                "top": 500,
-                "width": 880,
-                "height": 880
+                "left": 97,
+                "top": 518,
+                "width": 292,
+                "height": 326
+              },
+              "shader": {
+                "effect": "voiceBars",
+                "colors": [
+                  "#50495f",
+                  "#c1b2d9",
+                  "#f3e9ff"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 2.2,
+                "opacity": 1,
+                "radius": 20,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-1",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 691,
+                "top": 1094,
+                "width": 292,
+                "height": 326
+              },
+              "shader": {
+                "effect": "voiceBars",
+                "colors": [
+                  "#50495f",
+                  "#c1b2d9",
+                  "#f3e9ff"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 2.2,
+                "opacity": 1,
+                "radius": 20,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-2",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 400,
+                "top": 301.5,
+                "width": 281,
+                "height": 281
               },
               "shader": {
                 "effect": "voiceRing",
@@ -4485,9 +4959,9 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 2.2,
                 "opacity": 1,
-                "radius": 330,
+                "radius": 75.87,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -4512,28 +4986,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 130,
-                "width": 960,
-                "height": 60,
-                "fontSize": 24,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 67,
+                "width": 972,
+                "height": 125,
+                "fontSize": 23,
+                "fontWeight": 600,
                 "color": "#c1b2d9",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Ink Aura",
+              "text": "14 / Crossfade",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 260,
-                "width": 960,
-                "height": 100,
-                "fontSize": 64,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 182,
+                "width": 972,
+                "height": 125,
+                "fontSize": 48,
+                "fontWeight": 600,
                 "color": "#f3e9ff",
                 "textAlign": "center"
               }
@@ -4544,10 +5018,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 210,
-                "top": 610,
-                "width": 660,
-                "height": 660
+                "left": 410,
+                "top": 730,
+                "width": 259,
+                "height": 518
               },
               "framing": {
                 "mode": "fill",
@@ -4555,8 +5029,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#c1b2d9",
                 "grayscale": 0,
@@ -4566,32 +5040,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Leave your mark.",
+              "text": "Find a new angle.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 1480,
-                "width": 960,
-                "height": 70,
-                "fontSize": 34,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 1766,
+                "width": 972,
+                "height": 125,
+                "fontSize": 28,
+                "fontWeight": 600,
                 "color": "#f3e9ff",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  14",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1750,
-                "width": 960,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#c1b2d9",
                 "textAlign": "center"
               }
             }
@@ -4600,7 +5058,7 @@
       },
       {
         "id": "style-15-landscape",
-        "label": "15 · Prism Echo · Landscape",
+        "label": "15 · The Sound Desk · Landscape",
         "width": 1920,
         "height": 1080,
         "root": {
@@ -4615,14 +5073,14 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 540,
-                "top": 135,
-                "width": 840,
-                "height": 840
+                "left": 1212.5,
+                "top": 302,
+                "width": 302,
+                "height": 302
               },
               "shader": {
                 "effect": "voiceRing",
@@ -4634,9 +5092,47 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 0.9,
                 "opacity": 1,
-                "radius": 310,
+                "radius": 81.54,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-1",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 1018,
+                "top": 713,
+                "width": 691,
+                "height": 140
+              },
+              "shader": {
+                "effect": "voiceBars",
+                "colors": [
+                  "#3c55a0",
+                  "#89e8f5",
+                  "#f2a2e9"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 0.9,
+                "opacity": 1,
+                "radius": 20,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -4661,28 +5157,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 35,
-                "width": 1800,
-                "height": 60,
-                "fontSize": 21,
-                "fontWeight": 500,
+                "left": 96,
+                "top": 38,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 20,
+                "fontWeight": 600,
                 "color": "#89e8f5",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Prism Echo",
+              "text": "15 / The Sound Desk",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 105,
-                "width": 1800,
-                "height": 100,
-                "fontSize": 54,
-                "fontWeight": 700,
+                "left": 96,
+                "top": 103,
+                "width": 1728,
+                "height": 70,
+                "fontSize": 42,
+                "fontWeight": 600,
                 "color": "#f2a2e9",
                 "textAlign": "center"
               }
@@ -4693,10 +5189,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 650,
-                "top": 245,
-                "width": 620,
-                "height": 620
+                "left": 192,
+                "top": 302,
+                "width": 730,
+                "height": 518
               },
               "framing": {
                 "mode": "fill",
@@ -4704,8 +5200,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#89e8f5",
                 "grayscale": 0,
@@ -4715,32 +5211,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Make yourself heard.",
+              "text": "Your daily frequency.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 925,
-                "width": 1800,
+                "left": 96,
+                "top": 994,
+                "width": 1728,
                 "height": 70,
-                "fontSize": 27,
-                "fontWeight": 500,
+                "fontSize": 24,
+                "fontWeight": 600,
                 "color": "#f2a2e9",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  15",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1010,
-                "width": 1800,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#89e8f5",
                 "textAlign": "center"
               }
             }
@@ -4749,7 +5229,7 @@
       },
       {
         "id": "style-15-portrait",
-        "label": "15 · Prism Echo · Portrait",
+        "label": "15 · The Sound Desk · Portrait",
         "width": 1080,
         "height": 1920,
         "root": {
@@ -4764,14 +5244,14 @@
           },
           "children": [
             {
-              "id": "voice-visual",
+              "id": "visual-0",
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 100,
-                "top": 500,
-                "width": 880,
-                "height": 880
+                "left": 572,
+                "top": 612.5,
+                "width": 389,
+                "height": 389
               },
               "shader": {
                 "effect": "voiceRing",
@@ -4783,9 +5263,47 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 1,
+                "scale": 0.9,
                 "opacity": 1,
-                "radius": 330,
+                "radius": 105.03,
+                "quality": "medium",
+                "clock": "show",
+                "glow": 0.65,
+                "bindings": {
+                  "intensity": {
+                    "get": "values.sensitivity"
+                  },
+                  "speed": {
+                    "get": "values.motion"
+                  },
+                  "glow": {
+                    "get": "values.glow"
+                  }
+                }
+              }
+            },
+            {
+              "id": "visual-1",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 572,
+                "top": 1267,
+                "width": 389,
+                "height": 250
+              },
+              "shader": {
+                "effect": "voiceBars",
+                "colors": [
+                  "#3c55a0",
+                  "#89e8f5",
+                  "#f2a2e9"
+                ],
+                "speed": 1.6,
+                "intensity": 1.5,
+                "scale": 0.9,
+                "opacity": 1,
+                "radius": 20,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -4810,28 +5328,28 @@
               },
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 130,
-                "width": 960,
-                "height": 60,
-                "fontSize": 24,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 67,
+                "width": 972,
+                "height": 125,
+                "fontSize": 23,
+                "fontWeight": 600,
                 "color": "#89e8f5",
                 "textAlign": "center"
               }
             },
             {
-              "id": "style-title",
+              "id": "headline",
               "type": "text",
-              "text": "Prism Echo",
+              "text": "15 / The Sound Desk",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 260,
-                "width": 960,
-                "height": 100,
-                "fontSize": 64,
-                "fontWeight": 700,
+                "left": 54,
+                "top": 182,
+                "width": 972,
+                "height": 125,
+                "fontSize": 48,
+                "fontWeight": 600,
                 "color": "#f2a2e9",
                 "textAlign": "center"
               }
@@ -4842,10 +5360,10 @@
               "slotId": "host",
               "styles": {
                 "position": "absolute",
-                "left": 210,
-                "top": 610,
-                "width": 660,
-                "height": 660
+                "left": 108,
+                "top": 538,
+                "width": 410,
+                "height": 922
               },
               "framing": {
                 "mode": "fill",
@@ -4853,8 +5371,8 @@
                 "y": 0.5
               },
               "appearance": {
-                "shape": "circle",
-                "cornerRadius": 0,
+                "shape": "rectangle",
+                "cornerRadius": 24,
                 "outlineWidth": 2,
                 "outlineColor": "#89e8f5",
                 "grayscale": 0,
@@ -4864,32 +5382,16 @@
             {
               "id": "tagline",
               "type": "text",
-              "text": "Make yourself heard.",
+              "text": "Your daily frequency.",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 1480,
-                "width": 960,
-                "height": 70,
-                "fontSize": 34,
-                "fontWeight": 500,
+                "left": 54,
+                "top": 1766,
+                "width": 972,
+                "height": 125,
+                "fontSize": 28,
+                "fontWeight": 600,
                 "color": "#f2a2e9",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "edition",
-              "type": "text",
-              "text": "LIVE SESSIONS  /  15",
-              "styles": {
-                "position": "absolute",
-                "left": 60,
-                "top": 1750,
-                "width": 960,
-                "height": 44,
-                "fontSize": 18,
-                "fontWeight": 500,
-                "color": "#89e8f5",
                 "textAlign": "center"
               }
             }
