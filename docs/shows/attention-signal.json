@@ -1,7 +1,7 @@
 {
   "schema": "producer.presentation/2",
   "id": "attention-signal",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "name": "Attention Is Currency · Signal",
   "set": {
     "initialLayout": "landscape",
@@ -143,7 +143,7 @@
               },
               "shader": {
                 "effect": "voiceRing",
-                "variant": 0,
+                "variant": 15,
                 "colors": [
                   "#f4f4f2",
                   "#f4f4f2",
@@ -343,7 +343,7 @@
               },
               "shader": {
                 "effect": "voiceRing",
-                "variant": 0,
+                "variant": 15,
                 "colors": [
                   "#f4f4f2",
                   "#f4f4f2",

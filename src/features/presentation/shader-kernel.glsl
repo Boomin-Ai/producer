@@ -29,7 +29,7 @@ vec4 shade(vec2 uv) {
   float level=clamp(audioLevel*intensity,0.0,1.0);
   float harmonic=clamp(floor(frequency*3.0+0.5),1.0,8.0);
   float angle=atan(p.y,p.x);
-  float style=floor(voiceStyle+0.5);
+  float style=voiceStyle>14.5?0.0:floor(voiceStyle+0.5);
   float wave=clamp(voiceWave(angle,t,harmonic,style),0.0,1.0);
   float amplitude=level*max(0.0,limit-inner-36.0)*0.95;
   float contour=inner+11.0+amplitude*wave;
@@ -53,9 +53,10 @@ vec4 shade(vec2 uv) {
    float orbit=inner+10.0+amplitude*(0.5+0.45*cos(angle*2.0+t));
    distance=min(distance,abs(radial-orbit)-2.0-level*2.0);
   }
+  if(voiceStyle>14.5)distance=radial-contour-thickness;
   float core=1.0-smoothstep(-0.75,0.75,distance);
   float bloom=exp(-max(distance,0.0)/5.0)*clamp(glow,0.0,1.0)*level*0.9;
-  float coverage=clamp(core+(1.0-core)*bloom,0.0,1.0)*alpha*smoothstep(inner-2.0,inner,radial);
+  float coverage=clamp(core+(1.0-core)*bloom,0.0,1.0)*alpha*(voiceStyle>14.5?1.0:smoothstep(inner-2.0,inner,radial));
   vec3 color=mix(a,mix(b,c,0.5+0.5*sin(angle-t*level*0.35)),0.85+level*0.15);
   return vec4(color*coverage,coverage);
  }

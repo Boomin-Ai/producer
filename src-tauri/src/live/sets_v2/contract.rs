@@ -398,7 +398,7 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
             || !number(s.opacity, 0., 1.)
             || !number(s.radius, 0., 960.)
             || !number(s.glow, 0., 1.)
-            || s.variant>14
+            || s.variant>15
             || !["low", "medium"].contains(&s.quality.as_str())
             || !["show", "segment"].contains(&s.clock.as_str())
         {

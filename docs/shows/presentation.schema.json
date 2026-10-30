@@ -6533,7 +6533,7 @@
                 "variant": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 14
+                  "maximum": 15
                 },
                 "bindings": {
                   "type": "object",

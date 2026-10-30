@@ -43,7 +43,7 @@ impl ShaderEffect {
             || !(0.25..=4.0).contains(&self.scale)
             || !(0.0..=1.0).contains(&self.opacity)
             || !(0.0..=960.0).contains(&self.radius)
-            || self.variant>14
+            || self.variant>15
             || !(0.0..=1.0).contains(&self.glow)
         {
             return Err("Invalid shader preset or parameters".into());
