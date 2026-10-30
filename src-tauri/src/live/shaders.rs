@@ -32,6 +32,7 @@ impl ShaderEffect {
                 | "rain"
                 | "snow"
                 | "clouds"
+                | "voiceBars"
         ) || !matches!(self.quality.as_str(), "low" | "medium")
             || !matches!(self.clock.as_str(), "show" | "segment")
             || self.colors.len() != 3
@@ -68,7 +69,7 @@ pub fn native_effect() -> String {
         .replace("mix(", "lerp(")
         .replace("fract(", "frac(")
         .replace("atan(", "atan2(");
-    format!("uniform float4x4 ViewProj;\nuniform float clockTime;uniform float effectType;uniform float speed;uniform float intensity;uniform float frequency;uniform float radius;uniform float alpha;uniform float2 extent;uniform float4 paletteA;uniform float4 paletteB;uniform float4 paletteC;\nstruct VertData {{float4 pos:POSITION;float2 uv:TEXCOORD0;}};\nVertData VSDefault(VertData v){{VertData o;o.pos=mul(float4(v.pos.xyz,1.0),ViewProj);o.uv=v.uv;return o;}}\n{body}\nfloat4 PSDefault(VertData v):TARGET{{return shade(v.uv);}}\ntechnique Draw{{pass{{vertex_shader=VSDefault(v);pixel_shader=PSDefault(v);}}}}\n")
+    format!("uniform float4x4 ViewProj;\nuniform float clockTime;uniform float audioLevel;uniform float effectType;uniform float speed;uniform float intensity;uniform float frequency;uniform float radius;uniform float alpha;uniform float2 extent;uniform float4 paletteA;uniform float4 paletteB;uniform float4 paletteC;\nstruct VertData {{float4 pos:POSITION;float2 uv:TEXCOORD0;}};\nVertData VSDefault(VertData v){{VertData o;o.pos=mul(float4(v.pos.xyz,1.0),ViewProj);o.uv=v.uv;return o;}}\n{body}\nfloat4 PSDefault(VertData v):TARGET{{return shade(v.uv);}}\ntechnique Draw{{pass{{vertex_shader=VSDefault(v);pixel_shader=PSDefault(v);}}}}\n")
 }
 #[cfg(have_engine)]
 pub unsafe fn create(

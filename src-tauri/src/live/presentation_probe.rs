@@ -211,6 +211,26 @@ pub unsafe fn start(
             let baseline = serde_json::to_value(&handle.snapshot.lock().unwrap().sources)
                 .map_err(|e| e.to_string())?;
             let before = capture(&path, "room-before")?;
+            if path.join("voice-check").exists() {
+                use super::presentation::Request;
+                let projection=projections.first().ok_or("Voice projection missing")?.clone();
+                let request=||Request{asset_ids:None,preload:None,generation:status.generation,lease:lease.clone(),projection:projection.clone(),bindings:std::collections::HashMap::new()};
+                handle.presentation_warm(request())?;
+                handle.presentation_apply(request())?;
+                super::audio_reactive::publish(0.);
+                std::thread::sleep(Duration::from_millis(500));
+                let silent=capture(&path,"voice-silent")?;
+                for _ in 0..5{super::audio_reactive::publish(0.7);std::thread::sleep(Duration::from_millis(40));}
+                let speaking=capture(&path,"voice-speaking")?;
+                std::thread::sleep(Duration::from_millis(1200));
+                let expired=capture(&path,"voice-expired")?;
+                let delta=|a:&[u8],b:&[u8]|->f64{a.iter().zip(b).map(|(a,b)|(*a as i32-*b as i32).unsigned_abs() as f64).sum::<f64>()/a.len() as f64};
+                let active_delta=delta(&silent,&speaking);let idle_delta=delta(&silent,&expired);
+                if active_delta<0.5{return Err(format!("Native voice layer did not react: {active_delta}"));}
+                if idle_delta>0.5{return Err(format!("Native voice layer did not return to silence: {idle_delta}"));}
+                handle.presentation_return(Some(lease))?;
+                return Ok(serde_json::json!({"ok":true,"nativeVoiceBars":true,"syntheticAudio":true,"noMicrophoneOpened":true,"activePixelDelta":active_delta,"expiredPixelDelta":idle_delta}));
+            }
             if path.join("morph-check").exists() {
                 use super::presentation::Request;
                 let bindings: std::collections::HashMap<String, String> =

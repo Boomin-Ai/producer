@@ -3,6 +3,23 @@
 vec4 shade(vec2 uv) {
  float t=clockTime*speed;
  vec3 a=paletteA.xyz,b=paletteB.xyz,c=paletteC.xyz;
+ // Voice level visualization: one analytical bar lookup, never a PCM/spectrum claim.
+ // Native audioLevel comes from the existing microphone bus; no device activation.
+ if(effectType>14.5) {
+  float level=clamp(audioLevel*intensity,0.0,1.0);
+  float count=clamp(floor(extent.x/max(extent.y,1.0)*frequency*8.0),8.0,96.0);
+  float cellWidth=extent.x/count,index=floor(uv.x*count);
+  float seed=fract(sin(index*12.9898+17.13)*4375.8545);
+  float shape=0.42+0.34*sin(index*0.73+t*2.1)+0.24*sin(index*1.37-t*1.4+seed*6.28);
+  float halfWidth=cellWidth*0.32;
+  float halfHeight=min(extent.y*0.48,1.0+level*extent.y*(0.18+0.28*clamp(shape,0.0,1.0)));
+  float barRadius=min(min(halfWidth,halfHeight),radius);
+  vec2 q=vec2(abs(fract(uv.x*count)-0.5)*cellWidth,abs(uv.y-0.5)*extent.y)-vec2(halfWidth-barRadius,halfHeight-barRadius);
+  float distance=length(max(q,vec2(0.0)))+min(max(q.x,q.y),0.0)-barRadius;
+  float coverage=(1.0-smoothstep(-0.75,0.75,distance))*alpha;
+  vec3 color=mix(a,mix(b,c,uv.x),0.55+level*0.45);
+  return vec4(color*coverage,coverage);
+ }
  // Bounded weather layers. One analytical cell lookup; transparent background.
  if(effectType>11.5) {
   vec2 p=uv*vec2(extent.x/extent.y,1.0);

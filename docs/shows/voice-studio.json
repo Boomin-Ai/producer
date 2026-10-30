@@ -1,0 +1,354 @@
+{
+  "schema": "producer.presentation/2",
+  "id": "voice-studio",
+  "version": "1.0.0",
+  "name": "Voice Studio",
+  "set": {
+    "initialLayout": "landscape",
+    "values": {
+      "title": {
+        "type": "text",
+        "default": "VOICE / STUDIO",
+        "maxLength": 60
+      }
+    },
+    "feeds": {},
+    "slots": [
+      {
+        "id": "host",
+        "label": "Host camera"
+      }
+    ],
+    "components": {},
+    "controls": [
+      {
+        "id": "title",
+        "type": "text",
+        "label": "Title",
+        "key": "title"
+      },
+      {
+        "id": "landscape",
+        "type": "button",
+        "label": "Landscape",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "landscape"
+        }
+      },
+      {
+        "id": "portrait",
+        "type": "button",
+        "label": "Portrait",
+        "action": {
+          "type": "layout.select",
+          "layoutId": "portrait"
+        }
+      }
+    ],
+    "controlArrangement": {
+      "sections": [
+        {
+          "id": "content",
+          "label": "Content",
+          "controls": [
+            "set:title"
+          ]
+        },
+        {
+          "id": "layout",
+          "label": "Layout",
+          "controls": [
+            "set:landscape",
+            "set:portrait"
+          ]
+        }
+      ],
+      "minimized": [
+        "set:landscape",
+        "set:portrait"
+      ]
+    },
+    "layouts": [
+      {
+        "id": "landscape",
+        "label": "Voice studio \u00b7 Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "studio-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1920,
+            "height": 1080,
+            "background": "#080d17",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-level",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 1160,
+                "top": 350,
+                "width": 650,
+                "height": 350
+              },
+              "shader": {
+                "effect": "voiceBars",
+                "colors": [
+                  "#142b3d",
+                  "#62e5d5",
+                  "#c5b2ff"
+                ],
+                "speed": 1,
+                "intensity": 1,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 20,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 100,
+                "top": 60,
+                "width": 1600,
+                "height": 90,
+                "fontSize": 58,
+                "fontWeight": 600,
+                "color": "#edf2f7"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 100,
+                "top": 190,
+                "width": 990,
+                "height": 780
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 28,
+                "outlineWidth": 2,
+                "outlineColor": "#344455",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "voice-heading",
+              "type": "text",
+              "text": "THE VOICE",
+              "styles": {
+                "position": "absolute",
+                "left": 1160,
+                "top": 240,
+                "width": 650,
+                "height": 80,
+                "fontSize": 44,
+                "fontWeight": 600,
+                "color": "#edf2f7"
+              }
+            },
+            {
+              "id": "voice-subtitle",
+              "type": "text",
+              "text": "MICROPHONE BUS",
+              "styles": {
+                "position": "absolute",
+                "left": 1160,
+                "top": 735,
+                "width": 650,
+                "height": 55,
+                "fontSize": 24,
+                "fontWeight": 600,
+                "color": "#62e5d5"
+              }
+            },
+            {
+              "id": "voice-description",
+              "type": "text",
+              "text": "Speak. Let the room move.",
+              "styles": {
+                "position": "absolute",
+                "left": 1160,
+                "top": 805,
+                "width": 650,
+                "height": 80,
+                "fontSize": 30,
+                "fontWeight": 600,
+                "color": "#edf2f7"
+              }
+            },
+            {
+              "id": "source-note",
+              "type": "text",
+              "text": "Level-reactive bars \u00b7 not a PCM waveform",
+              "styles": {
+                "position": "absolute",
+                "left": 1160,
+                "top": 910,
+                "width": 650,
+                "height": 60,
+                "fontSize": 18,
+                "fontWeight": 600,
+                "color": "#aab8ca"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "portrait",
+        "label": "Voice studio \u00b7 Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "studio-root",
+          "type": "box",
+          "styles": {
+            "position": "relative",
+            "width": 1080,
+            "height": 1920,
+            "background": "#080d17",
+            "overflow": "hidden"
+          },
+          "children": [
+            {
+              "id": "voice-level",
+              "type": "shader",
+              "styles": {
+                "position": "absolute",
+                "left": 72,
+                "top": 1330,
+                "width": 936,
+                "height": 260
+              },
+              "shader": {
+                "effect": "voiceBars",
+                "colors": [
+                  "#142b3d",
+                  "#62e5d5",
+                  "#c5b2ff"
+                ],
+                "speed": 1,
+                "intensity": 1,
+                "scale": 1,
+                "opacity": 1,
+                "radius": 20,
+                "quality": "medium",
+                "clock": "show"
+              }
+            },
+            {
+              "id": "title",
+              "type": "text",
+              "text": {
+                "get": "values.title"
+              },
+              "styles": {
+                "position": "absolute",
+                "left": 72,
+                "top": 90,
+                "width": 936,
+                "height": 110,
+                "fontSize": 62,
+                "fontWeight": 600,
+                "color": "#edf2f7"
+              }
+            },
+            {
+              "id": "host-camera",
+              "type": "slot",
+              "slotId": "host",
+              "styles": {
+                "position": "absolute",
+                "left": 72,
+                "top": 270,
+                "width": 936,
+                "height": 1000
+              },
+              "framing": {
+                "mode": "fill",
+                "x": 0.5,
+                "y": 0.5
+              },
+              "appearance": {
+                "shape": "rectangle",
+                "cornerRadius": 28,
+                "outlineWidth": 2,
+                "outlineColor": "#344455",
+                "grayscale": 0,
+                "opacity": 1
+              }
+            },
+            {
+              "id": "voice-subtitle",
+              "type": "text",
+              "text": "MICROPHONE BUS",
+              "styles": {
+                "position": "absolute",
+                "left": 72,
+                "top": 1625,
+                "width": 936,
+                "height": 65,
+                "fontSize": 28,
+                "fontWeight": 600,
+                "color": "#62e5d5"
+              }
+            },
+            {
+              "id": "voice-description",
+              "type": "text",
+              "text": "Speak. Let the room move.",
+              "styles": {
+                "position": "absolute",
+                "left": 72,
+                "top": 1710,
+                "width": 936,
+                "height": 70,
+                "fontSize": 38,
+                "fontWeight": 600,
+                "color": "#edf2f7"
+              }
+            },
+            {
+              "id": "source-note",
+              "type": "text",
+              "text": "Level-reactive bars \u00b7 not a PCM waveform",
+              "styles": {
+                "position": "absolute",
+                "left": 72,
+                "top": 1810,
+                "width": 936,
+                "height": 55,
+                "fontSize": 20,
+                "fontWeight": 600,
+                "color": "#aab8ca"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

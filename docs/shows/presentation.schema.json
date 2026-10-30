@@ -6483,6 +6483,9 @@
                     },
                     {
                       "const": "clouds"
+                    },
+                    {
+                      "const": "voiceBars"
                     }
                   ]
                 },

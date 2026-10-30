@@ -3,6 +3,7 @@
 //! stubs keep the app building and the IPC surface truthful about it.
 
 pub mod animation;
+pub mod audio_reactive;
 pub mod bridge;
 #[cfg(have_engine)]
 mod callback_diagnostics;

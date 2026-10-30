@@ -1,5 +1,6 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {Hono} from 'hono';
+import {readFileSync} from 'node:fs';
 import {authorSet,parseSetAuthoringInput} from '../src/dataIntegrations/setAuthoring';
 import {dataIntegrationRoutes} from '../src/dataIntegrations/routes';
 import {parsePackageText} from '../../src/features/presentation/validation';
@@ -21,6 +22,17 @@ describe('one-shot Set authoring',()=>{
   const [url,init]=fetcher.mock.calls[0],body=JSON.parse(init!.body as string);expect(url).toBe('https://api.anthropic.com/v1/messages');expect(init!.redirect).toBe('manual');expect(new Headers(init!.headers).get('x-api-key')).toBe('synthetic-secret');expect(body.max_tokens).toBe(2048);expect(body.tools).toBeUndefined();expect(body.system).not.toContain('Answer concisely');expect(body.system.length).toBeLessThan(8000);
   expect(parsePackageText(body.system.split('Minimal valid example:\n')[1]).set.slots[0].id).toBe('host');
   expect(JSON.stringify(result)).not.toContain('synthetic-secret');expect(Object.keys(result).sort()).toEqual(['model','package','provider']);
+ });
+ it('accepts only the trusted microphone-level shader and still rejects invalid bounds without spending',async()=>{
+  const voice=JSON.parse(readFileSync(decodeURIComponent(new URL('../../docs/shows/voice-studio.json',import.meta.url).pathname),'utf8'));
+  const fetcher=vi.fn<typeof fetch>(async()=>response(voice));
+  const result=await authorSet(connection,'key',{prompt:'A microphone-reactive cover',package:voice},{fetcher});
+  expect(result.package.set.layouts).toHaveLength(2);expect(fetcher).toHaveBeenCalledTimes(1);
+  for(const change of [(shader:any)=>{shader.shader.effect='aurora';},(shader:any)=>{shader.shader.audioLevel=1;},(shader:any)=>{shader.styles.width=3000;}]){
+   const bad=structuredClone(voice);const shader=bad.set.layouts[0].root.children.find((node:any)=>node.type==='shader');change(shader);
+   const unused=vi.fn<typeof fetch>();await expect(authorSet(connection,'key',{prompt:'Revise',package:bad},{fetcher:unused})).rejects.toThrow();expect(unused).not.toHaveBeenCalled();
+   const invalid=vi.fn<typeof fetch>(async()=>response(bad));await expect(authorSet(connection,'key',{prompt:'Generate'},{fetcher:invalid})).rejects.toThrow();expect(invalid).toHaveBeenCalledTimes(1);
+  }
  });
  it('rejects invalid JSON, schema, embedded media and truncated/tool responses without retry',async()=>{
   for(const result of [Response.json({stop_reason:'end_turn',content:[{type:'text',text:'```json\n{}\n```'}]}),response({wrong:'schema'}),response(draft,'max_tokens'),Response.json({stop_reason:'end_turn',content:[{type:'tool_use',id:'tool'}]}),response({...draft,set:{...draft.set,assets:{image:{name:'Local',mime:'image/png',data:'producer-media:00000000-0000-0000-0000-000000000000'}}}})]){

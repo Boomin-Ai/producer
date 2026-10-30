@@ -2257,6 +2257,7 @@ impl SceneGraph {
     /// Peak-and-reset for every metered extra since the last call, 0..=1.
     pub fn take_extra_peaks(&self) -> Vec<(String, f64)> {
         let mut out = Vec::new();
+        let mut host_mic=0.0f32;
         for e in &self.extras {
             if !metered(e.kind) {
                 continue;
@@ -2265,10 +2266,14 @@ impl SceneGraph {
             for (slot_src, slot_peak) in EXTRA_PEAKS.iter() {
                 if slot_src.load(Ordering::Relaxed) == key {
                     let v = slot_peak.swap(0, Ordering::Relaxed) as f64 / 1_000_000.0;
+                    if e.kind=="mic" && !unsafe {ffi::obs_source_muted(e.src)} {
+                        host_mic=host_mic.max((v as f32*unsafe {ffi::obs_source_get_volume(e.src)}).clamp(0.,1.));
+                    }
                     out.push((e.id.clone(), v));
                 }
             }
         }
+        super::audio_reactive::publish(host_mic);
         out
     }
 }

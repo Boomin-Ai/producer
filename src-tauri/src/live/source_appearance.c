@@ -7,6 +7,14 @@
 #include <string.h>
 #include <math.h>
 #include <stdio.h>
+#include <time.h>
+#ifdef PRODUCER_AUDIO_REACTIVE
+extern float producer_audio_reactive_level(void);
+#else
+/* Standalone graphics probes have no room audio engine. */
+static float producer_audio_reactive_level(void){return 0;}
+#endif
+static double audio_clock(void){struct timespec t;timespec_get(&t,TIME_UTC);return (double)t.tv_sec+(double)t.tv_nsec/1e9;}
 static void producer_shader_register(void);
 struct appearance_filter {obs_source_t *source;gs_effect_t *effect;float radius,outline,gray,opacity,width,height,circle,r,g,b;};
 /* Immutable video-only reference. The trusted owner binds it before adding it
@@ -104,7 +112,7 @@ struct shader_source {
  obs_source_t *source;gs_effect_t *effect,*display;gs_texrender_t *texture;
  gs_eparam_t *time_param,*intensity_param,*frequency_param,*alpha_param;
  uint32_t width,height,rw,rh;float time,intensity,frequency,alpha;
- float last[4];bool painted;
+ float last[5];bool painted;bool voice;float audio;double audio_at;
 };
 /* A shader owns its presentation program. Mutating OBS's shared default
  * program here corrupts a following graphics batch's active render pass. */
@@ -130,8 +138,9 @@ static void *shader_create(obs_data_t *settings,obs_source_t *source){
  const char *code=obs_data_get_string(settings,"_kernel");if(!code||!*code){free(s);return NULL;}
  s->width=(uint32_t)bounded(obs_data_get_double(settings,"width"),1920);s->height=(uint32_t)bounded(obs_data_get_double(settings,"height"),1920);
  const char *kind=obs_data_get_string(settings,"effect");
- const char *presets[]={"aurora","edgeGlow","lightSweep","plasma","silk","rings","grid","stars","petals","contours","prism","borderFlare","rain","snow","clouds"};
- float mode=0;for(int i=0;i<15;i++){if(strcmp(kind,presets[i])==0){mode=(float)i;break;}}
+ const char *presets[]={"aurora","edgeGlow","lightSweep","plasma","silk","rings","grid","stars","petals","contours","prism","borderFlare","rain","snow","clouds","voiceBars"};
+ s->voice=strcmp(kind,"voiceBars")==0;
+ float mode=0;for(int i=0;i<16;i++){if(strcmp(kind,presets[i])==0){mode=(float)i;break;}}
  bool low=strcmp(obs_data_get_string(settings,"quality"),"low")==0;
  float reduction=mode==0||(mode>=3&&mode<11)?(low?.25f:.5f):(low?.5f:1.f);
  s->rw=(uint32_t)fmaxf(1,ceilf(s->width*reduction));s->rh=(uint32_t)fmaxf(1,ceilf(s->height*reduction));
@@ -147,13 +156,17 @@ static void *shader_create(obs_data_t *settings,obs_source_t *source){
 }
 static void shader_render(void *data,gs_effect_t *unused){
  (void)unused;struct shader_source *s=data;if(!s->effect||!s->texture||s->alpha<=0)return;
- float values[]={floorf(s->time*30.f)/30.f,s->intensity,s->frequency,s->alpha};
+ double now=audio_clock();float dt=s->audio_at>0?fmin(fmax(now-s->audio_at,0.),0.1):1.f/30.f;s->audio_at=now;
+ float level=s->voice?producer_audio_reactive_level():0;
+ float target=sqrtf(fmaxf(0,level));
+ s->audio+=(target-s->audio)*(1.f-expf(-dt*(target>s->audio?24.f:8.f)));
+ float values[]={floorf(s->time*30.f)/30.f,s->intensity,s->frequency,s->alpha,s->audio};
  if(!s->painted||memcmp(values,s->last,sizeof(values))!=0){
   gs_texrender_reset(s->texture);
   if(!gs_texrender_begin(s->texture,s->rw,s->rh))return;
   struct vec4 clear={0,0,0,0};gs_clear(GS_CLEAR_COLOR,&clear,0,0);gs_ortho(0,(float)s->rw,0,(float)s->rh,-100,100);
   struct vec2 extent={(float)s->width,(float)s->height};gs_effect_set_vec2(gs_effect_get_param_by_name(s->effect,"extent"),&extent);
-  gs_effect_set_float(s->time_param,values[0]);gs_effect_set_float(s->intensity_param,values[1]);gs_effect_set_float(s->frequency_param,values[2]);gs_effect_set_float(s->alpha_param,values[3]);
+  gs_effect_set_float(s->time_param,values[0]);gs_effect_set_float(s->intensity_param,values[1]);gs_effect_set_float(s->frequency_param,values[2]);gs_effect_set_float(s->alpha_param,values[3]);shader_scalar(s->effect,"audioLevel",values[4]);
   gs_blend_state_push();gs_blend_function(GS_BLEND_ONE,GS_BLEND_INVSRCALPHA);
   gs_technique_t *tech=gs_effect_get_technique(s->effect,"Draw");size_t passes=gs_technique_begin(tech);
   for(size_t i=0;i<passes;i++){if(gs_technique_begin_pass(tech,i)){gs_draw_sprite(NULL,0,s->rw,s->rh);gs_technique_end_pass(tech);}}

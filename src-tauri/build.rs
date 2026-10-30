@@ -103,6 +103,7 @@ fn link_live_engine_macos() {
         .file("src/live/capture_guard.m")
         .file("src/live/person_mask.m")
         .file("src/live/source_appearance.c")
+        .define("PRODUCER_AUDIO_REACTIVE", None)
         .flag("-fobjc-arc")
         .flag("-fmodules")
         .compile("producer_live_shim");
@@ -231,6 +232,7 @@ fn link_live_engine_windows() {
     cc::Build::new()
         .file("src/live/shim_win.c")
         .file("src/live/source_appearance.c")
+        .define("PRODUCER_AUDIO_REACTIVE", None)
         .compile("producer_live_shim");
     // User32/Gdi32: the preview child HWND. Ole32: COM init for the DirectShow
     // device enumeration the camera picker uses.
