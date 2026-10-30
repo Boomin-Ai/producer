@@ -6486,6 +6486,9 @@
                     },
                     {
                       "const": "voiceBars"
+                    },
+                    {
+                      "const": "voiceRing"
                     }
                   ]
                 },

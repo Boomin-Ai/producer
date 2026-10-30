@@ -34,8 +34,8 @@ export class SetAuthoringDraft {
 }
 
 export function authoringBaseIssue(doc:PresentationPackage):string|undefined {
- const unsupported=(node:PresentationPackage['set']['layouts'][number]['root']):boolean=>!(['box','text','slot'].includes(node.type)||node.type==='shader'&&node.shader?.effect==='voiceBars')||!!node.children?.some(unsupported);
- if(doc.show||doc.runtime.instances.length||Object.keys(doc.set.components).length||doc.set.layouts.some(layout=>unsupported(layout.root)))return 'This Set uses features beyond the text/camera and voiceBars generator. Generate a fresh draft or use the full manual workflow below.';
+ const unsupported=(node:PresentationPackage['set']['layouts'][number]['root']):boolean=>!(['box','text','slot'].includes(node.type)||node.type==='shader'&&['voiceBars','voiceRing'].includes(node.shader?.effect??''))||!!node.children?.some(unsupported);
+ if(doc.show||doc.runtime.instances.length||Object.keys(doc.set.components).length||doc.set.layouts.some(layout=>unsupported(layout.root)))return 'This Set uses features beyond the text/camera and voiceBars/voiceRing generator. Generate a fresh draft or use the full manual workflow below.';
  if(Object.keys(doc.set.assets??{}).length)return 'This Set contains media assets. Generate a fresh draft or use the manual package workflow below.';
  if(new TextEncoder().encode(JSON.stringify(doc)).byteLength>64*1024)return 'This Set exceeds the 64 KB starting-package limit. Generate a fresh draft or use the manual package workflow below.';
  return undefined;

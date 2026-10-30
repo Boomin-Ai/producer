@@ -3,6 +3,29 @@
 vec4 shade(vec2 uv) {
  float t=clockTime*speed;
  vec3 a=paletteA.xyz,b=paletteB.xyz,c=paletteC.xyz;
+ // Radial bars share the camera's center and grow outward from its edge.
+ if(effectType>15.5) {
+  vec2 p=(uv-0.5)*extent;
+  float radial=length(p),limit=min(extent.x,extent.y)*0.5;
+  float inner=min(radius,max(1.0,limit-12.0));
+  float level=clamp(audioLevel*intensity,0.0,1.0);
+  float count=clamp(floor(frequency*64.0),16.0,96.0);
+  float angle=(atan(p.y,p.x)+3.14159265)/6.2831853;
+  float index=floor(angle*count),offset=(fract(angle*count)-0.5)*6.2831853/count;
+  float shape=0.5+0.25*sin(index*0.73+t*2.1)+0.25*sin(index*1.37-t*1.4);
+  float height=3.0+level*max(0.0,limit-inner-12.0)*(0.3+0.7*shape);
+  float halfWidth=max(1.0,inner*6.2831853/count*0.32);
+  float rounding=min(halfWidth,height*0.5);
+  vec2 q=abs(vec2(sin(offset)*radial,cos(offset)*radial-inner-height*0.5))-vec2(halfWidth-rounding,height*0.5-rounding);
+  float barDistance=length(max(q,vec2(0.0)))+min(max(q.x,q.y),0.0)-rounding;
+  float rimDistance=abs(radial-inner)-1.25;
+  float distance=min(barDistance,rimDistance);
+  float core=1.0-smoothstep(-0.75,0.75,distance);
+  float bloom=exp(-max(distance,0.0)/3.0)*clamp(glow,0.0,1.0)*level*0.7;
+  float coverage=clamp(core+(1.0-core)*bloom,0.0,1.0)*alpha;
+  vec3 color=mix(a,mix(b,c,0.5+0.5*sin(angle*6.2831853)),0.65+level*0.35);
+  return vec4(color*coverage,coverage);
+ }
  // Voice level visualization: one analytical bar lookup, never a PCM/spectrum claim.
  // Native audioLevel comes from the existing microphone bus; no device activation.
  if(effectType>14.5) {

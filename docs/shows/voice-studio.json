@@ -1,7 +1,7 @@
 {
   "schema": "producer.presentation/2",
   "id": "voice-studio",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "name": "Voice Studio",
   "set": {
     "initialLayout": "landscape",
@@ -139,13 +139,13 @@
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 60,
-                "top": 230,
-                "width": 1800,
-                "height": 660
+                "left": 545.0,
+                "top": 145,
+                "width": 830,
+                "height": 830
               },
               "shader": {
-                "effect": "voiceBars",
+                "effect": "voiceRing",
                 "colors": [
                   "#142b3d",
                   "#62e5d5",
@@ -153,9 +153,9 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 0.6,
+                "scale": 1,
                 "opacity": 1,
-                "radius": 20,
+                "radius": 325.0,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -181,9 +181,9 @@
               "styles": {
                 "position": "absolute",
                 "left": 72,
-                "top": 65,
+                "top": 35,
                 "width": 1776,
-                "height": 90,
+                "height": 80,
                 "fontSize": 58,
                 "fontWeight": 600,
                 "color": "#edf2f7",
@@ -209,7 +209,7 @@
               "appearance": {
                 "shape": "circle",
                 "cornerRadius": 28,
-                "outlineWidth": 4,
+                "outlineWidth": 0,
                 "outlineColor": "#62e5d5",
                 "grayscale": 0,
                 "opacity": 1
@@ -222,44 +222,12 @@
               "styles": {
                 "position": "absolute",
                 "left": 72,
-                "top": 925,
+                "top": 1005,
                 "width": 1776,
                 "height": 55,
                 "fontSize": 24,
                 "fontWeight": 600,
                 "color": "#62e5d5",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "voice-description",
-              "type": "text",
-              "text": "Your voice. In motion.",
-              "styles": {
-                "position": "absolute",
-                "left": 72,
-                "top": 160,
-                "width": 1776,
-                "height": 80,
-                "fontSize": 30,
-                "fontWeight": 600,
-                "color": "#edf2f7",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "source-note",
-              "type": "text",
-              "text": "Microphone bus \u00b7 level-reactive visuals",
-              "styles": {
-                "position": "absolute",
-                "left": 72,
-                "top": 1010,
-                "width": 1776,
-                "height": 60,
-                "fontSize": 18,
-                "fontWeight": 600,
-                "color": "#aab8ca",
                 "textAlign": "center"
               }
             }
@@ -287,13 +255,13 @@
               "type": "shader",
               "styles": {
                 "position": "absolute",
-                "left": 24,
-                "top": 610,
-                "width": 1032,
-                "height": 660
+                "left": 120.0,
+                "top": 520,
+                "width": 840,
+                "height": 840
               },
               "shader": {
-                "effect": "voiceBars",
+                "effect": "voiceRing",
                 "colors": [
                   "#142b3d",
                   "#62e5d5",
@@ -301,9 +269,9 @@
                 ],
                 "speed": 1.6,
                 "intensity": 1.5,
-                "scale": 0.6,
+                "scale": 1,
                 "opacity": 1,
-                "radius": 20,
+                "radius": 330.0,
                 "quality": "medium",
                 "clock": "show",
                 "glow": 0.65,
@@ -357,7 +325,7 @@
               "appearance": {
                 "shape": "circle",
                 "cornerRadius": 28,
-                "outlineWidth": 4,
+                "outlineWidth": 0,
                 "outlineColor": "#62e5d5",
                 "grayscale": 0,
                 "opacity": 1
@@ -392,22 +360,6 @@
                 "fontSize": 38,
                 "fontWeight": 600,
                 "color": "#edf2f7",
-                "textAlign": "center"
-              }
-            },
-            {
-              "id": "source-note",
-              "type": "text",
-              "text": "Microphone bus \u00b7 level-reactive visuals",
-              "styles": {
-                "position": "absolute",
-                "left": 72,
-                "top": 1780,
-                "width": 936,
-                "height": 55,
-                "fontSize": 20,
-                "fontWeight": 600,
-                "color": "#aab8ca",
                 "textAlign": "center"
               }
             }
