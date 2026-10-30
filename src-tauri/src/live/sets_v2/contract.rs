@@ -385,24 +385,7 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
     }
     for (key, s) in &plan.shaders {
         if !identity(key)
-            || ![
-                "aurora",
-                "edgeGlow",
-                "lightSweep",
-                "plasma",
-                "silk",
-                "rings",
-                "grid",
-                "stars",
-                "petals",
-                "contours",
-                "prism",
-                "borderFlare",
-                "rain",
-                "snow",
-                "clouds",
-            ]
-            .contains(&s.effect.as_str())
+            || !super::super::shaders::PRESETS.contains(&s.effect.as_str())
             || s.colors.len() != 3
             || s.colors.iter().any(|c| c.len() != 7 || !hex(c))
             || !number(s.speed, 0., 4.)

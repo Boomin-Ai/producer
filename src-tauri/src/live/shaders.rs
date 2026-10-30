@@ -1,5 +1,6 @@
 //! Trusted, bounded GPU presets. Packages select parameters, never shader code.
 use serde::{Deserialize, Serialize};
+pub const PRESETS:&[&str]=&["aurora","edgeGlow","lightSweep","plasma","silk","rings","grid","stars","petals","contours","prism","borderFlare","rain","snow","clouds","voiceBars"];
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ShaderEffect {
@@ -15,25 +16,7 @@ pub struct ShaderEffect {
 }
 impl ShaderEffect {
     pub fn validate(&self) -> Result<(), String> {
-        if !matches!(
-            self.effect.as_str(),
-            "aurora"
-                | "edgeGlow"
-                | "lightSweep"
-                | "plasma"
-                | "silk"
-                | "rings"
-                | "grid"
-                | "stars"
-                | "petals"
-                | "contours"
-                | "prism"
-                | "borderFlare"
-                | "rain"
-                | "snow"
-                | "clouds"
-                | "voiceBars"
-        ) || !matches!(self.quality.as_str(), "low" | "medium")
+        if !PRESETS.contains(&self.effect.as_str()) || !matches!(self.quality.as_str(), "low" | "medium")
             || !matches!(self.clock.as_str(), "show" | "segment")
             || self.colors.len() != 3
             || self.colors.iter().any(|c| {
