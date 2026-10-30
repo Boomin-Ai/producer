@@ -16,7 +16,9 @@ vec4 shade(vec2 uv) {
   float barRadius=min(min(halfWidth,halfHeight),radius);
   vec2 q=vec2(abs(fract(uv.x*count)-0.5)*cellWidth,abs(uv.y-0.5)*extent.y)-vec2(halfWidth-barRadius,halfHeight-barRadius);
   float distance=length(max(q,vec2(0.0)))+min(max(q.x,q.y),0.0)-barRadius;
-  float coverage=(1.0-smoothstep(-0.75,0.75,distance))*alpha;
+  float core=1.0-smoothstep(-0.75,0.75,distance);
+  float bloom=exp(-max(distance,0.0)/max(1.0,cellWidth*0.22))*clamp(glow,0.0,1.0)*level*0.7;
+  float coverage=clamp(core+(1.0-core)*bloom,0.0,1.0)*alpha;
   vec3 color=mix(a,mix(b,c,uv.x),0.55+level*0.45);
   return vec4(color*coverage,coverage);
  }
@@ -122,8 +124,8 @@ vec4 shade(vec2 uv) {
   float edge=exp(-abs(d+3.0)/max(1.0,frequency*5.0));
   float pulse=0.65+0.35*sin(t*1.7+uv.x*5.0-uv.y*4.0);
   vec3 col=mix(b,c,0.5+0.5*sin(t*0.7+uv.x*4.0+uv.y*2.0));
-  float glow=clamp(edge*pulse*intensity,0.0,1.0)*alpha*coverage;
-  return vec4(col*glow,glow);
+  float edgeLight=clamp(edge*pulse*intensity,0.0,1.0)*alpha*coverage;
+  return vec4(col*edgeLight,edgeLight);
  }
  float phase=fract(t*0.16);
  float band=exp(-pow((uv.x+uv.y*0.22-(phase*1.6-0.3))*max(2.0,frequency*12.0),2.0));

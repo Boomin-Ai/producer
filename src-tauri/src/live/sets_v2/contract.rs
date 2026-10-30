@@ -124,6 +124,8 @@ pub struct Shader {
     pub scale: f32,
     pub opacity: f32,
     pub radius: f32,
+    #[serde(default)]
+    pub glow:f32,
     pub quality: String,
     pub clock: String,
 }
@@ -393,6 +395,7 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
             || !number(s.scale, 0.25, 4.)
             || !number(s.opacity, 0., 1.)
             || !number(s.radius, 0., 960.)
+            || !number(s.glow, 0., 1.)
             || !["low", "medium"].contains(&s.quality.as_str())
             || !["show", "segment"].contains(&s.clock.as_str())
         {

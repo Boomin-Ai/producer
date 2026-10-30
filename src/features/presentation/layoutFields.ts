@@ -13,6 +13,7 @@ export function layoutFieldKeys(doc:PresentationPackage,layoutId:string):Set<str
     binding(node.text);binding(node.when);
     Object.values(node.styles??{}).forEach(binding);
     Object.values(node.appearance??{}).forEach(binding);
+    Object.values(node.shader?.bindings??{}).forEach(binding);
     Object.values(node.props??{}).forEach(binding);
     node.children?.forEach(child=>visit(child,ancestors));
     if(node.component && !ancestors.has(node.component)){

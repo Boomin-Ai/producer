@@ -78,6 +78,7 @@ extern "C" fn extra_audio_cb(
     muted: bool,
 ) {
     if muted || audio.is_null() {
+        super::audio_reactive::audio_sample(source as usize,0.);
         return;
     }
     let audio = unsafe { &*audio };
@@ -93,6 +94,7 @@ extern "C" fn extra_audio_cb(
         }
     }
     let key = source as usize;
+    super::audio_reactive::audio_sample(key,peak);
     for (slot_src, slot_peak) in EXTRA_PEAKS.iter() {
         if slot_src.load(Ordering::Relaxed) == key {
             slot_peak.fetch_max((peak * 1_000_000.0) as u64, Ordering::Relaxed);
@@ -1648,6 +1650,7 @@ impl SceneGraph {
             // Meter every audio-bearing extra the mixer shows a strip for.
             if metered(kind) {
                 peak_slot_register(src);
+                if kind=="mic"{super::audio_reactive::register(src as usize,ffi::obs_source_get_volume(src),ffi::obs_source_muted(src));}
                 ffi::obs_source_add_audio_capture_callback(src, extra_audio_cb, ptr::null_mut());
             }
             self.extras.push(ExtraItem {
@@ -1843,6 +1846,7 @@ impl SceneGraph {
                     ptr::null_mut(),
                 );
             }
+            super::audio_reactive::unregister(e.src as usize);
             peak_slot_release(e.src);
         }
         unsafe {
@@ -2010,6 +2014,9 @@ impl SceneGraph {
         unsafe {
             if let Some(v) = volume {
                 ffi::obs_source_set_volume(src, v.clamp(0.0, 1.0));
+            }
+            if self.extras.iter().any(|e|e.src==src&&e.kind=="mic") {
+                super::audio_reactive::configure(src as usize,volume.unwrap_or_else(||ffi::obs_source_get_volume(src)),muted.unwrap_or_else(||ffi::obs_source_muted(src)));
             }
             if let Some(m) = muted {
                 ffi::obs_source_set_muted(src, m);
@@ -2257,7 +2264,6 @@ impl SceneGraph {
     /// Peak-and-reset for every metered extra since the last call, 0..=1.
     pub fn take_extra_peaks(&self) -> Vec<(String, f64)> {
         let mut out = Vec::new();
-        let mut host_mic=0.0f32;
         for e in &self.extras {
             if !metered(e.kind) {
                 continue;
@@ -2266,14 +2272,10 @@ impl SceneGraph {
             for (slot_src, slot_peak) in EXTRA_PEAKS.iter() {
                 if slot_src.load(Ordering::Relaxed) == key {
                     let v = slot_peak.swap(0, Ordering::Relaxed) as f64 / 1_000_000.0;
-                    if e.kind=="mic" && !unsafe {ffi::obs_source_muted(e.src)} {
-                        host_mic=host_mic.max((v as f32*unsafe {ffi::obs_source_get_volume(e.src)}).clamp(0.,1.));
-                    }
                     out.push((e.id.clone(), v));
                 }
             }
         }
-        super::audio_reactive::publish(host_mic);
         out
     }
 }

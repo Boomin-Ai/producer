@@ -11,6 +11,8 @@ pub struct ShaderEffect {
     pub scale: f64,
     pub opacity: f64,
     pub radius: f64,
+    #[serde(default)]
+    pub glow:f64,
     pub quality: String,
     pub clock: String,
 }
@@ -30,6 +32,7 @@ impl ShaderEffect {
                 self.scale,
                 self.opacity,
                 self.radius,
+                self.glow,
             ]
             .iter()
             .all(|v| v.is_finite())
@@ -38,6 +41,7 @@ impl ShaderEffect {
             || !(0.25..=4.0).contains(&self.scale)
             || !(0.0..=1.0).contains(&self.opacity)
             || !(0.0..=960.0).contains(&self.radius)
+            || !(0.0..=1.0).contains(&self.glow)
         {
             return Err("Invalid shader preset or parameters".into());
         }
@@ -52,7 +56,7 @@ pub fn native_effect() -> String {
         .replace("mix(", "lerp(")
         .replace("fract(", "frac(")
         .replace("atan(", "atan2(");
-    format!("uniform float4x4 ViewProj;\nuniform float clockTime;uniform float audioLevel;uniform float effectType;uniform float speed;uniform float intensity;uniform float frequency;uniform float radius;uniform float alpha;uniform float2 extent;uniform float4 paletteA;uniform float4 paletteB;uniform float4 paletteC;\nstruct VertData {{float4 pos:POSITION;float2 uv:TEXCOORD0;}};\nVertData VSDefault(VertData v){{VertData o;o.pos=mul(float4(v.pos.xyz,1.0),ViewProj);o.uv=v.uv;return o;}}\n{body}\nfloat4 PSDefault(VertData v):TARGET{{return shade(v.uv);}}\ntechnique Draw{{pass{{vertex_shader=VSDefault(v);pixel_shader=PSDefault(v);}}}}\n")
+    format!("uniform float4x4 ViewProj;\nuniform float clockTime;uniform float audioLevel;uniform float glow;uniform float effectType;uniform float speed;uniform float intensity;uniform float frequency;uniform float radius;uniform float alpha;uniform float2 extent;uniform float4 paletteA;uniform float4 paletteB;uniform float4 paletteC;\nstruct VertData {{float4 pos:POSITION;float2 uv:TEXCOORD0;}};\nVertData VSDefault(VertData v){{VertData o;o.pos=mul(float4(v.pos.xyz,1.0),ViewProj);o.uv=v.uv;return o;}}\n{body}\nfloat4 PSDefault(VertData v):TARGET{{return shade(v.uv);}}\ntechnique Draw{{pass{{vertex_shader=VSDefault(v);pixel_shader=PSDefault(v);}}}}\n")
 }
 #[cfg(have_engine)]
 pub unsafe fn create(
@@ -95,6 +99,7 @@ mod tests {
             scale: 1.,
             opacity: 1.,
             radius: 20.,
+            glow:0.,
             quality: "low".into(),
             clock: "segment".into(),
         };

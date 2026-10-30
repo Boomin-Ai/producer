@@ -148,7 +148,7 @@ static void *shader_create(obs_data_t *settings,obs_source_t *source){
  char *error=NULL;obs_enter_graphics();s->effect=gs_effect_create(code,"producer-presets.effect",&error);
  if(!s->effect){blog(100,"[shader] compile failed: %s",error?error:"unknown");if(error)bfree(error);obs_leave_graphics();free(s);return NULL;}
  if(error)bfree(error);error=NULL;s->display=gs_effect_create(SHADER_DISPLAY,"producer-shader-display.effect",&error);if(error)bfree(error);if(!s->display){gs_effect_destroy(s->effect);obs_leave_graphics();free(s);return NULL;}s->texture=gs_texrender_create(GS_RGBA,GS_ZS_NONE);
- shader_scalar(s->effect,"effectType",mode);shader_scalar(s->effect,"speed",bounded(obs_data_get_double(settings,"speed"),4));shader_scalar(s->effect,"radius",bounded(obs_data_get_double(settings,"radius"),960));
+ shader_scalar(s->effect,"effectType",mode);shader_scalar(s->effect,"speed",bounded(obs_data_get_double(settings,"speed"),4));shader_scalar(s->effect,"radius",bounded(obs_data_get_double(settings,"radius"),960));shader_scalar(s->effect,"glow",bounded(obs_data_get_double(settings,"glow"),1));
  struct vec2 extent={(float)s->width,(float)s->height};gs_effect_set_vec2(gs_effect_get_param_by_name(s->effect,"extent"),&extent);
  shader_palette(s->effect,"paletteA",obs_data_get_string(settings,"colorA"));shader_palette(s->effect,"paletteB",obs_data_get_string(settings,"colorB"));shader_palette(s->effect,"paletteC",obs_data_get_string(settings,"colorC"));
  s->time_param=gs_effect_get_param_by_name(s->effect,"clockTime");s->intensity_param=gs_effect_get_param_by_name(s->effect,"intensity");s->frequency_param=gs_effect_get_param_by_name(s->effect,"frequency");s->alpha_param=gs_effect_get_param_by_name(s->effect,"alpha");
@@ -159,8 +159,9 @@ static void shader_render(void *data,gs_effect_t *unused){
  double now=audio_clock();float dt=s->audio_at>0?fmin(fmax(now-s->audio_at,0.),0.1):1.f/30.f;s->audio_at=now;
  float level=s->voice?producer_audio_reactive_level():0;
  float target=sqrtf(fmaxf(0,level));
- s->audio+=(target-s->audio)*(1.f-expf(-dt*(target>s->audio?24.f:8.f)));
- float values[]={floorf(s->time*30.f)/30.f,s->intensity,s->frequency,s->alpha,s->audio};
+ s->audio+=(target-s->audio)*(1.f-expf(-dt*(target>s->audio?60.f:10.f)));
+ float phase=s->voice?(float)fmod(now,3600.):s->time;
+ float values[]={floorf(phase*60.f)/60.f,s->intensity,s->frequency,s->alpha,s->audio};
  if(!s->painted||memcmp(values,s->last,sizeof(values))!=0){
   gs_texrender_reset(s->texture);
   if(!gs_texrender_begin(s->texture,s->rw,s->rh))return;
