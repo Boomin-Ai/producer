@@ -213,33 +213,105 @@ pub unsafe fn start(
             let before = capture(&path, "room-before")?;
             if path.join("voice-check").exists() {
                 use super::presentation::Request;
-                let projection=projections.first().ok_or("Voice projection missing")?.clone();
-                let request=||Request{asset_ids:None,preload:None,generation:status.generation,lease:lease.clone(),projection:projection.clone(),bindings:std::collections::HashMap::new()};
-                let room_path=path.join("voice-room-check").exists();
+                let projection = projections
+                    .first()
+                    .ok_or("Voice projection missing")?
+                    .clone();
+                let request = || Request {
+                    asset_ids: None,
+                    preload: None,
+                    generation: status.generation,
+                    lease: lease.clone(),
+                    projection: projection.clone(),
+                    bindings: std::collections::HashMap::new(),
+                };
+                let room_path = path.join("voice-room-check").exists();
                 if room_path {
-                    use super::sets_v2::contract::{Action,Plan};
-                    let plan:Plan=serde_json::from_slice(&std::fs::read(path.join("plan.json")).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
-                    handle.sets_v2(Action::Prepare{generation:status.generation,output_id:None,revision:1,plan})?;
-                    for _ in 0..200 {if handle.sets_v2(Action::Status{generation:status.generation,output_id:None})?.ready{break;}std::thread::sleep(Duration::from_millis(20));}
-                    handle.sets_v2(Action::Take{generation:status.generation,output_id:None,revision:1,duration_ms:0.,mode:"dissolve".into()})?;
-                    for _ in 0..200 {if handle.sets_v2(Action::Status{generation:status.generation,output_id:None})?.rendered_revision==1{break;}std::thread::sleep(Duration::from_millis(20));}
+                    use super::sets_v2::contract::{Action, Plan};
+                    let plan: Plan = serde_json::from_slice(
+                        &std::fs::read(path.join("plan.json")).map_err(|e| e.to_string())?,
+                    )
+                    .map_err(|e| e.to_string())?;
+                    handle.sets_v2(Action::Prepare {
+                        generation: status.generation,
+                        output_id: None,
+                        revision: 1,
+                        plan,
+                    })?;
+                    for _ in 0..200 {
+                        if handle
+                            .sets_v2(Action::Status {
+                                generation: status.generation,
+                                output_id: None,
+                            })?
+                            .ready
+                        {
+                            break;
+                        }
+                        std::thread::sleep(Duration::from_millis(20));
+                    }
+                    handle.sets_v2(Action::Take {
+                        generation: status.generation,
+                        output_id: None,
+                        revision: 1,
+                        duration_ms: 0.,
+                        mode: "dissolve".into(),
+                    })?;
+                    for _ in 0..200 {
+                        if handle
+                            .sets_v2(Action::Status {
+                                generation: status.generation,
+                                output_id: None,
+                            })?
+                            .rendered_revision
+                            == 1
+                        {
+                            break;
+                        }
+                        std::thread::sleep(Duration::from_millis(20));
+                    }
                 } else {
                     handle.presentation_warm(request())?;
                     handle.presentation_apply(request())?;
                 }
                 super::audio_reactive::publish(0.);
                 std::thread::sleep(Duration::from_millis(500));
-                let silent=capture(&path,"voice-silent")?;
-                for _ in 0..5{super::audio_reactive::publish(0.7);std::thread::sleep(Duration::from_millis(40));}
-                let speaking=capture(&path,"voice-speaking")?;
+                let silent = capture(&path, "voice-silent")?;
+                for _ in 0..5 {
+                    super::audio_reactive::publish(0.7);
+                    std::thread::sleep(Duration::from_millis(40));
+                }
+                let speaking = capture(&path, "voice-speaking")?;
                 std::thread::sleep(Duration::from_millis(1200));
-                let expired=capture(&path,"voice-expired")?;
-                let delta=|a:&[u8],b:&[u8]|->f64{a.iter().zip(b).map(|(a,b)|(*a as i32-*b as i32).unsigned_abs() as f64).sum::<f64>()/a.len() as f64};
-                let active_delta=delta(&silent,&speaking);let idle_delta=delta(&silent,&expired);
-                if active_delta<0.5{return Err(format!("Native voice layer did not react: {active_delta}"));}
-                if idle_delta>0.5{return Err(format!("Native voice layer did not return to silence: {idle_delta}"));}
-                if room_path{handle.sets_v2(super::sets_v2::contract::Action::Return{generation:status.generation,output_id:None})?;}else{handle.presentation_return(Some(lease))?;}
-                return Ok(serde_json::json!({"ok":true,"nativeVoiceBars":true,"normalRoomPath":room_path,"syntheticAudio":true,"noMicrophoneOpened":true,"activePixelDelta":active_delta,"expiredPixelDelta":idle_delta}));
+                let expired = capture(&path, "voice-expired")?;
+                let delta = |a: &[u8], b: &[u8]| -> f64 {
+                    a.iter()
+                        .zip(b)
+                        .map(|(a, b)| (*a as i32 - *b as i32).unsigned_abs() as f64)
+                        .sum::<f64>()
+                        / a.len() as f64
+                };
+                let active_delta = delta(&silent, &speaking);
+                let idle_delta = delta(&silent, &expired);
+                if active_delta < 0.5 {
+                    return Err(format!("Native voice layer did not react: {active_delta}"));
+                }
+                if idle_delta > 0.5 {
+                    return Err(format!(
+                        "Native voice layer did not return to silence: {idle_delta}"
+                    ));
+                }
+                if room_path {
+                    handle.sets_v2(super::sets_v2::contract::Action::Return {
+                        generation: status.generation,
+                        output_id: None,
+                    })?;
+                } else {
+                    handle.presentation_return(Some(lease))?;
+                }
+                return Ok(
+                    serde_json::json!({"ok":true,"nativeVoiceBars":true,"normalRoomPath":room_path,"syntheticAudio":true,"noMicrophoneOpened":true,"activePixelDelta":active_delta,"expiredPixelDelta":idle_delta}),
+                );
             }
             if path.join("morph-check").exists() {
                 use super::presentation::Request;

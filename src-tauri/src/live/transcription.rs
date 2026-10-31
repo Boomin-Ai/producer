@@ -1,47 +1,139 @@
 //! Native streaming transcription. Credentials never cross IPC; audio callback
 //! writes only a bounded atomic ring. Networking and serialization run off-thread.
-use std::sync::{atomic::{AtomicBool,AtomicU32,AtomicU64,AtomicUsize,Ordering},OnceLock};
-use futures_util::{SinkExt,StreamExt};
+use futures_util::{SinkExt, StreamExt};
+use std::sync::{
+    atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering},
+    OnceLock,
+};
 use tauri::Emitter;
-use tokio_tungstenite::{connect_async,tungstenite::{client::IntoClientRequest,Message}};
-const CAP:usize=16384; // ~341 ms at the engine's fixed 48 kHz, mono.
-static RING:OnceLock<Vec<AtomicU32>>=OnceLock::new();
-static WRITE:AtomicUsize=AtomicUsize::new(0);
-static READ:AtomicUsize=AtomicUsize::new(0);
-static SOURCE:AtomicUsize=AtomicUsize::new(0);
-static GENERATION:AtomicU64=AtomicU64::new(0);
-static ACTIVE:AtomicBool=AtomicBool::new(false);
-const CREDENTIAL:&str="deepgram-live-transcription";
-#[derive(Clone,serde::Serialize)]
-pub struct Update {pub session:u64,pub state:String,pub text:String,pub is_final:bool,pub message:Option<String>}
-fn emit(app:&tauri::AppHandle,session:u64,state:&str,text:String,is_final:bool,message:Option<String>){let _=app.emit("live://transcript",Update{session,state:state.into(),text,is_final,message});}
+use tokio_tungstenite::{
+    connect_async,
+    tungstenite::{client::IntoClientRequest, Message},
+};
+const CAP: usize = 16384; // ~341 ms at the engine's fixed 48 kHz, mono.
+static RING: OnceLock<Vec<AtomicU32>> = OnceLock::new();
+static WRITE: AtomicUsize = AtomicUsize::new(0);
+static READ: AtomicUsize = AtomicUsize::new(0);
+static SOURCE: AtomicUsize = AtomicUsize::new(0);
+static GENERATION: AtomicU64 = AtomicU64::new(0);
+static ACTIVE: AtomicBool = AtomicBool::new(false);
+const CREDENTIAL: &str = "deepgram-live-transcription";
+#[derive(Clone, serde::Serialize)]
+pub struct Update {
+    pub session: u64,
+    pub state: String,
+    pub text: String,
+    pub is_final: bool,
+    pub message: Option<String>,
+}
+fn emit(
+    app: &tauri::AppHandle,
+    session: u64,
+    state: &str,
+    text: String,
+    is_final: bool,
+    message: Option<String>,
+) {
+    let _ = app.emit(
+        "live://transcript",
+        Update {
+            session,
+            state: state.into(),
+            text,
+            is_final,
+            message,
+        },
+    );
+}
 /// Single selected microphone producer; no locks, allocation, networking or OBS calls.
-pub unsafe fn capture(key:usize,plane:*const f32,frames:usize){
- if SOURCE.load(Ordering::Relaxed)!=key||!ACTIVE.load(Ordering::Relaxed)||plane.is_null()||frames>8192{return;}
- let Some(gain)=super::audio_reactive::input_gain(key)else{return;};if gain<=0.{return;}
- let Some(ring)=RING.get()else{return;};let start=WRITE.load(Ordering::Relaxed);
- for i in 0..frames {let v=*plane.add(i)*gain;ring[(start+i)%CAP].store(if v.is_finite(){v.clamp(-1.,1.).to_bits()}else{0},Ordering::Relaxed);}
- let end=start+frames;READ.fetch_max(end.saturating_sub(CAP),Ordering::AcqRel);WRITE.store(end,Ordering::Release);
+pub unsafe fn capture(key: usize, plane: *const f32, frames: usize) {
+    if SOURCE.load(Ordering::Relaxed) != key
+        || !ACTIVE.load(Ordering::Relaxed)
+        || plane.is_null()
+        || frames > 8192
+    {
+        return;
+    }
+    let Some(gain) = super::audio_reactive::input_gain(key) else {
+        return;
+    };
+    if gain <= 0. {
+        return;
+    }
+    let Some(ring) = RING.get() else {
+        return;
+    };
+    let start = WRITE.load(Ordering::Relaxed);
+    for i in 0..frames {
+        let v = *plane.add(i) * gain;
+        ring[(start + i) % CAP].store(
+            if v.is_finite() {
+                v.clamp(-1., 1.).to_bits()
+            } else {
+                0
+            },
+            Ordering::Relaxed,
+        );
+    }
+    let end = start + frames;
+    READ.fetch_max(end.saturating_sub(CAP), Ordering::AcqRel);
+    WRITE.store(end, Ordering::Release);
 }
-fn drain()->Vec<u8>{
- let Some(ring)=RING.get()else{return vec![];};let end=WRITE.load(Ordering::Acquire);let start=READ.load(Ordering::Relaxed).max(end.saturating_sub(CAP));
- let mut bytes=Vec::with_capacity((end-start)*2);
- for i in start..end {let f=f32::from_bits(ring[i%CAP].load(Ordering::Relaxed));let v=(f.clamp(-1.,1.)*32767.) as i16;bytes.extend_from_slice(&v.to_le_bytes());}
- READ.fetch_max(end,Ordering::AcqRel);bytes
+fn drain() -> Vec<u8> {
+    let Some(ring) = RING.get() else {
+        return vec![];
+    };
+    let end = WRITE.load(Ordering::Acquire);
+    let start = READ.load(Ordering::Relaxed).max(end.saturating_sub(CAP));
+    let mut bytes = Vec::with_capacity((end - start) * 2);
+    for i in start..end {
+        let f = f32::from_bits(ring[i % CAP].load(Ordering::Relaxed));
+        let v = (f.clamp(-1., 1.) * 32767.) as i16;
+        bytes.extend_from_slice(&v.to_le_bytes());
+    }
+    READ.fetch_max(end, Ordering::AcqRel);
+    bytes
 }
-fn key()->Result<String,String>{
- #[cfg(feature="sets-v2-dev")]
- {
-  let path=std::path::PathBuf::from(std::env::var_os("HOME").ok_or("Home directory unavailable")?).join("Library/Application Support/ai.boomin.producer.sets-v2-dev/secrets/deepgram-key.txt");
-  if let Ok(raw)=std::fs::read_to_string(path){let value=raw.trim().trim_matches('"').trim();let value=value.strip_prefix("Token ").unwrap_or(value);if !value.is_empty()&&value.len()<512&&value.bytes().all(|b|b.is_ascii_graphic()) {super::creds::store(CREDENTIAL,value).map_err(|_|"Could not secure the Deepgram key in the OS keychain")?;return Ok(value.into());}}
- }
- super::creds::resolve(CREDENTIAL).map_err(|_|"Save a Deepgram key before starting captions".into())
+fn key() -> Result<String, String> {
+    #[cfg(feature = "sets-v2-dev")]
+    {
+        let path = std::path::PathBuf::from(
+            std::env::var_os("HOME").ok_or("Home directory unavailable")?,
+        )
+        .join(
+            "Library/Application Support/ai.boomin.producer.sets-v2-dev/secrets/deepgram-key.txt",
+        );
+        if let Ok(raw) = std::fs::read_to_string(path) {
+            let value = raw.trim().trim_matches('"').trim();
+            let value = value.strip_prefix("Token ").unwrap_or(value);
+            if !value.is_empty() && value.len() < 512 && value.bytes().all(|b| b.is_ascii_graphic())
+            {
+                super::creds::store(CREDENTIAL, value)
+                    .map_err(|_| "Could not secure the Deepgram key in the OS keychain")?;
+                return Ok(value.into());
+            }
+        }
+    }
+    super::creds::resolve(CREDENTIAL)
+        .map_err(|_| "Save a Deepgram key before starting captions".into())
 }
-pub fn stop(session:u64){if GENERATION.load(Ordering::Acquire)==session{GENERATION.fetch_add(1,Ordering::AcqRel);ACTIVE.store(false,Ordering::Release);SOURCE.store(0,Ordering::Release);READ.store(WRITE.load(Ordering::Acquire),Ordering::Release);}}
-pub async fn start(app:tauri::AppHandle)->Result<u64,String>{
- if ACTIVE.compare_exchange(false,true,Ordering::AcqRel,Ordering::Acquire).is_err(){return Err("Captions are already running".into());}
- let session=GENERATION.fetch_add(1,Ordering::AcqRel)+1;
- let result:Result<u64,String>=async {
+pub fn stop(session: u64) {
+    if GENERATION.load(Ordering::Acquire) == session {
+        GENERATION.fetch_add(1, Ordering::AcqRel);
+        ACTIVE.store(false, Ordering::Release);
+        SOURCE.store(0, Ordering::Release);
+        READ.store(WRITE.load(Ordering::Acquire), Ordering::Release);
+    }
+}
+pub async fn start(app: tauri::AppHandle) -> Result<u64, String> {
+    if ACTIVE
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return Err("Captions are already running".into());
+    }
+    let session = GENERATION.fetch_add(1, Ordering::AcqRel) + 1;
+    let result:Result<u64,String>=async {
   let source=super::audio_reactive::first_input().ok_or("Add and unmute a microphone before starting captions")?;
   let secret=key()?;
   RING.get_or_init(||(0..CAP).map(|_|AtomicU32::new(0)).collect());READ.store(WRITE.load(Ordering::Acquire),Ordering::Release);
@@ -88,10 +180,32 @@ pub async fn start(app:tauri::AppHandle)->Result<u64,String>{
   });
   Ok(session)
  }.await;
- if result.is_err(){stop(session);}
- result.map_err(String::from)
+    if result.is_err() {
+        stop(session);
+    }
+    result.map_err(String::from)
 }
-fn merge_caption(committed:&str,partial:&str)->String{
- let joined=if committed.is_empty(){partial.to_string()}else{format!("{committed} {partial}")};let chars:Vec<char>=joined.chars().collect();if chars.len()<=4096{return joined;}let tail:String=chars[chars.len()-4096..].iter().collect();tail.split_once(' ').map(|(_,s)|s.to_string()).unwrap_or(tail)
+fn merge_caption(committed: &str, partial: &str) -> String {
+    let joined = if committed.is_empty() {
+        partial.to_string()
+    } else {
+        format!("{committed} {partial}")
+    };
+    let chars: Vec<char> = joined.chars().collect();
+    if chars.len() <= 4096 {
+        return joined;
+    }
+    let tail: String = chars[chars.len() - 4096..].iter().collect();
+    tail.split_once(' ')
+        .map(|(_, s)| s.to_string())
+        .unwrap_or(tail)
 }
-#[cfg(test)]mod tests{use super::*;#[test]fn captions_bound_and_merge(){assert_eq!(merge_caption("one","two"),"one two");assert!(merge_caption("",&"é ".repeat(4000)).chars().count()<=4096);}}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn captions_bound_and_merge() {
+        assert_eq!(merge_caption("one", "two"), "one two");
+        assert!(merge_caption("", &"é ".repeat(4000)).chars().count() <= 4096);
+    }
+}

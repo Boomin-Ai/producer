@@ -1,6 +1,26 @@
 //! Trusted, bounded GPU presets. Packages select parameters, never shader code.
 use serde::{Deserialize, Serialize};
-pub const PRESETS:&[&str]=&["aurora","edgeGlow","lightSweep","plasma","silk","rings","grid","stars","petals","contours","prism","borderFlare","rain","snow","clouds","voiceBars","voiceRing","launchV1","voiceSea"];
+pub const PRESETS: &[&str] = &[
+    "aurora",
+    "edgeGlow",
+    "lightSweep",
+    "plasma",
+    "silk",
+    "rings",
+    "grid",
+    "stars",
+    "petals",
+    "contours",
+    "prism",
+    "borderFlare",
+    "rain",
+    "snow",
+    "clouds",
+    "voiceBars",
+    "voiceRing",
+    "launchV1",
+    "voiceSea",
+];
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ShaderEffect {
@@ -12,15 +32,16 @@ pub struct ShaderEffect {
     pub opacity: f64,
     pub radius: f64,
     #[serde(default)]
-    pub glow:f64,
+    pub glow: f64,
     #[serde(default)]
-    pub variant:u32,
+    pub variant: u32,
     pub quality: String,
     pub clock: String,
 }
 impl ShaderEffect {
     pub fn validate(&self) -> Result<(), String> {
-        if !PRESETS.contains(&self.effect.as_str()) || !matches!(self.quality.as_str(), "low" | "medium")
+        if !PRESETS.contains(&self.effect.as_str())
+            || !matches!(self.quality.as_str(), "low" | "medium")
             || !matches!(self.clock.as_str(), "show" | "segment")
             || self.colors.len() != 3
             || self.colors.iter().any(|c| {
@@ -43,7 +64,7 @@ impl ShaderEffect {
             || !(0.25..=4.0).contains(&self.scale)
             || !(0.0..=1.0).contains(&self.opacity)
             || !(0.0..=960.0).contains(&self.radius)
-            || self.variant>15
+            || self.variant > 15
             || !(0.0..=1.0).contains(&self.glow)
         {
             return Err("Invalid shader preset or parameters".into());
@@ -102,7 +123,8 @@ mod tests {
             scale: 1.,
             opacity: 1.,
             radius: 20.,
-            glow:0.,variant:0,
+            glow: 0.,
+            variant: 0,
             quality: "low".into(),
             clock: "segment".into(),
         };
