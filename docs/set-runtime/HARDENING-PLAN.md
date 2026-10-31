@@ -821,3 +821,13 @@ revision changes; existing integration tests and both TypeScript checks pass.
 Client draft tests cover invalid results, late replies and explicit loading.
 No paid live generation, native acceptance, deployment or hosted Boomin authoring
 route is claimed. Milestone 5 remains an initial implementation, not complete.
+
+## Queued canvas-output work after Road To V1 (2026-10-31)
+
+User-reported production issues require an audit of the complete canvas-output subsystem before the Kleveland Set. These are queued requirements, not completed fixes.
+
+- Fix outline-induced layout shifts: outlines must not alter authored content bounds, crop, scale, or hit testing. Verify portrait/landscape, resize, shape changes, and native output.
+- Distinguish disconnected/missing cameras from Set preparation or rendering failure. Preserve healthy output and other layers; report the affected slot with an actionable source state through the room notification system.
+- Design the JSON-backed WYSIWYG editor alongside the renderer audit. Authored JSON remains authoritative for drag, resize, grouping, masks and stacking; use the same viewport transforms and bounds in editor and native output. Support undo/redo, validation, off-air editing and explicit take semantics. Audit every authored node type rather than only camera slots.
+- Keep imported bitmaps atomic; independently movable title/artwork elements require separate authored assets or nodes. The initial Road To V1 clean plates combine the fixed Road To lettering with the road, while V1 and the host are independent nodes. Split clean-plate layers before promising independent title dragging.
+- Add regression cases for outline changes, camera disconnect/reconnect, clipping, scaling, and JSON edit/preview/native round trips. Scope production fixes separately from the launch artwork; Kleveland Set follows this work.

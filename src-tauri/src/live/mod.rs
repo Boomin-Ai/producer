@@ -3,6 +3,7 @@
 //! stubs keep the app building and the IPC surface truthful about it.
 
 pub mod animation;
+pub mod audio_reactive;
 pub mod bridge;
 #[cfg(have_engine)]
 mod callback_diagnostics;
@@ -10,6 +11,7 @@ pub mod commands;
 pub mod creds;
 #[cfg(all(have_engine, target_os = "macos", feature = "portrait-camera-dev"))]
 pub(crate) mod portrait_camera_probe;
+pub mod transcription;
 #[cfg(feature = "guest-rtc-pilot")]
 pub use producer_guest_session as guest_session;
 #[cfg(have_engine)]

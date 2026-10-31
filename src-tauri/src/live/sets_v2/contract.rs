@@ -124,6 +124,10 @@ pub struct Shader {
     pub scale: f32,
     pub opacity: f32,
     pub radius: f32,
+    #[serde(default)]
+    pub glow: f32,
+    #[serde(default)]
+    pub variant: u32,
     pub quality: String,
     pub clock: String,
 }
@@ -385,24 +389,7 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
     }
     for (key, s) in &plan.shaders {
         if !identity(key)
-            || ![
-                "aurora",
-                "edgeGlow",
-                "lightSweep",
-                "plasma",
-                "silk",
-                "rings",
-                "grid",
-                "stars",
-                "petals",
-                "contours",
-                "prism",
-                "borderFlare",
-                "rain",
-                "snow",
-                "clouds",
-            ]
-            .contains(&s.effect.as_str())
+            || !super::super::shaders::PRESETS.contains(&s.effect.as_str())
             || s.colors.len() != 3
             || s.colors.iter().any(|c| c.len() != 7 || !hex(c))
             || !number(s.speed, 0., 4.)
@@ -410,6 +397,8 @@ pub fn validate(plan: &Plan) -> Result<(), String> {
             || !number(s.scale, 0.25, 4.)
             || !number(s.opacity, 0., 1.)
             || !number(s.radius, 0., 960.)
+            || !number(s.glow, 0., 1.)
+            || s.variant > 15
             || !["low", "medium"].contains(&s.quality.as_str())
             || !["show", "segment"].contains(&s.clock.as_str())
         {

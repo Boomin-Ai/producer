@@ -79,11 +79,20 @@ export function outputProjection(doc: PresentationPackage, state: RehearsalState
       const cueSequence=spec.cueSequence===undefined?undefined:evaluate(spec.cueSequence,publicState,props,64,doc.set.tokens);if(cueSequence!==undefined&&(typeof cueSequence!=='number'||!Number.isSafeInteger(cueSequence)||cueSequence<0))throw Error('Invalid 3D cue sequence');
       out.scene3d={id:spec.id,pass:spec.pass,world:structuredClone(spec.world),cue:cue as string,...(typeof cueSequence==='number'?{cueSequence}:{}),...(typeof view==='string'?{view}:{})};
     }
-    if(n.type==='shader')out.shader=structuredClone(n.shader!);
+    if(n.type==='shader'){
+      const {bindings,...shader}=structuredClone(n.shader!);
+      for(const [name,expression] of Object.entries(bindings??{})){
+        const value=evaluate(expression,publicState,props,64,doc.set.tokens);
+        const max=name==='speed'?4:name==='intensity'?2:1;
+        if(typeof value!=='number'||!Number.isFinite(value)||value<0||value>max)throw Error(`Invalid shader ${name} binding.`);
+        Object.assign(shader,{[name]:value});
+      }
+      out.shader=shader;
+    }
     if(n.type==='media'){out.assetId=n.assetId;out.fit=n.fit??'contain';out.loop=mediaConfig(doc,n.assetId!).loop;out.autoplay=mediaConfig(doc,n.assetId!).start==='entry';if(state.media?.[n.assetId!])out.playback={...state.media[n.assetId!]};}
     if (n.type === 'text') {
       out.text = String(evaluate(n.text!, publicState, props, 64, doc.set.tokens));
-      if (out.text.length > 1024) throw new Error('Output text budget exceeded.');
+      if (out.text.length > 4096) throw new Error('Output text budget exceeded.');
     }
     if (n.type === 'slot') {
       out.slotId = n.slotId;

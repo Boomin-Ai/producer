@@ -1,3 +1,4 @@
+import {notify,dismissKey} from "../lib/notices";
 import {DataIntegrations} from "../components/DataIntegrations";
 import { ShareDomainSettings } from "../components/ShareDomainSettings";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -214,6 +215,12 @@ export function Home({
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  useEffect(()=>{
+    if(view.kind!=="room")return;
+    if(loadError)notify(loadError,{key:"workspace-connection",tone:"error",sticky:true});
+    else dismissKey("workspace-connection");
+  },[view.kind,loadError]);
+
   const loadChannels = useCallback(async () => {
     const all: Channel[] = [];
     let firstError: string | null = null;
@@ -356,9 +363,6 @@ export function Home({
   if (view.kind === "room") {
     return (
       <>
-        {loadError && !errorDismissed && (
-          <SystemBanner message={loadError} onDismiss={() => setErrorDismissed(true)} />
-        )}
         <LiveView
           key={view.room.id}
           room={view.room}

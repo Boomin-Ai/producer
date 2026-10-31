@@ -224,7 +224,7 @@ export class RehearsalSession {
     if (configured) {
       doc.set.initialLayout = configured.layoutId;
       if(doc.set.views){const view=Object.entries(doc.set.views).find(([,variants])=>Object.values(variants).includes(configured.layoutId));if(view)doc.set.initialView=view[0];else delete doc.set.initialView;}
-      for (const [key, value] of Object.entries(configured.values)) doc.set.values[key].default = value;
+      for (const [key, value] of Object.entries(configured.values)) doc.set.values[key].default = key==='liveCaption'?'':value;
       for (const [key, value] of Object.entries(configured.feeds)) doc.set.feeds[key].default = value;
     }
     return parsePackage(doc);

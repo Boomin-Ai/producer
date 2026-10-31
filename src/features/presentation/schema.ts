@@ -119,7 +119,7 @@ const motion = object({ durationMs: number(200, 30_000), property: union(literal
 const scene3dWorld:Codec<Scene3dWorld>={json:WORLD_SCHEMA,read(v,p){try{return parseWorld(v);}catch(e){return fail(p,String(e));}}};
 const scene3dLayer=object({id:string(53,'^[a-z][a-z0-9-]{0,52}$'),pass:union(literal('background'),literal('foreground')),world:scene3dWorld,cue:optional(binding),view:optional(binding),cueSequence:optional(binding)});
 const chart=object({id,kind:union(literal('line'),literal('area'),literal('bar')),unit:optional(binding),timeZone:optional(binding),data:union(string(32768),binding),color:string(9,'^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$'),gridColor:optional(string(9,'^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$')),durationMs:optional(number(0,2000)),lineWidth:optional(number(1,8)),fillOpacity:optional(number(0,.5)),yMin:optional(number(-1e6,1e6)),yMax:optional(number(-1e6,1e6)),windowMs:optional(number(1,604800000))});
-const shader=object({effect:union(literal('aurora'),literal('edgeGlow'),literal('lightSweep'),literal('plasma'),literal('silk'),literal('rings'),literal('grid'),literal('stars'),literal('petals'),literal('contours'),literal('prism'),literal('borderFlare'),literal('rain'),literal('snow'),literal('clouds')),colors:array(string(7),3),speed:number(0,4),intensity:number(0,2),scale:number(.25,4),opacity:number(0,1),radius:number(0,960),quality:union(literal('low'),literal('medium')),clock:union(literal('show'),literal('segment'))});
+const shader=object({effect:union(literal('aurora'),literal('edgeGlow'),literal('lightSweep'),literal('plasma'),literal('silk'),literal('rings'),literal('grid'),literal('stars'),literal('petals'),literal('contours'),literal('prism'),literal('borderFlare'),literal('rain'),literal('snow'),literal('clouds'),literal('voiceBars'),literal('voiceRing'),literal('launchV1'),literal('voiceSea')),colors:array(string(7),3),speed:number(0,4),intensity:number(0,2),scale:number(.25,4),opacity:number(0,1),radius:number(0,960),glow:optional(number(0,1)),variant:optional(number(0,15)),bindings:optional(object({intensity:optional(binding),speed:optional(binding),glow:optional(binding)})),quality:union(literal('low'),literal('medium')),clock:union(literal('show'),literal('segment'))});
 const layerMask=object({kind:union(literal('rounded'),literal('circle'),literal('wipe')),radius:optional(binding),progress:optional(binding),x:optional(binding),y:optional(binding),feather:optional(binding),invert:optional(binding),direction:optional(union(literal('left'),literal('right'),literal('up'),literal('down')))});
 const backdropEffect=object({blur:binding});
 const animation=object({tracks:array(object({target:id,property:union(literal('x'),literal('y'),literal('width'),literal('height'),literal('opacity'),literal('scale'),literal('rotation'),literal('shader.intensity'),literal('shader.scale'),literal('mask.progress')),
@@ -168,7 +168,7 @@ const node: Codec<PresentationNode> = union(
   object({ ...common, type: literal('component'), component: id, props: dictionary(binding) }),
 );
 const valueDefinition = union(
-  object({ type: literal('text'), default: string(160), maxLength: number(1, 160) }),
+  object({ type: literal('text'), default: string(4096), maxLength: number(1, 4096) }),
   object({ type: literal('number'), default: number(-1e6, 1e6), min: number(-1e6, 1e6), max: number(-1e6, 1e6) }),
   object({ type: literal('boolean'), default: boolean }),
 );
@@ -309,6 +309,8 @@ export function parsePackage(value: unknown): PresentationPackage {
       if(Object.keys(n.styles??{}).some(k=>!['position','left','top','width','height'].includes(k)))fail('$.set','3D layers own their compositing effects.');
     }
     if(n.type==='shader'){
+      if(n.shader!.variant!==undefined&&!Number.isInteger(n.shader!.variant))fail('$.set','Shader variants require a whole number.');
+      for(const value of Object.values(n.shader!.bindings??{})){checkBinding(value,scope);if(bindingType(value,props)!=='number')fail('$.set','Shader parameter bindings must be numeric.');}
       if(n.shader!.colors.length!==3||n.shader!.colors.some(c=>!/^#[0-9a-f]{6}$/i.test(c)))fail('$.set','Shader colors require three hex colors.');
       if(n.styles?.position!=='absolute'||['left','top','width','height'].some(k=>typeof n.styles?.[k]!=='number'))fail('$.set','Shader layers require numeric absolute geometry.');
       if(Object.keys(n.styles??{}).some(k=>!['position','left','top','width','height'].includes(k)))fail('$.set','Use shader opacity and radius rather than CSS effects.');

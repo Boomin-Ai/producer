@@ -1559,3 +1559,14 @@ pub async fn live_set_source_create(
         Err("Set source creation requires the native macOS engine".into())
     }
 }
+
+#[tauri::command]
+pub async fn live_transcription_start(app: tauri::AppHandle) -> EngineResult<u64> {
+    super::transcription::start(app)
+        .await
+        .map_err(EngineError::Other)
+}
+#[tauri::command]
+pub fn live_transcription_stop(session: u64) {
+    super::transcription::stop(session);
+}

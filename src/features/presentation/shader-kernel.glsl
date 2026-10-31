@@ -1,8 +1,166 @@
 // Shared, trusted kernel for WebGL preview and native OBS/Metal output.
 // No imported code, texture sampling loops, or blur passes.
+// Bounded periodic contours; every style closes at the angular seam.
+float voiceWave(float a,float t,float h,float style) {
+ if(style<0.5)return 0.5+0.25*sin(a*h-t*1.8)+0.15*sin(a*(h+2.0)+t*1.2)+0.1*sin(a*(h+4.0)-t*0.9);
+ if(style<1.5)return 0.5+0.35*sin(a*3.0-t*1.4)*cos(a*2.0+t*0.7);
+ if(style<2.5)return pow(0.5+0.5*sin(a*18.0-t*2.0),3.0)*(0.65+0.35*sin(a*3.0+t));
+ if(style<3.5)return 0.5+0.3*sin(a*2.0-t)+0.18*sin(a*3.0+t*0.6);
+ if(style<4.5)return 0.45+0.35*cos(a*4.0-t*0.8)+0.18*sin(a*2.0+t*1.3);
+ if(style<5.5)return 0.5+0.25*sin(a*3.0+t)+0.2*sin(a*6.0-t*1.6);
+ if(style<6.5)return 0.5+0.4*sin(a*2.0-t)*cos(a*3.0+t*0.5);
+ if(style<7.5)return 0.5+0.4*sin(a*7.0-t*2.0);
+ if(style<8.5)return pow(0.5+0.5*cos(a*8.0-t*0.6),0.65);
+ if(style<9.5)return 0.2+0.65*pow(0.5+0.5*sin(a*13.0+t*2.0),6.0)+0.1*sin(a*3.0-t);
+ if(style<10.5)return 0.5+0.12*sin(a*2.0-t)+0.1*sin(a*11.0+t*0.5);
+ if(style<11.5)return 0.5+0.45*cos(a*2.0-t*0.7);
+ if(style<12.5){float pulse=exp(-pow(sin((a-t)*0.5)*7.0,2.0));return 0.25+pulse*(0.45+0.3*sin(a*16.0-t*16.0));}
+ if(style<13.5)return 0.5+0.2*sin(a*3.0-t*0.4)+0.15*cos(a*5.0+t*0.3)+0.12*sin(a*9.0-t*0.7);
+ return 0.5+0.3*cos(a*3.0-t)+0.18*cos(a*6.0-t*2.0);
+}
+// launchV1 uses four bounded convex polygons; no fonts, textures or user code.
+float launchCross(vec2 a,vec2 b){return a.x*b.y-a.y*b.x;}
+float launchEdge2(vec2 p,vec2 a,vec2 b){vec2 e=b-a,q=p-a;vec2 v=q-e*clamp(dot(q,e)/dot(e,e),0.0,1.0);return dot(v,v);}
+float launchQuad(vec2 p,vec2 a,vec2 b,vec2 c,vec2 d){
+ float inside=step(0.0,launchCross(b-a,p-a))*step(0.0,launchCross(c-b,p-b))*step(0.0,launchCross(d-c,p-c))*step(0.0,launchCross(a-d,p-d));
+ return sqrt(min(min(launchEdge2(p,a,b),launchEdge2(p,b,c)),min(launchEdge2(p,c,d),launchEdge2(p,d,a))))*(1.0-2.0*inside);
+}
+float launchLetters(vec2 p,float aspect){
+ // Optically centered, forward-leaning racing cut: broad V, compact sans-serif 1.
+ p.x-=(0.48-p.y)*0.16*aspect;p.x+=0.04*aspect;
+ vec2 k=vec2(aspect,1.0);
+ float vLeft=launchQuad(p,vec2(0.06,0.12)*k,vec2(0.235,0.12)*k,vec2(0.40,0.84)*k,vec2(0.29,0.84)*k);
+ float vRight=launchQuad(p,vec2(0.45,0.12)*k,vec2(0.64,0.12)*k,vec2(0.40,0.84)*k,vec2(0.29,0.84)*k);
+ float oneStem=launchQuad(p,vec2(0.76,0.12)*k,vec2(0.90,0.12)*k,vec2(0.90,0.84)*k,vec2(0.76,0.84)*k);
+ float oneCap=launchQuad(p,vec2(0.67,0.24)*k,vec2(0.76,0.12)*k,vec2(0.90,0.12)*k,vec2(0.90,0.27)*k);
+ return min(min(vLeft,vRight),min(oneStem,oneCap));
+}
+float launchHash(vec2 p){vec3 q=fract(vec3(p.x,p.y,p.x)*0.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
+float launchNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(launchHash(i),launchHash(i+vec2(1.0,0.0)),f.x),mix(launchHash(i+vec2(0.0,1.0)),launchHash(i+vec2(1.0)),f.x),f.y);}
 vec4 shade(vec2 uv) {
  float t=clockTime*speed;
  vec3 a=paletteA.xyz,b=paletteB.xyz,c=paletteC.xyz;
+ // Full-frame liquid metal: slow ocean swell plus voice-driven capillary ripples.
+ if(effectType>17.5){
+  float level=clamp(audioLevel*intensity,0.0,1.0),strength=pow(level,1.6);
+  vec2 q=vec2((uv.x-0.5)*extent.x/max(extent.y,1.0)*3.0,uv.y*4.0);
+  float u=q.x*3.5+q.y*2.1-t*0.65,v=q.x*-2.7+q.y*4.2+t*0.43;
+  float swell=sin(u)*0.55+sin(v)*0.30+sin(q.x*6.0+sin(q.y*2.0)-t*0.8)*0.15;
+  vec2 delta=q-vec2(0.0,2.65);float r=max(length(delta),0.03),phase=r*16.0-t*2.4;
+  float ripple=sin(phase)*exp(-r*0.32)*strength;
+  float amplitude=0.20+strength*0.52;
+  float dx=(cos(u)*1.925-cos(v)*0.81)*amplitude+cos(phase)*delta.x/r*strength*1.15;
+  float dy=(cos(u)*1.155+cos(v)*1.26)*amplitude+cos(phase)*delta.y/r*strength*1.15;
+  float fineA=q.x*17.0+q.y*24.0+sin(q.y*4.0-t*0.6)*1.3-t*1.1;
+  float fineB=q.x*-23.0+q.y*13.0+sin(q.x*3.0+t*0.5)*1.2+t*0.9;
+  float textureStrength=0.65+strength*0.85;
+  dx+=(cos(fineA)*0.22+cos(fineB)*0.17)*textureStrength;
+  dy+=(cos(fineA)*0.32+cos(fineB)*0.12)*textureStrength;
+  vec3 n=normalize(vec3(-dx,-dy,1.0));
+  float silver=pow(max(dot(n,normalize(vec3(-0.35,-0.5,1.0))),0.0),24.0);
+  float crest=pow(clamp(0.5+0.5*(swell+ripple*0.5),0.0,1.0),7.0);
+  float depth=smoothstep(0.05,0.82,uv.y);
+  vec3 water=mix(vec3(0.92,0.95,0.97),vec3(0.014,0.027,0.043),depth);
+  float reflected=pow(0.5+0.5*sin(q.x*2.6+q.y*1.2+dx*2.2-t*0.25),5.0);
+  vec3 light=mix(a,b,0.5+0.5*sin(q.x*0.9+dy*0.6));light=mix(light,c,smoothstep(0.2,1.4,q.x));
+  float glint=pow(0.5+0.5*sin(fineA),18.0)*pow(0.5+0.5*sin(fineB),3.0);
+  water+=vec3(0.35,0.55,0.65)*glint*depth*(0.08+strength*0.22);
+  water*=0.65+0.35*n.z;water+=vec3(silver)*(0.10+depth*0.55);
+  water+=light*(reflected*(0.06+depth*0.32)+crest*depth*(0.10+strength*0.35));
+  water+=vec3(0.7,0.85,0.9)*smoothstep(0.72,0.95,swell+ripple*0.45)*depth*strength*0.16;
+  return vec4(clamp(water,vec3(0.0),vec3(1.0))*alpha,alpha);
+ }
+ // Solid forged V1. Audio adds short exterior fins; the readable face never deforms.
+ if(effectType>16.5){
+  float aspect=extent.x/max(extent.y,1.0),aa=1.0/max(extent.y,1.0);
+  vec2 p=uv*vec2(aspect,1.0);
+  float front=launchLetters(p,aspect),back=launchLetters(p-vec2(0.018*aspect,0.024),aspect);
+  float face=1.0-smoothstep(-aa,aa,front),side=1.0-smoothstep(-aa,aa,back);
+  float solid=max(face,side),level=clamp(audioLevel*intensity,0.0,1.0);
+  float density=clamp(frequency,0.25,4.0);
+  float wave=pow(0.5+0.5*sin((p.x*25.0+p.y*41.0)*density-t*3.2),8.0);
+  wave*=0.35+0.65*pow(0.5+0.5*sin(p.x*13.0-p.y*17.0+t*1.3),2.0);
+  float expansion=pow(level,1.8)*0.065*wave;
+  float fin=1.0-smoothstep(-aa,aa,front-expansion);
+  float outer=max(front-expansion,0.0);
+  float halo=exp(-outer/0.007)*(1.0-smoothstep(0.006,0.008,outer))*clamp(glow,0.0,1.0)*(0.20+level*0.48);
+  float light=max(fin,halo),coverage=clamp(solid+(1.0-solid)*light,0.0,1.0);
+  vec3 edge=mix(a,b,smoothstep(0.10,0.65,uv.x));
+  edge=mix(edge,c,smoothstep(0.48,0.96,uv.x)*0.76+smoothstep(0.66,0.92,uv.y)*0.20);
+  vec2 normal=normalize(vec2(launchLetters(p+vec2(aa,0.0),aspect)-front,launchLetters(p+vec2(0.0,aa),aspect)-front)+vec2(0.000001));
+  float bevel=(1.0-smoothstep(0.0,0.018,-front))*face;
+  float rim=exp(-abs(front+0.002)/0.0025)*face;
+  float grain=launchNoise(p*180.0),stone=launchNoise(p*31.0);
+  float crack=1.0-smoothstep(0.008,0.035,abs(launchNoise(p*66.0)-launchNoise(p*109.0+vec2(4.2))));
+  float gloss=pow(0.5+0.5*sin(p.x*3.5-p.y*5.0+0.5),14.0);
+  vec3 metal=vec3(0.012,0.015,0.021)+vec3(0.025,0.030,0.038)*stone+vec3(0.010)*grain+vec3(0.075,0.080,0.090)*gloss;
+  metal*=1.0-crack*0.52;
+  metal+=edge*crack*0.022;
+  float reflection=0.18+0.64*max(dot(normal,normalize(vec2(-0.7,-0.9))),0.0);
+  metal=mix(metal,edge*reflection,bevel*0.85);
+  metal+=edge*rim*0.72;
+  vec3 extrusion=vec3(0.009,0.011,0.017)+edge*(0.055+0.10*smoothstep(0.4,0.9,uv.y));
+  vec3 color=mix(extrusion,metal,face)*solid+edge*light*(1.0-solid);
+  return vec4(clamp(color,vec3(0.0),vec3(coverage))*alpha,coverage*alpha);
+ }
+ // One closed contour; integer angular harmonics keep the seam connected.
+ if(effectType>15.5) {
+  vec2 p=(uv-0.5)*extent;
+  float radial=length(p),limit=min(extent.x,extent.y)*0.5;
+  float inner=min(radius,max(1.0,limit-12.0));
+  float level=clamp(audioLevel*intensity,0.0,1.0);
+  float harmonic=clamp(floor(frequency*3.0+0.5),1.0,8.0);
+  float angle=atan(p.y,p.x);
+  float style=voiceStyle>14.5?0.0:floor(voiceStyle+0.5);
+  float wave=clamp(voiceWave(angle,t,harmonic,style),0.0,1.0);
+  float amplitude=level*max(0.0,limit-inner-36.0)*0.95;
+  float contour=inner+11.0+amplitude*wave;
+  float slope=amplitude*(voiceWave(angle+0.01,t,harmonic,style)-voiceWave(angle-0.01,t,harmonic,style))/0.02;
+  float thickness=8.0+level*6.0;
+  if(style>12.5&&style<13.5)thickness=10.0+level*13.0;
+  if(style>9.5&&style<10.5)thickness=2.5+level*2.0;
+  if(style>0.5&&style<1.5||style>5.5&&style<7.5)thickness=4.0+level*3.0;
+  float distance=abs(radial-contour)/sqrt(1.0+pow(slope/max(contour,1.0),2.0))-thickness;
+  // Multiple currents remain connected contours with the same camera center.
+  if(style>0.5&&style<1.5||style>5.5&&style<7.5){
+   float twin=inner+13.0+amplitude*clamp(voiceWave(angle,t+2.1,harmonic,style),0.0,1.0);
+   distance=min(distance,abs(radial-twin)-thickness*0.75);
+  }
+  if(style>4.5&&style<5.5||style>9.5&&style<10.5||style>13.5){
+   float ripple=inner+8.0+amplitude*wave*0.48;
+   distance=min(distance,abs(radial-ripple)-2.5-level*1.5);
+   distance=min(distance,abs(radial-(inner+6.0+amplitude*wave*0.22))-1.5-level);
+  }
+  if(style>2.5&&style<3.5||style>10.5&&style<11.5){
+   float orbit=inner+10.0+amplitude*(0.5+0.45*cos(angle*2.0+t));
+   distance=min(distance,abs(radial-orbit)-2.0-level*2.0);
+  }
+  if(voiceStyle>14.5)distance=radial-contour-thickness;
+  float core=1.0-smoothstep(-0.75,0.75,distance);
+  float bloom=exp(-max(distance,0.0)/5.0)*clamp(glow,0.0,1.0)*level*0.9;
+  float coverage=clamp(core+(1.0-core)*bloom,0.0,1.0)*alpha*(voiceStyle>14.5?1.0:smoothstep(inner-2.0,inner,radial));
+  vec3 color=mix(a,mix(b,c,0.5+0.5*sin(angle-t*level*0.35)),0.85+level*0.15);
+  return vec4(color*coverage,coverage);
+ }
+ // Voice level visualization: one analytical bar lookup, never a PCM/spectrum claim.
+ // Native audioLevel comes from the existing microphone bus; no device activation.
+ if(effectType>14.5) {
+  float level=clamp(audioLevel*intensity,0.0,1.0);
+  float count=clamp(floor(extent.x/max(extent.y,1.0)*frequency*8.0),8.0,96.0);
+  float cellWidth=extent.x/count,index=floor(uv.x*count);
+  float seed=fract(sin(index*12.9898+17.13)*4375.8545);
+  float shape=0.42+0.34*sin(index*0.73+t*2.1)+0.24*sin(index*1.37-t*1.4+seed*6.28);
+  float halfWidth=cellWidth*0.32;
+  float halfHeight=min(extent.y*0.48,1.0+level*extent.y*(0.18+0.28*clamp(shape,0.0,1.0)));
+  float barRadius=min(min(halfWidth,halfHeight),radius);
+  vec2 q=vec2(abs(fract(uv.x*count)-0.5)*cellWidth,abs(uv.y-0.5)*extent.y)-vec2(halfWidth-barRadius,halfHeight-barRadius);
+  float distance=length(max(q,vec2(0.0)))+min(max(q.x,q.y),0.0)-barRadius;
+  float core=1.0-smoothstep(-0.75,0.75,distance);
+  float bloom=exp(-max(distance,0.0)/max(1.0,cellWidth*0.22))*clamp(glow,0.0,1.0)*level*0.7;
+  float coverage=clamp(core+(1.0-core)*bloom,0.0,1.0)*alpha;
+  vec3 color=mix(a,mix(b,c,uv.x),0.55+level*0.45);
+  return vec4(color*coverage,coverage);
+ }
  // Bounded weather layers. One analytical cell lookup; transparent background.
  if(effectType>11.5) {
   vec2 p=uv*vec2(extent.x/extent.y,1.0);
@@ -105,8 +263,8 @@ vec4 shade(vec2 uv) {
   float edge=exp(-abs(d+3.0)/max(1.0,frequency*5.0));
   float pulse=0.65+0.35*sin(t*1.7+uv.x*5.0-uv.y*4.0);
   vec3 col=mix(b,c,0.5+0.5*sin(t*0.7+uv.x*4.0+uv.y*2.0));
-  float glow=clamp(edge*pulse*intensity,0.0,1.0)*alpha*coverage;
-  return vec4(col*glow,glow);
+  float edgeLight=clamp(edge*pulse*intensity,0.0,1.0)*alpha*coverage;
+  return vec4(col*edgeLight,edgeLight);
  }
  float phase=fract(t*0.16);
  float band=exp(-pow((uv.x+uv.y*0.22-(phase*1.6-0.3))*max(2.0,frequency*12.0),2.0));

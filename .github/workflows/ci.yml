@@ -23,6 +23,7 @@ jobs:
       - run: bun run test:module-arrangements
       - run: bun run test:package-validation
       - run: bun run test:set-authoring
+      - run: bun run test:voice-bars
       - run: bun run test:module-runtime
       - run: node scripts/test-just-facts-show.mjs
       - run: node scripts/test-atmosphere.mjs

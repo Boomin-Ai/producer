@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
+import {readFileSync} from 'node:fs';
 const result=await build({entryPoints:['src/features/presentation/layoutFields.ts'],bundle:true,write:false,format:'esm',platform:'node'});
 const {layoutFieldKeys}=await import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`);
 const doc={set:{components:{caption:{root:{type:'text',text:{get:'props.title'}}}},layouts:[
@@ -11,4 +12,8 @@ assert.deepEqual([...layoutFieldKeys(doc,'intro')].sort(),['hostName','opening']
 assert.deepEqual([...layoutFieldKeys(doc,'chips')].sort(),['chipsQuestion','hostName']);
 assert.deepEqual([...layoutFieldKeys(doc,'panel')].sort(),['analystOneName','analystTwoName']);
 assert.equal(layoutFieldKeys(doc,'unknown').size,0);
+const voice=JSON.parse(readFileSync('docs/shows/voice-studio.json','utf8'));
+for(const layout of voice.set.layouts){
+ for(const key of ['sensitivity','motion','glow'])assert(layoutFieldKeys(voice,layout.id).has(key),`${layout.id} exposes ${key}`);
+}
 console.log('PASS: each layout exposes its bound fields, including expressions and reusable component props.');
