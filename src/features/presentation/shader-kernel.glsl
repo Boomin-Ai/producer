@@ -26,13 +26,14 @@ float launchQuad(vec2 p,vec2 a,vec2 b,vec2 c,vec2 d){
  return sqrt(min(min(launchEdge2(p,a,b),launchEdge2(p,b,c)),min(launchEdge2(p,c,d),launchEdge2(p,d,a))))*(1.0-2.0*inside);
 }
 float launchLetters(vec2 p,float aspect){
+ // Optically centered, forward-leaning racing cut: broad V, compact sans-serif 1.
+ p.x-=(0.48-p.y)*0.16*aspect;p.x+=0.04*aspect;
  vec2 k=vec2(aspect,1.0);
- float vLeft=launchQuad(p,vec2(0.07,0.10)*k,vec2(0.21,0.10)*k,vec2(0.36,0.86)*k,vec2(0.25,0.86)*k);
- float vRight=launchQuad(p,vec2(0.39,0.10)*k,vec2(0.53,0.10)*k,vec2(0.36,0.86)*k,vec2(0.25,0.86)*k);
- float oneStem=launchQuad(p,vec2(0.79,0.10)*k,vec2(0.89,0.10)*k,vec2(0.89,0.86)*k,vec2(0.79,0.86)*k);
- float oneCap=launchQuad(p,vec2(0.73,0.18)*k,vec2(0.79,0.10)*k,vec2(0.85,0.10)*k,vec2(0.85,0.25)*k);
- float oneFoot=launchQuad(p,vec2(0.73,0.77)*k,vec2(0.92,0.77)*k,vec2(0.92,0.86)*k,vec2(0.73,0.86)*k);
- return min(min(vLeft,vRight),min(oneStem,min(oneCap,oneFoot)));
+ float vLeft=launchQuad(p,vec2(0.06,0.12)*k,vec2(0.235,0.12)*k,vec2(0.40,0.84)*k,vec2(0.29,0.84)*k);
+ float vRight=launchQuad(p,vec2(0.45,0.12)*k,vec2(0.64,0.12)*k,vec2(0.40,0.84)*k,vec2(0.29,0.84)*k);
+ float oneStem=launchQuad(p,vec2(0.76,0.12)*k,vec2(0.90,0.12)*k,vec2(0.90,0.84)*k,vec2(0.76,0.84)*k);
+ float oneCap=launchQuad(p,vec2(0.67,0.24)*k,vec2(0.76,0.12)*k,vec2(0.90,0.12)*k,vec2(0.90,0.27)*k);
+ return min(min(vLeft,vRight),min(oneStem,oneCap));
 }
 float launchHash(vec2 p){vec3 q=fract(vec3(p.x,p.y,p.x)*0.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
 float launchNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(launchHash(i),launchHash(i+vec2(1.0,0.0)),f.x),mix(launchHash(i+vec2(0.0,1.0)),launchHash(i+vec2(1.0)),f.x),f.y);}
