@@ -18,9 +18,60 @@ float voiceWave(float a,float t,float h,float style) {
  if(style<13.5)return 0.5+0.2*sin(a*3.0-t*0.4)+0.15*cos(a*5.0+t*0.3)+0.12*sin(a*9.0-t*0.7);
  return 0.5+0.3*cos(a*3.0-t)+0.18*cos(a*6.0-t*2.0);
 }
+// launchV1 uses four bounded convex polygons; no fonts, textures or user code.
+float launchCross(vec2 a,vec2 b){return a.x*b.y-a.y*b.x;}
+float launchEdge2(vec2 p,vec2 a,vec2 b){vec2 e=b-a,q=p-a;vec2 v=q-e*clamp(dot(q,e)/dot(e,e),0.0,1.0);return dot(v,v);}
+float launchQuad(vec2 p,vec2 a,vec2 b,vec2 c,vec2 d){
+ float inside=step(0.0,launchCross(b-a,p-a))*step(0.0,launchCross(c-b,p-b))*step(0.0,launchCross(d-c,p-c))*step(0.0,launchCross(a-d,p-d));
+ return sqrt(min(min(launchEdge2(p,a,b),launchEdge2(p,b,c)),min(launchEdge2(p,c,d),launchEdge2(p,d,a))))*(1.0-2.0*inside);
+}
+float launchLetters(vec2 p,float aspect){
+ vec2 k=vec2(aspect,1.0);
+ float vLeft=launchQuad(p,vec2(0.07,0.10)*k,vec2(0.21,0.10)*k,vec2(0.36,0.86)*k,vec2(0.25,0.86)*k);
+ float vRight=launchQuad(p,vec2(0.39,0.10)*k,vec2(0.53,0.10)*k,vec2(0.36,0.86)*k,vec2(0.25,0.86)*k);
+ float oneStem=launchQuad(p,vec2(0.79,0.10)*k,vec2(0.89,0.10)*k,vec2(0.89,0.86)*k,vec2(0.79,0.86)*k);
+ float oneCap=launchQuad(p,vec2(0.73,0.18)*k,vec2(0.79,0.10)*k,vec2(0.85,0.10)*k,vec2(0.85,0.25)*k);
+ float oneFoot=launchQuad(p,vec2(0.73,0.77)*k,vec2(0.92,0.77)*k,vec2(0.92,0.86)*k,vec2(0.73,0.86)*k);
+ return min(min(vLeft,vRight),min(oneStem,min(oneCap,oneFoot)));
+}
+float launchHash(vec2 p){vec3 q=fract(vec3(p.x,p.y,p.x)*0.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
+float launchNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(launchHash(i),launchHash(i+vec2(1.0,0.0)),f.x),mix(launchHash(i+vec2(0.0,1.0)),launchHash(i+vec2(1.0)),f.x),f.y);}
 vec4 shade(vec2 uv) {
  float t=clockTime*speed;
  vec3 a=paletteA.xyz,b=paletteB.xyz,c=paletteC.xyz;
+ // Solid forged V1. Audio adds short exterior fins; the readable face never deforms.
+ if(effectType>16.5){
+  float aspect=extent.x/max(extent.y,1.0),aa=1.0/max(extent.y,1.0);
+  vec2 p=uv*vec2(aspect,1.0);
+  float front=launchLetters(p,aspect),back=launchLetters(p-vec2(0.018*aspect,0.024),aspect);
+  float face=1.0-smoothstep(-aa,aa,front),side=1.0-smoothstep(-aa,aa,back);
+  float solid=max(face,side),level=clamp(audioLevel*intensity,0.0,1.0);
+  float density=clamp(frequency,0.25,4.0);
+  float wave=pow(0.5+0.5*sin((p.x*25.0+p.y*41.0)*density-t*3.2),8.0);
+  wave*=0.35+0.65*pow(0.5+0.5*sin(p.x*13.0-p.y*17.0+t*1.3),2.0);
+  float expansion=pow(level,1.8)*0.065*wave;
+  float fin=1.0-smoothstep(-aa,aa,front-expansion);
+  float outer=max(front-expansion,0.0);
+  float halo=exp(-outer/0.007)*(1.0-smoothstep(0.006,0.008,outer))*clamp(glow,0.0,1.0)*(0.20+level*0.48);
+  float light=max(fin,halo),coverage=clamp(solid+(1.0-solid)*light,0.0,1.0);
+  vec3 edge=mix(a,b,smoothstep(0.10,0.65,uv.x));
+  edge=mix(edge,c,smoothstep(0.48,0.96,uv.x)*0.76+smoothstep(0.66,0.92,uv.y)*0.20);
+  vec2 normal=normalize(vec2(launchLetters(p+vec2(aa,0.0),aspect)-front,launchLetters(p+vec2(0.0,aa),aspect)-front)+vec2(0.000001));
+  float bevel=(1.0-smoothstep(0.0,0.018,-front))*face;
+  float rim=exp(-abs(front+0.002)/0.0025)*face;
+  float grain=launchNoise(p*180.0),stone=launchNoise(p*31.0);
+  float crack=1.0-smoothstep(0.008,0.035,abs(launchNoise(p*66.0)-launchNoise(p*109.0+vec2(4.2))));
+  float gloss=pow(0.5+0.5*sin(p.x*3.5-p.y*5.0+0.5),14.0);
+  vec3 metal=vec3(0.012,0.015,0.021)+vec3(0.025,0.030,0.038)*stone+vec3(0.010)*grain+vec3(0.075,0.080,0.090)*gloss;
+  metal*=1.0-crack*0.52;
+  metal+=edge*crack*0.022;
+  float reflection=0.18+0.64*max(dot(normal,normalize(vec2(-0.7,-0.9))),0.0);
+  metal=mix(metal,edge*reflection,bevel*0.85);
+  metal+=edge*rim*0.72;
+  vec3 extrusion=vec3(0.009,0.011,0.017)+edge*(0.055+0.10*smoothstep(0.4,0.9,uv.y));
+  vec3 color=mix(extrusion,metal,face)*solid+edge*light*(1.0-solid);
+  return vec4(clamp(color,vec3(0.0),vec3(coverage))*alpha,coverage*alpha);
+ }
  // One closed contour; integer angular harmonics keep the seam connected.
  if(effectType>15.5) {
   vec2 p=(uv-0.5)*extent;

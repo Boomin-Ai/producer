@@ -6489,6 +6489,9 @@
                     },
                     {
                       "const": "voiceRing"
+                    },
+                    {
+                      "const": "launchV1"
                     }
                   ]
                 },
