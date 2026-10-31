@@ -29,6 +29,7 @@ for(const layout of doc.set.layouts){
   const projection=outputProjection(doc,session.snapshot()),nodes=flatten(projection.root),host=nodes.find(n=>n.slotId==='host'),shader=nodes.find(n=>n.shader?.effect==='launchV1'),plate=nodes.find(n=>n.assetId);
   assert.equal(host,undefined,'Camera removed from every layout');assert(!nodes.some(n=>n.type==='slot'));assert.equal(shader.shader.effect,'launchV1');assert.equal(plate.fit,layout.id.startsWith('sea')?'contain':'cover');assert(nodes.indexOf(plate)<nodes.indexOf(shader));
   const title=nodes.find(n=>n.assetId==='title');assert(title,'Title remains an independent editable layer');assert.equal(title.styles.left+title.styles.width/2,shader.styles.left+shader.styles.width/2,'V1 and Road To share a centerline');
+  const captions=nodes.find(n=>n.id.endsWith('/live-captions'));assert(captions);assert.equal(captions.styles.textTransform,'uppercase');assert(captions.styles.fontFamily.includes('Impact'));if(portrait){assert(captions.styles.top>=shader.styles.top+shader.styles.height);}else{assert(captions.styles.left>shader.styles.left+shader.styles.width);assert(captions.styles.height>=650);assert(shader.styles.left+shader.styles.width/2<layout.width/2);}
   assert.equal(shader.shader.intensity,live?1.25:0);
   session.send({type:'field',key:'sensitivity',value:1.7});session.send({type:'field',key:'motion',value:1.4});session.send({type:'field',key:'glow',value:.3});
   const changed=flatten(outputProjection(doc,session.snapshot()).root).find(n=>n.shader?.effect==='launchV1').shader;
