@@ -46,3 +46,7 @@ pub extern "C" fn producer_audio_reactive_level()->f32{
  #[test]fn timestamp_wrap(){let v=((u32::MAX-30)as u64)<<32|1_000_000;assert_eq!(sample_level(v,5),1.);}
  #[test]fn direct_audio_mute_gain_and_cleanup(){let key=999;register(key,0.5,false);audio_sample(key,0.8);assert!(producer_audio_reactive_level()>0.3);configure(key,1.,true);assert_eq!(producer_audio_reactive_level(),0.);configure(key,0.,false);assert_eq!(producer_audio_reactive_level(),0.);unregister(key);assert_eq!(producer_audio_reactive_level(),0.);publish(f32::NAN);assert_eq!(producer_audio_reactive_level(),0.);}
 }
+
+/// Read-only source identity/gain for native transcription; no microphone activation.
+pub fn first_input()->Option<usize>{INPUTS.iter().find_map(|i|{let key=i.key.load(Ordering::Acquire);(key!=0&&i.gain.load(Ordering::Relaxed)>0).then_some(key)})}
+pub fn input_gain(key:usize)->Option<f32>{INPUTS.iter().find(|i|i.key.load(Ordering::Acquire)==key&&key!=0).map(|i|i.gain.load(Ordering::Relaxed) as f32/1_000_000.)}

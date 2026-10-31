@@ -95,6 +95,7 @@ extern "C" fn extra_audio_cb(
     }
     let key = source as usize;
     super::audio_reactive::audio_sample(key,peak);
+    unsafe {super::transcription::capture(key,plane,audio.frames as usize);}
     for (slot_src, slot_peak) in EXTRA_PEAKS.iter() {
         if slot_src.load(Ordering::Relaxed) == key {
             slot_peak.fetch_max((peak * 1_000_000.0) as u64, Ordering::Relaxed);

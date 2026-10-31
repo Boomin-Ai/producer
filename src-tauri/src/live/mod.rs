@@ -4,6 +4,7 @@
 
 pub mod animation;
 pub mod audio_reactive;
+pub mod transcription;
 pub mod bridge;
 #[cfg(have_engine)]
 mod callback_diagnostics;

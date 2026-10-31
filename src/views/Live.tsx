@@ -1,3 +1,4 @@
+import {LiveCaptions} from '../features/transcription/LiveCaptions';
 import {PresentationRelay} from "../features/presentation/presentationRelay";
 import {RoomSetControls} from "../features/presentation/RoomSetControls";
 import {modulePushPublisher} from '../features/presentation/modulePush';
@@ -8390,6 +8391,7 @@ export function LiveView({
             * Scenes, guests, votes and chat stay, gated by `can`. */}
           {isHost ? (
             <>
+          <LiveCaptions key={roomId??'local'} enabled={docApplied&&!!setRehearsal.package.set.values.liveCaption} onText={text=>{if(setRehearsal.package.set.values.liveCaption)setRehearsal.send({type:'field',key:'liveCaption',value:text});}} />
           {/* The guest link IS the guest feature: no flag, no door. */}
           <span className="hd-link-group" hidden={!canGuests}>
             <button

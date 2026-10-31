@@ -370,6 +370,8 @@ pub fn run() {
             live::commands::live_set_return,
             live::commands::live_restore_room,
             live::commands::live_replace_source,
+            live::commands::live_transcription_start,
+            live::commands::live_transcription_stop,
             live::commands::live_program_audio_start,
             live::commands::live_program_audio_read,
             live::commands::live_program_audio_stop,

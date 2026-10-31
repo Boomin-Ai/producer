@@ -30,6 +30,7 @@ export async function createRoadToV1(options={}){
         {id:'road-cleanplate',type:'media',assetId:orientation,fit:'cover',styles:rect(0,0,width,height)},
         {id:'header-cleanplate',type:'box',styles:{...rect(0,0,width,portrait?620:530),background:'#ffffff'},children:[]},
         {id:'centered-title',type:'media',assetId:'title',fit:'contain',styles:portrait?rect(35,95,1010,444):rect(410,25,1100,484)},
+        {id:'live-captions',type:'text',text:value('liveCaption'),styles:{...rect(portrait?70:150,portrait?1680:960,portrait?940:1620,portrait?150:100),fontSize:portrait?48:44,fontWeight:700,color:'#ffffff',textAlign:'center',textShadow:'0 2px 7px #000000',overflow:'hidden'}},
         {id:'launch-lettering',type:'shader',styles:rect(sx,sy,sw,sh),shader:{effect:'launchV1',colors:['#00d9ff','#ed17df','#ffae24'],speed:live?.55:0,intensity:live?1.25:0,scale:1,opacity:1,radius:0,glow:.7,quality:'medium',clock:'show',bindings:{...(live?{intensity:value('sensitivity'),speed:value('motion')}:{}),glow:value('glow')}}},
       ]}});
   }
@@ -39,7 +40,7 @@ export async function createRoadToV1(options={}){
     template.root.children=[
       {id:'liquid-background',type:'shader',styles:rect(0,0,width,height),shader:{effect:'voiceSea',colors:['#00d9ff','#ed17df','#ffae24'],speed:.55,intensity:1.5,scale:1,opacity:1,radius:0,quality:'medium',clock:'show',glow:.7,bindings:{intensity:value('seaStrength'),speed:value('motion')}}},
       {id:'floating-title',type:'media',assetId:'title',fit:'contain',styles:portrait?rect(35,95,1010,444):rect(410,25,1100,484)},
-      ...template.root.children.filter(n=>n.id==='launch-lettering'),
+      ...template.root.children.filter(n=>n.id==='launch-lettering'||n.id==='live-captions'),
     ];layouts.push(template);
   }
   const controls=[...layouts.map(layout=>({id:layout.id,type:'button',label:layout.label,action:{type:'layout.select',layoutId:layout.id}})),
@@ -48,8 +49,8 @@ export async function createRoadToV1(options={}){
     {id:'sea-strength',type:'number',label:'Sea response',key:'seaStrength'},
     {id:'glow',type:'number',label:'Neon glow',key:'glow'},
   ];
-  const raw={schema:'producer.presentation/2',id:'road-to-v1',name:'Road To V1',version:'1.1.1',runtime:{schema:'producer.modules/1',definitions:{},instances:[]},set:{
-    initialLayout:'sea-landscape',assets,values:{seaStrength:{type:'number',default:1.5,min:0,max:2},sensitivity:{type:'number',default:1.25,min:0,max:2},motion:{type:'number',default:.55,min:0,max:4},glow:{type:'number',default:.7,min:0,max:1}},feeds:{},slots:[],components:{},layouts,controls,
+  const raw={schema:'producer.presentation/2',id:'road-to-v1',name:'Road To V1',version:'1.2.0',runtime:{schema:'producer.modules/1',definitions:{},instances:[]},set:{
+    initialLayout:'sea-landscape',assets,values:{liveCaption:{type:'text',default:'',maxLength:160},seaStrength:{type:'number',default:1.5,min:0,max:2},sensitivity:{type:'number',default:1.25,min:0,max:2},motion:{type:'number',default:.55,min:0,max:4},glow:{type:'number',default:.7,min:0,max:1}},feeds:{},slots:[],components:{},layouts,controls,
     controlArrangement:{sections:[{id:'composition',label:'Composition',controls:layouts.map(l=>`set:${l.id}`)},{id:'lighting',label:'Voice and lighting',controls:['set:sensitivity','set:motion','set:glow','set:sea-strength']}],minimized:[...layouts.map(l=>`set:${l.id}`),'set:sensitivity']},
   }};
   const bundle=await build({stdin:{contents:"export {parsePackage} from './src/features/presentation/schema';",resolveDir:root},bundle:true,platform:'node',format:'esm',write:false});
