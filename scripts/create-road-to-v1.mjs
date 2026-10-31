@@ -23,7 +23,7 @@ export async function createRoadToV1(options={}){
   const layouts=[];
   for(const mode of ['live','title'])for(const orientation of ['landscape','portrait']){
     const portrait=orientation==='portrait',width=portrait?1080:1920,height=portrait?1920:1080;
-    const sx=portrait?60:105,sy=portrait?650:480,sw=portrait?960:1150,sh=portrait?800:530;
+    const sx=portrait?60:105,sy=portrait?510:370,sw=portrait?960:1150,sh=portrait?800:530;
     const live=mode==='live';
     layouts.push({id:`${mode}-${orientation}`,label:`${live?'Live':'Title'} · ${portrait?'Portrait':'Landscape'}`,width,height,
       animation:{tracks:[],transition:{type:'morph',durationMs:600,contentDurationMs:0}},
@@ -31,14 +31,14 @@ export async function createRoadToV1(options={}){
         {id:'road-cleanplate',type:'media',assetId:orientation,fit:'cover',styles:rect(0,0,width,height)},
         {id:'header-cleanplate',type:'box',styles:{...rect(0,0,width,portrait?620:530),background:'#ffffff'},children:[]},
         {id:'centered-title',type:'media',assetId:'title',fit:'contain',styles:portrait?rect(35,95,1010,444):rect(130,25,1100,484)},
-        {id:'caption-panel',type:'box',styles:{...rect(portrait?70:1280,portrait?1410:240,portrait?940:580,portrait?430:790),background:'linear-gradient(135deg, #00d9ff 0%, #ed17df 50%, #ffae24 100%)',borderRadius:22,overflow:'hidden'},children:[
+        {id:'caption-panel',type:'box',styles:{...rect(portrait?70:1280,portrait?1270:130,portrait?940:580,portrait?430:790),background:'linear-gradient(135deg, #00d9ff 0%, #ed17df 50%, #ffae24 100%)',borderRadius:22,overflow:'hidden'},children:[
           {id:'caption-panel-inner',type:'box',styles:{...rect(3,3,portrait?934:574,portrait?424:784),background:'#0b0b0c',borderRadius:19},children:[]},
         ]},
-        {id:'caption-portrait',type:'box',styles:{...rect(portrait?105:1320,portrait?1440:275,portrait?88:112,portrait?88:112),overflow:'hidden',borderRadius:12},children:[
+        {id:'caption-portrait',type:'box',styles:{...rect(portrait?105:1320,portrait?1300:165,portrait?88:112,portrait?88:112),overflow:'hidden',borderRadius:12},children:[
           {id:'caption-portrait-photo',type:'media',assetId:'host',fit:'cover',styles:portrait?rect(-42,-4,194,161):rect(-53,-5,246,204)},
         ]},
-        {id:'caption-host-name',type:'text',text:'KLEVELAND',styles:{...rect(portrait?220:1455,portrait?1452:307,portrait?720:360,55),fontFamily:'Impact, Arial Narrow, sans-serif',fontSize:portrait?34:38,fontWeight:400,letterSpacing:1,color:'#e9ffff'}},
-        {id:'live-captions',type:'text',text:value('liveCaption'),styles:{...rect(portrait?110:1320,portrait?1555:425,portrait?860:500,portrait?250:555),fontFamily:'Impact, Arial Narrow, sans-serif',fontSize:portrait?58:72,fontWeight:400,lineHeight:1.03,letterSpacing:.6,textTransform:'uppercase',color:'#e9ffff',textAlign:portrait?'center':'left',textShadow:'2px 2px 0 #0b1420, -2px -2px 0 #0b1420, 4px 4px 0 #9d217a, 0 0 12px #00d9ff55',overflow:'hidden'}},
+        {id:'caption-host-name',type:'text',text:'KLEVELAND',styles:{...rect(portrait?220:1455,portrait?1312:197,portrait?720:360,55),fontFamily:'Impact, Arial Narrow, sans-serif',fontSize:portrait?34:38,fontWeight:400,letterSpacing:1,color:'#e9ffff'}},
+        {id:'live-captions',type:'text',text:value('liveCaption'),styles:{...rect(portrait?110:1320,portrait?1415:315,portrait?860:500,portrait?250:555),fontFamily:'Impact, Arial Narrow, sans-serif',fontSize:portrait?58:72,fontWeight:400,lineHeight:1.03,letterSpacing:.6,textTransform:'uppercase',color:'#e9ffff',textAlign:portrait?'center':'left',textShadow:'2px 2px 0 #0b1420, -2px -2px 0 #0b1420, 4px 4px 0 #9d217a, 0 0 12px #00d9ff55',overflow:'hidden',display:'flex',alignItems:'flex-end',whiteSpace:'pre-wrap'}},
         {id:'launch-lettering',type:'shader',styles:rect(sx,sy,sw,sh),shader:{effect:'launchV1',colors:['#00d9ff','#ed17df','#ffae24'],speed:live?.55:0,intensity:live?1.25:0,scale:1,opacity:1,radius:0,glow:.7,quality:'medium',clock:'show',bindings:{...(live?{intensity:value('sensitivity'),speed:value('motion')}:{}),glow:value('glow')}}},
       ]}});
   }
@@ -57,8 +57,8 @@ export async function createRoadToV1(options={}){
     {id:'sea-strength',type:'number',label:'Sea response',key:'seaStrength'},
     {id:'glow',type:'number',label:'Neon glow',key:'glow'},
   ];
-  const raw={schema:'producer.presentation/2',id:'road-to-v1',name:'Road To V1',version:'1.2.2',runtime:{schema:'producer.modules/1',definitions:{},instances:[]},set:{
-    initialLayout:'sea-landscape',assets,values:{liveCaption:{type:'text',default:'',maxLength:80},seaStrength:{type:'number',default:1.5,min:0,max:2},sensitivity:{type:'number',default:1.25,min:0,max:2},motion:{type:'number',default:.55,min:0,max:4},glow:{type:'number',default:.7,min:0,max:1}},feeds:{},slots:[],components:{},layouts,controls,
+  const raw={schema:'producer.presentation/2',id:'road-to-v1',name:'Road To V1',version:'1.2.3',runtime:{schema:'producer.modules/1',definitions:{},instances:[]},set:{
+    initialLayout:'sea-landscape',assets,values:{liveCaption:{type:'text',default:'',maxLength:4096},seaStrength:{type:'number',default:1.5,min:0,max:2},sensitivity:{type:'number',default:1.25,min:0,max:2},motion:{type:'number',default:.55,min:0,max:4},glow:{type:'number',default:.7,min:0,max:1}},feeds:{},slots:[],components:{},layouts,controls,
     controlArrangement:{sections:[{id:'composition',label:'Composition',controls:layouts.map(l=>`set:${l.id}`)},{id:'lighting',label:'Voice and lighting',controls:['set:sensitivity','set:motion','set:glow','set:sea-strength']}],minimized:[...layouts.map(l=>`set:${l.id}`),'set:sensitivity']},
   }};
   const bundle=await build({stdin:{contents:"export {parsePackage} from './src/features/presentation/schema';",resolveDir:root},bundle:true,platform:'node',format:'esm',write:false});

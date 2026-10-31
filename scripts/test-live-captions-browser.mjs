@@ -16,7 +16,7 @@ try{
  await p.evaluate(()=>window.transcript({session:1,state:'listening',text:'Road to version one',is_final:false}));
  await p.frameLocator('iframe').getByText('Road to version one',{exact:true}).waitFor();
  assert.equal(await p.evaluate(()=>window.session.exportPreparedPackage().set.values.liveCaption.default),'','transient speech never persists into Set JSON');
- await p.evaluate(()=>window.transcript({session:1,state:'listening',text:'We are building the next generation of creative tools and every word should stay visible while we stream live. Newest words here.',is_final:false}));assert((await p.evaluate(()=>window.session.snapshot().values.liveCaption)).length<=80);assert((await p.evaluate(()=>window.session.snapshot().values.liveCaption)).endsWith('Newest words here.'));
+ await p.evaluate(()=>window.transcript({session:1,state:'listening',text:'We are building the next generation of creative tools and every word should stay visible while we stream live. Newest words here.',is_final:false}));assert((await p.evaluate(()=>window.session.snapshot().values.liveCaption)).length>80);assert((await p.evaluate(()=>window.session.snapshot().values.liveCaption)).endsWith('Newest words here.'));
  await p.getByRole('button',{name:'Stop captions'}).click();assert.equal(await p.evaluate(()=>window.session.snapshot().values.liveCaption),'');assert.deepEqual(await p.evaluate(()=>window.stops),[1]);
  await p.evaluate(()=>window.transcript({session:1,state:'listening',text:'stale text',is_final:true}));assert.equal(await p.evaluate(()=>window.session.snapshot().values.liveCaption),'');
  console.log('PASS: caption start/stop, partial text reaches actual SetPreview, caption excluded from saved JSON, stop clears and stale sessions ignored.');

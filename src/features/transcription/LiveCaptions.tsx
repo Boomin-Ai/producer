@@ -4,7 +4,7 @@ import {listen} from '@tauri-apps/api/event';
 import {notifyError} from '../../lib/notices';
 type Update={session:number;state:string;text:string;is_final:boolean;message?:string};
 export function LiveCaptions({enabled,onText,maxLength=160}:{enabled:boolean;onText:(text:string)=>void;maxLength?:number}){
- const [state,setState]=useState('off'),session=useRef<number|null>(null),lastText=useRef(''),active=useRef(true),text=useRef(onText),limit=useRef(maxLength);text.current=onText;limit.current=Math.max(16,Math.min(160,maxLength));
+ const [state,setState]=useState('off'),session=useRef<number|null>(null),lastText=useRef(''),active=useRef(true),text=useRef(onText),limit=useRef(maxLength);text.current=onText;limit.current=Math.max(16,Math.min(4096,maxLength));
  const stop=async()=>{const id=session.current;session.current=null;setState('off');lastText.current='';text.current('');if(id!==null)await invoke('live_transcription_stop',{session:id}).catch(()=>{});};
  useEffect(()=>{active.current=true;let disposed=false;let unlisten:(()=>void)|undefined;
   void listen<Update>('live://transcript',({payload:p})=>{if(disposed||!active.current||session.current!==p.session)return;

@@ -92,7 +92,7 @@ export function outputProjection(doc: PresentationPackage, state: RehearsalState
     if(n.type==='media'){out.assetId=n.assetId;out.fit=n.fit??'contain';out.loop=mediaConfig(doc,n.assetId!).loop;out.autoplay=mediaConfig(doc,n.assetId!).start==='entry';if(state.media?.[n.assetId!])out.playback={...state.media[n.assetId!]};}
     if (n.type === 'text') {
       out.text = String(evaluate(n.text!, publicState, props, 64, doc.set.tokens));
-      if (out.text.length > 1024) throw new Error('Output text budget exceeded.');
+      if (out.text.length > 4096) throw new Error('Output text budget exceeded.');
     }
     if (n.type === 'slot') {
       out.slotId = n.slotId;

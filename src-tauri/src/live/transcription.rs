@@ -68,12 +68,12 @@ pub async fn start(app:tauri::AppHandle)->Result<u64,String>{
        if let Ok(v)=serde_json::from_str::<serde_json::Value>(&raw){
         if v["type"]=="Error"{failure=Some("Deepgram could not transcribe this stream".into());break;}
         if v["type"]=="Results"{
-         let text=v["channel"]["alternatives"][0]["transcript"].as_str().unwrap_or("").trim();if text.is_empty(){if v["speech_final"].as_bool().unwrap_or(false){committed.clear();}continue;}
+         let text=v["channel"]["alternatives"][0]["transcript"].as_str().unwrap_or("").trim();if text.is_empty(){continue;}
          let final_result=v["is_final"].as_bool().unwrap_or(false);
          let display=merge_caption(&committed,text);
          if final_result{committed=display.clone();}
          if GENERATION.load(Ordering::Acquire)==session{emit(&app,session,"listening",display,final_result,None);}
-         if v["speech_final"].as_bool().unwrap_or(false){committed.clear();}
+
         }
        }
       },
@@ -92,6 +92,6 @@ pub async fn start(app:tauri::AppHandle)->Result<u64,String>{
  result.map_err(String::from)
 }
 fn merge_caption(committed:&str,partial:&str)->String{
- let joined=if committed.is_empty(){partial.to_string()}else{format!("{committed} {partial}")};let chars:Vec<char>=joined.chars().collect();if chars.len()<=160{return joined;}let tail:String=chars[chars.len()-160..].iter().collect();tail.split_once(' ').map(|(_,s)|s.to_string()).unwrap_or(tail)
+ let joined=if committed.is_empty(){partial.to_string()}else{format!("{committed} {partial}")};let chars:Vec<char>=joined.chars().collect();if chars.len()<=4096{return joined;}let tail:String=chars[chars.len()-4096..].iter().collect();tail.split_once(' ').map(|(_,s)|s.to_string()).unwrap_or(tail)
 }
-#[cfg(test)]mod tests{use super::*;#[test]fn captions_bound_and_merge(){assert_eq!(merge_caption("one","two"),"one two");assert!(merge_caption("",&"é ".repeat(200)).chars().count()<=160);}}
+#[cfg(test)]mod tests{use super::*;#[test]fn captions_bound_and_merge(){assert_eq!(merge_caption("one","two"),"one two");assert!(merge_caption("",&"é ".repeat(4000)).chars().count()<=4096);}}

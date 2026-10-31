@@ -168,7 +168,7 @@ const node: Codec<PresentationNode> = union(
   object({ ...common, type: literal('component'), component: id, props: dictionary(binding) }),
 );
 const valueDefinition = union(
-  object({ type: literal('text'), default: string(160), maxLength: number(1, 160) }),
+  object({ type: literal('text'), default: string(4096), maxLength: number(1, 4096) }),
   object({ type: literal('number'), default: number(-1e6, 1e6), min: number(-1e6, 1e6), max: number(-1e6, 1e6) }),
   object({ type: literal('boolean'), default: boolean }),
 );

@@ -353,12 +353,12 @@
                   },
                   "default": {
                     "type": "string",
-                    "maxLength": 160
+                    "maxLength": 4096
                   },
                   "maxLength": {
                     "type": "number",
                     "minimum": 1,
-                    "maximum": 160
+                    "maximum": 4096
                   }
                 },
                 "required": [
@@ -440,12 +440,12 @@
                   },
                   "default": {
                     "type": "string",
-                    "maxLength": 160
+                    "maxLength": 4096
                   },
                   "maxLength": {
                     "type": "number",
                     "minimum": 1,
-                    "maximum": 160
+                    "maximum": 4096
                   }
                 },
                 "required": [
