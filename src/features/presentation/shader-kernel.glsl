@@ -39,6 +39,36 @@ float launchNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mi
 vec4 shade(vec2 uv) {
  float t=clockTime*speed;
  vec3 a=paletteA.xyz,b=paletteB.xyz,c=paletteC.xyz;
+ // Full-frame liquid metal: slow ocean swell plus voice-driven capillary ripples.
+ if(effectType>17.5){
+  float level=clamp(audioLevel*intensity,0.0,1.0),strength=pow(level,1.6);
+  vec2 q=vec2((uv.x-0.5)*extent.x/max(extent.y,1.0)*3.0,uv.y*4.0);
+  float u=q.x*3.5+q.y*2.1-t*0.65,v=q.x*-2.7+q.y*4.2+t*0.43;
+  float swell=sin(u)*0.55+sin(v)*0.30+sin(q.x*6.0+sin(q.y*2.0)-t*0.8)*0.15;
+  vec2 delta=q-vec2(0.0,2.65);float r=max(length(delta),0.03),phase=r*16.0-t*2.4;
+  float ripple=sin(phase)*exp(-r*0.32)*strength;
+  float amplitude=0.20+strength*0.52;
+  float dx=(cos(u)*1.925-cos(v)*0.81)*amplitude+cos(phase)*delta.x/r*strength*1.15;
+  float dy=(cos(u)*1.155+cos(v)*1.26)*amplitude+cos(phase)*delta.y/r*strength*1.15;
+  float fineA=q.x*17.0+q.y*24.0+sin(q.y*4.0-t*0.6)*1.3-t*1.1;
+  float fineB=q.x*-23.0+q.y*13.0+sin(q.x*3.0+t*0.5)*1.2+t*0.9;
+  float textureStrength=0.65+strength*0.85;
+  dx+=(cos(fineA)*0.22+cos(fineB)*0.17)*textureStrength;
+  dy+=(cos(fineA)*0.32+cos(fineB)*0.12)*textureStrength;
+  vec3 n=normalize(vec3(-dx,-dy,1.0));
+  float silver=pow(max(dot(n,normalize(vec3(-0.35,-0.5,1.0))),0.0),24.0);
+  float crest=pow(clamp(0.5+0.5*(swell+ripple*0.5),0.0,1.0),7.0);
+  float depth=smoothstep(0.05,0.82,uv.y);
+  vec3 water=mix(vec3(0.92,0.95,0.97),vec3(0.014,0.027,0.043),depth);
+  float reflected=pow(0.5+0.5*sin(q.x*2.6+q.y*1.2+dx*2.2-t*0.25),5.0);
+  vec3 light=mix(a,b,0.5+0.5*sin(q.x*0.9+dy*0.6));light=mix(light,c,smoothstep(0.2,1.4,q.x));
+  float glint=pow(0.5+0.5*sin(fineA),18.0)*pow(0.5+0.5*sin(fineB),3.0);
+  water+=vec3(0.35,0.55,0.65)*glint*depth*(0.08+strength*0.22);
+  water*=0.65+0.35*n.z;water+=vec3(silver)*(0.10+depth*0.55);
+  water+=light*(reflected*(0.06+depth*0.32)+crest*depth*(0.10+strength*0.35));
+  water+=vec3(0.7,0.85,0.9)*smoothstep(0.72,0.95,swell+ripple*0.45)*depth*strength*0.16;
+  return vec4(clamp(water,vec3(0.0),vec3(1.0))*alpha,alpha);
+ }
  // Solid forged V1. Audio adds short exterior fins; the readable face never deforms.
  if(effectType>16.5){
   float aspect=extent.x/max(extent.y,1.0),aa=1.0/max(extent.y,1.0);

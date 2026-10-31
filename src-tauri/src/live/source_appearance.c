@@ -138,11 +138,11 @@ static void *shader_create(obs_data_t *settings,obs_source_t *source){
  const char *code=obs_data_get_string(settings,"_kernel");if(!code||!*code){free(s);return NULL;}
  s->width=(uint32_t)bounded(obs_data_get_double(settings,"width"),1920);s->height=(uint32_t)bounded(obs_data_get_double(settings,"height"),1920);
  const char *kind=obs_data_get_string(settings,"effect");
- const char *presets[]={"aurora","edgeGlow","lightSweep","plasma","silk","rings","grid","stars","petals","contours","prism","borderFlare","rain","snow","clouds","voiceBars","voiceRing","launchV1"};
- s->voice=strcmp(kind,"voiceBars")==0||strcmp(kind,"voiceRing")==0||strcmp(kind,"launchV1")==0;
- float mode=0;for(int i=0;i<18;i++){if(strcmp(kind,presets[i])==0){mode=(float)i;break;}}
+ const char *presets[]={"aurora","edgeGlow","lightSweep","plasma","silk","rings","grid","stars","petals","contours","prism","borderFlare","rain","snow","clouds","voiceBars","voiceRing","launchV1","voiceSea"};
+ s->voice=strcmp(kind,"voiceBars")==0||strcmp(kind,"voiceRing")==0||strcmp(kind,"launchV1")==0||strcmp(kind,"voiceSea")==0;
+ float mode=0;for(int i=0;i<19;i++){if(strcmp(kind,presets[i])==0){mode=(float)i;break;}}
  bool low=strcmp(obs_data_get_string(settings,"quality"),"low")==0;
- float reduction=mode==0||(mode>=3&&mode<11)?(low?.25f:.5f):(low?.5f:1.f);
+ float reduction=mode==0||mode==18||(mode>=3&&mode<11)?(low?.25f:.5f):(low?.5f:1.f);
  s->rw=(uint32_t)fmaxf(1,ceilf(s->width*reduction));s->rh=(uint32_t)fmaxf(1,ceilf(s->height*reduction));
  s->intensity=bounded(obs_data_get_double(settings,"intensity"),2);s->frequency=bounded(obs_data_get_double(settings,"scale"),4);s->alpha=bounded(obs_data_get_double(settings,"opacity"),1);
  char *error=NULL;obs_enter_graphics();s->effect=gs_effect_create(code,"producer-presets.effect",&error);

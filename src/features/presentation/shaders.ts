@@ -1,5 +1,5 @@
 export interface ShaderEffect {
- effect:'aurora'|'edgeGlow'|'lightSweep'|'plasma'|'silk'|'rings'|'grid'|'stars'|'petals'|'contours'|'prism'|'borderFlare'|'rain'|'snow'|'clouds'|'voiceBars'|'voiceRing'|'launchV1';
+ effect:'aurora'|'edgeGlow'|'lightSweep'|'plasma'|'silk'|'rings'|'grid'|'stars'|'petals'|'contours'|'prism'|'borderFlare'|'rain'|'snow'|'clouds'|'voiceBars'|'voiceRing'|'launchV1'|'voiceSea';
  colors:string[];speed:number;intensity:number;scale:number;
  opacity:number;radius:number;glow?:number;variant?:number;bindings?:Partial<Record<'intensity'|'speed'|'glow',import('./schema').Binding>>;quality:'low'|'medium';clock:'show'|'segment';
 }

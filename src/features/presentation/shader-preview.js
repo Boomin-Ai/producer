@@ -2,11 +2,11 @@
 function producerShaderPreview(canvas,config,width,height){
  const gl=canvas.getContext('webgl',{alpha:true,premultipliedAlpha:true,antialias:false,preserveDrawingBuffer:true});
  if(!gl){canvas.dataset.gpu='unavailable';return {draw(){},destroy(){}};}
- const mode=['aurora','edgeGlow','lightSweep','plasma','silk','rings','grid','stars','petals','contours','prism','borderFlare','rain','snow','clouds','voiceBars','voiceRing','launchV1'].indexOf(config.effect),low=config.quality==='low',reduction=mode===0||(mode>=3&&mode<11)?(low?.25:.5):(low?.5:1);
+ const mode=['aurora','edgeGlow','lightSweep','plasma','silk','rings','grid','stars','petals','contours','prism','borderFlare','rain','snow','clouds','voiceBars','voiceRing','launchV1','voiceSea'].indexOf(config.effect),low=config.quality==='low',reduction=mode===0||mode===18||(mode>=3&&mode<11)?(low?.25:.5):(low?.5:1);
  canvas.width=Math.max(1,Math.ceil(width*reduction));canvas.height=Math.max(1,Math.ceil(height*reduction));
  const compile=(type,code)=>{const s=gl.createShader(type);gl.shaderSource(s,code);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s;};
  const vs=compile(gl.VERTEX_SHADER,'attribute vec2 point;varying vec2 uv;void main(){uv=vec2((point.x+1.0)*0.5,(1.0-point.y)*0.5);gl_Position=vec4(point,0.0,1.0);}');
- const fs=compile(gl.FRAGMENT_SHADER,(mode===17?'precision highp float;':'precision mediump float;')+'varying vec2 uv;uniform float clockTime,effectType,speed,intensity,frequency,radius,alpha,audioLevel,glow,voiceStyle;uniform vec2 extent;uniform vec4 paletteA,paletteB,paletteC;\n'+PRODUCER_SHADER_KERNEL+'\nvoid main(){gl_FragColor=shade(uv);}');
+ const fs=compile(gl.FRAGMENT_SHADER,(mode>=17?'precision highp float;':'precision mediump float;')+'varying vec2 uv;uniform float clockTime,effectType,speed,intensity,frequency,radius,alpha,audioLevel,glow,voiceStyle;uniform vec2 extent;uniform vec4 paletteA,paletteB,paletteC;\n'+PRODUCER_SHADER_KERNEL+'\nvoid main(){gl_FragColor=shade(uv);}');
  const program=gl.createProgram();gl.attachShader(program,vs);gl.attachShader(program,fs);gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program));gl.useProgram(program);
  const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
  const point=gl.getAttribLocation(program,'point');gl.enableVertexAttribArray(point);gl.vertexAttribPointer(point,2,gl.FLOAT,false,0,0);

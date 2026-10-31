@@ -6492,6 +6492,9 @@
                     },
                     {
                       "const": "launchV1"
+                    },
+                    {
+                      "const": "voiceSea"
                     }
                   ]
                 },

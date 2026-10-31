@@ -1,6 +1,6 @@
 //! Trusted, bounded GPU presets. Packages select parameters, never shader code.
 use serde::{Deserialize, Serialize};
-pub const PRESETS:&[&str]=&["aurora","edgeGlow","lightSweep","plasma","silk","rings","grid","stars","petals","contours","prism","borderFlare","rain","snow","clouds","voiceBars","voiceRing","launchV1"];
+pub const PRESETS:&[&str]=&["aurora","edgeGlow","lightSweep","plasma","silk","rings","grid","stars","petals","contours","prism","borderFlare","rain","snow","clouds","voiceBars","voiceRing","launchV1","voiceSea"];
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ShaderEffect {

@@ -10,8 +10,8 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const bundle=await build({stdin:{contents:"export {parsePackage} from './src/features/presentation/schema';export {RehearsalSession} from './src/features/presentation/rehearsal';export {outputProjection} from './src/features/presentation/projection';",resolveDir:root},bundle:true,platform:'node',format:'esm',write:false});
 const {parsePackage,RehearsalSession,outputProjection}=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
 const json=fs.readFileSync(path.join(root,'docs/shows/road-to-v1.json'),'utf8'),doc=parsePackage(JSON.parse(json));
-assert.equal(doc.id,'road-to-v1');assert.equal(doc.show,undefined);assert.equal(doc.set.layouts.length,4);
-assert.deepEqual(doc.set.layouts.map(l=>l.id),['live-landscape','live-portrait','title-landscape','title-portrait']);
+assert.equal(doc.id,'road-to-v1');assert.equal(doc.show,undefined);assert.equal(doc.set.layouts.length,6);
+assert.deepEqual(doc.set.layouts.map(l=>l.id),['live-landscape','live-portrait','title-landscape','title-portrait','sea-landscape','sea-portrait']);
 assert.equal(doc.set.slots.length,0);
 assert(Buffer.byteLength(json)<40*1024*1024);
 for(const [id,asset]of Object.entries(doc.set.assets)){
@@ -23,18 +23,18 @@ assert(!json.includes('producer-media:'));assert(!/https?:\/\//.test(json));
 const flatten=node=>[node,...node.children.flatMap(flatten)];
 const session=new RehearsalSession(doc,undefined,'rehearsal');
 for(const layout of doc.set.layouts){
-  const portrait=layout.id.endsWith('portrait'),live=layout.id.startsWith('live');
+  const portrait=layout.id.endsWith('portrait'),live=!layout.id.startsWith('title');
   assert.equal(layout.width,portrait?1080:1920);assert.equal(layout.height,portrait?1920:1080);
   session.send({type:'control',action:{type:'layout.select',layoutId:layout.id}});
-  const projection=outputProjection(doc,session.snapshot()),nodes=flatten(projection.root),host=nodes.find(n=>n.slotId==='host'),shader=nodes.find(n=>n.shader),plate=nodes.find(n=>n.assetId);
-  assert.equal(host,undefined,'Camera removed from every layout');assert(!nodes.some(n=>n.type==='slot'));assert.equal(shader.shader.effect,'launchV1');assert.equal(plate.fit,'cover');assert(nodes.indexOf(plate)<nodes.indexOf(shader));
+  const projection=outputProjection(doc,session.snapshot()),nodes=flatten(projection.root),host=nodes.find(n=>n.slotId==='host'),shader=nodes.find(n=>n.shader?.effect==='launchV1'),plate=nodes.find(n=>n.assetId);
+  assert.equal(host,undefined,'Camera removed from every layout');assert(!nodes.some(n=>n.type==='slot'));assert.equal(shader.shader.effect,'launchV1');assert.equal(plate.fit,layout.id.startsWith('sea')?'contain':'cover');assert(nodes.indexOf(plate)<nodes.indexOf(shader));
   assert.equal(shader.shader.intensity,live?1.25:0);
   session.send({type:'field',key:'sensitivity',value:1.7});session.send({type:'field',key:'motion',value:1.4});session.send({type:'field',key:'glow',value:.3});
-  const changed=flatten(outputProjection(doc,session.snapshot()).root).find(n=>n.shader).shader;
+  const changed=flatten(outputProjection(doc,session.snapshot()).root).find(n=>n.shader?.effect==='launchV1').shader;
   assert.equal(changed.intensity,live?1.7:0);assert.equal(changed.speed,live?1.4:0);assert.equal(changed.glow,.3);
   session.send({type:'field',key:'sensitivity',value:1.25});session.send({type:'field',key:'motion',value:.55});session.send({type:'field',key:'glow',value:.7});
 }
 assert.deepEqual(doc.set.controls.filter(c=>c.type==='button').map(c=>c.action.layoutId),doc.set.layouts.map(l=>l.id));
 assert.deepEqual(await createRoadToV1({output:null}),doc,'Regeneration is reproducible');
 await assert.rejects(createRoadToV1({landscape:path.join(root,'missing-road-cleanplate.png'),output:null}),/background is missing/);
-console.log('PASS: Road To V1 four layouts, embedded assets, no camera, live/static controls and reproducible generation');
+console.log('PASS: Road To V1 six layouts, embedded assets, no camera, live/static controls and reproducible generation');
