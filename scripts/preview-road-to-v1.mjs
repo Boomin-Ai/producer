@@ -10,8 +10,8 @@ try{
   window.preview=id=>{const l=window.doc.set.layouts.find(l=>l.id===id);host.style.width=l.width>l.height?'1280px':'540px';root.render(R.createElement(SetPreview,{doc:window.doc,state:{...session.snapshot(),layoutId:id},output:{bindings:{host:'host-preview'},framing:{},sources:{items:[{id:'host-preview',src_w:480,src_h:640}]}}}));};
   window.frame=()=>{const c=document.createElement('canvas');c.width=480;c.height=640;const x=c.getContext('2d');x.fillStyle='#14161b';x.fillRect(0,0,480,640);x.fillStyle='#a4a6ad';x.beginPath();x.ellipse(240,230,98,120,0,0,Math.PI*2);x.fill();x.beginPath();x.ellipse(240,640,215,260,0,0,Math.PI*2);x.fill();x.fillStyle='white';x.font='22px Arial';x.textAlign='center';x.fillText('HOST CAMERA',240,600);window.emit?.({type:'guest_thumbs',thumbs:[{id:'host-preview',jpeg:c.toDataURL('image/jpeg').split(',')[1]}]});};
  },process.env.PRODUCER_CAPTION_PREVIEW??'');
- for(const id of ['live-landscape','live-portrait','title-landscape','title-portrait','sea-landscape','sea-portrait']){
+ for(const id of ['live-landscape','live-portrait','title-landscape','title-portrait','sea-landscape','sea-portrait','host-landscape','host-portrait']){
   await page.evaluate(id=>window.preview(id),id);await page.frameLocator('iframe').locator('canvas[data-effect="launchV1"]').first().waitFor();await page.waitForTimeout(1000);await page.evaluate(()=>window.frame());await page.waitForTimeout(300);await page.locator('.set-preview').screenshot({path:`target/road-to-v1/${id}.png`});
  }
- console.log('PASS: six actual SetPreview compositions with embedded artwork and live shader preview.');
+ console.log('PASS: eight actual SetPreview compositions with embedded artwork and live shader preview.');
 }finally{await browser.close();}

@@ -51,14 +51,21 @@ export async function createRoadToV1(options={}){
       ...template.root.children.filter(n=>['launch-lettering','caption-panel','caption-portrait','caption-host-name','live-captions'].includes(n.id)),
     ];layouts.push(template);
   }
+  for(const orientation of ['landscape','portrait']){
+    const portrait=orientation==='portrait',layout=structuredClone(layouts.find(l=>l.id===`sea-${orientation}`));
+    layout.id=`host-${orientation}`;layout.label=`Host camera · ${portrait?'Portrait':'Landscape'}`;
+    layout.root.children=layout.root.children.filter(n=>!['caption-portrait','caption-host-name','live-captions'].includes(n.id));
+    layout.root.children.push({id:'host-camera',type:'slot',slotId:'host',styles:rect(portrait?73:1283,portrait?1273:133,portrait?934:574,portrait?424:784),framing:{mode:'fill',x:.5,y:.5},appearance:{shape:'rectangle',cornerRadius:19,outlineWidth:0,outlineColor:'#ffffff',grayscale:0,opacity:1}});
+    layouts.push(layout);
+  }
   const controls=[...layouts.map(layout=>({id:layout.id,type:'button',label:layout.label,action:{type:'layout.select',layoutId:layout.id}})),
     {id:'sensitivity',type:'number',label:'Voice sensitivity',key:'sensitivity'},
     {id:'motion',type:'number',label:'Motion speed',key:'motion'},
     {id:'sea-strength',type:'number',label:'Sea response',key:'seaStrength'},
     {id:'glow',type:'number',label:'Neon glow',key:'glow'},
   ];
-  const raw={schema:'producer.presentation/2',id:'road-to-v1',name:'Road To V1',version:'1.2.3',runtime:{schema:'producer.modules/1',definitions:{},instances:[]},set:{
-    initialLayout:'sea-landscape',assets,values:{liveCaption:{type:'text',default:'',maxLength:4096},seaStrength:{type:'number',default:1.5,min:0,max:2},sensitivity:{type:'number',default:1.25,min:0,max:2},motion:{type:'number',default:.55,min:0,max:4},glow:{type:'number',default:.7,min:0,max:1}},feeds:{},slots:[],components:{},layouts,controls,
+  const raw={schema:'producer.presentation/2',id:'road-to-v1',name:'Road To V1',version:'1.3.0',runtime:{schema:'producer.modules/1',definitions:{},instances:[]},set:{
+    initialLayout:'sea-landscape',assets,values:{liveCaption:{type:'text',default:'',maxLength:4096},seaStrength:{type:'number',default:1.5,min:0,max:2},sensitivity:{type:'number',default:1.25,min:0,max:2},motion:{type:'number',default:.55,min:0,max:4},glow:{type:'number',default:.7,min:0,max:1}},feeds:{},slots:[{id:'host',label:'Host camera'}],components:{},layouts,controls,
     controlArrangement:{sections:[{id:'composition',label:'Composition',controls:layouts.map(l=>`set:${l.id}`)},{id:'lighting',label:'Voice and lighting',controls:['set:sensitivity','set:motion','set:glow','set:sea-strength']}],minimized:[...layouts.map(l=>`set:${l.id}`),'set:sensitivity']},
   }};
   const bundle=await build({stdin:{contents:"export {parsePackage} from './src/features/presentation/schema';",resolveDir:root},bundle:true,platform:'node',format:'esm',write:false});
@@ -73,6 +80,6 @@ if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.ur
   const args=process.argv.slice(2),options={};
   try{
     for(let i=0;i<args.length;i+=2){const key=args[i]?.replace(/^--/,'');if(!['landscape','portrait','output'].includes(key)||!args[i+1])throw Error('Usage: node scripts/create-road-to-v1.mjs [--landscape image.png] [--portrait image.png] [--output set.json]');options[key]=path.resolve(args[i+1]);}
-    const doc=await createRoadToV1(options);console.log(`Built ${doc.name}: six camera-free layouts with embedded backgrounds. ${options.output??defaults.output}`);
+    const doc=await createRoadToV1(options);console.log(`Built ${doc.name}: eight layouts including live host camera with embedded backgrounds. ${options.output??defaults.output}`);
   }catch(error){console.error(error.message);process.exitCode=1;}
 }
