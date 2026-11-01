@@ -303,6 +303,15 @@ jobs:
 
       # No APPLE_* env here on purpose: tauri must NOT sign/notarize the
       # engine-less intermediate app; signing happens after engine assembly.
+      - name: Check native preview coordinate mapping
+        run: |
+          clang -fobjc-arc -fblocks scripts/test-preview-geometry.m src-tauri/src/live/shim.m \
+            -framework AppKit -framework WebKit -framework AVFoundation \
+            -framework CoreMediaIO -framework SystemExtensions -framework CoreGraphics \
+            -o /tmp/producer-preview-geometry-test
+          /tmp/producer-preview-geometry-test
+          node scripts/test-preview-session.mjs
+
       - name: Build app (engine linked, unsigned)
         env:
           INCLUDE_NATIVE_GUEST: ${{ (github.event_name == 'push' || inputs.native_guest) && '1' || '0' }}

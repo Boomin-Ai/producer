@@ -18,7 +18,7 @@ function App() {
     if(!hasTauri())return;
     void (async()=>{
       const probe=await invoke<boolean>('live_set_v2_smoke_enabled');
-      const studio=import.meta.env.DEV&&import.meta.env.VITE_SCENE3D_STUDIO==='1'&&
+      const studio=import.meta.env.DEV&&(import.meta.env.VITE_SCENE3D_STUDIO==='1'||['1','review'].includes(import.meta.env.VITE_AUTHORING_DESKTOP_PROOF))&&
         await import('@tauri-apps/api/app').then(app=>app.getIdentifier())==='ai.boomin.producer.sets-v2-dev';
       setSetsDevelopment(probe||studio);
     })().catch(()=>{});

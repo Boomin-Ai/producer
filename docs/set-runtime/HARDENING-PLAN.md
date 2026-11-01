@@ -1012,3 +1012,60 @@ Next gates: physical camera/mic plus recording acceptance in a compatible app;
 stronger intent-aware visual evaluation and typography repair; authenticated
 hosted MCP preparation access; WYSIWYG edits and undo on the same document IDs.
 No production deployment in this milestone.
+
+### Desktop acceptance preparation — 2026-11-01
+
+The remaining native dev executable contains the older 0.4.77 version and is
+not accepted by the compiler's verified 0.4.78 profile. Do not bypass discovery
+or relabel that binary. The build script and reopen launcher now agree on
+`src-tauri/target/sets-v2-dev/Producer Sets v2 Dev.app`, and the development-only
+camera/audio/library-validation entitlements are checked into the repository.
+A conservative 3 GiB free-space preflight runs before profile changes or builds.
+
+Removed only the disposable Cache and Code Cache directories of the inactive
+`.hiringcafe-chrome-profile`, recovering about 1 GiB. Available space is about
+1.4 GiB; the build preflight correctly refused to start. Launcher syntax,
+entitlement plist and diff checks passed. No new native app was built or opened;
+physical capture and recording acceptance remain pending. Installed production,
+recordings, photos, browser sessions and conversation history were retained.
+
+### Desktop camera, microphone and dual recording acceptance — 2026-11-01
+
+Built and signed the compatible 0.4.78 isolated Tauri app after reclaiming
+disposable Google updater downloads, an unused older Codex executable, compiler
+cache and closed Wrangler logs older than 24 hours. The first build's completed
+compiler intermediates were removed when disk headroom tightened; the signed
+app and user data were retained. The final build includes the restored native
+safe-area mapping described in `docs/sets-v2/PREVIEW-GEOMETRY.md`. Dev staging and
+the macOS release workflow now gate builds on that real AppKit regression test.
+
+The repaired Claude-generated package was loaded into its own dev room with the
+FaceTime HD Camera and MacBook Air Microphone. Both native layouts rendered, and
+a simultaneous recording produced 1920×1080 and 1080×1920 files at 30 fps. The
+system decoder verified 10.400s landscape and 10.133s portrait recordings with
+microphone audio in both (decoded peaks 0.088919 and 0.089172). Decoded frames
+preserve the authored layout. A window-only screenshot confirms that both
+native previews now align with their HTML canvas outlines. The proof and decoded
+recording reports are in `target/visual-acceptance/desktop-proof.json` and the
+two `*-recording.json` files; recorded frame PNGs are alongside them.
+
+The acceptance harness now waits for asynchronous portrait preparation, scopes
+its run guard to the actual web document, serializes progress reports, bounds
+recording start/stop and cleans up attempted recording on failure. Its fixture
+explicitly activates the mic in the room scene; unmuting a hidden mic alone
+produced silent initial test files. Automatic recording is disabled after the
+test using local `VITE_AUTHORING_DESKTOP_PROOF=review`, which opens the saved
+room without resetting it.
+
+An additional diagnostic issue remains: the legacy `live_portrait_frame` readback
+enables continuous full-resolution CPU JPEG encoding on the video callback. A
+sample showed an unoptimized debug build spending its callback time there while
+encoder startup waited on the video output mutex. Acceptance now inspects the
+actual recorded files without enabling that diagnostic. This does not claim the
+diagnostic path is fixed, nor quantify release-build performance. Its work should
+be bounded or moved off the video callback in the canvas subsystem follow-up.
+
+No production deployment occurred. Next: broader design/typography capability
+and quality evaluation, hosted MCP preparation access, then WYSIWYG edits on
+stable document IDs; keep native canvas/display and diagnostic fixes covered by
+the build gates rather than changing generated Set geometry to compensate.

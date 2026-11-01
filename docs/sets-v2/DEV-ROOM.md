@@ -4,6 +4,20 @@ Updated 2026-10-24. The isolated `Producer Sets v2 Dev.app` opens the normal Pro
 
 Run `npm run dev:sets-v2` for the local frontend, then `npm run dev:sets-v2-room` to build and open the app. `python3 scripts/sets-v2/dev-room.py --prepare` builds without opening; `--smoke` exercises the normal room controls automatically.
 
+The native build requires at least 3 GiB free before starting (a conservative
+headroom check, not an exact size estimate). After staging, `npm run
+dev:sets-v2-open` starts the local services and reopens that same bundle. Dev
+signing uses `scripts/sets-v2/dev-entitlements.plist`; production signing remains
+separate.
+
+For the generated-Set desktop acceptance fixture, `VITE_AUTHORING_DESKTOP_PROOF=1`
+is an explicit opt-in that configures a dedicated room using
+`target/visual-acceptance/repaired.set.json`, activates the built-in camera and
+microphone, and records ten seconds of both outputs. It requires the isolated
+native app and verifies its version. Use `VITE_AUTHORING_DESKTOP_PROOF=review`
+afterwards to open that saved room without resetting it or recording again.
+The recording inspector is `scripts/sets-v2/inspect-authoring-recording.swift`.
+
 The app uses identifier `ai.boomin.producer.sets-v2-dev`, isolated storage, a copied set library and copied local media-picker grants. It does not copy account credentials or modify original set packages. The staged bundle is `src-tauri/target/sets-v2-dev/Producer Sets v2 Dev.app`.
 
 ## Available for review

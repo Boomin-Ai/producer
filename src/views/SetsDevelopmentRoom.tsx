@@ -16,6 +16,10 @@ export function SetsDevelopmentRoom() {
     [error, setError] = useState("");
   const bootstrap=useRef<Promise<LiveRoom>|undefined>(undefined);
   const smokeStarted = useRef(false);
+  const authoringProof=import.meta.env.DEV&&import.meta.env.VITE_AUTHORING_DESKTOP_PROOF==='1';
+  const authoringReview=import.meta.env.DEV&&['1','review'].includes(import.meta.env.VITE_AUTHORING_DESKTOP_PROOF);
+  const authoringStarted=useRef(false);
+  useEffect(()=>{if(room&&authoringProof&&!authoringStarted.current){authoringStarted.current=true;void import('../features/sets-v2/authoringDesktopProof').then(m=>m.authoringDesktopProof(room.id));}},[room,authoringProof]);
   const studioStarted=useRef(false);
   const atmosphere=import.meta.env.DEV&&import.meta.env.VITE_ATMOSPHERE_STUDIO==='1';
   const studio=!atmosphere&&import.meta.env.DEV&&import.meta.env.VITE_SCENE3D_STUDIO;
@@ -48,11 +52,17 @@ export function SetsDevelopmentRoom() {
     let cancelled = false;
     bootstrap.current??=(async () => {
       const smoke = await invoke<boolean>("live_set_v2_smoke_enabled");
-      const name = atmosphere ? "Atmosphere Studio" : studio ? "Producer 3D Studio" : scene3d ? "Producer 3D GPU lab" : new URLSearchParams(location.search).has("roomColor") ? "Producer color check" : smoke ? "Producer dev smoke" : "Producer dev";
+      const name = authoringReview ? "Producer authoring acceptance" : atmosphere ? "Atmosphere Studio" : studio ? "Producer 3D Studio" : scene3d ? "Producer 3D GPU lab" : new URLSearchParams(location.search).has("roomColor") ? "Producer color check" : smoke ? "Producer dev smoke" : "Producer dev";
       const workspace=await invoke<{endpointId:string;serverRoomId:string;runProof?:boolean;moduleBindings:import('../../shared/set-runtime/contract').ModuleBindings}|null>('live_set_v2_dev_workspace');
       if(workspace)setActiveEndpointId(workspace.endpointId);
       const rooms = await ipc.liveListRooms();
       let room = rooms.filter(r=>r.name===name).sort((a,b)=>(b.config?.length??0)-(a.config?.length??0))[0] ?? (await ipc.liveCreateRoom(name));
+      if(authoringProof){
+        const {authoringAcceptanceConfig}=await import('../features/sets-v2/authoringDesktopProof');
+        const config=await authoringAcceptanceConfig();
+        await ipc.liveUpdateRoom(room.id,{config:JSON.stringify(config)});
+        room={...room,config:JSON.stringify(config)};
+      }
       if(atmosphere&&workspace){
         const config=JSON.parse(room.config||'{}');
         if(config.presentation?.package?.id===atmosphereSet.id&&JSON.stringify(config.presentation.package)!==JSON.stringify(atmosphereSet)){config.presentation.package=atmosphereSet;await ipc.liveUpdateRoom(room.id,{config:JSON.stringify(config)});room={...room,config:JSON.stringify(config)};}
