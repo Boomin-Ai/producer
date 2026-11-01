@@ -24,6 +24,11 @@ export async function openSetEditorReview(name:string){
   picker.click();
   (await until(()=>Array.from(document.querySelectorAll<HTMLButtonElement>('[role="option"]')).find(o=>o.textContent?.includes(name)),'saved Set '+name)).click();
   await until(()=>document.querySelector('dialog[open] [role="combobox"][aria-label="Choose set"]')?.textContent?.includes(name),'selected Set');
+  const hostSource=import.meta.env.VITE_SET_EDITOR_REVIEW_HOST_SOURCE;
+  if(hostSource){
+   const source=await until(()=>Array.from(document.querySelectorAll<HTMLSelectElement>('dialog[open] .set-source-card select[aria-label$=" source"]')).find(s=>s.getAttribute('aria-label')?.startsWith('Host')&&Array.from(s.options).some(o=>o.value===hostSource)),'existing review host source');
+   if(!source.value)select(source,hostSource);
+  }
   await invoke('live_set_v2_report',{result:{kind:'set-editor-review',ok:true,name,outputActionInvoked:false}});
  }catch(error){await invoke('live_set_v2_report',{result:{kind:'set-editor-review',ok:false,name,error:String(error),debug:(await import('./preparedScenes')).preparationDebug(),alerts:Array.from(document.querySelectorAll('[role=alert], .set-error')).map(e=>e.textContent)}});}
 }

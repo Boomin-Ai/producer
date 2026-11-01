@@ -23,6 +23,9 @@ name. The dev room opens that package in Set edit without taking output. Set edi
 shows layout-relevant `value.set` buttons under **Visual controls**, using the
 editor's private session. Browser isolation coverage verifies these buttons
 change the preview without changing room state or taking output.
+For a fixture with a Host slot, optional `VITE_SET_EDITOR_REVIEW_HOST_SOURCE`
+can select an existing room-source ID in an empty private slot; it preserves an
+already assigned source and does not take output or create a device.
 
 The 2026-11-01 Atlantium Georgia capacity package has six scenes in two
 orientations, a supplied static headshot and research controls. All 12 layouts
