@@ -653,6 +653,12 @@ static NSArray *rust_adapter_proof(NSString *out) {
 }
 
 
+static bool authored_asset_rect(NSDictionary *node, NSString *resource, double px, double py, CGRect *result) {
+  NSDictionary *b=node[@"bounds"]; double x=px+[b[@"x"] doubleValue],y=py+[b[@"y"] doubleValue];
+  if([node[@"resource"] isEqual:resource]){*result=CGRectMake(x,y,[b[@"width"] doubleValue],[b[@"height"] doubleValue]);return true;}
+  for(NSDictionary *child in node[@"children"])if(authored_asset_rect(child,resource,x,y,result))return true;
+  return false;
+}
 static NSArray *real_room_proof(NSString *out) {
   NSString *folder = @(getenv("PRODUCER_ROOM_FIXTURES") ?: "/private/tmp/producer-sets-v2-room-fixtures");
   NSArray *files = [[[NSFileManager defaultManager] contentsOfDirectoryAtPath:folder error:nil] sortedArrayUsingSelector:@selector(compare:)];
@@ -741,7 +747,15 @@ static NSArray *real_room_proof(NSString *out) {
       }
       require(titlePixels>200,"prepared native graphics remain painted after repeated takes");
       if(getenv("PRODUCER_PROBE_DYNAMIC_SHOWCASE")&&[file hasPrefix:@"atmosphere"]){unsigned heading=0;for(uint32_t y=52;y<110;y++)for(uint32_t x=80;x<520;x++){const uint8_t *p=pixel(frame,w,x,y);if(p[0]>220&&p[1]>220&&p[2]>220)heading++;}require(heading>200,"weather shaders preserve following heading graphics");const uint8_t *bottom=pixel(frame,w,w>h?1480:540,w>h?620:1200);require(bottom[1]>245&&bottom[0]<10&&bottom[2]<10,"camera fills the lower transparent bezel opening");}
-      require(videoPixels>5000,"native camera remains visible through transparent bezel");
+      if(!getenv("PRODUCER_PROBE_STATIC_AUTHORING"))require(videoPixels>5000,"native camera remains visible through transparent bezel");
+      if(getenv("PRODUCER_PROBE_HOST_ASSET")){
+        CGRect image;require(authored_asset_rect(plan[@"root"],[NSString stringWithUTF8String:getenv("PRODUCER_PROBE_HOST_ASSET")],0,0,&image),"authored host image exists in the native plan");
+        unsigned visible=0,total=0;
+        for(uint32_t y=fmax(0,image.origin.y+image.size.height*.25);y<fmin(h,image.origin.y+image.size.height*.75);y++)for(uint32_t x=fmax(0,image.origin.x+image.size.width*.25);x<fmin(w,image.origin.x+image.size.width*.75);x++){
+          const uint8_t *p=pixel(frame,w,x,y);total++;if(p[0]>55&&p[1]>35&&p[2]>20)visible++;
+        }
+        require(total>100&&visible>total/10,"provided host headshot is visible in native output");
+      }
     }
     png(frame,w,h,[out stringByAppendingPathComponent:[[file stringByDeletingPathExtension] stringByAppendingString:@"-room.png"]]);
     [checks addObject:@{@"file":file,@"rendered":@YES,@"resources":plan[@"resources"]}];

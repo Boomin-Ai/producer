@@ -20,6 +20,11 @@ export function SetsDevelopmentRoom() {
   const authoringReview=import.meta.env.DEV&&['1','review'].includes(import.meta.env.VITE_AUTHORING_DESKTOP_PROOF);
   const authoringStarted=useRef(false);
   useEffect(()=>{if(room&&authoringProof&&!authoringStarted.current){authoringStarted.current=true;void import('../features/sets-v2/authoringDesktopProof').then(m=>m.authoringDesktopProof(room.id));}},[room,authoringProof]);
+  const editorReviewStarted=useRef(false);
+  useEffect(()=>{
+    const name=import.meta.env.DEV&&import.meta.env.VITE_SET_EDITOR_REVIEW_NAME;
+    if(room&&name&&!editorReviewStarted.current){editorReviewStarted.current=true;void import('../features/sets-v2/roomSmoke').then(m=>m.openSetEditorReview(name));}
+  },[room]);
   const studioStarted=useRef(false);
   const atmosphere=import.meta.env.DEV&&import.meta.env.VITE_ATMOSPHERE_STUDIO==='1';
   const studio=!atmosphere&&import.meta.env.DEV&&import.meta.env.VITE_SCENE3D_STUDIO;

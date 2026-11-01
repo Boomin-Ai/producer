@@ -8,7 +8,8 @@ const {values}=parseArgs({options:{package:{type:'string'},output:{type:'string'
 if(!values.package)throw Error('Pass --package FILE; optionally --reactive for a Set with voice rings.');
 const output=resolve(values.output??'target/authoring-native');await mkdir(output,{recursive:true});
 const plans=await mkdtemp(join(output,'plans-')),sourceText=await readFile(values.package,'utf8');
-const manifest={status:'running',packageSha256:createHash('sha256').update(sourceText).digest('hex'),startedAt:new Date().toISOString(),syntheticCamera:true,syntheticAudio:!!values.reactive,physicalDevicesTested:false,recordingTested:false};
+const sourceDocument=JSON.parse(sourceText),syntheticCamera=!!sourceDocument.set.slots.length;
+const manifest={status:'running',packageSha256:createHash('sha256').update(sourceText).digest('hex'),startedAt:new Date().toISOString(),syntheticCamera,staticHostAsset:!syntheticCamera&&sourceDocument.set.assets?.headshot?'asset:headshot':null,syntheticAudio:!!values.reactive,physicalDevicesTested:false,recordingTested:false};
 await writeFile(join(output,'run.json'),JSON.stringify(manifest,null,2));
 const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'playwright-core');
 const browser=await chromium.launch({executablePath:process.env.PRODUCER_CHROME??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
@@ -28,7 +29,7 @@ try{
   await writeFile(join(plans,layout.id+'.json'),JSON.stringify(plan));
  }
 }finally{await browser.close();}
-const child=spawn('bash',['scripts/sets-v2/run-native-probe.sh'],{stdio:'inherit',env:{...process.env,PRODUCER_PROBE_OUTPUT:output,PRODUCER_ROOM_FIXTURES:plans,PRODUCER_PROBE_SHOWCASE_ONLY:'1',PRODUCER_PROBE_SHOWCASE_FOCUS:'1',PRODUCER_PROBE_DYNAMIC_SHOWCASE:'1',...(values.reactive?{PRODUCER_PROBE_REACTIVE:'1'}:{})}});
+const child=spawn('bash',['scripts/sets-v2/run-native-probe.sh'],{stdio:'inherit',env:{...process.env,PRODUCER_PROBE_OUTPUT:output,PRODUCER_ROOM_FIXTURES:plans,PRODUCER_PROBE_SHOWCASE_ONLY:'1',PRODUCER_PROBE_SHOWCASE_FOCUS:'1',PRODUCER_PROBE_DYNAMIC_SHOWCASE:'1',...(!syntheticCamera?{PRODUCER_PROBE_STATIC_AUTHORING:'1'}:{}),...(manifest.staticHostAsset?{PRODUCER_PROBE_HOST_ASSET:manifest.staticHostAsset}:{}),...(values.reactive?{PRODUCER_PROBE_REACTIVE:'1'}:{})}});
 const code=await new Promise((resolve,reject)=>{child.on('error',reject);child.on('exit',code=>resolve(code??1));});
 if(code!==0)process.exitCode=Number(code);
 await writeFile(join(output,'run.json'),JSON.stringify({...manifest,status:code===0?'passed':'failed',finishedAt:new Date().toISOString(),exitCode:code},null,2));

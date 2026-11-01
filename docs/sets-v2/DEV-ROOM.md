@@ -18,6 +18,19 @@ native app and verifies its version. Use `VITE_AUTHORING_DESKTOP_PROOF=review`
 afterwards to open that saved room without resetting it or recording again.
 The recording inspector is `scripts/sets-v2/inspect-authoring-recording.swift`.
 
+For private review of a saved package, set `VITE_SET_EDITOR_REVIEW_NAME` to its
+name. The dev room opens that package in Set edit without taking output. Set edit now
+shows layout-relevant `value.set` buttons under **Visual controls**, using the
+editor's private session. Browser isolation coverage verifies these buttons
+change the preview without changing room state or taking output.
+
+The 2026-11-01 Atlantium Georgia capacity package has six scenes in two
+orientations, a supplied static headshot and research controls. All 12 layouts
+passed the isolated native renderer harness, including headshot visibility.
+The generic authoring harness now distinguishes static-image packages from
+synthetic-camera fixtures. This package's run does not test physical microphone
+response or recording. Evidence: `target/atlantium-georgia-six/native/run.json`.
+
 The app uses identifier `ai.boomin.producer.sets-v2-dev`, isolated storage, a copied set library and copied local media-picker grants. It does not copy account credentials or modify original set packages. The staged bundle is `src-tauri/target/sets-v2-dev/Producer Sets v2 Dev.app`.
 
 ## Available for review

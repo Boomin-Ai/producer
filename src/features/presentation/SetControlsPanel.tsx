@@ -112,6 +112,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
   const fields = doc.set.controls.filter(c => c.type !== 'button');
   const activeFieldKeys=layoutFieldKeys(doc,state.layoutId);
   const layoutFields=fields.filter(c=>activeFieldKeys.has(c.key));
+  const visualControls=actionControls.filter(c=>c.type==='button'&&c.action.type==='value.set'&&activeFieldKeys.has(c.action.key));
   const activeLayout=doc.set.layouts.find(layout=>layout.id===state.layoutId);
   const stopped = !state.running && state.trace.some(entry => entry.message.startsWith('Show started'));
   const phase = doc.show?.phases.find(p => p.id === state.show.phase);
@@ -241,7 +242,8 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
           <details key={`${state.sandboxId}-setup`} open><summary><strong>Content & sources</strong><span>Changes update the set</span></summary>
             {rehearsing&&<p className="set-section-note">Rehearsal edits reset on exit. Sources stay saved.</p>}
             <h3 className="set-editor-heading">Content <span>{activeLayout?.label}</span></h3>
-            <div className="set-controls-fields">{layoutFields.map(control)}{!layoutFields.length && <p className="set-section-note">This layout has no editable content.</p>}</div>
+            <div className="set-controls-fields">{layoutFields.map(control)}{!layoutFields.length&&!visualControls.length && <p className="set-section-note">This layout has no editable content.</p>}</div>
+            {visualControls.length>0&&<section aria-label="Preview visual controls"><h3 className="set-editor-heading">Visual controls</h3><div className="set-layout-actions">{visualControls.map(control)}</div></section>}
 
             <MediaPlaybackControls session={session} edit />
             {doc.show&&activeLayout?.animation&&<details className="set-section"><summary>Animation</summary><p className="set-section-note">{doc.show?'Pause the show to scrub this segment. Reset rehearsal returns to the beginning.':'Animation follows the selected layout.'}</p><label>Animation position<input aria-label="Animation position" type="range" min="0" max={Math.max(1000,...activeLayout.animation.tracks.map(t=>(t.delayMs??0)+t.keyframes[t.keyframes.length-1].atMs))} step="10" value={state.animationClock?.segmentMs??0} disabled={!rehearsing||!state.running||!state.paused} onChange={e=>session.send({type:'seek',milliseconds:Number(e.target.value)})}/></label></details>}

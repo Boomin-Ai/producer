@@ -6,6 +6,27 @@ async function until<T>(read: () => T | Promise<T>, label: string,attempts=600):
   throw Error(`Timed out: ${label}`);
 }
 const button = (label: string, root: ParentNode = document) => Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(b => (b.getAttribute('aria-label')===label || b.textContent?.trim()===label) && !b.disabled);
+/** Local review only: open a saved Set in its editor without taking output. */
+export async function openSetEditorReview(name:string){
+ if(!import.meta.env.DEV)return;
+ try{
+  const dock=await until(()=>document.querySelector<HTMLElement>('[aria-label="Show the bottom row"]')||button('Set settings'),'Set controls');
+  if(dock.getAttribute('aria-label')==='Show the bottom row')dock.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+  if(!document.querySelector('dialog[open]'))(await until(()=>button('Set settings'),'Set settings')).click();
+  const picker=await until(()=>document.querySelector<HTMLButtonElement>('dialog[open] [role="combobox"][aria-label="Choose set"]'),'Set picker');
+  // The saved package may have changed while the room retained its older copy.
+  // Select away first so a matching title cannot satisfy the load wait early.
+  if(picker.textContent?.includes(name)){
+   picker.click();
+   (await until(()=>Array.from(document.querySelectorAll<HTMLButtonElement>('[role="option"]')).find(o=>!o.textContent?.includes(name)),'alternate private Set')).click();
+   await until(()=>!picker.textContent?.includes(name),'alternate private Set loaded');
+  }
+  picker.click();
+  (await until(()=>Array.from(document.querySelectorAll<HTMLButtonElement>('[role="option"]')).find(o=>o.textContent?.includes(name)),'saved Set '+name)).click();
+  await until(()=>document.querySelector('dialog[open] [role="combobox"][aria-label="Choose set"]')?.textContent?.includes(name),'selected Set');
+  await invoke('live_set_v2_report',{result:{kind:'set-editor-review',ok:true,name,outputActionInvoked:false}});
+ }catch(error){await invoke('live_set_v2_report',{result:{kind:'set-editor-review',ok:false,name,error:String(error),debug:(await import('./preparedScenes')).preparationDebug(),alerts:Array.from(document.querySelectorAll('[role=alert], .set-error')).map(e=>e.textContent)}});}
+}
 function select(el: HTMLSelectElement, value: string) {
   Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value')!.set!.call(el,value);
   el.dispatchEvent(new Event('change',{bubbles:true}));

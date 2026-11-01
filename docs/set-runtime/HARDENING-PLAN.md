@@ -65,6 +65,17 @@ Imports must produce useful field-path errors without freezing the UI. An invali
 
 ## 4. Resource budgets and runtime enforcement
 
+The 2026-11-01 Atlantium capacity Set exposed an authoring preflight gap:
+schema and browser validation accepted layouts that exceeded native limits
+(128 nodes, 16 graphics surfaces and 8 Mi graphics pixels). The capacity bars
+split graphics batches; 67 map markers expanded into too many native nodes.
+The package was repaired within the existing limits by consolidating painted
+bars and using five regional map images containing the same 67 record points.
+All 12 repaired native layouts pass. Native limits were not raised. Add lowered
+graph node/surface/pixel estimates to generator admission checks so authors
+receive actionable errors before room preparation. Canonical validation alone
+still does not establish native affordability.
+
 Current documented 3D bounds include up to two passes per layout, six retained contexts and 24 Mi logical pixels per output store; world limits include 128 meshes, eight lights, eight slots, twelve views and thirty-two cues. These are existing bounds, not a complete hardware safety model.
 
 Add explicit combined budgets for decoded textures, GPU texture memory estimates, vertices/triangles, material/shader variants, draw calls, shadow maps, render targets, effects, active contexts, asset decoding, queued actions, subscriptions and generated controls/collections. Budget lighting/shadows and model complexity by cost as well as object count.

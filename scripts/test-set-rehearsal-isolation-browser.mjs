@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-const {chromium}=await import('/private/tmp/producer-sets-v2-browser/node_modules/playwright-core/index.mjs');
+const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'/private/tmp/producer-sets-v2-browser/node_modules/playwright-core/index.mjs');
 const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
 try{
  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:1436/');
@@ -8,7 +8,7 @@ try{
   const {SetControlsPanel}=await import('/src/features/presentation/SetControlsPanel.tsx'),{HEAD_TO_HEAD}=await import('/src/features/presentation/fixtures.ts');
   const source=await(await fetch('/src/features/presentation/SetControlsPanel.tsx')).text(),{RehearsalSession}=await import(source.match(/from "([^"]*rehearsal\.ts[^"]*)"/)[1]);
   window.__TAURI_INTERNALS__={transformCallback:()=>1,invoke:async(cmd)=>cmd==='set_library_list'?[]:null};window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
-  window.roomSession=new RehearsalSession(HEAD_TO_HEAD,undefined,'prepare');window.takes=0;window.bindCalls=[];
+  const fixture=structuredClone(HEAD_TO_HEAD);fixture.set.controls.push({id:'preview-spotlight',type:'button',label:'Preview spotlight',action:{type:'value.set',key:'hostName',value:'Private spotlight'}});window.roomSession=new RehearsalSession(fixture,undefined,'prepare');window.takes=0;window.bindCalls=[];
   function Harness(){const [session,setSession]=R.useState(window.roomSession),[bindings,setBindings]=R.useState({host:'camera-a'}),[active,setActive]=R.useState(false);window.roomSession=session;
    return R.createElement(SetControlsPanel,{session,onChange:doc=>setSession(new RehearsalSession(doc,undefined,'prepare')),output:{renderer:'native',active,busy:false,error:'',bindings,framing:{},sources:{items:[{id:'camera-a',label:'Camera A',kind:'camera',visible:true,has_frame:true},{id:'camera-b',label:'Camera B',kind:'camera',visible:true,has_frame:true}]},bind:(slot,id)=>{window.bindCalls.push([slot,id]);setBindings(old=>({...old,[slot]:id}));},frame:()=>{},apply:async()=>{window.takes++;setActive(true);},returnToRoom:async()=>true}});
   }
@@ -19,6 +19,10 @@ try{
  assert(await editor.getByRole('toolbar',{name:'Set configuration'}).getByRole('button',{name:'Show on output',exact:true}).isVisible());
  assert.equal(await editor.locator('.set-editor-apply-status').innerText(),'Changes not on output');
  const before=await page.evaluate(()=>JSON.stringify(window.roomSession.snapshot()));
+ await editor.getByRole('region',{name:'Preview visual controls'}).getByRole('button',{name:'Preview spotlight',exact:true}).click();
+ assert.equal(await editor.getByRole('textbox',{name:'Host name',exact:false}).inputValue(),'Private spotlight');
+ assert.equal(await page.evaluate(()=>JSON.stringify(window.roomSession.snapshot())),before);
+ assert.equal(await page.evaluate(()=>window.takes),0);
  await editor.getByRole('button',{name:'Rehearse',exact:true}).click();await page.waitForTimeout(250);
  assert.equal(await page.evaluate(()=>JSON.stringify(window.roomSession.snapshot())),before);
  await editor.getByRole('combobox',{name:'Edit segment',exact:true}).selectOption('round');
