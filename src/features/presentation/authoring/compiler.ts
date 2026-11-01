@@ -42,6 +42,7 @@ export function compileDesignPlan(input: unknown, target: AuthoringTarget, asset
       if(e.kind==='image'){const asset=id(e.asset);if(!assets?.[asset])throw Error(`Missing authorized asset: ${asset}`);usedAssets[asset]=assets[asset];return {...node,type:'media',assetId:asset,fit:'contain'};}
       if(e.kind==='effect'){
         if(!['voiceBars','voiceRing','voiceSea','launchV1'].includes(e.effect))throw Error('Unknown effect recipe.');
+        if(e.effect==='voiceRing'&&(typeof e.radius!=='number'||!Number.isFinite(e.radius)||e.radius<=0))throw Error('voiceRing requires a positive radius matching the host camera radius; leave room around it for waves.');
         requireFeatures(target,[`shader.${e.effect}@1`]);
         return {...node,type:'shader',shader:{effect:e.effect,colors:e.colors??['#00d9ff','#ed17df','#ffae24'],intensity:e.sensitivity??1,speed:e.speed??.55,scale:1,opacity:1,radius:e.radius??0,quality:'medium',clock:'show'}};
       }

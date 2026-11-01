@@ -911,3 +911,48 @@ These are not paid live-model quality measurements or new native output proof.
 The isolated local backend was refreshed with the new routes. Next: controlled
 live-provider acceptance on the compatible native dev build, resumable generation
 jobs, visual checks and the bounded repair/evaluation loop.
+
+### Local agent authoring and first live-provider acceptance — 2026-11-01
+
+Added `tools/producer-mcp`, a stdio MCP server using the official SDK, and the
+Claude-compatible `producer-sets` skill. Seven tools discover compiler
+capabilities, list/inspect local packages, compile plans, apply revision-fenced
+edits, validate full packages and create standalone browser previews. The full
+canonical schema is also available as an on-demand MCP resource. The same
+compiler, codec, RehearsalSession and SetPreview are reused; no parallel schema or
+renderer was introduced. Skills and project MCP config are checked in. The local
+Codex MCP registration and personal Claude/Codex skill copies were installed.
+
+File access is confined to an operator-configured artifact directory; source files
+are bounded regular files, symlinks/path traversal are rejected, original Sets
+are retained and edits save unique new drafts. Asset bytes remain local. The agent
+can author a plan itself without a second paid model call or provider credential.
+This is not a hosted MCP connector, a native capability probe or an automatic
+room-preparation/output-control bridge. Every tool reports native readiness as
+untested; browser previews have placeholder sources and simulated audio.
+
+Three manually initiated provider acceptance calls exercised the local saved
+Claude connection. The first exposed rejection of thinking content in the
+one-shot provider parser. It now extracts only final text from documented
+thinking/redacted-thinking responses and continues to reject tool/unknown content,
+empty final text, truncation and over-budget responses. Thinking is not returned
+or persisted. The second compiled two layouts in 17.7 seconds, but visual review
+found an omitted voiceRing radius concealed by the host camera. Compact plans now
+require a positive ring radius and the shared instructions describe concentric
+camera/ring geometry. The third compiled two layouts in 16.2 seconds: 1,979-byte
+plan, 4,636-byte canonical package. These are individual acceptance observations,
+not a measured success rate or a claim of production-ready visual design.
+
+Tests cover the real stdio handshake/tool/resource protocol, two-format drafting,
+revision conflicts, immutable originals, asset-free inspection and preserved
+artwork, invalid geometry, directory boundaries, standalone preview rendering,
+layout switching and script-tag escaping. Provider/route regressions pass (16
+tests), along with compiler checks and desktop/server typechecks. The skill passed
+its frontmatter/scaffold validator. Native rendering of these new generated drafts
+remains pending: the dev app needs a compatible build and this machine has about
+1 GB free. No production deployment was performed.
+
+Next: native acceptance on a compatible build; automated text-fit and relational
+geometry checks (ring/camera alignment and padding still need semantic checks);
+bounded visual repair/evaluation; authenticated hosted MCP with scoped preparation
+commands. Keep taking output, recording and streaming distinct from drafting.

@@ -6,6 +6,7 @@ const {compileDesignPlan,applyDesignEdits,designContext,packageRevision,AUTHORIN
 const target={catalogRevision:1,features:[...AUTHORING_CATALOG.features]};
 const plan={schema:'producer.design-plan/1',id:'launch-studio',name:'Launch studio',background:'#101010',layouts:['landscape','portrait'].map(orientation=>({id:orientation,name:orientation,orientation,elements:[{id:'title',kind:'text',bounds:[30,20,900,100],text:'ROAD TO V1',field:'title',size:64},{id:'host',kind:'camera',bounds:[30,160,700,700],slot:'host'},{id:'voice',kind:'effect',bounds:[30,900,900,120],effect:'voiceBars'}]}))};
 const doc=compileDesignPlan(plan,target);assert.equal(doc.set.layouts.length,2);assert.equal(doc.set.slots.length,1);assert.equal(doc.set.controls.filter(c=>c.type==='text').length,1);assert.deepEqual(compileDesignPlan(plan,target),doc,'deterministic compilation');
+const ring=structuredClone(plan);ring.layouts[0].elements.at(-1).effect='voiceRing';assert.throws(()=>compileDesignPlan(ring,target),/positive radius/);ring.layouts[0].elements.at(-1).radius=0;assert.throws(()=>compileDesignPlan(ring,target),/positive radius/);
 assert.throws(()=>compileDesignPlan(plan,{...target,features:['core@1']}),/cannot render/);
 assert.throws(()=>compileDesignPlan(plan,{...target,catalogRevision:0}),/catalog changed/);
 const bad=structuredClone(plan);bad.layouts[0].elements[0].bounds=[1900,0,200,100];assert.throws(()=>compileDesignPlan(bad,target),/fit inside/);

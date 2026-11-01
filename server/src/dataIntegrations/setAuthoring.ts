@@ -55,8 +55,18 @@ export async function requestAuthoringText(connection:Connection,key:string,inpu
  try{result=await Promise.race([operation(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new ProviderError('provider_timeout','Claude generation timed out. No automatic retry was started.')),90000);})]);}finally{if(timer!==undefined)clearTimeout(timer);}
  signal.throwIfAborted();
  if(result.stop_reason!=='end_turn')throw new ProviderError('provider_incomplete','Claude did not finish the Set draft. Try a simpler prompt or adjust the saved token budget; no automatic retry was made.');
- if(!Array.isArray(result.content)||!result.content.length||result.content.length>8||result.content.some(block=>!block||typeof block!=='object'||block.type!=='text'||typeof block.text!=='string'))throw new ProviderError('provider_response','Claude returned unsupported authoring content.');
- const text=result.content.map(block=>block.text).join('');
+ // Some Claude models include thinking even in a one-shot authoring reply.
+ // Only final text is a design candidate. Never expose/store reasoning, and
+ // still reject tool calls or unfamiliar content rather than executing them.
+ if(!Array.isArray(result.content)||!result.content.length||result.content.length>8||result.content.some(block=>{
+  if(!block||typeof block!=='object')return true;
+  if(block.type==='text')return typeof block.text!=='string';
+  if(block.type==='thinking')return typeof block.thinking!=='string'||typeof block.signature!=='string';
+  if(block.type==='redacted_thinking')return typeof block.data!=='string';
+  return true;
+ }))throw new ProviderError('provider_response','Claude returned unsupported authoring content.');
+ const text=result.content.filter(block=>block.type==='text').map(block=>block.text).join('');
+ if(!text.trim())throw new ProviderError('provider_response','Claude returned no final authoring text.');
  return text;
 }
 export async function authorSet(connection:Connection,key:string,value:unknown,options:{signal?:AbortSignal;fetcher?:typeof fetch}={}):Promise<SetAuthoringResult>{

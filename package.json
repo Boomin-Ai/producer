@@ -57,7 +57,9 @@
     "dev:sets-v2-open": "node scripts/sets-v2/open-dev.mjs",
     "test:design-plan": "node scripts/test-design-plan.mjs",
     "test:design-plan-browser": "node scripts/test-design-plan-browser.mjs",
-    "test:design-generation-browser": "node scripts/test-design-generation-browser.mjs"
+    "test:design-generation-browser": "node scripts/test-design-generation-browser.mjs",
+    "mcp:sets": "node tools/producer-mcp/server.mjs",
+    "test:mcp": "node tools/producer-mcp/test.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.0",
