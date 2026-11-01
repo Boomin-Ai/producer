@@ -33,6 +33,9 @@ The default artifact directory is `~/Documents/Producer Sets`. Set `PRODUCER_SET
 | `producer_compile_set` | New validated package from a plan; optional local asset source |
 | `producer_edit_set` | New package from atomic edits against an exact revision |
 | `producer_validate_set` | Full canonical package validation |
+| `producer_check_geometry` | Ring alignment/radius/padding and advisory text overlap checks |
+| `producer_visual_check` | Real browser text-fit measurements for every configured layout, plus geometry findings |
+| `producer_repair_ring` | Revision-fenced ring repair around an explicitly selected camera, saved as a new draft |
 | `producer_preview_set` | Standalone HTML using the actual Producer SetPreview renderer |
 
 Resources: `producer://authoring/guide` is the compact authoring contract; `producer://authoring/schema` exposes the full canonical JSON schema directly from the codec. Load the latter only for advanced file authoring.
@@ -40,6 +43,8 @@ Resources: `producer://authoring/guide` is the compact authoring contract; `prod
 Try: “Use producer-sets to make an Attention Is Currency studio in landscape and portrait. Cream, black and red; a circular host camera with a visible voice-reactive ring, and an editable topic headline. Generate both previews.”
 
 The compact profile currently supports panels, text, cameras, existing image assets and four trusted audio-reactive effects. Edits support moving direct layout children, changing literal text, replacing an element with a camera and duplicating layouts. Full-schema file authoring is broader; validation does not mean every feature can be generated through the compact plan.
+
+The visual check needs an installed Chromium browser. On macOS it defaults to `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`; elsewhere configure `PRODUCER_BROWSER_PATH` in the MCP environment. The server never downloads a browser during a tool call. An unavailable browser is an error, not a successful visual check. HTML previews also display a report after checking all layouts. Findings cover current text/default values and direct numeric ring geometry, not all future feed values or animation states. Overlap findings are advisory because editorial layering can be intentional. Ring repairs never move the camera or other artwork; insufficient space produces a diagnostic instead.
 
 ## Boundaries and verification
 

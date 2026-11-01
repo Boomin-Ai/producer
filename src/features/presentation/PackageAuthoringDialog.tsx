@@ -3,6 +3,7 @@ import {designContext,packageRevision} from './authoring/compiler';
 import {compileDesignPlan,applyDesignEdits} from './authoring/compiler';
 import {AUTHORING_CATALOG} from './authoring/catalog';
 import {designBrief} from './authoring/brief';
+import {VisualReview} from './authoring/VisualReview';
 import { useEffect, useMemo, useRef, useState,useSyncExternalStore } from 'react';
 import {activeEndpointId,WORKSPACE_EVENT} from '../../lib/workspace';
 import {dataIntegrations} from '../../lib/dataIntegrations';
@@ -114,6 +115,7 @@ export function PackageAuthoringDialog({ doc, intent, onLoad, onClose, returnFoc
     </details>
     {draft.error&&<p role="alert">{draft.error}</p>}
     {draft.package&&<DraftPreview key={draft.package.id+draft.text.length} doc={draft.package} model={draft.model}/>}
+    {import.meta.env.DEV&&draft.package&&<VisualReview doc={draft.package} onRepair={fixed=>{if(authoring.snapshot().package!==draft.package)return;authoring.editCandidate(JSON.stringify(fixed,null,2));authoring.validate();setNotice('Ring fitted locally. Review the updated layouts before loading preparation.');}}/>}
     {notice && <p role="status">{notice}</p>}
     <footer><span>Validate → Preview → Load preparation → Rehearse</span>{intent !== 'export' && <button disabled={!draft.package||draft.status!=='ready'} onClick={load}>Load preparation</button>}</footer>
   </dialog>, document.body);

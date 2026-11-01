@@ -8,6 +8,7 @@ import {homedir} from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {authoringRuntime,previewHtml} from './runtime.mjs';
+import {checkRenderedSet} from './visual-check.mjs';
 
 const MAX_PACKAGE=40*1024*1024, MAX_DESIGN=128*1024;
 const fileName=z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,180}\.set\.json$/);
@@ -72,6 +73,13 @@ export async function createAuthoringServer(directory) {
     return save(next);
   });
   tool('producer_validate_set','Validate the full canonical Set schema, including features beyond compact plans. Structural validity does not establish native readiness.',{file:fileName},true,async({file})=>{const doc=await read(file);return {ok:true,id:doc.id,revision:await api.packageRevision(doc),layouts:doc.set.layouts.length,...scope};});
+  tool('producer_check_geometry','Check ring/camera alignment, radius, wave padding and possible text-box overlaps. Text glyph fit needs the browser visual check.',{file:fileName},true,async({file})=>api.checkVisualGeometry(await read(file)));
+  tool('producer_visual_check','Render every configured layout in an installed Chromium browser and measure text fit, ring geometry and possible overlaps. Uses placeholder cameras, does not capture devices or verify native output.',{file:fileName},true,async({file})=>{const doc=await read(file);return {revision:await api.packageRevision(doc),...await checkRenderedSet(doc)};});
+  tool('producer_repair_ring','Fit one ring around a selected circular camera with 90px wave space. Requires the exact current revision, preserves the camera and saves a new draft. Refuses if there is insufficient canvas space.',{file:fileName,baseRevision:z.string().regex(/^[a-f0-9]{64}$/),layout:z.string(),ring:z.string(),camera:z.string()},false,async({file,...input})=>{
+    const base=await read(file),next=await api.repairCameraRing(base,input);
+    if(await api.packageRevision(await read(file))!==input.baseRevision)throw Error('The source Set changed during repair. Inspect it again.');
+    return save(next);
+  });
   tool('producer_preview_set','Create a standalone HTML browser preview using Producer’s actual SetPreview renderer. Cameras are placeholders and audio is simulated. Does not load preparation or put anything on air.',{file:fileName},false,async({file})=>{
     const doc=await read(file);
     const name=`preview-${randomUUID()}.html`,path=await writeNew(name,await previewHtml(doc));

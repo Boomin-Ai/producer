@@ -22,7 +22,7 @@ try{
  assert.equal(await page.getByRole('button',{name:'Load preparation'}).isDisabled(),true);
  assert.equal(await page.evaluate(()=>window.authorCalls[0].body.package),undefined,'fresh draft does not silently send current Set');
  await prompt.fill('Revised prompt while waiting');await page.evaluate(()=>window.resolveDraft());await page.waitForTimeout(50);assert.equal(await page.getByRole('region',{name:'Validated draft preview'}).count(),0,'edited prompt rejects stale generation');
- await page.getByRole('button',{name:'Generate draft',exact:true}).click();await page.evaluate(()=>window.resolveDraft());await page.getByRole('region',{name:'Validated draft preview'}).waitFor();assert.equal(await page.locator('iframe').count(),1);assert.equal(await page.evaluate(()=>window.loads.length),0,'validation and preview never load automatically');
+ await page.getByRole('button',{name:'Generate draft',exact:true}).click();await page.evaluate(()=>window.resolveDraft());await page.getByRole('region',{name:'Validated draft preview'}).waitFor();assert.equal(await page.locator('.set-preview iframe').count(),1);assert.equal(await page.evaluate(()=>window.loads.length),0,'validation and preview never load automatically');
  await page.getByRole('button',{name:'Load preparation',exact:true}).click();assert.equal(await page.evaluate(()=>window.loads.length),1);assert.equal(await page.evaluate(()=>window.loads[0].name),'Generated magazine');assert.equal(await page.locator('dialog').count(),0);
  assert.deepEqual(errors,[]);
  console.log('PASS: prompt → validated preview → explicit preparation load, with saved Claude selection, fresh scope and late-response fencing');

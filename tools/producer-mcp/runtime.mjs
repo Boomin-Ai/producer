@@ -12,6 +12,7 @@ export function authoringRuntime() {
       export * from './src/features/presentation/authoring/catalog';
       export * from './src/features/presentation/authoring/compiler';
       export * from './src/features/presentation/authoring/brief';
+      export * from './src/features/presentation/authoring/visual';
       export * from './src/features/presentation/validation';
       export {presentationJsonSchema} from './src/features/presentation/schema';`},
     bundle:true,platform:'node',format:'esm',write:false,
@@ -28,6 +29,7 @@ async function previewScript() {
       import {SetPreview} from './src/features/presentation/SetPreview';
       import {RehearsalSession} from './src/features/presentation/rehearsal';
       import {parsePackage} from './src/features/presentation/schema';
+      import {auditVisuals} from './src/features/presentation/authoring/visualBrowser';
       const doc=parsePackage(JSON.parse(document.getElementById('package').textContent));
       const session=new RehearsalSession(doc,undefined,'prepare');
       const root=createRoot(document.getElementById('preview'));
@@ -36,7 +38,12 @@ async function previewScript() {
       for(const l of doc.set.layouts){const o=document.createElement('option');o.value=l.id;o.textContent=l.label;select.append(o);}
       select.value=doc.set.initialLayout;
       select.onchange=()=>{session.send({type:'control',action:{type:'layout.select',layoutId:select.value}});render();};
-      render();`},
+      render();
+      auditVisuals(doc).then(report=>{
+        window.__producerVisualReview={ok:true,report};
+        const region=document.getElementById('review');region.textContent='Visual review: '+(report.issues.length?report.issues.length+' findings':'configured text fits; no supported geometry issues found');
+        for(const issue of report.issues){const p=document.createElement('p');p.textContent=issue.layout+' / '+issue.node+': '+issue.message;region.append(p);}
+      }).catch(error=>{window.__producerVisualReview={ok:false,error:error.message};document.getElementById('review').textContent='Visual review unavailable: '+error.message;});`},
     bundle:true,platform:'browser',format:'iife',write:false,minify:true,
     define:{'process.env.NODE_ENV':'"production"'},
     plugins:[{name:'producer-raw',setup(b){
@@ -54,5 +61,5 @@ export async function previewHtml(doc) {
   <style>body{margin:24px;background:#10141c;color:#eee;font:16px system-ui}header{display:flex;gap:20px;align-items:center;margin-bottom:16px}select{font:inherit;padding:8px}#preview{max-width:1100px;margin:auto}.set-preview{position:relative;width:100%;max-height:85vh}.set-preview iframe{position:absolute;border:0;width:100%;height:100%}.set-preview-status{position:absolute;bottom:8px;left:8px;background:#10141c;padding:8px}p{color:#b9c3d2}</style>
   <header><strong>Producer · Draft preview</strong><label>Layout <select id="layouts"></select></label></header>
   <p>Browser preview only. Cameras are placeholders; audio-reactive effects use simulated levels. Import the Set into Producer to bind sources and check native output.</p>
-  <div id="preview"></div><script id="package" type="application/json">${data}</script><script>${code}</script></html>`;
+  <div id="preview"></div><section id="review" aria-label="Visual review">Checking every layout…</section><script id="package" type="application/json">${data}</script><script>${code}</script></html>`;
 }

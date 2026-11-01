@@ -956,3 +956,59 @@ Next: native acceptance on a compatible build; automated text-fit and relational
 geometry checks (ring/camera alignment and padding still need semantic checks);
 bounded visual repair/evaluation; authenticated hosted MCP with scoped preparation
 commands. Keep taking output, recording and streaming distinct from drafting.
+
+### Visual review, targeted repairs and native pixel acceptance — 2026-11-01
+
+Dev draft previews now run sequential offscreen reviews of every configured
+layout. Text measurements come from the same sandboxed frame document used by
+SetPreview after fonts are ready; no parallel text-layout approximation is used.
+Findings include stable layout/node IDs, rendered paths and measured content/box
+sizes. The geometry review detects ambiguous ring/camera associations, wrong
+centers/radii, nonsquare ring bounds, insufficient wave padding and possible
+text-box collisions. Text overlaps are advisory: magazine layering can be
+intentional. Reviews are advisory and do not silently modify or take output.
+
+A targeted local ring repair preserves a selected circular camera, centers its
+ring, matches the radius and reserves 90px for voice peaks. It is fenced by the
+package revision, saves a new draft and refuses insufficient canvas space or
+unsupported transformed/dynamic geometry. No provider retry or paid repair is
+triggered. Text findings can be addressed with existing bounds edits or a revised
+plan; automated typography rewriting is not implemented.
+
+MCP now has ten tools, adding `producer_check_geometry`, `producer_visual_check`
+and `producer_repair_ring`. The visual tool uses installed Chromium via
+playwright-core, without downloading a browser or capturing devices. Previews
+also show the report. The Claude/Codex skill documents these tools and their
+limits. Checks cover configured/default content and direct absolute numeric ring
+geometry; future feed values, nested/transformed relationships and animated
+states remain outside this first pass. They do not prove visual design quality.
+
+The actual Claude-generated two-format package from the previous milestone had
+five ring findings. Targeted repairs removed them while preserving controls,
+slots, camera geometry and text. Both repaired layouts passed browser text checks.
+They were lowered through compileRoomScene and rendered using the exact Rust
+room adapter, native OBS sources, CEF graphics and GPU shaders in the isolated
+native probe linked against the installed Producer engine. Native repeated-take
+readiness, pixels and resource cleanup passed for 1920×1080 and 1080×1920.
+Synthetic loud input changed 65,411 and 69,067 pixels respectively; after silence,
+both returned to their baseline with zero pixels above the comparison threshold.
+No physical camera/microphone was captured and no recording was made. This is
+native-engine acceptance, not a completed end-to-end device/recording check.
+
+The first native build failed for lack of disk space. Reclaimed the obsolete
+staged dev app bundle and download/validation caches; installed production and
+user data were retained. The smaller isolated native probe then built and passed.
+A fresh compatible Tauri dev bundle is still required for desktop UI/device
+acceptance; the removed staging bundle must not be assumed launchable.
+
+Validation includes browser text-overflow cases in both formats, ambiguity/edge/
+stale-revision refusal, original/control preservation, the dev repair UI with no
+native IPC, renderer cleanup on unmount, real stdio MCP tools, the existing saved-
+Claude authoring flow, TypeScript and the frontend build. Evidence is under
+`target/visual-acceptance` and `target/authoring-native`; a repaired importable
+sample is in `~/Documents/Producer Sets/claude-magazine-repaired.set.json`.
+
+Next gates: physical camera/mic plus recording acceptance in a compatible app;
+stronger intent-aware visual evaluation and typography repair; authenticated
+hosted MCP preparation access; WYSIWYG edits and undo on the same document IDs.
+No production deployment in this milestone.

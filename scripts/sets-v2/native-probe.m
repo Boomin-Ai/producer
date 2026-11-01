@@ -80,6 +80,11 @@ static const char CODE[] =
     "lerp(tint,float4(1,1,1,1),marker);}"
     "technique Draw{pass{vertex_shader=VS(v);pixel_shader=PS(v);}}";
 static atomic_uint source_live = 0;
+#ifdef PRODUCER_AUDIO_REACTIVE
+/* Probe-only input to the same native reactive path. Never captures a mic. */
+static atomic_int probe_audio_milli=0;
+float producer_audio_reactive_level(void){return atomic_load(&probe_audio_milli)/1000.f;}
+#endif
 static const char *test_name(void *x) {
   (void)x;
   return "Synthetic moving capture";
@@ -658,7 +663,7 @@ static NSArray *real_room_proof(NSString *out) {
     NSDictionary *plan = [NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:[folder stringByAppendingPathComponent:file]] options:0 error:nil];
     uint32_t w = [plan[@"target"][@"width"] unsignedIntValue], h = [plan[@"target"][@"height"] unsignedIntValue];
     obs_scene_t *room = obs_scene_create_private("Authored room integration");
-    obs_source_t *source = obs_scene_get_source(room), *camera = solid(640,480,0,1,0,true);
+    obs_source_t *source = obs_scene_get_source(room), *camera = solid(640,480,0,1,0,!getenv("PRODUCER_PROBE_REACTIVE"));
     obs_set_output_source(0, source);
     void *owner = sets_v2_rust_attach(room,w,h);
     require(owner != NULL,"authored room attaches");
@@ -704,6 +709,29 @@ static NSArray *real_room_proof(NSString *out) {
     NSMutableDictionary *properties=[changedRoot[@"properties"] mutableCopy]?:[NSMutableDictionary dictionary];properties[@"opacity"]=@0.25;changedRoot[@"properties"]=properties;stale[@"root"]=changedRoot;
     rust_call(owner,@{@"op":@"activate",@"generation":@7,@"revision":@6,@"key":@"prepared-a",@"plan":stale},camera,false);
     NSData *frame=capture(source,w,h,w,h);
+#ifdef PRODUCER_AUDIO_REACTIVE
+    if(getenv("PRODUCER_PROBE_REACTIVE")){
+      atomic_store(&probe_audio_milli,1000);
+      for(int i=0;i<30;i++){capture(source,w,h,w,h);usleep(33000);}
+      NSData *loud=capture(source,w,h,w,h);
+      atomic_store(&probe_audio_milli,0);
+      for(int i=0;i<60;i++){capture(source,w,h,w,h);usleep(33000);}
+      NSData *quiet=capture(source,w,h,w,h);
+      unsigned changed=0,remaining=0;
+      for(uint32_t y=0;y<h;y++)for(uint32_t x=0;x<w;x++){
+        const uint8_t *a=pixel(frame,w,x,y),*b=pixel(loud,w,x,y),*c=pixel(quiet,w,x,y);
+        if(abs(a[0]-b[0])+abs(a[1]-b[1])+abs(a[2]-b[2])>40)changed++;
+        if(abs(a[0]-c[0])+abs(a[1]-c[1])+abs(a[2]-c[2])>40)remaining++;
+      }
+      require(changed>500,"native voice ring visibly responds to loud input");
+      require(remaining<changed/10+10,"native voice ring settles near silence after release");
+      NSString *stem=[file stringByDeletingPathExtension];
+      png(loud,w,h,[out stringByAppendingPathComponent:[stem stringByAppendingString:@"-loud.png"]]);
+      png(quiet,w,h,[out stringByAppendingPathComponent:[stem stringByAppendingString:@"-quiet.png"]]);
+      NSDictionary *audioReport=@{@"input":@"synthetic-level",@"changedPixels":@(changed),@"remainingPixels":@(remaining),@"microphoneCaptured":@NO};
+      [[NSJSONSerialization dataWithJSONObject:audioReport options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:[stem stringByAppendingString:@"-reactive.json"]] atomically:YES];
+    }
+#endif
     if(getenv("PRODUCER_PROBE_SHOWCASE_ONLY")){
       unsigned titlePixels=0,videoPixels=0;
       for(uint32_t y=0;y<h;y++)for(uint32_t x=0;x<w;x++){

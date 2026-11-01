@@ -290,6 +290,14 @@
             beacon.style.cssText='position:absolute;left:'+width+'px;top:0;width:2px;height:1px;pointer-events:none;background:linear-gradient(to right,rgb('+[a,a,a].join(',')+') 50%,rgb('+[b,b,b].join(',')+') 50%)';
           }
           port.postMessage({ type: 'prepared', revision: p.revision, serial:data.serial??0, width, height, slots });
+          if(data.audit)void document.fonts.ready.then(()=>{
+            if(ticket!==sequence||!port)return;
+            const textMetrics=[...entries.values()].filter(e=>e.type==='text').map(e=>{
+              const el=e.element;
+              return {node:el.dataset.node,width:el.clientWidth,height:el.clientHeight,contentWidth:el.scrollWidth,contentHeight:el.scrollHeight};
+            });
+            port.postMessage({type:'visual-audit',revision:p.revision,serial:data.serial??0,textMetrics});
+          });
           motionReady=true;
         }).catch(()=>{if(ticket===sequence&&port)port.postMessage({type:'error'});});
       } catch { port.postMessage({ type: 'error' }); }

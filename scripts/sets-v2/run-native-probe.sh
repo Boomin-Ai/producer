@@ -33,6 +33,9 @@ PLIST
 CARGO_BUILD_JOBS=1 CARGO_TARGET_DIR="${PRODUCER_SETS_V2_RUST_TARGET:-/private/tmp/producer-sets-v2-rust-target}" cargo build --offline --manifest-path scripts/sets-v2/rust-probe/Cargo.toml
 rust_lib="${PRODUCER_SETS_V2_RUST_TARGET:-/private/tmp/producer-sets-v2-rust-target}/debug/libproducer_sets_v2_native_adapter_probe.a"
 probe_sanitizer=(-fno-omit-frame-pointer)
+if [[ -n "${PRODUCER_PROBE_REACTIVE:-}" ]]; then
+  probe_sanitizer+=(-DPRODUCER_AUDIO_REACTIVE)
+fi
 if [[ "${PRODUCER_PROBE_ASAN:-0}" == "1" ]]; then
   probe_sanitizer=(-fsanitize=address -fno-omit-frame-pointer -g)
 fi

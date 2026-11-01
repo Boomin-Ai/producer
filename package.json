@@ -59,7 +59,9 @@
     "test:design-plan-browser": "node scripts/test-design-plan-browser.mjs",
     "test:design-generation-browser": "node scripts/test-design-generation-browser.mjs",
     "mcp:sets": "node tools/producer-mcp/server.mjs",
-    "test:mcp": "node tools/producer-mcp/test.mjs"
+    "test:mcp": "node tools/producer-mcp/test.mjs",
+    "test:authoring-visual": "node scripts/test-authoring-visual.mjs",
+    "test:visual-review-browser": "node scripts/test-visual-review-browser.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.0",
