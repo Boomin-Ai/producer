@@ -908,6 +908,41 @@ static void wait_program(obs_source_t *p, uint64_t revision) {
   require(program_status(p).rendered_revision == revision,
           "candidate endpoint rendered receipt");
 }
+static NSDictionary *paired_program_proof(void) {
+  obs_scene_t *room=obs_scene_create_private("Paired output proof");
+  obs_source_t *a=producer_set_v2_program_create(640,360),*b=producer_set_v2_program_create(360,640);
+  obs_source_t *red=solid(640,360,1,0,0,false),*green=solid(360,640,0,1,0,false),*nextA=solid(640,360,0,1,0,false),*nextB=solid(360,640,1,0,0,false);
+  require(a&&b&&obs_scene_add(room,a)&&obs_scene_add(room,b),"attach paired programs");
+  obs_set_output_source(0,obs_scene_get_source(room));
+  require(producer_set_v2_program_prepare(a,red,1)&&producer_set_v2_program_prepare(b,green,1),"prepare both candidates");
+  capture(obs_scene_get_source(room),640,360,640,360);
+  require(producer_set_v2_program_ready(a,1),"landscape candidate ready");
+  require(!producer_set_v2_program_take_pair(a,1,b,1,0,0),"unready portrait rejects the entire take");
+  require(!program_status(a).queued&&!program_status(b).queued,"failed pair leaves both unqueued");
+  require(producer_set_v2_program_ready(b,1),"portrait candidate ready");
+  require(!producer_set_v2_program_take_pair(a,1,b,99,0,0),"stale portrait rejects the entire take");
+  require(!program_status(a).queued&&!program_status(b).queued,"stale pair leaves both unqueued");
+  require(producer_set_v2_program_take_pair(a,1,b,1,0,0),"queue initial paired cut");
+  wait_program(a,1);wait_program(b,1);
+  color(capture(a,640,360,640,360),640,320,180,255,0,0,255,"landscape receives its own design");
+  color(capture(b,360,640,360,640),360,180,320,0,255,0,255,"portrait receives its own design");
+  require(producer_set_v2_program_collect(a)&&producer_set_v2_program_collect(b),"collect pair");
+  for(uint64_t r=2;r<=5;r++){
+    require(producer_set_v2_program_prepare(a,r%2?red:nextA,r)&&producer_set_v2_program_prepare(b,r%2?green:nextB,r),"prepare repeated paired view");
+    capture(obs_scene_get_source(room),640,360,640,360);
+    require(producer_set_v2_program_ready(a,r)&&producer_set_v2_program_ready(b,r),"both repeated candidates ready");
+    require(!producer_set_v2_program_take_pair(a,r,b,r,-1,0),"invalid duration retains both outputs");
+    require(program_status(a).rendered_revision==r-1&&program_status(b).rendered_revision==r-1,"rejected pair preserves previous revisions");
+    require(producer_set_v2_program_take_pair(a,r,b,r,90,0),"queue repeated paired transition");
+    require(!producer_set_v2_program_take_pair(a,r,b,r,90,0),"reject overlapping paired take");
+    wait_program(a,r);wait_program(b,r);
+    require(producer_set_v2_program_collect(a)&&producer_set_v2_program_collect(b),"collect completed pair");
+  }
+  obs_set_output_source(0,NULL);obs_scene_release(room);obs_source_release(a);obs_source_release(b);obs_source_release(red);obs_source_release(green);obs_source_release(nextA);obs_source_release(nextB);
+  for(int i=0;i<200&&producer_set_v2_live_programs();i++)usleep(10000);
+  require(!producer_set_v2_live_programs(),"paired programs release all ownership");
+  return @{@"readyGate":@YES,@"staleGate":@YES,@"bothRendered":@YES,@"repeatedTransitions":@YES,@"cleanup":@YES};
+}
 static NSArray *program_proof(NSString *out) {
 
   NSMutableArray *checks = [NSMutableArray array];
@@ -1482,6 +1517,11 @@ static int runProbe(int argc, char **argv) {
     producer_source_appearance_register();
     sets_v2_rust_register();
     register_test();
+    if(getenv("PRODUCER_PROBE_PAIR_ONLY")){
+      NSDictionary *report=paired_program_proof();
+      [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:@"paired-output-proof.json"] atomically:YES];
+      obs_shutdown();puts("PASS: coordinated paired takes, readiness/stale gates, repeated transitions and cleanup");return 0;
+    }
     if(getenv("PRODUCER_PROBE_VIEWPORT_ONLY")){
       NSDictionary *report=owner_proof(out);
       [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:@"viewport-proof.json"] atomically:YES];

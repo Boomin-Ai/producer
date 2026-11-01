@@ -223,6 +223,13 @@ pub enum Action {
         duration_ms: f64,
         mode: String,
     },
+    TakePair {
+        generation: u64,
+        program_revision: u64,
+        portrait_revision: u64,
+        duration_ms: f64,
+        mode: String,
+    },
     Cancel {
         generation: u64,
         output_id: Option<String>,
@@ -245,6 +252,7 @@ pub enum Action {
 impl Action {
     pub fn output(&self) -> &str {
         match self {
+            Self::TakePair { .. } => "program",
             Self::Prepare { output_id, .. }
             | Self::Preload { output_id, .. }
             | Self::Activate { output_id, .. }
@@ -263,6 +271,7 @@ impl Action {
             | Self::Activate { generation, .. }
             | Self::Retain { generation, .. }
             | Self::Take { generation, .. }
+            | Self::TakePair { generation, .. }
             | Self::Cancel { generation, .. }
             | Self::Status { generation, .. }
             | Self::Pause { generation, .. }

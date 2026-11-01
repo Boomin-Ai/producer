@@ -1,3 +1,4 @@
+import {outputLayout} from './layoutViews';
 import {IS_MAC} from '../../lib/platform';
 import {AssetTransport} from './assetTransport';
 import {useEffect,useRef,useState,useSyncExternalStore,type ReactNode} from 'react';
@@ -28,8 +29,8 @@ export function OutputSettings({icon,session,output,sourceNames,view='landscape'
  const checkGeneration=(generation:number)=>{if(cacheGeneration.current!==generation){media.current.clear();warmed.current='';cacheGeneration.current=generation;}};
  const lease=useRef(crypto.randomUUID()),revision=useRef(0),flight=useRef(false),fingerprint=useRef('');
  const portraits=session.package.set.layouts.filter(l=>l.height>l.width);
- const pairedId=state.layoutId.endsWith('-landscape')?state.layoutId.replace(/-landscape$/,'-portrait'):`${state.layoutId}-portrait`;
- const matched=portraits.find(l=>l.id===state.layoutId||l.id===pairedId)?.id??(portraits.length===1?portraits[0].id:undefined);
+ const pairedId=outputLayout(session.package.set,state.layoutId,'portrait');
+ const matched=portraits.find(l=>l.id===pairedId)?.id??(!session.package.set.views&&portraits.length===1?portraits[0].id:undefined);
  // Never silently substitute the room camera for a set that's on output.
  // The compositor fits an unmatched landscape composition into the portrait canvas.
  const effectiveLayout=layout==='room'?'room':portraits.some(l=>l.id===layout)?layout:matched??state.layoutId;
@@ -37,6 +38,7 @@ export function OutputSettings({icon,session,output,sourceNames,view='landscape'
  const authored=usingSet&&(active||view!=='landscape');
  const fitted=usingSet&&!portraits.some(l=>l.id===effectiveLayout);
  useEffect(()=>{setLayout('auto');fingerprint.current='';media.current.clear();},[session.package.id]);
+ useEffect(()=>{output.configurePortrait?.((active||view!=='landscape')&&layout!=='room'?layout:null);},[output.configurePortrait,active,view,layout]);
  const warmed=useRef('');
  const wake=useRef<()=>void>(()=>{}),pending=useRef(false);
  const latest=useRef({session,output,layout:effectiveLayout,state,authored});latest.current={session,output,layout:effectiveLayout,state,authored};
@@ -50,10 +52,11 @@ export function OutputSettings({icon,session,output,sourceNames,view='landscape'
    if(flight.current){pending.current=true;return;}flight.current=true;
    try{
     const current=latest.current;
+    if(current.authored&&current.output.configurePortrait){setBusy(false);setError('');return;}
     if(!current.authored){
      if(fingerprint.current!=='room'){setBusy(true);const sources=await ipc.livePortraitRoom();if(alive){setSources(sources);fingerprint.current='room';media.current.clear();}}
      else{const sources=await ipc.livePortraitState();if(alive)setSources(sources);}
-     if(current.output.renderer==='native'){await current.output.stopPortrait?.();}
+     if(current.output.renderer==='native'&&(!current.output.configurePortrait||current.layout==='room')){await current.output.stopPortrait?.();}
      if(current.output.renderer!=='native'&&!current.output.active&&current.layout&&current.session.package.set.layouts.some(l=>l.id===current.layout)&&alive){
       const projection=setOutputProjection(current.session,0,current.layout),visible=new Set<string>();if(projection.timeline)projection.timeline={...projection.timeline,clock:{...projection.timeline.clock,running:false}};const visit=(n:typeof projection.root)=>{if(n.slotId)visible.add(n.slotId);n.children.forEach(visit);};visit(projection.root);
       const bindings=Object.fromEntries(Object.entries(resolveRoomBindings(current.output.bindings,current.output.sources)).filter(([slot,id])=>visible.has(slot)&&current.output.sources.items?.some(s=>s.id===id&&s.has_frame&&s.visible)));

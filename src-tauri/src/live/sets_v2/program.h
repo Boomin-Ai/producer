@@ -24,6 +24,10 @@ bool producer_set_v2_program_ready(obs_source_t *program, uint64_t revision);
 bool producer_set_v2_program_take(obs_source_t *program, uint64_t revision,
                                   double duration_ms,
                                   enum producer_set_v2_transition_mode mode);
+/* Queue both outputs under one graphics lock, or leave both unchanged. */
+bool producer_set_v2_program_take_pair(obs_source_t *a,uint64_t ar,
+                                      obs_source_t *b,uint64_t br,double duration,
+                                      enum producer_set_v2_transition_mode mode);
 bool producer_set_v2_program_cancel(obs_source_t *program, uint64_t revision);
 bool producer_set_v2_program_pause(obs_source_t *program, bool paused);
 bool producer_set_v2_program_status(obs_source_t *program,

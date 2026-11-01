@@ -25,6 +25,8 @@ export interface SetOutputControls {
   prepareDraft?:(doc:import('./schema').PresentationPackage,bindings:Record<string,string>,framing:Record<string,import('./schema').SlotFraming>)=>void;
   clearDraftPreparation?:()=>void;
 
+  requiredOrientations?:readonly import('./layoutViews').LayoutOrientation[];
+  configurePortrait?:(layout:string|null)=>void;
   applyPortrait?:(projection:OutputProjection,layoutId?:string)=>Promise<void>;
   stopPortrait?:()=>Promise<void>;
   createSource?:(slot:string,spec:import('../../lib/sourceSpec').ExtraSpec,label:string,assign?:boolean)=>Promise<string|void>;

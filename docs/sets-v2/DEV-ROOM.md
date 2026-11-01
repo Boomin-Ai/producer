@@ -209,3 +209,30 @@ for the focused native Metal check. It covers pillarbox and letterbox opacity,
 centered content, authored transparency, contain/cover/stretch, budget rejection,
 retention after failed preparation and graph cleanup. This focused probe needs no
 browser fixtures, physical devices, recording or streaming.
+
+
+### One host selection, paired output variants (November 1)
+
+Host layout buttons and minimized/segment pickers now list logical views rather
+than separate orientation canvases. `layoutViews.ts` resolves explicit `set.views`
+first, suffix pairs only for legacy packages, and preserves unpaired layouts.
+Orientation-specific editing remains in the Set editor. Shared copy, source
+bindings, framing and runtime state are preserved.
+
+Landscape program always resolves the selected view's landscape variant. Portrait
+Follow set resolves the explicit portrait variant; a missing variant fits the
+selected composition. In Both/portrait mode, the room preparation bank pins and
+prepares both required scenes before activation. A native `takePair` request
+validates both revisions/readiness and allocates both transitions before queueing
+either, under one graphics lock. Failed preparation or rejected/stale paired takes
+retain previous outputs. Render completion requires both native receipts. This
+coordinates the native queue; no encoder frame-alignment claim is made.
+
+Checks: `node scripts/test-paired-layout-views.mjs` (with
+`PRODUCER_PLAYWRIGHT_MODULE` pointing to an installed Playwright Core), existing
+standalone-panel and prepared-scene regressions, TypeScript, and
+`PRODUCER_PROBE_PAIR_ONLY=1 bash scripts/sets-v2/run-native-probe.sh`. The focused
+Metal probe covers unready/stale rejection without either output changing,
+independent orientation designs, initial cuts, repeated paired transitions,
+overlap rejection and cleanup. New package generation can retain the current
+`set.views` JSON; this change does not rename authored IDs or rewrite saved Sets.

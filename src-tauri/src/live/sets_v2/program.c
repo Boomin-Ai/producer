@@ -415,6 +415,26 @@ bool producer_set_v2_program_take(obs_source_t *s, uint64_t revision,
   obs_leave_graphics();
   return true;
 }
+bool producer_set_v2_program_take_pair(obs_source_t *a,uint64_t ar,
+                                      obs_source_t *b,uint64_t br,double duration,
+                                      enum producer_set_v2_transition_mode mode) {
+  struct program *p[2]={get(a),get(b)};uint64_t revisions[2]={ar,br};
+  if(!p[0]||!p[1]||a==b||!isfinite(duration)||duration<0||duration>10000||mode<0||mode>2)return false;
+  obs_enter_graphics();
+  for(int i=0;i<2;i++)if(!p[i]->pending||!p[i]->ready||!p[i]->warmed||p[i]->queued||p[i]->transitioning||p[i]->prepared_revision!=revisions[i]){obs_leave_graphics();return false;}
+  obs_source_t *sources[2]={a,b},*transitions[2]={NULL,NULL};
+  for(int i=0;i<2;i++)if(p[i]->current&&duration>0){
+    obs_source_t *t=producer_set_v2_transition_create(p[i]->current,p[i]->pending,p[i]->width,p[i]->height,mode);
+    if(!t||!obs_source_add_active_child(sources[i],t)){
+      if(t)obs_source_release(t);
+      for(int j=0;j<i;j++)if(transitions[j])detach(p[j],transitions[j]);
+      obs_leave_graphics();return false;
+    }
+    transitions[i]=t;
+  }
+  for(int i=0;i<2;i++){p[i]->transition=transitions[i];p[i]->duration_ms=duration;p[i]->queued=true;p[i]->progress=0;snapshot_children(p[i]);}
+  obs_leave_graphics();return true;
+}
 bool producer_set_v2_program_cancel(obs_source_t *s, uint64_t revision) {
   struct program *p = get(s);
   if (!p)

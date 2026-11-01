@@ -134,6 +134,7 @@ extern "C" {
     ) -> bool;
     fn producer_set_v2_program_ready(p: *mut ffi::obs_source_t, r: u64) -> bool;
     fn producer_set_v2_program_take(p: *mut ffi::obs_source_t, r: u64, d: f64, mode: i32) -> bool;
+    fn producer_set_v2_program_take_pair(a:*mut ffi::obs_source_t,ar:u64,b:*mut ffi::obs_source_t,br:u64,duration:f64,mode:i32)->bool;
     fn producer_set_v2_program_cancel(p: *mut ffi::obs_source_t, r: u64) -> bool;
     fn producer_set_v2_program_pause(p: *mut ffi::obs_source_t, paused: bool) -> bool;
     fn producer_set_v2_program_status(p: *mut ffi::obs_source_t, out: *mut NativeStatus) -> bool;
@@ -623,6 +624,16 @@ impl RoomProgram {
             presented_revision: 0,
         })
     }
+    pub unsafe fn take_pair(&mut self,portrait:&mut Self,program_revision:u64,portrait_revision:u64,duration:f64,mode:&str)->Result<Status,String>{
+        self.poll()?;portrait.poll()?;
+        let mode=match mode {"dissolve"=>0,"wipe"=>1,"slide"=>2,_=>return Err("Invalid v2 transition mode".into())};
+        if !producer_set_v2_program_take_pair(self.program.0,program_revision,portrait.program.0,portrait_revision,duration,mode){return Err("Both output candidates must be ready and current; previous outputs retained".into());}
+        for (program,revision) in [(&mut *self,program_revision),(portrait,portrait_revision)] {
+            if let (Some(draft),Some((r,specs,clock)))=(&program.draft,&program.pending_3d){if *r==revision{draft._resources.publish3d(specs,clock.as_ref());}}
+        }
+        // The normal poll path confirms each output's rendered revision.
+        self.poll()
+    }
     pub unsafe fn dispatch(
         &mut self,
         action: Action,
@@ -731,6 +742,7 @@ impl RoomProgram {
                 self.bank.retain(|key, _| keys.contains(key));
                 self.resources.retain_manifest(&asset_ids);
             }
+            Action::TakePair { .. } => return Err("Paired takes require the room output coordinator".into()),
             Action::Take {
                 revision,
                 duration_ms,

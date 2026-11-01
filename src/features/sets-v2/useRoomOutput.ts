@@ -1,5 +1,6 @@
+import {outputLayout} from '../presentation/layoutViews';
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ipc, listenLiveEvents, type LiveSources } from "../../lib/ipc";
 import {
   setOutputProjection,
@@ -36,6 +37,9 @@ export function useRoomOutput(
   onFraming?: (f: Record<string, SlotFraming>) => void,
 ): SetOutputControls {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
+  const [portraitLayout,setPortraitLayout]=useState<string|null>(null);
+  const portraitConfig=useRef(portraitLayout);portraitConfig.current=portraitLayout;
+  const configurePortrait=useCallback((layout:string|null)=>setPortraitLayout(layout),[]);
   const [bindings, setBindings] = useState(initialBindings),
     [framing, setFraming] = useState(initialFraming);
   const [pendingChange, setPendingChange] = useState<"set" | "segment" | "content">("content");
@@ -123,7 +127,7 @@ export function useRoomOutput(
     // Prepare each design in its own output orientation; don't allocate a second
     // fitted copy of every portrait layout on the landscape renderer.
     const selected=inventory.find(s=>s.layout===state.layoutId);
-    const fallback=selected&&selected.target.id!=='program'?{...selected,target:{id:'program',orientation:'landscape' as const,...canvas,scaling:'contain' as const}}:undefined;
+    const fallback=selected&&selected.target.id!=='program'&&outputLayout(session.package.set,state.layoutId,'landscape')===state.layoutId?{...selected,target:{id:'program',orientation:'landscape' as const,...canvas,scaling:'contain' as const}}:undefined;
     const currentVariants=session.package.set.views&&Object.values(session.package.set.views).find(variants=>Object.values(variants).includes(state.layoutId));
     const currentLayouts=new Set<string>(currentVariants?Object.values(currentVariants):[state.layoutId]);
     const specs=warmInventory([...authoredSpecs,...(fallback?[fallback]:[])],currentLayouts);
@@ -165,7 +169,7 @@ export function useRoomOutput(
   void preparationVersion;
   const project = () => {
     const current = latest.current,
-      p = setOutputProjection(current.session, 1);
+      p = setOutputProjection(current.session, 1,outputLayout(current.session.package.set,current.session.snapshot().layoutId,'landscape'));
     const visit = (n: typeof p.root) => {
       if (n.slotId && current.framing[n.slotId])
         n.framing = current.framing[n.slotId];
@@ -175,8 +179,14 @@ export function useRoomOutput(
     return p;
   };
   const signature = (p = project(), current = latest.current) => {
+    const selected=current.session.snapshot().layoutId;
+    const portraitId=portraitConfig.current===null?undefined:portraitConfig.current==='auto'?outputLayout(current.session.package.set,selected,'portrait'):portraitConfig.current;
+    const portrait=portraitId?setOutputProjection(current.session,1,portraitId):undefined;
     return JSON.stringify({
       canvas:canvasRef.current,
+      portrait:portraitConfig.current,
+      portraitRoot:portrait?.root,
+      portraitTracks:portrait?.timeline?.tracks,
       root: p.root,
       assets: media.current.signature(p).assets,
       tracks: p.timeline?.tracks,
@@ -206,6 +216,7 @@ export function useRoomOutput(
     setPendingChange(previous.definition !== selection.definition ? "set" : previous.layout !== selection.layout || previous.phase !== selection.phase ? "segment" : "content");
     setBusy(true);
     setError("");
+    let portraitAttempted=0;
     let attempted = 0,failedCommit:import('../presentation/projection').OutputProjection['moduleCommit']=initialCommit;
     let failureStage:'prepare'|'render'='prepare';
     const started=performance.now();
@@ -217,37 +228,45 @@ export function useRoomOutput(
       if (ticket !== operation.current) return;
       const full=project();failedCommit=full.moduleCommit;
       const fingerprint=signature(full,current),layout=current.session.snapshot().layoutId;
-      const base=specsRef.current.find(s=>s.layout===layout);if(!base)throw Error('Selected layout is not in preparation inventory');
+      const programLayout=outputLayout(current.session.package.set,layout,'landscape');
+      const base=specsRef.current.find(s=>s.layout===programLayout);if(!base)throw Error('Selected layout is not in preparation inventory');
       const spec:SceneSpec={...base,projection:full,phase:snapshot.show.phase,target:{id:'program',orientation:'landscape',...canvasRef.current,scaling:'contain'}};
+      const portraitId=portraitConfig.current===null?undefined:portraitConfig.current==='auto'?outputLayout(current.session.package.set,layout,'portrait'):portraitConfig.current;
+      const portraitBase=portraitId?specsRef.current.find(s=>s.layout===portraitId):undefined;
+      const portraitProjection=portraitId?setOutputProjection(current.session,1,portraitId):undefined;
+      if(portraitProjection){const visit=(n:typeof portraitProjection.root)=>{if(n.slotId&&current.framing[n.slotId])n.framing=current.framing[n.slotId];n.children.forEach(visit);};visit(portraitProjection.root);}
+      const portraitSpec=portraitBase&&portraitProjection?{...portraitBase,projection:portraitProjection,target:{id:'portrait',orientation:'portrait' as const,width:canvasRef.current.height,height:Math.round(canvasRef.current.height*16/9),scaling:'contain' as const}}:undefined;
+      if(portraitId&&!portraitSpec)throw Error('Portrait layout is not in preparation inventory');
       timing('cache-request');
-      await bank.current!.take(spec,async(entry,candidateRevision)=>{
+      await bank.current!.takeGroup([spec,...(portraitSpec?[portraitSpec]:[])],async(entries)=>{
       if(ticket!==operation.current||current.session.snapshot().layoutId!==layout||current.session.snapshot().show.phase!==snapshot.show.phase||signature()!==fingerprint)return;
-      attempted=candidateRevision;
-      const plan=runtimePlan(entry.plan!,full);
+      attempted=entries[0].revision;portraitAttempted=entries[1]?.revision??0;
       failureStage='render';
-      timing('activate-request',{cacheKey:entry.key});
-      await request({op:'activate',revision:attempted,key:entry.key,plan});
+      timing('activate-request',{cacheKey:entries[0].entry.key});
+      for(const [i,candidate]of entries.entries())await request({op:'activate',outputId:i?'portrait':'program',revision:candidate.revision,key:candidate.entry.key,plan:runtimePlan(candidate.entry.plan!,i?portraitProjection!:full)});
       if (ticket !== operation.current) return;
       const charts=chartSeries(full),chartUpdate=!!charts&&!!shownCharts.current&&charts!==shownCharts.current;
       const transition =
         authoredCrossfadeMs(full.timeline?.transition,isActive.current&&(shownSelection.current.definition!==selection.definition||shownLayout.current!==layout),snapshot.paused,isActive.current&&!chartUpdate);
       timing('take-request',{transitionMs:transition});
-      await request({
-        op: "take",
-        revision: attempted,
-        durationMs: transition,
-        mode: "dissolve",
-      });
+      await request(portraitSpec?{op:'takePair',programRevision:attempted,portraitRevision:entries[1].revision,durationMs:transition,mode:'dissolve'}:{op:'take',revision:attempted,durationMs:transition,mode:'dissolve'});
       let sawTransition=false;
       for (let i = 0; i < 200; i++) {
         const status = await request({ op: "status" });
         if(status.transitioning&&!sawTransition){sawTransition=true;timing('transition-first-observed',{renderSerial:status.renderSerial});}
-        if (status.renderedRevision === attempted && !status.transitioning) {
+        const portraitStatus=portraitSpec?await request({op:'status',outputId:'portrait'}):undefined;
+        if (status.renderedRevision === attempted && !status.transitioning&&(!portraitStatus||portraitStatus.renderedRevision===entries[1].revision&&!portraitStatus.transitioning)) {
           timing('render-complete',{renderSerial:status.renderSerial,moduleCommit:full.moduleCommit});
           if (!alive.current || ticket!==operation.current || current.session!==latest.current.session || current.roomId !== latest.current.roomId)
             return;
           if(full.moduleCommit)window.dispatchEvent(new CustomEvent('producer:module-presented',{detail:{roomId:current.roomId,output:'program',generation:generation.current,nativeRevision:attempted,renderSerial:status.renderSerial,moduleCommit:full.moduleCommit}}));
           media.current.acknowledge(full);
+          if(portraitProjection){
+            media.current.acknowledge(portraitProjection);
+            portraitShownLayout.current=current.session.package.id+':'+portraitId;
+            portraitShownCharts.current=chartSeries(portraitProjection);
+            if(portraitProjection.moduleCommit)window.dispatchEvent(new CustomEvent('producer:module-presented',{detail:{roomId:current.roomId,output:'portrait',generation:generation.current,nativeRevision:entries[1].revision,renderSerial:portraitStatus?.renderSerial,moduleCommit:portraitProjection.moduleCommit}}));
+          }
           confirmed.current = fingerprint;
           shownCharts.current=charts;
           shownLayout.current = layout;
@@ -265,6 +284,7 @@ export function useRoomOutput(
       });
     } catch (e) {
       timing('error',{error:String(e)});
+      if(portraitAttempted)await request({op:'cancel',outputId:'portrait',revision:portraitAttempted}).catch(()=>{});
       if (attempted)
         await request({ op: "cancel", revision: attempted }).catch(() => {});
       if (alive.current && ticket === operation.current){setError(String(e));reportFailure(current,'program',failedCommit,failureStage,attempted);}
@@ -304,6 +324,7 @@ export function useRoomOutput(
   }, [
     bindings,
     framing,
+    portraitLayout,
     state.layoutId,
     JSON.stringify(state.values),
     JSON.stringify(state.feeds),
@@ -350,6 +371,7 @@ export function useRoomOutput(
     session,
     canvas,
     retryVersion,
+    portraitLayout,
     bindings,
     framing,
   ]);
@@ -357,11 +379,11 @@ export function useRoomOutput(
     if (!enabled) return;
     const timer = setTimeout(
       () =>
-        void request({ op: "pause", paused: !!state.paused }).catch(() => {}),
+        void Promise.all([request({op:'pause',paused:!!state.paused}),...(portraitConfig.current!==null?[request({op:'pause',outputId:'portrait',paused:!!state.paused})]:[])]).catch(()=>{}),
       0,
     );
     return () => clearTimeout(timer);
-  }, [enabled, state.paused]);
+  }, [enabled, state.paused, portraitLayout]);
   const applyPortrait = async (
     projection: import("../presentation/projection").OutputProjection,
     layoutId?:string,
@@ -404,6 +426,8 @@ export function useRoomOutput(
   };
   return {
     renderer: "native",
+    configurePortrait,
+    requiredOrientations:portraitLayout===null?['landscape']:['landscape','portrait'],
     layoutReadiness,
     retryPreparation:()=>{bank.current?.retry();setRetryVersion(v=>v+1);},
     prepareDraft:(doc,bindings,framing)=>setDraftCandidate({doc,bindings,framing}),
@@ -412,6 +436,7 @@ export function useRoomOutput(
     stopPortrait: async () => {
       ++portraitOperation.current;
       await request({ op: "return", outputId: "portrait" });
+      bank.current?.invalidateOutput('portrait');
     },
     selectToShow,
     setSelectToShow: (value) => {

@@ -72,16 +72,26 @@ export class PreparedScenes {
   });return entry.promise;
  }
  async take(spec:SceneSpec,run:(entry:Entry,revision:number)=>Promise<void>){
-  const pinned=this.get(spec);pinned.pins++;
-  try{
-   let entry=await this.ensure(spec,100);while(entry.state.state==='queued')entry=await this.ensure(spec,100);
-   return await this.enqueue(100,false,async()=>{
-    const status=await this.send({op:'status',outputId:spec.target.id});
-    if(!status.cachedKeys?.includes(entry.key)){entry.state={state:'queued'};this.changed();throw Error('Prepared scene expired; retry loading');}
-    this.revision=Math.max(this.revision,status.preparedRevision,status.renderedRevision)+1;const result=await run(entry,this.revision);this.active.set(spec.target.id,spec);return result;
-   });
-  }finally{pinned.pins--;await this.trim(100);}
+  return this.takeGroup([spec],entries=>run(entries[0].entry,entries[0].revision));
  }
+ /** Pin and prepare every required output before either can be activated. */
+ async takeGroup(specs:SceneSpec[],run:(entries:{entry:Entry;revision:number}[])=>Promise<void>){
+  const pinned=specs.map(s=>this.get(s));pinned.forEach(e=>e.pins++);
+  try{
+   const entries:Entry[]=[];
+   for(const spec of specs){let entry=await this.ensure(spec,100);while(entry.state.state==='queued')entry=await this.ensure(spec,100);entries.push(entry);}
+   return await this.enqueue(100,false,async()=>{
+    for(const [i,entry]of entries.entries()){
+     const status=await this.send({op:'status',outputId:specs[i].target.id});
+     if(!status.cachedKeys?.includes(entry.key)){entry.state={state:'queued'};this.changed();throw Error('Prepared scene expired; retry loading');}
+     this.revision=Math.max(this.revision,status.preparedRevision,status.renderedRevision);
+    }
+    const result=await run(entries.map(entry=>({entry,revision:++this.revision})));
+    specs.forEach(spec=>this.active.set(spec.target.id,spec));return result;
+   });
+  }finally{pinned.forEach(e=>e.pins--);await this.trim(100);}
+ }
+
  async preload(specs:SceneSpec[],cancel:()=>boolean){for(const spec of specs){if(cancel()||this.disposed)return;try{const entry=await this.ensure(spec);if(entry.state.state==='queued'&&!cancel()){await sleep(50);await this.ensure(spec);}}catch{/* Per-layout error is exposed; later layouts keep loading. */}}}
  async retain(specs:SceneSpec[]){this.inventory=[...specs];await this.trim();}
  /** Keep authored designs plus the latest presented snapshot per output. Text,
@@ -106,6 +116,7 @@ export class PreparedScenes {
  }
  reset(){this.active.clear();this.sentAssets.clear();this.abort=true;for(const e of this.entries.values())e.state={state:'queued'};this.changed();}
  invalidate(spec:SceneSpec){const entry=this.get(spec);entry.state={state:'queued'};entry.plan=undefined;this.changed();}
+ invalidateOutput(outputId:string){this.sentAssets.delete(outputId);for(const e of this.entries.values())if(e.spec.target.id===outputId)e.state={state:'queued'};this.changed();}
  retry(){for(const e of this.entries.values())if(e.state.state==='error')e.state={state:'queued'};this.changed();}
  dispose(){debugSessions.delete(this);this.disposed=true;this.abort=true;for(const job of this.jobs)job.reject(Error('Room preparation closed'));this.jobs=[];this.entries.clear();this.active.clear();this.inventory=undefined;}
 }
