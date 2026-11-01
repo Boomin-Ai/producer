@@ -1,3 +1,6 @@
+import {compileDesignPlan,applyDesignEdits} from './authoring/compiler';
+import {AUTHORING_CATALOG} from './authoring/catalog';
+import {designBrief} from './authoring/brief';
 import { useEffect, useMemo, useRef, useState,useSyncExternalStore } from 'react';
 import {activeEndpointId,WORKSPACE_EVENT} from '../../lib/workspace';
 import {dataIntegrations} from '../../lib/dataIntegrations';
@@ -20,6 +23,7 @@ export function PackageAuthoringDialog({ doc, intent, onLoad, onClose, returnFoc
   onClose: () => void; returnFocus: HTMLElement | null;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const currentDoc=useRef(doc);currentDoc.current=doc;
   const [request, setRequest] = useState('');
   const endpoint=useSyncExternalStore(subscribeWorkspace,activeEndpointId,()=>null);
   const {connections,connectionError,retryConnections}=useDataConnections(intent==='edit-set'?endpoint??undefined:undefined);
@@ -34,6 +38,15 @@ export function PackageAuthoringDialog({ doc, intent, onLoad, onClose, returnFoc
   const close=()=>{authoring.cancel();onClose();};
   const generate=()=>{if(!selected||!request.trim()||useBase&&baseIssue)return;setNotice('');void authoring.generate({connectionId:selected.connection.id,expectedRevision:selected.revision,prompt:generationPrompt,...(useBase?{package:doc}:{}),requireShow:intent==='add-show'});};
   const [notice, setNotice] = useState('');
+  const compilePlan=async()=>{
+    const original=draft.text,base=doc;
+    try{
+      const input=JSON.parse(original),target={catalogRevision:AUTHORING_CATALOG.revision,features:[...AUTHORING_CATALOG.features]};
+      const compiled=input.schema==='producer.set-edit/1'?await applyDesignEdits(base,input,target):compileDesignPlan(input,target,base.set.assets);
+      if(currentDoc.current!==base||authoring.snapshot().text!==original||!ref.current?.open)return;
+      authoring.editCandidate(JSON.stringify(compiled,null,2));authoring.validate();setNotice('Design compiled. Review both layouts before loading preparation.');
+    }catch(e){setNotice(e instanceof Error?e.message:'Design compilation failed.');}
+  };
   const packageJson = useMemo(()=>JSON.stringify(doc,null,2),[doc]);
   useEffect(() => {
     const dialog = ref.current!;
@@ -71,6 +84,11 @@ export function PackageAuthoringDialog({ doc, intent, onLoad, onClose, returnFoc
       <div className="set-authoring-actions"><button disabled={draft.status==='generating'||!selected||!request.trim()||generationPrompt.length>4000||!!(useBase&&baseIssue)} onClick={generate}>{draft.status==='generating'?'Generating draft…':'Generate draft'}</button>{draft.status==='generating'&&<button onClick={()=>{authoring.cancel();setNotice('Draft request canceled here. The provider may still finish the request.');}}>Cancel generation</button>}</div>
     </section>}
     {intent==='add-show'&&<p>Automated Show generation is not available yet. Use the manual agent workflow below to create and validate a Show.</p>}
+    {import.meta.env.DEV&&intent==='edit-set'&&<section aria-label="Design plan compiler">
+      <p>Design plan preview: copy a compact brief, paste your agent’s plan or targeted edits in the manual workflow, then compile and review. This dev profile targets the current renderer; installed-engine compatibility negotiation is still pending.</p>
+      <button onClick={()=>void designBrief(doc,request).then(value=>copy(value,'Design brief'))}>Copy design brief</button>
+      <button disabled={!draft.text.trim()||draft.status==='generating'} onClick={()=>void compilePlan()}>Compile design plan</button>
+    </section>}
     <details><summary>Manual agent workflow</summary>
     <div className="set-authoring-actions"><button onClick={() => void copy(packageJson, 'Package JSON')}>Copy package JSON</button>
       <button onClick={() => void copy(brief(), 'Agent brief')}>Copy agent brief</button></div>

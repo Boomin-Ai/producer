@@ -831,3 +831,50 @@ User-reported production issues require an audit of the complete canvas-output s
 - Design the JSON-backed WYSIWYG editor alongside the renderer audit. Authored JSON remains authoritative for drag, resize, grouping, masks and stacking; use the same viewport transforms and bounds in editor and native output. Support undo/redo, validation, off-air editing and explicit take semantics. Audit every authored node type rather than only camera slots.
 - Keep imported bitmaps atomic; independently movable title/artwork elements require separate authored assets or nodes. The initial Road To V1 clean plates combine the fixed Road To lettering with the road, while V1 and the host are independent nodes. Split clean-plate layers before promising independent title dragging.
 - Add regression cases for outline changes, camera disconnect/reconnect, clipping, scaling, and JSON edit/preview/native round trips. Scope production fixes separately from the launch artwork; Kleveland Set follows this work.
+
+## Design-plan compiler milestone — 2026-11-01
+
+The platform audit identified the one-shot restricted authoring profile as the
+immediate generation bottleneck. Improve authoring before extending managed 3D.
+The agreed direction is capability discovery, compact design plans, deterministic
+compilation, stable edits, visual checks and bounded repair. Keep the existing
+package admission, native preparation and explicit take boundaries.
+
+Initial dev implementation:
+- `authoring/catalog.ts` defines a versioned compiler profile, supported element
+  kinds, edit operations and budgets. This is a compiler capability snapshot;
+  installed native-engine and hosted-server negotiation is **not implemented**.
+- `authoring/compiler.ts` compiles compact independent orientation layouts into
+  canonical presentation/2 packages, sharing field/slot identities and generating
+  controls. Supports panels, editable text, cameras, existing images, and four
+  approved audio-effect presets. Full schema validation remains mandatory.
+- Asset-free design context contains asset IDs/name/MIME. Original bytes remain
+  local. Edits require a SHA-256 base revision, operate atomically on a clone,
+  target existing direct-child IDs and preserve untouched data. Initial edits:
+  move, literal text, camera replacement, and layout duplication. Nested edits
+  and replacement of bound text are rejected explicitly.
+- The dev-only authoring dialog offers Copy design brief and Compile design plan.
+  Agent responses enter the existing manual text area. Compilation previews a
+  candidate; only the existing Load preparation button changes preparation.
+  The saved-Claude one-shot production route remains unchanged.
+
+Acceptance covers deterministic landscape/portrait compilation, target mismatch,
+invalid geometry/fields, stale revision, atomic failure, missing/nested targets,
+asset-free context, and Road To V1 duplicate-layout/caption-to-camera edits that
+preserve original layouts, asset bytes and control arrangement. Browser tests
+cover compilation, private preview and explicit loading without provider calls.
+These tests do not establish live-model generation success or native output parity.
+
+Next implementation gates, in order:
+1. Negotiate compiler/native/workspace capability versions and deploy matching
+   generated contracts. Do not infer support from the requested model output.
+2. Wire saved-provider generation to compact plan/edit responses with references
+   resolved locally; use a bounded generation job with progress/cancellation and
+   revision checks. Keep paid repair within an explicit request budget.
+3. Add measured text-fit and intent-aware overlap checks, render both orientations,
+   and introduce a bounded repair pass with a real held-out prompt corpus.
+4. Move high-frequency content updates onto retained property updates, then
+   expand existing typed adapter/signal contracts. Deepgram/liveCaption currently
+   remains a dedicated path. Generic webhook/stream execution is still pending.
+5. Build dragging/undo against these stable document identities and edit semantics.
+   Broader 3D assets and arbitrary effects remain deferred until this path works.
