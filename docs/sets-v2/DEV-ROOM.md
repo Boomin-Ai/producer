@@ -28,6 +28,27 @@ can select an existing room-source ID in an empty private slot; it preserves an
 already assigned source and does not take output or create a device.
 Optional `VITE_SET_EDITOR_REVIEW_LAYOUT` selects a layout ID inside that private
 editor without changing the package's initial layout or the room output.
+`VITE_SET_EDITOR_DIAGNOSE=1` additionally reports source frame dimensions and
+preparation states after fifteen seconds. For an explicitly authorized local
+playback check, `VITE_SET_EDITOR_VERIFY_OUTPUT=<unique nonce>` takes the Set,
+waits for every layout to prepare, then switches through its distinct views
+and checks native rendered-revision receipts. This changes local output; it
+does not record or stream. Completed checks and receipts are stored by nonce
+in local storage so a frontend reload does not repeat a completed take test.
+Remove the verification flag after checking. Landscape/portrait variants of
+one view share the view check; both variants must still report ready.
+
+On 2026-11-01, the AI offer package passed the isolated renderer but its
+long-running desktop room reported first-frame preparation timeouts. A fresh
+room preparation recovered; source diagnostics confirmed camera and video
+frames. Unused embedded assets were removed from the standalone AI package,
+and real-room acceptance took all five offer views with both orientations ready.
+The separate Atlanta capacity package also passed all seven view takes and
+fourteen-layout readiness, including its sole Atlanta API CTA. Receipts are in
+`target/set-failure-fix/*-room-output-proof.json`. Disk exhaustion occurred during
+the investigation; the initial timeout's precise cause is not conclusively
+isolated. This is successful recovery and stronger desktop acceptance, not a
+claim that the native decoder or all resource-pressure failures were repaired.
 
 The 2026-11-01 Atlantium Georgia capacity package has six scenes in two
 orientations, a supplied static headshot and research controls. All 12 layouts

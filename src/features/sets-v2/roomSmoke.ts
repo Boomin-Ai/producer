@@ -6,7 +6,7 @@ async function until<T>(read: () => T | Promise<T>, label: string,attempts=600):
   throw Error(`Timed out: ${label}`);
 }
 const button = (label: string, root: ParentNode = document) => Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(b => (b.getAttribute('aria-label')===label || b.textContent?.trim()===label) && !b.disabled);
-/** Local review only: open a saved Set in its editor without taking output. */
+/** Private editor review by default; output verification is a separate opt-in. */
 export async function openSetEditorReview(name:string){
  if(!import.meta.env.DEV)return;
  try{
@@ -36,6 +36,41 @@ export async function openSetEditorReview(name:string){
    await until(()=>picker.value===layout,'review layout selected');
   }
   await invoke('live_set_v2_report',{result:{kind:'set-editor-review',ok:true,name,layout:document.querySelector<HTMLSelectElement>('dialog[open] select[aria-label="Edit layout"]')?.value,outputActionInvoked:false}});
+  const verify=import.meta.env.VITE_SET_EDITOR_VERIFY_OUTPUT;
+  if(verify&&localStorage.getItem('producer-review-take:'+verify)!=='complete'){
+   localStorage.setItem('producer-review-take:'+verify,'started');
+   const status=async()=>{const {generation}=await invoke<{generation:number}>('live_set_status');return invoke<{renderedRevision:number;transitioning:boolean}>('live_set_v2',{request:{op:'status',generation}});};
+   const deadline=Date.now()+90000;
+   (await until(()=>button('Show on output')??document.querySelector('.set-editor-apply-status.applied'),'review take')).dispatchEvent(new MouseEvent('click',{bubbles:true}));
+   await invoke('live_set_v2_report',{result:{kind:'set-output-verifying',name,stage:'take requested'}});
+   await until(()=>{if(Date.now()>deadline)throw Error('Review take deadline exceeded');const error=document.querySelector('dialog[open] [role=alert]')?.textContent;if(error)throw Error(error);return document.querySelector('.set-editor-apply-status.applied');},'review taken',1800);
+   button('Close editor')?.click();
+   await invoke('live_set_v2_report',{result:{kind:'set-output-verifying',name,stage:'taken; waiting for all layouts'}});
+   await until(()=>{if(Date.now()>deadline)throw Error('Layout readiness deadline exceeded');const panel=document.querySelector<HTMLElement>('.set-controls[data-layouts-total]');return panel&&Number(panel.dataset.layoutsTotal)>0&&panel.dataset.layoutsReady===panel.dataset.layoutsTotal;},'all room layouts ready',1800);
+   const checks=[];
+   const view=(label:string)=>label.replace(/ · (Landscape|Portrait)$/,'');
+   const labels=Array.from(new Map(Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).map(b=>{const label=b.querySelector('span')?.textContent??'';return [view(label),label] as const;})).values());
+   for(const label of labels){
+    const target=Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).find(b=>b.querySelector('span')?.textContent===label)!;
+    const selected=document.querySelector('.set-layouts button[aria-pressed="true"] span')?.textContent??'';
+    if(view(selected)===view(label)){checks.push({label,alreadySelected:true});continue;}
+    const before=await status();target.click();
+    const receipt=await until(async()=>{if(Date.now()>deadline)throw Error('Layout switching deadline exceeded');const s=await status();return s.renderedRevision>before.renderedRevision&&!s.transitioning?s:null;},'room layout '+label,1800);
+    checks.push({label,renderedRevision:receipt.renderedRevision});
+   }
+   const result={kind:'set-output-verified',ok:true,name,checks,completedAt:new Date().toISOString(),debug:(await import('./preparedScenes')).preparationDebug()};
+   localStorage.setItem('producer-review-proof:'+verify,JSON.stringify(result));
+   await invoke('live_set_v2_report',{result});
+   localStorage.setItem('producer-review-take:'+verify,'complete');
+   (await until(()=>button('Set settings'),'reopen checked Set')).click();
+   return;
+  }
+  if(verify){const saved=localStorage.getItem('producer-review-proof:'+verify);if(saved)await invoke('live_set_v2_report',{result:JSON.parse(saved)});}
+  if(import.meta.env.VITE_SET_EDITOR_DIAGNOSE==='1'){
+   await sleep(15000);
+   const engine=await invoke<{sources?:{items?:Array<{id:string;label:string;kind:string;has_frame?:boolean;src_w:number;src_h:number}>}}>('live_engine_status');
+   await invoke('live_set_v2_report',{result:{kind:'set-editor-diagnostics',name,sources:engine.sources?.items?.map(({id,label,kind,has_frame,src_w,src_h})=>({id,label,kind,has_frame,src_w,src_h})),bindings:Array.from(document.querySelectorAll<HTMLSelectElement>('dialog[open] .set-source-card select[aria-label$=" source"]')).map(s=>({label:s.getAttribute('aria-label'),source:s.value})),debug:(await import('./preparedScenes')).preparationDebug()}});
+  }
  }catch(error){await invoke('live_set_v2_report',{result:{kind:'set-editor-review',ok:false,name,error:String(error),debug:(await import('./preparedScenes')).preparationDebug(),alerts:Array.from(document.querySelectorAll('[role=alert], .set-error')).map(e=>e.textContent)}});}
 }
 function select(el: HTMLSelectElement, value: string) {
