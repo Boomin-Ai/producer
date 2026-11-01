@@ -194,3 +194,18 @@ Moved Rehearse/Exit rehearsal and Show on output into the editor configuration t
 Import/export/media moved into a Files popover to keep the header on one line. Export returns focus to its visible Files trigger. Compact editor widths retain both actions and reduce status text to a colored indicator with its full title/accessible text. Show transport remains below the toolbar during private practice.
 
 Validation: TypeScript and browser configuration, private rehearsal/apply isolation, and editor navigation/canvas fitting checks pass. The isolation test verifies both actions are inside the top toolbar, initial unapplied feedback, and confirmed on-output feedback/disabled unchanged action. Visually inspected the toolbar screenshot. No native changes or production deployment.
+
+
+### Fitted output margins (November 1)
+
+A portrait Set fitted into landscape program output could expose an unrelated
+room video in its transparent side margins. The native scene viewport now paints
+only contain-fit margins opaque black. Authored alpha inside the fitted canvas is
+preserved; matching-aspect, cover and stretch compositions keep their behavior.
+This does not alter the saved Set JSON or move authored elements.
+
+Run `PRODUCER_PROBE_VIEWPORT_ONLY=1 bash scripts/sets-v2/run-native-probe.sh`
+for the focused native Metal check. It covers pillarbox and letterbox opacity,
+centered content, authored transparency, contain/cover/stretch, budget rejection,
+retention after failed preparation and graph cleanup. This focused probe needs no
+browser fixtures, physical devices, recording or streaming.

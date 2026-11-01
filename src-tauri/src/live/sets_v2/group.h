@@ -15,6 +15,8 @@ bool producer_set_v2_group_add(obs_source_t *group, obs_source_t *child,
                                float x, float y, float width, float height,
                                bool contain);
 bool producer_set_v2_group_seal(obs_source_t *group);
+/* Opaque black bars outside the fitted viewport; authored alpha stays intact. */
+bool producer_set_v2_group_viewport_inset(obs_source_t *group, float x, float y);
 /* In graphics context only; geometry belongs to this placement/group, not
  * shared capture. */
 bool producer_set_v2_group_frame(obs_source_t *group, float radius,

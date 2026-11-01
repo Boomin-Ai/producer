@@ -1153,7 +1153,7 @@ static NSDictionary *owner_proof(NSString *out) {
     color(frame, 640, 320, 180, 0, 255, 0, 255,
           "viewport center retains source");
     if (mode == SET_V2_CONTAIN) {
-      color(frame, 640, 10, 180, 0, 0, 0, 0, "contain transparent letterbox");
+      color(frame, 640, 10, 180, 0, 0, 0, 255, "contain opaque letterbox hides underlying room video");
       color(frame, 640, 180, 180, 0, 0, 255, 255,
             "contain preserves canvas aspect");
     } else {
@@ -1184,6 +1184,23 @@ static NSDictionary *owner_proof(NSString *out) {
     require(!producer_set_v2_live_groups(),
             "native owner releases complete graph");
   }
+  // Preserve intentional alpha within the design while hiding room pixels only
+  // in aspect-fit margins, in both orientations and at matching aspect.
+  root.children = &children[1]; root.child_count = 1;
+  const uint32_t widths[] = {640, 240, 320};
+  const uint32_t heights[] = {360, 640, 240};
+  for (int i=0;i<3;i++) {
+    uint32_t w=widths[i],h=heights[i];
+    struct producer_set_v2_scene *scene=producer_set_v2_scene_prepare(&root,w,h,SET_V2_CONTAIN,budget,error,sizeof(error));
+    require(scene!=NULL,"prepare transparent fitted design");
+    NSData *frame=capture(producer_set_v2_scene_source(scene),w,h,w,h);
+    color(frame,w,w/2,h/2,0,255,0,255,"fitted design stays centered");
+    if(i==0)color(frame,w,1,h/2,0,0,0,255,"pillarbox margin is opaque black");
+    if(i==1)color(frame,w,w/2,1,0,0,0,255,"letterbox margin is opaque black");
+    const int alphaY=i==1?h/2-80:1;
+    color(frame,w,w/2,alphaY,0,0,0,0,"authored transparency inside viewport is preserved");
+    producer_set_v2_scene_release(scene);
+  }
   obs_source_release(blue);
   obs_source_release(green);
   for (int i = 0; i < 200 && atomic_load(&source_live); i++)
@@ -1194,6 +1211,8 @@ static NSDictionary *owner_proof(NSString *out) {
     @"contain" : @YES,
     @"cover" : @YES,
     @"stretch" : @YES,
+    @"opaqueFitMargins" : @YES,
+    @"authoredAlphaPreserved" : @YES,
     @"actualColorTargetBudget" : @YES,
     @"preflightRejectsInvalidGraph" : @YES,
     @"failedPreparePreservesExistingGraph" : @YES,
@@ -1463,6 +1482,11 @@ static int runProbe(int argc, char **argv) {
     producer_source_appearance_register();
     sets_v2_rust_register();
     register_test();
+    if(getenv("PRODUCER_PROBE_VIEWPORT_ONLY")){
+      NSDictionary *report=owner_proof(out);
+      [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:@"viewport-proof.json"] atomically:YES];
+      obs_shutdown();puts("PASS: opaque fit margins, preserved authored alpha, contain/cover/stretch and cleanup");return 0;
+    }
     if(getenv("PRODUCER_PROBE_VISUAL_EFFECTS_ONLY")){
       NSDictionary *report=getenv("PRODUCER_PROBE_CHART")?chart_proof(out):getenv("PRODUCER_PROBE_GRAPHICS_CACHE")?graphics_cache_proof(app,out):visual_effects_proof(out);
       [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:@"visual-effects-proof.json"] atomically:YES];
