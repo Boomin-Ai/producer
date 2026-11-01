@@ -26,6 +26,8 @@ change the preview without changing room state or taking output.
 For a fixture with a Host slot, optional `VITE_SET_EDITOR_REVIEW_HOST_SOURCE`
 can select an existing room-source ID in an empty private slot; it preserves an
 already assigned source and does not take output or create a device.
+Optional `VITE_SET_EDITOR_REVIEW_LAYOUT` selects a layout ID inside that private
+editor without changing the package's initial layout or the room output.
 
 The 2026-11-01 Atlantium Georgia capacity package has six scenes in two
 orientations, a supplied static headshot and research controls. All 12 layouts

@@ -29,7 +29,13 @@ export async function openSetEditorReview(name:string){
    const source=await until(()=>Array.from(document.querySelectorAll<HTMLSelectElement>('dialog[open] .set-source-card select[aria-label$=" source"]')).find(s=>s.getAttribute('aria-label')?.startsWith('Host')&&Array.from(s.options).some(o=>o.value===hostSource)),'existing review host source');
    if(!source.value)select(source,hostSource);
   }
-  await invoke('live_set_v2_report',{result:{kind:'set-editor-review',ok:true,name,outputActionInvoked:false}});
+  const layout=import.meta.env.VITE_SET_EDITOR_REVIEW_LAYOUT;
+  if(layout){
+   const picker=await until(()=>{const s=document.querySelector<HTMLSelectElement>('dialog[open] select[aria-label="Edit layout"]');return s&&Array.from(s.options).some(o=>o.value===layout)?s:null;},'review layout');
+   select(picker,layout);
+   await until(()=>picker.value===layout,'review layout selected');
+  }
+  await invoke('live_set_v2_report',{result:{kind:'set-editor-review',ok:true,name,layout:document.querySelector<HTMLSelectElement>('dialog[open] select[aria-label="Edit layout"]')?.value,outputActionInvoked:false}});
  }catch(error){await invoke('live_set_v2_report',{result:{kind:'set-editor-review',ok:false,name,error:String(error),debug:(await import('./preparedScenes')).preparationDebug(),alerts:Array.from(document.querySelectorAll('[role=alert], .set-error')).map(e=>e.textContent)}});}
 }
 function select(el: HTMLSelectElement, value: string) {
