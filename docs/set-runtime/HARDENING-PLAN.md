@@ -878,3 +878,36 @@ Next implementation gates, in order:
    remains a dedicated path. Generic webhook/stream execution is still pending.
 5. Build dragging/undo against these stable document identities and edit semantics.
    Broader 3D assets and arbitrary effects remain deferred until this path works.
+
+### Saved-Claude design generation — 2026-11-01
+
+Dev now exposes **Use design compiler** in Generate Set draft. It discovers the
+workspace authoring catalog, probes the installed app's native Set/effect/3D
+support, and intersects supported features before enabling generation. The
+0.4.78 engine predates a unified capability descriptor: discovery uses an explicit
+compatibility manifest for that exact verified release, plus native feature
+probes. Unknown versions and unavailable engines fail closed. Future releases
+must supply/update their profile; a general native descriptor remains follow-up.
+
+The local workspace adds authenticated authoring-capabilities and saved-connection
+`author-design` routes. The existing primary-role, encrypted secret, revision,
+request budget and rate-limit boundaries apply. Provider transport is shared with
+legacy authoring. The provider returns an untrusted plan/edit document; the client
+compiles against retained local assets, validates the canonical package, and only
+then previews. Base revisions protect edits; local draft generation fences cancel,
+changed inputs, replaced documents and closed dialogs. Cancellation still does
+not guarantee the upstream paid request stops. No automatic repair/retry exists.
+
+Edits send bounded asset-free structural context and a SHA-256 base revision.
+Fresh plans send a prompt and negotiated target. Embedded images remain local.
+The hosted Boomin API export/routes have not been updated or deployed; a workspace
+without this catalog reports incompatibility. Production UI keeps the original
+flow; the compiler switch is dev-only.
+
+Verification: 15 provider/route regressions, including real Road To V1 context and
+edit preservation; browser prompt-to-preview with simulated native/provider
+responses; existing authoring browser regression; desktop and server typechecks.
+These are not paid live-model quality measurements or new native output proof.
+The isolated local backend was refreshed with the new routes. Next: controlled
+live-provider acceptance on the compatible native dev build, resumable generation
+jobs, visual checks and the bounded repair/evaluation loop.

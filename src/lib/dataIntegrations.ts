@@ -9,6 +9,8 @@ async function call<T>(endpoint:string,method:'GET'|'POST'|'DELETE',path:string,
  return result.body as T;
 }
 export const dataIntegrations={
+ authoringCapabilities:(endpoint:string)=>call<{revision:number;features:string[]}>(endpoint,'GET','/authoring-capabilities'),
+ authorDesign:(endpoint:string,id:string,body:import('../../server/src/dataIntegrations/designAuthoring').DesignInput&{expectedRevision:number})=>call<{connectionId:string;connectionRevision:number;document:unknown;provider:'anthropic';model:string}>(endpoint,'POST','/'+encodeURIComponent(id)+'/author-design',body),
  authorSet:(endpoint:string,id:string,body:{expectedRevision:number;prompt:string;package?:import('../features/presentation/schema').PresentationPackage})=>call<import('../features/presentation/setAuthoring').AuthoringReply>(endpoint,'POST','/'+encodeURIComponent(id)+'/author-set',body),
  locations:(endpoint:string,query:string)=>call<{locations:WeatherLocation[]}>(endpoint,'GET','/locations?query='+encodeURIComponent(query)),
  list:(endpoint:string)=>call<{connections:SavedConnection[];capabilities:string[]}>(endpoint,'GET',''),

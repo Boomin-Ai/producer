@@ -1,3 +1,5 @@
+import {discoverAuthoringTarget} from './authoring/discovery';
+import {designContext,packageRevision} from './authoring/compiler';
 import {compileDesignPlan,applyDesignEdits} from './authoring/compiler';
 import {AUTHORING_CATALOG} from './authoring/catalog';
 import {designBrief} from './authoring/brief';
@@ -27,16 +29,29 @@ export function PackageAuthoringDialog({ doc, intent, onLoad, onClose, returnFoc
   const [request, setRequest] = useState('');
   const endpoint=useSyncExternalStore(subscribeWorkspace,activeEndpointId,()=>null);
   const {connections,connectionError,retryConnections}=useDataConnections(intent==='edit-set'?endpoint??undefined:undefined);
+  const [designMode,setDesignMode]=useState(false);
+  const [target,setTarget]=useState<import('./authoring/catalog').AuthoringTarget>();
+  const [capabilityError,setCapabilityError]=useState('');
+  useEffect(()=>{let disposed=false;setTarget(undefined);setCapabilityError('');if(!designMode||!endpoint)return;void dataIntegrations.authoringCapabilities(endpoint).then(discoverAuthoringTarget).then(value=>{if(!disposed)setTarget(value);}).catch(e=>{if(!disposed)setCapabilityError(e instanceof Error?e.message:String(e));});return()=>{disposed=true;};},[designMode,endpoint]);
   const [connectionId,setConnectionId]=useState(''),[useBase,setUseBase]=useState(false);
   const agents=connections.filter(saved=>saved.connection.kind==='agent'&&saved.connection.provider==='anthropic'&&saved.hasSecret);
   const selected=agents.find(saved=>saved.connection.id===connectionId)||(connectionId?undefined:agents[0]);
-  const authoring=useMemo(()=>new SetAuthoringDraft(input=>{if(!endpoint)throw Error('Connect a workspace to generate a Set.');const {connectionId,...body}=input;return dataIntegrations.authorSet(endpoint,connectionId,body);}),[endpoint]);
+  const authoring=useMemo(()=>new SetAuthoringDraft(input=>{if(!endpoint)throw Error('Connect a workspace to generate a Set.');const {connectionId,...body}=input;
+    if(!designMode)return dataIntegrations.authorSet(endpoint,connectionId,body);
+    if(!target)throw Error('Wait for compatible app and workspace capabilities.');
+    return (async()=>{
+      const base=body.package;
+      const reply=await dataIntegrations.authorDesign(endpoint,connectionId,{expectedRevision:body.expectedRevision,prompt:body.prompt,target,...(base?{context:designContext(base),baseRevision:await packageRevision(base)}:{})});
+      const candidate=base?await applyDesignEdits(base,reply.document,target):compileDesignPlan(reply.document,target);
+      return {...reply,package:candidate};
+    })();
+  }),[endpoint,designMode,target]);
   const draft=useSyncExternalStore(authoring.subscribe,authoring.snapshot);
-  const baseIssue=useMemo(()=>authoringBaseIssue(doc),[doc]);
+  const baseIssue=useMemo(()=>designMode?undefined:authoringBaseIssue(doc),[doc,designMode]);
   const generationPrompt=(intent==='add-show'?'Include an optional Show with the requested segment sequence. ':'')+request.trim();
   useEffect(()=>{authoring.cancel();return()=>authoring.cancel();},[authoring,doc,selected?.connection.id,selected?.revision]);
   const close=()=>{authoring.cancel();onClose();};
-  const generate=()=>{if(!selected||!request.trim()||useBase&&baseIssue)return;setNotice('');void authoring.generate({connectionId:selected.connection.id,expectedRevision:selected.revision,prompt:generationPrompt,...(useBase?{package:doc}:{}),requireShow:intent==='add-show'});};
+  const generate=()=>{if(!selected||!request.trim()||useBase&&baseIssue||designMode&&!target)return;setNotice('');void authoring.generate({connectionId:selected.connection.id,expectedRevision:selected.revision,prompt:generationPrompt,...(useBase?{package:doc}:{}),requireShow:intent==='add-show'});};
   const [notice, setNotice] = useState('');
   const compilePlan=async()=>{
     const original=draft.text,base=doc;
@@ -73,15 +88,17 @@ export function PackageAuthoringDialog({ doc, intent, onLoad, onClose, returnFoc
     <p>Describe a Set, validate the draft, and preview it before loading it into preparation. Loading a draft does not put it on air.</p>
     {intent !== 'export' && <label>Changes to request<textarea autoFocus value={request} onChange={e => {setRequest(e.target.value);authoring.cancel();setNotice('');}} placeholder={intent === 'add-show' ? 'Describe the segments, timing and interactions you want…' : 'Describe the design or show changes you want…'} maxLength={4000} /></label>}
     {intent==='edit-set'&&<section className="set-authoring-generate" aria-label="Generate a Set">
-      <p>Generate text and camera layouts, including microphone-reactive voice bars. Browser voice-bar previews use simulated levels; native output uses the existing microphone bus. Automated 3D, data bindings, and Show generation are not supported yet; the manual workflow still supports the full Set schema.</p>
+      {import.meta.env.DEV&&<label><input type="checkbox" checked={designMode} onChange={e=>setDesignMode(e.target.checked)}/>Use design compiler</label>}
+      {designMode&&<p>{capabilityError||(!target?'Checking app and workspace compatibility…':'Design compiler ready. Existing assets stay on this device; edits preserve the current Set.')}</p>}
+      {!designMode&&<p>Generate text and camera layouts, including microphone-reactive voice bars. Browser voice-bar previews use simulated levels; native output uses the existing microphone bus. Automated 3D, data bindings, and Show generation are not supported yet; the manual workflow still supports the full Set schema.</p>}
       <label>Saved Claude connection<select aria-label="Saved Claude connection" value={selected?.connection.id??''} onChange={e=>{setConnectionId(e.target.value);authoring.cancel();}}><option value="" disabled>Choose a saved Claude connection</option>{agents.map(saved=><option key={saved.connection.id} value={saved.connection.id}>{saved.connection.name} · {saved.connection.kind==='agent'?saved.connection.model:''}</option>)}</select></label>
       {!endpoint?<p>Connect a workspace to use a saved Claude connection.</p>:!agents.length&&!connectionError?<p>Add a Claude connection with an API key in Data connections, then return here.</p>:null}
       {connectionError&&<p role="alert">{connectionError} <button onClick={retryConnections}>Retry connections</button></p>}
-      {selected?.connection.kind==='agent'&&<p>Output limit: {selected.connection.maxOutputTokens.toLocaleString()} tokens. Two layouts may need 4,096 tokens; adjust the saved connection in Data connections, or request one simple layout.</p>}
+      {selected?.connection.kind==='agent'&&<p>Output limit: {selected.connection.maxOutputTokens.toLocaleString()} tokens. {designMode?'Compact plans reduce repeated JSON; complex requests can still exceed this limit.':'Two layouts may need 4,096 tokens; adjust the saved connection in Data connections, or request one simple layout.'}</p>}
       <label className="set-authoring-base"><input type="checkbox" checked={useBase} disabled={!!baseIssue} onChange={e=>{setUseBase(e.target.checked);authoring.cancel();}}/>Use current Set as starting point</label>
       {baseIssue&&<p>{baseIssue}</p>}
-      <p>{useBase?'The prompt and current Set package will be sent to your saved Claude connection.':'Generate a fresh draft from this prompt using your saved Claude connection.'} Each Generate request uses your provider account.</p>
-      <div className="set-authoring-actions"><button disabled={draft.status==='generating'||!selected||!request.trim()||generationPrompt.length>4000||!!(useBase&&baseIssue)} onClick={generate}>{draft.status==='generating'?'Generating draft…':'Generate draft'}</button>{draft.status==='generating'&&<button onClick={()=>{authoring.cancel();setNotice('Draft request canceled here. The provider may still finish the request.');}}>Cancel generation</button>}</div>
+      <p>{useBase?(designMode?'The prompt and asset-free design context will be sent to your saved Claude connection.':'The prompt and current Set package will be sent to your saved Claude connection.'):'Generate a fresh draft from this prompt using your saved Claude connection.'} Each Generate request uses your provider account.</p>
+      <div className="set-authoring-actions"><button disabled={draft.status==='generating'||designMode&&!target||!selected||!request.trim()||generationPrompt.length>4000||!!(useBase&&baseIssue)} onClick={generate}>{draft.status==='generating'?'Generating draft…':'Generate draft'}</button>{draft.status==='generating'&&<button onClick={()=>{authoring.cancel();setNotice('Draft request canceled here. The provider may still finish the request.');}}>Cancel generation</button>}</div>
     </section>}
     {intent==='add-show'&&<p>Automated Show generation is not available yet. Use the manual agent workflow below to create and validate a Show.</p>}
     {import.meta.env.DEV&&intent==='edit-set'&&<section aria-label="Design plan compiler">
