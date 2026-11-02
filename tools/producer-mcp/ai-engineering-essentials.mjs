@@ -2,8 +2,10 @@ import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
-import plan from './fixtures/ai-engineering-essentials.mjs';
-const out=fileURLToPath(new URL('../../target/ai-engineering-essentials/',import.meta.url));await mkdir(out,{recursive:true});
+import shell from './fixtures/ai-engineering-essentials.mjs';
+const episode=process.argv.includes('--cloudflare');
+const plan=episode?(await import('./fixtures/ai-engineering-cloudflare.mjs')).default:shell;
+const out=fileURLToPath(new URL('../../target/'+(episode?'ai-engineering-cloudflare':'ai-engineering-essentials')+'/',import.meta.url));await mkdir(out,{recursive:true});
 const client=new Client({name:'ai-engineering-essentials',version:'1'}),transport=new StdioClientTransport({command:process.execPath,args:[fileURLToPath(new URL('./server.mjs',import.meta.url))],stderr:'pipe'});
 const call=async(name,args={})=>{const r=await client.callTool({name,arguments:args});if(r.isError)throw Error(r.content[0]?.text);return JSON.parse(r.content[0].text);};
 try{

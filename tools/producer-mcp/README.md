@@ -253,6 +253,25 @@ art to MCP; no repo artwork or personal photo bytes are committed here. Portrait
 Host diameter is 360px on the 1080px canvas, with a narrower headline column.
 Shared artwork, stable Host placement and 360ms crossfades tie chapters together.
 
+`node tools/producer-mcp/ai-engineering-essentials.mjs --cloudflare` authors the
+first episode while retaining the Set name **AI Engineering Essentials** and
+all six paired view IDs. `--cloudflare --edit` refines the last episode copy.
+The episode adds a Cloudflare opener, six staggered platform layers, an AI-app
+flow, the new `cf` CLI, getting started and a dedicated full-list CTA (bio link
+or comment ESSENTIALS). Results are isolated in `target/ai-engineering-cloudflare/`.
+The reusable shell fixture remains intact. CLI examples are illustrative text;
+authoring does not install packages, authenticate to Cloudflare or deploy.
+
+Copy is grounded in [Cloudflare's product directory](https://developers.cloudflare.com/directory/),
+[the cf CLI reference](https://developers.cloudflare.com/cf/),
+[installation requirements](https://developers.cloudflare.com/cf/get-started/)
+and [project behavior](https://developers.cloudflare.com/cf/projects/).
+`cf` is beta and distinct from Wrangler. Existing Wrangler projects must migrate
+before using `cf` project commands; the slide includes this distinction. Commands,
+configuration and supported behavior can change during beta. The six full-stack
+cards are selected product capabilities, not a claim that every application
+requirement or third-party integration is covered by one service.
+
 [Remotion parameterized rendering](https://www.remotion.dev/docs/parameterized-rendering)
 informs schema-driven inputs and editable controls.
 [Node-RED credentials](https://nodered.org/docs/creating-nodes/credentials) and
