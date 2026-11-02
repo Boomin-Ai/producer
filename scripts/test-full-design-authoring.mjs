@@ -1,0 +1,48 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {authoringRuntime} from '../tools/producer-mcp/runtime.mjs';
+const api=await authoringRuntime(),target={catalogRevision:api.AUTHORING_CATALOG.revision,features:[...api.AUTHORING_CATALOG.features]};
+assert.deepEqual(api.presentationJsonSchema,JSON.parse(await readFile(new URL('../docs/shows/presentation.schema.json',import.meta.url),'utf8')),'published schema matches the import codec');
+let fixtures=0;
+for(const name of ['road-to-v1','atmosphere','visual-effects-lab','grand-arena-3d-study','signal-desk']){
+ const text=await readFile(new URL('../docs/shows/'+name+'.json',import.meta.url),'utf8');
+ const original=api.parsePackageText(text);original.set.assets??={};const assets=original.set.assets,tree=structuredClone(original);delete tree.set.assets;
+ const plan={schema:'producer.design-plan/2',package:tree,assetRefs:Object.keys(assets??{})};
+ assert.deepEqual(api.compileDesignPlan(plan,target,assets),original,'full canonical round trip: '+name);fixtures++;
+ assert(!JSON.stringify(api.designContext(original)).includes('base64,'));
+ const revision=await api.packageRevision(original);
+ const first=original.set.layouts[0],before=JSON.stringify(original);
+ const edit={schema:'producer.set-edit/2',baseRevision:revision,operations:[{op:'replace',path:'/set/layouts/0/label',value:'Edited composition'},{op:'replace',path:'/name',value:'Edited Set'}]};
+ const edited=await api.applyDesignEdits(original,edit,target);assert.equal(edited.set.layouts[0].label,'Edited composition');assert.equal(edited.name,'Edited Set');assert.deepEqual(edited.set.assets,assets);assert.equal(JSON.stringify(original),before);
+ await assert.rejects(api.applyDesignEdits(edited,edit,target),/changed/);
+ for(const operations of [[{op:'replace',path:'/set/assets',value:{}}],[{op:'add',path:'/__proto__/bad',value:1}],[...edit.operations,{op:'remove',path:'/set/layouts/999'}],[{op:'replace',path:'/set/layouts/0/root/styles/opacity',value:NaN}],[{op:'replace',path:'/set/layouts/0/root/styles/opacity',value:Infinity}],[{op:'remove',path:'/set/layouts/0',value:null}]])await assert.rejects(api.applyDesignEdits(original,{...edit,operations},target));
+ assert.equal(JSON.stringify(original),before,'failed canonical edit is atomic');
+ assert.throws(()=>api.compileDesignPlan({...plan,package:{...tree,set:{...tree.set,assets:{}}}},target,assets),/assetRefs/);
+ if(api.packageFeatures(original).length>1)assert.throws(()=>api.compileDesignPlan(plan,{...target,features:['core@1']},assets),/cannot render/);
+}
+const show=api.parsePackageText(await readFile(new URL('../src/features/presentation/fixtures/head-to-head.json',import.meta.url),'utf8'));show.set.assets??={};const showTree=structuredClone(show);delete showTree.set.assets;
+assert.deepEqual(api.compileDesignPlan({schema:'producer.design-plan/2',package:showTree,assetRefs:Object.keys(show.set.assets)},target,show.set.assets),show);fixtures++;
+const weather=api.parsePackageText(await readFile(new URL('../docs/shows/atmosphere.json',import.meta.url),'utf8'));
+const req=api.integrationRequirements(weather).find(r=>r.capability==='data.weather@1');assert(req,'old module-only weather package has a portable requirement');
+const adapter={schema:'producer.data-adapter/1',id:'my-weather',version:1,capability:'data.weather@1',transport:'poll',operations:[{id:'forecast',input:req.input,output:req.output,delivery:'snapshot',refresh:true}]};
+const connection={connection:{id:'recipient-owned',name:'My forecast',kind:'weather',provider:'my-weather'},revision:7,hasSecret:false,status:'ready',error:'',testedAt:0};
+assert.equal(api.integrationSetup(weather,[],{},[]).find(s=>s.requirement.role===req.role).status,'adapter-unavailable');
+assert.equal(api.integrationSetup(weather,[],{},[adapter]).find(s=>s.requirement.role===req.role).status,'needs-connection');
+assert.equal(api.integrationSetup(weather,[connection],{[req.role]:{id:connection.connection.id,revision:7}},[adapter]).find(s=>s.requirement.role===req.role).status,'connected');
+assert.equal(api.compatibleAdapters(req,[{...adapter,operations:[{...adapter.operations[0],output:'weather.observation@2'}]}]).length,0,'contract version mismatch');
+assert.equal(api.integrationSetup(weather,[connection],{[req.role]:{id:connection.connection.id,revision:6}},[adapter]).find(s=>s.requirement.role===req.role).status,'connection-changed');
+const future=structuredClone(weather);future.integrations={schema:'producer.integrations/1',requirements:[{role:'futureData',label:'Future data',capability:'data.future@1',input:'future.query@1',output:'future.answer@1',delivery:'event',optional:true}]};
+assert(api.parsePackageText(JSON.stringify(future)),'missing future adapter does not block downloading/importing a valid Set');
+assert(!JSON.stringify(future).includes('recipient-owned'),'recipient binding stays out of exported Set');
+const bad=structuredClone(future);bad.integrations.requirements[0].apiKey='must-not-export';assert.throws(()=>api.parsePackageText(JSON.stringify(bad)));
+const compact={schema:'producer.design-plan/1',id:'five-offers',name:'Five offers',background:'#000000',views:{},layouts:[]};
+for(let i=0;i<5;i++){compact.views['offer'+i]={};for(const orientation of ['landscape','portrait']){const id='offer'+i+'-'+orientation;compact.views['offer'+i][orientation]=id;compact.layouts.push({id,name:'Offer '+i+' · '+orientation,orientation,elements:[{id:'title',kind:'text',bounds:[40,40,900,100],text:'Offer '+i}]});}}
+const compiled=api.compileDesignPlan(compact,target);assert.equal(compiled.set.layouts.length,10);assert.equal(Object.keys(compiled.set.views).length,5);assert.deepEqual(compiled.set.controlArrangement.minimized,['builtin:layout']);
+const nested=await api.applyDesignEdits(compiled,{schema:'producer.set-edit/2',baseRevision:await api.packageRevision(compiled),operations:[{op:'replace',path:'/set/layouts/0/root/children/0/styles/fontSize',value:60}]},target);assert.equal(nested.set.layouts[0].root.children[0].styles.fontSize,60);
+const basic={id:'batch',kind:'graphic',bounds:{x:0,y:0,width:100,height:100},properties:{},children:[]};
+const root={id:'root',kind:'group',bounds:{x:0,y:0,width:1920,height:1080},properties:{},children:Array.from({length:32},(_,i)=>({...structuredClone(basic),id:'graphic'+i}))};
+const nativePlan={root,target:{id:'program',orientation:'landscape',width:1920,height:1080,scaling:'contain'},viewport:{scaleX:1,scaleY:1,offsetX:0,offsetY:0,clip:root.bounds}};
+assert.equal(api.estimateRenderPlan(nativePlan).graphicsSurfaces,1,'contiguous graphics batch together');
+nativePlan.root.children=Array.from({length:17},(_,i)=>[{...structuredClone(basic),id:'g'+i},{...structuredClone(basic),id:'s'+i,kind:'source'}]).flat();
+assert(api.estimateRenderPlan(nativePlan).issues.some(s=>s.includes('surfaces')),'interleaved sources expose the graphics-surface budget before native preparation');
+console.log(`PASS: ${fixtures} full-schema round trips (3D, animation, effects, modules, Shows, assets); canonical atomic edits; capability gates; five paired offers; portable adapter contracts and recipient setup`);

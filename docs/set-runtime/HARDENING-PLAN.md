@@ -48,6 +48,38 @@ Define unknown-field handling, defaults, units, numeric precision, identifier/re
 
 Ship machine-readable schemas, valid/invalid fixtures, an authoring guide and an offline validation command. Validator success means structurally supported, not guaranteed affordable on every device.
 
+### Authoring completeness and portable dependencies — local implementation, 2026-11-01
+
+The MCP and CLI now expose the complete canonical package codec through
+`producer.design-plan/2`, and revision-fenced nested JSON-pointer edits through
+`producer.set-edit/2`. Compact v1 remains supported, with up to 32 individual
+layouts and explicit view mappings. Advanced capabilities no longer require an
+agent to bypass the authoring tools and hand-write a separate package pipeline.
+All trusted existing shader parameters, managed 3D, animation, components,
+controls, modules, charts, masks, blur, bindings and optional Shows remain bounded
+by existing schema/native limits; this is not arbitrary code execution.
+
+Portable integration requirements declare roles and versioned data contracts,
+not saved accounts or secrets. Existing weather/agent modules imply requirements.
+Missing adapters/connections do not invalidate a downloadable/importable Set.
+Set edit supports adding a recipient-owned weather/agent connection, compatible
+binding selection and stale-revision recovery. Future webhook/stream contracts
+can be declared; trusted executable adapters and runtime delivery still require
+implementation. Registration metadata is not an execution grant.
+
+Browser review now includes advisory lowered-graph batching estimates at 1080p.
+These address early visibility of likely node/surface/graphics-pixel failures;
+they do not establish native affordability, decoded-resource limits, peak
+retention/transition budgets or native first-frame readiness. Full GPU admission,
+provider-specific strict response schemas, staged generation/evals and broad
+hardware/fault/reconnect tests remain required before stronger release claims.
+
+Local evidence includes six full-schema fixture round trips (launch, weather,
+visual-effects, managed 3D, signal graphics and a Show), atomic nested edits, actual MCP
+stdio and CLI execution, plus recipient weather setup using mocked provider
+storage. No paid model requests or production deployment are implied. See
+[authoring contract and commands](../../tools/producer-mcp/README.md).
+
 ## 3. Validation and admission control
 
 Validate before decoding assets, creating sources, opening connections or allocating GPU resources. Revalidate at native/server trust boundaries; frontend validation is not authority.

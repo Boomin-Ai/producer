@@ -1,68 +1,174 @@
-# Producer Set authoring MCP
+# Producer Set authoring MCP and CLI
 
-Local stdio MCP for Claude Code, Codex and other MCP clients. The agent supplies a compact design plan or a revision-fenced edit. Producer's existing compiler and canonical validator produce a new `.set.json`. No second model call, provider credential, running workspace server or native app is required.
+Local, deterministic authoring for Claude Code, Codex and other MCP clients. The
+agent supplies a design or an edit; Producer compiles and validates a new Set.
+There is no second model request, provider credential or native app requirement.
+
+## Contracts
+
+Capability catalog revision **2** supports two profiles through the same tools:
+
+| Profile | Input | Coverage |
+| --- | --- | --- |
+| Compact | `producer.design-plan/1` | Flat panels, text, source slots, authorized images and four voice-effect recipes |
+| Canonical | `producer.design-plan/2` | Every field accepted by the canonical Set codec: nested components, all 19 trusted shader presets/parameters, managed 3D worlds, charts, masks, blur, bindings, animations, controls, modules, paired views and optional Shows |
+
+Canonical plans use `{schema, package, assetRefs?}`. `package` is a complete
+`producer.presentation/2` document **without `set.assets`**. `assetRefs` lists IDs
+from an explicitly authorized `assetsFrom` Set. Media bytes never enter model
+context. Canonical schemas are generated from the actual import codec, avoiding a
+second advanced-feature grammar. Unsupported fields are rejected, not dropped.
+This does not add arbitrary JavaScript, HTML, shader code, network endpoints or
+Blender geometry to the renderer.
+
+Both profiles accept up to **32 individual layouts**. Author explicit `set.views`
+pairs and shared field/slot IDs; use `builtin:layout` for host navigation. Compact
+elements remain bounded at 64 per layout. Canonical node/world/resource limits
+remain those of the package codec and native renderer. A larger inventory does
+not override GPU budgets.
+
+`producer.set-edit/2` provides up to 64 atomic RFC 6902 `add`, `replace`, and
+`remove` operations with RFC 6901 pointers and an exact `baseRevision`. It supports
+nested geometry, editable field defaults, bindings, modules and Show changes.
+Assets and prototype keys cannot be patched. Final validation rejects dangling
+references or invalid intermediate combinations before saving anything. Legacy
+`producer.set-edit/1` remains supported for direct-child moves, literal text,
+camera replacement and layout duplication. Source files are never overwritten.
+
+## Portable integrations
+
+A Set may declare `integrations: {schema:"producer.integrations/1", requirements:[]}`.
+Requirements describe `role`, `label`, versioned `capability`, `input`, `output`,
+`delivery`, optional `transport`/`refresh`, optionality and optional exact adapter
+identity/version/operation. Existing weather/agent modules imply requirements, so
+older packages need no migration. Prefer inferred requirements for built-in weather/agent modules. Explicit integration metadata requires the updated importer. Conflicting roles/contracts are rejected.
+
+A weather Set carries its design, module behavior and `data.weather@1` contract.
+It does not carry the author's saved connection ID, endpoint or API key. Import
+and download remain valid when the recipient has no matching adapter or account.
+Set edit lists the missing requirement and lets the recipient add a weather or
+agent connection and select it. Unregistered adapters leave the authored design
+and defaults available; unavailable data is not presented as a live measurement.
+A configured connection is distinguished from a successfully tested connection.
+Stale connection revisions require reselection. Account secrets remain in the
+existing workspace connection store, outside exported Set JSON.
+
+Adapter compatibility checks use registered capability, input/output versions,
+delivery, transport, refresh and optional adapter pins. The existing trusted
+registry describes weather polling and agent requests; its contracts also admit
+webhook and streaming transports. **A declaration does not implement or install
+an adapter.** New transports/providers still need trusted execution code and
+runtime binding support. Imported Sets cannot install executable connectors.
 
 ## Setup
 
-Requires Node 22+ and this Producer checkout's dependencies:
+Requires Node 22+ and installed repository dependencies:
 
 ```sh
 npm ci
 npm ci --prefix tools/producer-mcp
 ```
 
-Open Claude Code at the repository root. The committed `.mcp.json` registers `producer-sets`, and `.claude/skills/producer-sets/SKILL.md` supplies the skill. Claude's normal project MCP trust handling applies. See [Claude MCP setup](https://code.claude.com/docs/en/mcp) and [skills locations](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview).
-
-For Codex, use an absolute checkout path:
+The repository `.mcp.json` registers the local server for Claude Code. The skill
+is `.claude/skills/producer-sets/SKILL.md`. For Codex:
 
 ```sh
 codex mcp add producer-sets -- node /absolute/producer/tools/producer-mcp/server.mjs
 ```
 
-Copy the skill folder into `~/.codex/skills/producer-sets` for personal discovery. MCP configuration follows the [official Codex MCP instructions](https://learn.chatgpt.com/docs/extend/mcp). Reconnect the client after adding a server if the new tools are not listed.
-
-The default artifact directory is `~/Documents/Producer Sets`. Set `PRODUCER_SETS_DIR` in the MCP process environment to choose another directory. Only regular `.set.json` files directly inside that directory are readable. Paths outside it and symbolic links are rejected. Outputs have unique names and never overwrite source Sets. No credentials belong in MCP config or Set documents.
+Use the same skill in `~/.codex/skills/producer-sets`. Restart the MCP connection
+after updating the server. The default artifact directory is
+`~/Documents/Producer Sets`, configurable with `PRODUCER_SETS_DIR`. The server
+reads regular `.set.json` files directly inside that directory; outside paths and
+symlinks are rejected. Outputs use unique filenames and preserve originals.
 
 ## Tools
 
-| Tool | Result |
+| Tool | Purpose |
 | --- | --- |
-| `producer_capabilities` | Current compiler catalog, compact contract and scope |
-| `producer_list_sets` | Up to 200 package filenames |
+| `producer_capabilities` | Current profiles, limits, target and instructions |
+| `producer_schema` | Exact package schema or focused node/runtime/integrations/animation section |
+| `producer_list_sets` | Discover authorized source files |
 | `producer_inspect_set` | Asset-free tree and exact revision |
-| `producer_compile_set` | New validated package from a plan; optional local asset source |
-| `producer_edit_set` | New package from atomic edits against an exact revision |
-| `producer_validate_set` | Full canonical package validation |
-| `producer_check_geometry` | Ring alignment/radius/padding and advisory text overlap checks |
-| `producer_visual_check` | Real browser text-fit measurements for every configured layout, plus geometry findings |
-| `producer_repair_ring` | Revision-fenced ring repair around an explicitly selected camera, saved as a new draft |
-| `producer_preview_set` | Standalone HTML using the actual Producer SetPreview renderer |
+| `producer_compile_set` | Compile either design profile, retaining authorized assets |
+| `producer_edit_set` | Apply either revision-fenced edit profile to a new draft |
+| `producer_requirements` | Discover portable integration and visual requirements |
+| `producer_validate_set` | Canonical structural validation |
+| `producer_check_geometry` | Ring alignment and advisory overlap checks |
+| `producer_visual_check` | Actual-browser text fit and estimated native batching budgets |
+| `producer_repair_ring` | Explicit, revision-fenced ring repair preserving the camera |
+| `producer_preview_set` | Standalone HTML using Producer's Set renderer |
 
-Resources: `producer://authoring/guide` is the compact authoring contract; `producer://authoring/schema` exposes the full canonical JSON schema directly from the codec. Load the latter only for advanced file authoring.
+Resources `producer://authoring/guide` and `producer://authoring/schema` expose the
+contract and full generated schema. Use focused discovery when possible rather
+than repeatedly supplying the full schema for a small edit.
 
-Try: “Use producer-sets to make an Attention Is Currency studio in landscape and portrait. Cream, black and red; a circular host camera with a visible voice-reactive ring, and an editable topic headline. Generate both previews.”
+## CLI
 
-The compact profile currently supports panels, text, cameras, existing image assets and four trusted audio-reactive effects. Edits support moving direct layout children, changing literal text, replacing an element with a camera and duplicating layouts. Full-schema file authoring is broader; validation does not mean every feature can be generated through the compact plan.
-
-The visual check needs an installed Chromium browser. On macOS it defaults to `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`; elsewhere configure `PRODUCER_BROWSER_PATH` in the MCP environment. The server never downloads a browser during a tool call. An unavailable browser is an error, not a successful visual check. HTML previews also display a report after checking all layouts. Findings cover current text/default values and direct numeric ring geometry, not all future feed values or animation states. Overlap findings are advisory because editorial layering can be intentional. Ring repairs never move the camera or other artwork; insufficient space produces a diagnostic instead.
-
-## Boundaries and verification
-
-This is a **local authoring server**, not a hosted Claude web connector or room-control bridge. Its capability profile describes this checkout, not the installed native renderer. All reports mark native readiness as untested. Browser cameras are placeholders, microphone animation is simulated, and native media references need Producer. Import the resulting file into Producer to bind sources, rehearse and check native output. There is no automatic room preparation, take, device activation, recording, streaming or deployment.
+The CLI calls exactly the same compiler and validators:
 
 ```sh
+npm run generate:set -- capabilities
+npm run generate:set -- schema
+npm run generate:set -- compile --plan design.json --assets-from source.set.json --out draft.set.json
+npm run generate:set -- edit --base draft.set.json --edit changes.json --out revised.set.json
+npm run generate:set -- requirements --file revised.set.json
+npm run generate:set -- check --file revised.set.json
+npm run generate:set -- preview --file revised.set.json --out preview.html
+```
+
+The caller authors the plan; the CLI does not call a model. Design/edit input is
+bounded at 1 MiB and Set input at 40 MiB. Output files must be new. `check` needs
+an installed Chromium; on macOS the default is Google Chrome. Configure
+`PRODUCER_BROWSER_PATH` elsewhere. No browser is downloaded during a tool call.
+
+## Verification boundaries
+
+Visual review measures configured text with the real browser renderer and lowers
+each layout at 1080p to estimate native nodes, graphics batches and raster pixels,
+including retained morph targets. It warns before likely 128-node, 16-surface or
+8-Mi-pixel graphics-limit failures. Estimates mirror current batching logic and
+are not GPU allocation, media decoding, driver, first-frame, peak retained-store
+or hardware certification. Review estimates alongside actual native preparation.
+Future feed values and all animation states are not covered by default snapshots.
+Browser cameras are placeholders; microphone response is simulated.
+
+These tools do not load room preparation, take output, activate devices, record,
+stream or deploy. Structural validity, browser visual review and native readiness
+are separate results. The app defaults to the full compiler; update app/workspace capability catalog revision 2 together. Saved-Claude design authoring uses these same profiles with
+explicit saved token budgets (256–32,768, model permitting), one request per click,
+and no automatic retry. Existing budgets/defaults are unchanged. A complex request
+can still truncate; revision-fenced incremental edits avoid regenerating assets
+or an entire Set for each adjustment.
+
+```sh
+npm run test:authoring-full
+node scripts/test-authoring-cli.mjs
 npm run test:mcp
-# Include real browser rendering (optional; use your installed Playwright module):
-PRODUCER_PLAYWRIGHT_MODULE=/absolute/path/playwright-core/index.mjs npm run test:mcp
+PRODUCER_PLAYWRIGHT_MODULE=/absolute/path/playwright-core/index.mjs node scripts/test-set-integration-portability-browser.mjs
 ```
 
-The test connects through the official SDK's real stdio transport and verifies tools/resources, compilation, revision conflicts, unchanged originals, invalid geometry, file boundaries, preview generation and optional browser rendering/script escaping. The server uses the [official MCP TypeScript SDK](https://ts.sdk.modelcontextprotocol.io/server).
+Tests include full-schema round trips of real launch, weather, visual-effects and
+managed-3D packages and a Show; nested atomic edits and capability failures; the actual MCP
+stdio transport; recipient connection creation/binding; and immutable CLI output.
+These establish compiler/transport/setup behavior, not a statistical natural-
+language generation success rate. Paid model acceptance remains opt-in through
+`scripts/test-design-generation-live.mjs --live` with an existing saved connection.
 
-Separate paid acceptance of Producer's saved-Claude route is opt-in, with exactly one request per invocation:
+## Design references
 
-```sh
-node scripts/test-design-generation-live.mjs --live \
-  --workspace-file /private/path/workspace.json --connection SAVED_CONNECTION_ID
-```
+[Remotion parameterized rendering](https://www.remotion.dev/docs/parameterized-rendering)
+informs schema-driven inputs and editable controls.
+[Node-RED credentials](https://nodered.org/docs/creating-nodes/credentials) and
+[configuration nodes](https://nodered.org/docs/creating-nodes/config-nodes) inform
+separating reusable definitions from recipient-owned connections and secrets.
+[OBS scene collections](https://obsproject.com/kb/scene-collections) provide a
+reference for portable collections with separately configured dependencies.
+[Claude structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)
+are a provider-side reliability option; the complete recursive Producer schema
+is not blindly passed as strict output configuration. Provider schema support and
+semantic validation must both be established before claiming strict conformance.
 
-That script uses an existing managed connection; it does not put keys in a Set or logs. It reports provider timing, layout counts and sizes, and saves artifacts under `target/authoring-acceptance`. It does not establish native rendering or a statistical generation success rate.
+The MCP acceptance test also repairs six nested temperature text boxes in a new
+weather draft and rechecks all six layouts. The source fixture stays unchanged;
+its editorial-overlap findings remain advisory.

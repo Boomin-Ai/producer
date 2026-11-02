@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {authoringRuntime} from '../tools/producer-mcp/runtime.mjs';
 import {checkRenderedSet} from '../tools/producer-mcp/visual-check.mjs';
-const api=await authoringRuntime(),target={catalogRevision:1,features:[...api.AUTHORING_CATALOG.features]};
+const api=await authoringRuntime(),target={catalogRevision:2,features:[...api.AUTHORING_CATALOG.features]};
 const plan={schema:'producer.design-plan/1',id:'visual-proof',name:'Visual proof',background:'#f4ecd8',layouts:['landscape','portrait'].map(orientation=>({id:orientation,name:orientation,orientation,elements:[
  {id:'ring',kind:'effect',bounds:[90,200,600,600],effect:'voiceRing',radius:300},
  {id:'host',kind:'camera',bounds:[200,300,400,400],slot:'host',radius:200},

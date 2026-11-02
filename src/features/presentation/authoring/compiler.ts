@@ -1,3 +1,5 @@
+import {packageFeatures} from './features';
+import {parsePackageText} from '../validation';
 import {parsePackage, type PresentationPackage, type PresentationNode} from '../schema';
 import {AUTHORING_CATALOG, requireFeatures, type AuthoringTarget} from './catalog';
 
@@ -18,9 +20,11 @@ function rect(v: unknown, w: number, h: number) {
   if (left < 0 || top < 0 || width < 1 || height < 1 || left+width > w || top+height > h) throw Error('Element must fit inside its authored canvas.');
   return {position:'absolute',left,top,width,height};
 }
+function designBudget(input:unknown){if(new TextEncoder().encode(JSON.stringify(input)).byteLength>AUTHORING_CATALOG.limits.designBytes)throw Error('Design input exceeds 1 MB. Split the work into revision-fenced edits.');}
 export function compileDesignPlan(input: unknown, target: AuthoringTarget, assets: PresentationPackage['set']['assets'] = {}): PresentationPackage {
-  requireFeatures(target,['core@1']);
-  const p=object(input,['schema','id','name','background','layouts']);
+  designBudget(input);requireFeatures(target,['core@1']);
+  if((input as Obj)?.schema==='producer.design-plan/2')return compileCanonicalPlan(input,target,assets);
+  const p=object(input,['schema','id','name','background','layouts','views','initialView'],['schema','id','name','background','layouts']);
   if(p.schema!=='producer.design-plan/1')throw Error('Unsupported design plan.');
   const values: Obj={},slots=new Map<string,string>(),usedAssets:Obj={},controls:Obj[]=[];
   const layouts=list(p.layouts,AUTHORING_CATALOG.limits.layouts).map(raw=>{
@@ -50,8 +54,8 @@ export function compileDesignPlan(input: unknown, target: AuthoringTarget, asset
     });
     return {id:id(l.id),label:text(l.name,80),width,height,animation:{tracks:[],transition:{type:'morph',durationMs:450,contentDurationMs:0}},root:{id:'root',type:'box',styles:{position:'relative',width,height,background:color(p.background),overflow:'hidden'},children}};
   });
-  for(const l of layouts)controls.push({id:`view-${l.id}`,type:'button',label:l.label,action:{type:'layout.select',layoutId:l.id}});
-  return parsePackage({schema:'producer.presentation/2',id:id(p.id),name:text(p.name,80),version:'1.0.0',set:{initialLayout:layouts[0].id,values,feeds:{},assets:usedAssets,slots:[...slots].map(([id,label])=>({id,label})),components:{},layouts,controls,controlArrangement:{sections:[{id:'content',label:'Content and layouts',controls:controls.map(c=>`set:${c.id}`)}],minimized:controls.filter(c=>c.type==='button').map(c=>`set:${c.id}`)}}});
+
+  return parsePackage({schema:'producer.presentation/2',id:id(p.id),name:text(p.name,80),version:'1.0.0',set:{...(p.views?{views:p.views}:{}),...(p.initialView?{initialView:p.initialView}:{}),initialLayout:layouts[0].id,values,feeds:{},assets:usedAssets,slots:[...slots].map(([id,label])=>({id,label})),components:{},layouts,controls,controlArrangement:{sections:[{id:'content',label:'Content and layouts',controls:['builtin:layout',...controls.map(c=>`set:${c.id}`)]}],minimized:['builtin:layout']}}});
 }
 
 /** Model context contains structure and asset identities, never embedded media bytes. */
@@ -66,13 +70,11 @@ export async function packageRevision(doc: PresentationPackage): Promise<string>
 }
 /** Atomic, revision-fenced local edits. The input and its assets are never mutated. */
 export async function applyDesignEdits(base: PresentationPackage, input: unknown, target: AuthoringTarget): Promise<PresentationPackage> {
-  requireFeatures(target,['core@1']);
+  designBudget(input);requireFeatures(target,['core@1']);
+  if((input as Obj)?.schema==='producer.set-edit/2')return applyCanonicalEdits(base,input,target);
   const request=object(input,['schema','baseRevision','operations']);
   if(request.schema!=='producer.set-edit/1'||request.baseRevision!==await packageRevision(base))throw Error('The Set changed after this edit was requested. Generate an edit against the current revision.');
-  const required=new Set<string>(['core@1',...(base.requires??[])]);
-  const inspect=(n:PresentationNode)=>{if(n.shader)required.add(`shader.${n.shader.effect}@1`);if(n.scene3d)required.add('scene3d@1');n.children?.forEach(inspect);};
-  base.set.layouts.forEach(l=>inspect(l.root));Object.values(base.set.components).forEach(c=>inspect(c.root));
-  requireFeatures(target,[...required]);
+  requireFeatures(target,packageFeatures(base));
   const next=structuredClone(base);
   for(const raw of list(request.operations,AUTHORING_CATALOG.limits.edits)){
     const op=object(raw,['op','layout','node','bounds','text','slot','id','name'],['op','layout']);
@@ -95,4 +97,47 @@ export async function applyDesignEdits(base: PresentationPackage, input: unknown
     }else throw Error('Unsupported edit operation.');
   }
   return parsePackage(next);
+}
+
+
+/** Bounded canonical authoring: every declarative schema field, no second schema
+ * for geometry/materials/modules to drift from the actual renderer contract. */
+export function compileCanonicalPlan(input:unknown,target:AuthoringTarget,assets:PresentationPackage['set']['assets']={}):PresentationPackage {
+ const plan=object(input,['schema','package','assetRefs'],['schema','package']);
+ if(plan.schema!=='producer.design-plan/2')throw Error('Unsupported canonical design plan.');
+ const raw=structuredClone(plan.package);
+ if(!raw||typeof raw!=='object'||!raw.set||typeof raw.set!=='object')throw Error('Canonical plan requires a complete Set package.');
+ if(raw.set.assets!==undefined)throw Error('Use assetRefs for authorized local assets; never supply asset bytes in a design.');
+ const refs=plan.assetRefs??[];
+ if(!Array.isArray(refs)||refs.length>24||new Set(refs).size!==refs.length)throw Error('Expected up to 24 distinct assetRefs.');
+ raw.set.assets=Object.fromEntries(refs.map((key:unknown)=>{const asset=id(key);if(!assets?.[asset])throw Error(`Missing authorized asset: ${asset}`);return [asset,structuredClone(assets[asset])];}));
+ const doc=parsePackageText(JSON.stringify(raw));requireFeatures(target,packageFeatures(doc));return doc;
+}
+/** RFC 6901 paths / RFC 6902 add, replace and remove, applied to a private copy.
+ * The final canonical validator owns reference/type checks. No intermediate
+ * partially-edited package can escape, and embedded assets cannot be patched. */
+export async function applyCanonicalEdits(base:PresentationPackage,input:unknown,target:AuthoringTarget):Promise<PresentationPackage>{
+ const edit=object(input,['schema','baseRevision','operations']);
+ if(edit.schema!=='producer.set-edit/2'||edit.baseRevision!==await packageRevision(base))throw Error('The Set changed after this edit was requested. Inspect its current revision.');
+ const next:any=structuredClone(base);
+ for(const raw of list(edit.operations,AUTHORING_CATALOG.limits.edits)){
+  const op=object(raw,['op','path','value'],['op','path']);
+  if(!['add','replace','remove'].includes(op.op)||typeof op.path!=='string'||!op.path.startsWith('/')||op.path.length>1024||/\~(?![01])/.test(op.path))throw Error('Invalid canonical edit operation or JSON pointer.');
+  if((op.op==='remove')===Object.prototype.hasOwnProperty.call(op,'value'))throw Error('Add/replace require value; remove must omit value.');
+  const parts=op.path.slice(1).split('/').map((p:string)=>p.replace(/~1/g,'/').replace(/~0/g,'~'));
+  if(parts.some((p:string)=>['__proto__','prototype','constructor'].includes(p))||parts[0]==='set'&&(parts.length===1||parts[1]==='assets'))throw Error('Asset/prototype replacement is not permitted.');
+  let parent=next;
+  for(const key of parts.slice(0,-1)){if(!parent||typeof parent!=='object'||!Object.prototype.hasOwnProperty.call(parent,key))throw Error('Edit parent does not exist.');parent=parent[key];}
+  if(!parent||typeof parent!=='object')throw Error('Edit parent must be an object or array.');
+  const key=parts[parts.length-1];
+  if(Array.isArray(parent)){
+   const index=key==='-'&&op.op==='add'?parent.length:/^(0|[1-9][0-9]*)$/.test(key)?Number(key):NaN;
+   if(!Number.isSafeInteger(index)||index<0||index>parent.length||(op.op!=='add'&&index===parent.length))throw Error('Invalid array edit index.');
+   if(op.op==='add')parent.splice(index,0,structuredClone(op.value));else if(op.op==='remove')parent.splice(index,1);else parent[index]=structuredClone(op.value);
+  }else{
+   if(op.op!=='add'&&!Object.prototype.hasOwnProperty.call(parent,key))throw Error('Edit target does not exist.');
+   if(op.op==='remove')delete parent[key];else parent[key]=structuredClone(op.value);
+  }
+ }
+ const doc=parsePackageText(JSON.stringify(next));requireFeatures(target,packageFeatures(doc));return doc;
 }

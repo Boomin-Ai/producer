@@ -29,11 +29,11 @@ export function PackageAuthoringDialog({ doc, intent, onLoad, onClose, returnFoc
   const currentDoc=useRef(doc);currentDoc.current=doc;
   const [request, setRequest] = useState('');
   const endpoint=useSyncExternalStore(subscribeWorkspace,activeEndpointId,()=>null);
-  const {connections,connectionError,retryConnections}=useDataConnections(intent==='edit-set'?endpoint??undefined:undefined);
-  const [designMode,setDesignMode]=useState(false);
+  const {connections,connectionError,retryConnections}=useDataConnections(intent!=='export'?endpoint??undefined:undefined);
+  const [designMode,setDesignMode]=useState(true);
   const [target,setTarget]=useState<import('./authoring/catalog').AuthoringTarget>();
   const [capabilityError,setCapabilityError]=useState('');
-  useEffect(()=>{let disposed=false;setTarget(undefined);setCapabilityError('');if(!designMode||!endpoint)return;void dataIntegrations.authoringCapabilities(endpoint).then(discoverAuthoringTarget).then(value=>{if(!disposed)setTarget(value);}).catch(e=>{if(!disposed)setCapabilityError(e instanceof Error?e.message:String(e));});return()=>{disposed=true;};},[designMode,endpoint]);
+  useEffect(()=>{let disposed=false;setTarget(undefined);setCapabilityError('');if(intent==='export'||!designMode||!endpoint)return;void Promise.resolve().then(()=>dataIntegrations.authoringCapabilities(endpoint)).then(discoverAuthoringTarget).then(value=>{if(!disposed)setTarget(value);}).catch(e=>{if(!disposed)setCapabilityError(e instanceof Error?e.message:String(e));});return()=>{disposed=true;};},[designMode,endpoint,intent]);
   const [connectionId,setConnectionId]=useState(''),[useBase,setUseBase]=useState(false);
   const agents=connections.filter(saved=>saved.connection.kind==='agent'&&saved.connection.provider==='anthropic'&&saved.hasSecret);
   const selected=agents.find(saved=>saved.connection.id===connectionId)||(connectionId?undefined:agents[0]);
@@ -58,7 +58,7 @@ export function PackageAuthoringDialog({ doc, intent, onLoad, onClose, returnFoc
     const original=draft.text,base=doc;
     try{
       const input=JSON.parse(original),target={catalogRevision:AUTHORING_CATALOG.revision,features:[...AUTHORING_CATALOG.features]};
-      const compiled=input.schema==='producer.set-edit/1'?await applyDesignEdits(base,input,target):compileDesignPlan(input,target,base.set.assets);
+      const compiled=String(input.schema).startsWith('producer.set-edit/')?await applyDesignEdits(base,input,target):compileDesignPlan(input,target,base.set.assets);
       if(currentDoc.current!==base||authoring.snapshot().text!==original||!ref.current?.open)return;
       authoring.editCandidate(JSON.stringify(compiled,null,2));authoring.validate();setNotice('Design compiled. Review both layouts before loading preparation.');
     }catch(e){setNotice(e instanceof Error?e.message:'Design compilation failed.');}

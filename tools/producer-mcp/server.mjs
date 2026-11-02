@@ -10,7 +10,7 @@ import {fileURLToPath} from 'node:url';
 import {authoringRuntime,previewHtml} from './runtime.mjs';
 import {checkRenderedSet} from './visual-check.mjs';
 
-const MAX_PACKAGE=40*1024*1024, MAX_DESIGN=128*1024;
+const MAX_PACKAGE=40*1024*1024, MAX_DESIGN=1024*1024;
 const fileName=z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,180}\.set\.json$/);
 const document=z.record(z.unknown());
 const reply=value=>({content:[{type:'text',text:JSON.stringify(value)}]});
@@ -21,7 +21,7 @@ export async function createAuthoringServer(directory) {
   const root=await realpath(directory),api=await authoringRuntime();
   const target={catalogRevision:api.AUTHORING_CATALOG.revision,features:[...api.AUTHORING_CATALOG.features]};
   const scope={validation:'package-structure',nativeReadiness:'not-tested',outputChanged:false};
-  const server=new McpServer({name:'producer-sets',version:'0.1.0'});
+  const server=new McpServer({name:'producer-sets',version:'0.2.0'});
 
   async function read(file) {
     fileName.parse(file);
@@ -37,7 +37,7 @@ export async function createAuthoringServer(directory) {
     } finally {await handle.close();}
   }
   function checkDesign(value) {
-    if(Buffer.byteLength(JSON.stringify(value))>MAX_DESIGN)throw Error('Design input exceeds 128 KB.');
+    if(Buffer.byteLength(JSON.stringify(value))>MAX_DESIGN)throw Error('Design input exceeds 1 MB.');
   }
   async function writeNew(name,contents) {
     const file=join(root,name),handle=await open(file,'wx',0o600);
@@ -50,7 +50,7 @@ export async function createAuthoringServer(directory) {
     api.parsePackageText(text);
     const file=`${doc.id}-${randomUUID()}.set.json`;
     const path=await writeNew(file,text);
-    return {file,path,revision:await api.packageRevision(doc),layouts:doc.set.layouts.map(l=>({id:l.id,name:l.label,width:l.width,height:l.height})),...scope};
+    return {file,path,revision:await api.packageRevision(doc),features:api.packageFeatures(doc),integrations:api.integrationRequirements(doc),views:doc.set.views??{},layouts:doc.set.layouts.map(l=>({id:l.id,name:l.label,width:l.width,height:l.height})),...scope};
   }
   function tool(name,description,inputSchema,readOnly,fn) {
     server.registerTool(name,{description,inputSchema,annotations:{readOnlyHint:readOnly,destructiveHint:false,idempotentHint:readOnly,openWorldHint:false}},async input=>{
@@ -63,9 +63,17 @@ export async function createAuthoringServer(directory) {
     });
   }
   tool('producer_capabilities','Discover the local compiler profile, plan/edit instructions and validation limits. This is not a connected native renderer capability probe.',{},true,async()=>({catalog:api.AUTHORING_CATALOG,target,instructions:api.DESIGN_INSTRUCTIONS,directory:root,...scope}));
+  tool('producer_schema','Read the exact canonical package schema or a focused authoring section. No media, credentials or native actions.',{section:z.enum(['package','node','runtime','integrations','animation']).optional()},true,async({section='package'})=>{
+    const full=api.presentationJsonSchema,fragment=section==='package'?full:section==='node'?full.$defs.node:section==='animation'?full.properties.set.properties.layouts.items.properties.animation:full.properties[section];
+    const definitions={},seen=new Set();
+    const collect=value=>{if(!value||typeof value!=='object')return;if(typeof value.$ref==='string'&&value.$ref.startsWith('#/$defs/')){const key=value.$ref.slice(8);if(!seen.has(key)&&full.$defs[key]){seen.add(key);definitions[key]=full.$defs[key];collect(full.$defs[key]);}}Object.values(value).forEach(collect);};
+    if(section!=='package')collect(fragment);
+    return {section,schema:section==='package'?full:{...fragment,...(Object.keys(definitions).length?{$defs:definitions}:{})},...scope};
+  });
+  tool('producer_requirements','Discover portable integration roles/contracts and required visual features. Import is allowed without a provider; connections remain local.',{file:fileName},true,async({file})=>{const doc=await read(file);return {integrations:api.integrationRequirements(doc),features:api.packageFeatures(doc),credentialsIncluded:false,...scope};});
   tool('producer_list_sets','List Set packages in the configured authoring directory.',{},true,async()=>({files:(await readdir(root,{withFileTypes:true})).filter(f=>f.isFile()&&fileName.safeParse(f.name).success).map(f=>f.name).sort().slice(0,200)}));
-  tool('producer_inspect_set','Read an existing Set tree and revision with asset bytes removed. Use its stable IDs for edits.',{file:fileName},true,async({file})=>{const doc=await read(file);const context=api.designContext(doc);if(Buffer.byteLength(JSON.stringify(context))>256*1024)throw Error('Set context exceeds 256 KB; use the local file workflow.');return {revision:await api.packageRevision(doc),context,...scope};});
-  tool('producer_compile_set','Compile a compact design plan to a new validated .set.json file. Optional assetsFrom supplies existing authorized asset IDs; embedded assets never enter the tool response.',{plan:document,assetsFrom:fileName.optional()},false,async({plan,assetsFrom})=>{checkDesign(plan);const assets=assetsFrom?(await read(assetsFrom)).set.assets:{};return save(api.compileDesignPlan(plan,target,assets));});
+  tool('producer_inspect_set','Read an existing Set tree and revision with asset bytes removed. Use its stable IDs for edits.',{file:fileName},true,async({file})=>{const doc=await read(file);const context=api.designContext(doc);if(Buffer.byteLength(JSON.stringify(context))>1024*1024)throw Error('Set context exceeds 1 MB; use the local file workflow.');return {revision:await api.packageRevision(doc),context,...scope};});
+  tool('producer_compile_set','Compile a compact or full canonical design plan to a new validated .set.json file. Optional assetsFrom supplies existing authorized asset IDs; embedded assets never enter the tool response.',{plan:document,assetsFrom:fileName.optional()},false,async({plan,assetsFrom})=>{checkDesign(plan);const assets=assetsFrom?(await read(assetsFrom)).set.assets:{};return save(api.compileDesignPlan(plan,target,assets));});
   tool('producer_edit_set','Apply atomic revision-fenced edits and save a new draft. The original file stays intact. Inspect the current revision first.',{file:fileName,edit:document},false,async({file,edit})=>{
     checkDesign(edit);const base=await read(file),revision=await api.packageRevision(base);
     const next=await api.applyDesignEdits(base,edit,target);
@@ -86,7 +94,7 @@ export async function createAuthoringServer(directory) {
     return {path,packageFile:file,revision:await api.packageRevision(doc),preview:'browser-simulation',...scope};
   });
   server.registerResource('authoring-guide','producer://authoring/guide',{mimeType:'application/json',description:'Producer compiler capabilities and compact plan/edit contract'},async uri=>({contents:[{uri:uri.href,mimeType:'application/json',text:JSON.stringify({catalog:api.AUTHORING_CATALOG,instructions:api.DESIGN_INSTRUCTIONS,...scope})}]}));
-  server.registerResource('canonical-schema','producer://authoring/schema',{mimeType:'application/schema+json',description:'Full canonical Set JSON schema from the installed checkout; broader than compact plans. Load only for advanced file authoring.'},async uri=>({contents:[{uri:uri.href,mimeType:'application/schema+json',text:JSON.stringify(api.presentationJsonSchema)}]}));
+  server.registerResource('canonical-schema','producer://authoring/schema',{mimeType:'application/schema+json',description:'Full canonical Set JSON schema from the installed checkout; used directly by canonical v2 plans and edits. Load for advanced authoring.'},async uri=>({contents:[{uri:uri.href,mimeType:'application/schema+json',text:JSON.stringify(api.presentationJsonSchema)}]}));
   return server;
 }
 

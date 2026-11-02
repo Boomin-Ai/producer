@@ -17,6 +17,7 @@ try{
   const host=document.createElement('div');document.body.replaceChildren(host);const root=(D.createRoot??D.default.createRoot)(host);
   root.render((R.createElement??R.default.createElement)(PackageAuthoringDialog,{doc,intent:'edit-set',returnFocus:null,onLoad:doc=>window.loads.push(doc),onClose:()=>root.unmount()}));
  });
+ await page.getByRole('checkbox',{name:'Use design compiler',exact:true}).uncheck();
  await page.getByRole('combobox',{name:'Saved Claude connection'}).selectOption('claude');
  const prompt=page.getByRole('textbox',{name:'Changes to request'});await prompt.fill('A cream and black magazine Set');await page.getByRole('button',{name:'Generate draft',exact:true}).click();
  assert.equal(await page.getByRole('button',{name:'Load preparation'}).isDisabled(),true);

@@ -3,12 +3,12 @@ import {dataIntegrations,type Connection,type SavedConnection} from '../lib/data
 import './dataIntegrations.css';
 const weather=():Connection=>({id:'weather-'+crypto.randomUUID().slice(0,8),name:'Weather',kind:'weather',provider:'open-meteo',location:'Atlanta',latitude:33.749,longitude:-84.388,units:'celsius',pollSeconds:300});
 const agent=():Connection=>({id:'agent-'+crypto.randomUUID().slice(0,8),name:'Research agent',kind:'agent',provider:'anthropic',model:'',webSearch:true,maxOutputTokens:2048});
-export function DataIntegrations({endpointId}:{endpointId:string|null}){
+export function DataIntegrations({endpointId,initialKind}:{endpointId:string|null;initialKind?:'weather'|'agent'}){
  const [connections,setConnections]=useState<SavedConnection[]>([]),[draft,setDraft]=useState<Connection|null>(null),[revision,setRevision]=useState<number>(),[secret,setSecret]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[loaded,setLoaded]=useState(false);
  const current=useRef(endpointId);current.current=endpointId;
  const refresh=async(id=endpointId)=>{if(!id)return;const response=await dataIntegrations.list(id);if(current.current===id){setConnections(response.connections);setLoaded(true);}};
- useEffect(()=>{let cancelled=false;setConnections([]);setDraft(null);setSecret('');setError('');setLoaded(false);setBusy(false);setRevision(undefined);if(endpointId)void refresh(endpointId).catch(e=>{if(!cancelled)setError(String(e));});return()=>{cancelled=true;};},[endpointId]);
- const run=async(work:(id:string)=>Promise<void>)=>{if(!endpointId||busy)return;const id=endpointId;setBusy(true);setError('');try{await work(id);}catch(e){if(current.current===id)setError(String(e));}finally{if(current.current===id)setBusy(false);}};
+ useEffect(()=>{let cancelled=false;setConnections([]);setDraft(initialKind==='weather'?weather():initialKind==='agent'?agent():null);setSecret('');setError('');setLoaded(false);setBusy(false);setRevision(undefined);if(endpointId)void refresh(endpointId).catch(e=>{if(!cancelled)setError(String(e));});return()=>{cancelled=true;};},[endpointId]);
+ const run=async(work:(id:string)=>Promise<void>)=>{if(!endpointId||busy)return;const id=endpointId;setBusy(true);setError('');try{await work(id);window.dispatchEvent(new Event('producer:data-connections-changed'));}catch(e){if(current.current===id)setError(String(e));}finally{if(current.current===id)setBusy(false);}};
  const edit=(saved:SavedConnection)=>{setDraft(structuredClone(saved.connection));setRevision(saved.revision);setSecret('');setError('');};
  const change=(patch:Partial<Connection>)=>setDraft(previous=>previous?{...previous,...patch} as Connection:previous);
  const save=()=>void run(async id=>{if(!draft)return;await dataIntegrations.save(id,draft,secret||undefined,revision);if(current.current!==id)return;setSecret('');setDraft(null);await refresh(id);});
@@ -40,7 +40,7 @@ export function DataIntegrations({endpointId}:{endpointId:string|null}){
      {draft.provider==='anthropic'&&<label>Anthropic workspace ID (optional)<input maxLength={120} value={draft.workspaceId??''} placeholder="Only needed for a key not scoped to one workspace" onChange={e=>{if(e.target.value)change({workspaceId:e.target.value});else setDraft(previous=>{if(!previous||previous.kind!=='agent')return previous;const {workspaceId:_,...rest}=previous;return rest;});}}/></label>}
      <label>API key<input type="password" autoComplete="new-password" required={revision===undefined} maxLength={512} value={secret} placeholder={revision===undefined?'Enter API key':'Leave blank to retain saved key'} onChange={e=>setSecret(e.target.value)}/></label>
      <label className="data-connection-checkbox"><input type="checkbox" checked={draft.webSearch} onChange={e=>change({webSearch:e.target.checked})}/>Allow web research for fact checks</label>
-     <label>Maximum output tokens<input required type="number" min={256} max={4096} value={draft.maxOutputTokens} onChange={e=>change({maxOutputTokens:Number(e.target.value)})}/></label>
+     <label>Maximum output tokens<input required type="number" min={256} max={32768} value={draft.maxOutputTokens} onChange={e=>change({maxOutputTokens:Number(e.target.value)})}/></label>
      <p className="cr-hint">The workspace server stores the key encrypted. Imported sets reference this connection; they do not contain its key. Requests use your provider account.</p>
     </>}
     <div className="data-connection-actions"><button type="submit" disabled={busy}>{busy?'Saving…':'Save connection'}</button><button type="button" disabled={busy} onClick={()=>{setDraft(null);setSecret('');}}>Cancel</button></div>

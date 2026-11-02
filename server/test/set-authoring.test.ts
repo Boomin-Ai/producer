@@ -58,7 +58,7 @@ describe('one-shot Set authoring',()=>{
   const fetcher=vi.fn<typeof fetch>();
   for(const input of [{prompt:''},{prompt:'x'.repeat(4001)},{prompt:'Make it',extra:true},{prompt:'Make it',package:{...draft,name:'x'.repeat(70000)}},{prompt:'Make it',package:{...draft,set:{...draft.set,assets:{image:{name:'Local',mime:'image/png',data:'producer-media:00000000-0000-0000-0000-000000000000'}}}}}])await expect(authorSet(connection,'key',input,{fetcher})).rejects.toMatchObject({code:'invalid_request'});
   await expect(authorSet({...connection,provider:'openai'},'key',{prompt:'Generate'},{fetcher})).rejects.toThrow('Claude');
-  await expect(authorSet({...connection,maxOutputTokens:4097},'key',{prompt:'Generate'},{fetcher})).rejects.toThrow('budget');expect(fetcher).not.toHaveBeenCalled();
+  await expect(authorSet({...connection,maxOutputTokens:32769},'key',{prompt:'Generate'},{fetcher})).rejects.toThrow('budget');expect(fetcher).not.toHaveBeenCalled();
   expect(parseSetAuthoringInput({prompt:'  Cover  ',package:draft}).prompt).toBe('Cover');
  });
  it('bounds streamed responses and respects cancellation without retry',async()=>{

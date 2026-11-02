@@ -107,7 +107,7 @@ dataIntegrationRoutes.post('/:id/author-set',async c=>{
 
 dataIntegrationRoutes.get('/authoring-capabilities',c=>c.json(AUTHORING_CATALOG));
 dataIntegrationRoutes.post('/:id/author-design',async c=>{
- const body=await input(c.req,132*1024);
+ const body=await input(c.req,1040*1024);
  const {expectedRevision,...fields}=body;
  if(!Number.isSafeInteger(expectedRevision)||(expectedRevision as number)<1)throw new ApiError(400,'invalid_request','Expected connection revision required');
  const request=parseDesignInput(fields),row=await load(c.env,c.req.param('id'));

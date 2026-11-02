@@ -13,6 +13,9 @@ export function authoringRuntime() {
       export * from './src/features/presentation/authoring/compiler';
       export * from './src/features/presentation/authoring/brief';
       export * from './src/features/presentation/authoring/visual';
+      export * from './src/features/presentation/authoring/features';
+      export * from './src/features/presentation/authoring/preflight';
+      export * from './src/features/presentation/integrationRequirements';
       export * from './src/features/presentation/validation';
       export {presentationJsonSchema} from './src/features/presentation/schema';`},
     bundle:true,platform:'node',format:'esm',write:false,

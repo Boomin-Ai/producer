@@ -10,7 +10,7 @@ try{
   const R=await import('/node_modules/.vite/deps/react.js'),D=await import('/node_modules/.vite/deps/react-dom_client.js');
   const {VisualReview}=await import('/src/features/presentation/authoring/VisualReview.tsx');
   const {compileDesignPlan}=await import('/src/features/presentation/authoring/compiler.ts');
-  const doc=compileDesignPlan({schema:'producer.design-plan/1',id:'review',name:'Review',background:'#000000',layouts:[{id:'main',name:'Main',orientation:'landscape',elements:[{id:'ring',kind:'effect',bounds:[200,200,500,500],effect:'voiceRing',radius:250},{id:'host',kind:'camera',bounds:[300,300,400,400],slot:'host',radius:200},{id:'headline',kind:'text',bounds:[900,100,180,40],size:72,text:'This headline needs more space'}]}]},{catalogRevision:1,features:['core@1','shader.voiceRing@1']});
+  const doc=compileDesignPlan({schema:'producer.design-plan/1',id:'review',name:'Review',background:'#000000',layouts:[{id:'main',name:'Main',orientation:'landscape',elements:[{id:'ring',kind:'effect',bounds:[200,200,500,500],effect:'voiceRing',radius:250},{id:'host',kind:'camera',bounds:[300,300,400,400],slot:'host',radius:200},{id:'headline',kind:'text',bounds:[900,100,180,40],size:72,text:'This headline needs more space'}]}]},{catalogRevision:2,features:['core@1','shader.voiceRing@1']});
   window.original=JSON.stringify(doc);window.doc=doc;window.repairs=[];window.calls=[];
   window.__TAURI_INTERNALS__={invoke:cmd=>{window.calls.push(cmd);throw Error('Visual review must not call native devices or room actions');}};
   const react=R.default??R,createRoot=D.createRoot??D.default.createRoot;

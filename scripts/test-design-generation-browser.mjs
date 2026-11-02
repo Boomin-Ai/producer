@@ -15,7 +15,7 @@ try{
   window.mockIntegrations={};window.mockIntegrations.list=async()=>({connections:[{connection:{id:'claude',name:'Studio Claude',kind:'agent',provider:'anthropic',model:'test-model',webSearch:false,maxOutputTokens:4096},revision:3,hasSecret:true,status:'ready',error:'',testedAt:1}],capabilities:[]});
   window.mockIntegrations.authorSet=async(endpoint,id,body)=>{window.authorCalls.push({endpoint,id,body});return new Promise(resolve=>{window.resolveDraft=()=>resolve({connectionId:'claude',connectionRevision:3,provider:'anthropic',model:'test-model',package:window.draftDoc});});};
   window.__TAURI_INTERNALS__={invoke:async cmd=>cmd==='plugin:app|version'?'0.4.78':cmd==='live_set_v2_capabilities'?['mask@1','backdrop@1','chart@1']:true};
-  window.mockIntegrations.authoringCapabilities=async()=>({revision:1,features:['core@1','shader.voiceBars@1']});
+  window.mockIntegrations.authoringCapabilities=async()=>({revision:2,features:['core@1','shader.voiceBars@1']});
   window.mockIntegrations.authorDesign=async(endpoint,id,body)=>{window.authorCalls.push({endpoint,id,body});return {connectionId:'claude',connectionRevision:3,provider:'anthropic',model:'test-model',document:{schema:'producer.design-plan/1',id:'compiled',name:'Compiled studio',background:'#000000',layouts:[{id:'main',name:'Main',orientation:'landscape',elements:[{id:'host',kind:'camera',slot:'host',bounds:[0,0,1920,1080]}]}]}};};
   const host=document.createElement('div');document.body.replaceChildren(host);const root=(D.createRoot??D.default.createRoot)(host);
   root.render((R.createElement??R.default.createElement)(PackageAuthoringDialog,{doc,intent:'edit-set',returnFocus:null,onLoad:doc=>window.loads.push(doc),onClose:()=>root.unmount()}));

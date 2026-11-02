@@ -1,3 +1,4 @@
+import {auditNativeEstimates} from './preflightBrowser';
 import {previewFrameSource} from '../frameSource';
 import {RehearsalSession} from '../rehearsal';
 import {outputProjection} from '../projection';
@@ -46,5 +47,7 @@ export async function auditVisuals(doc:PresentationPackage,signal?:AbortSignal):
    report.issues.push({code:'text_fit',layout:layout.id,node:direct?.id??m.node,path:m.node,severity:'error',measurements:{width:m.width,height:m.height,contentWidth:m.contentWidth,contentHeight:m.contentHeight},message:`Text needs ${m.contentWidth}×${m.contentHeight}px but its box is ${m.width}×${m.height}px. Increase its bounds, reduce type size or shorten the text.`});
   }
  }
- return {...report,textChecked:true};
+ const admission=await auditNativeEstimates(doc,signal);
+ for(const result of admission)for(const message of result.issues)report.issues.push({code:'native_budget_estimate',layout:result.layout,node:'root',severity:'warning',message});
+ return {...report,textChecked:true,admission};
 }

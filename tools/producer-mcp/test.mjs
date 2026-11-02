@@ -14,7 +14,7 @@ async function call(name,args={}){const result=await client.callTool({name,argum
 async function rejected(name,args){const result=await client.callTool({name,arguments:args});assert.equal(result.isError,true);}
 try {
  await client.connect(transport);
- assert.equal((await client.listTools()).tools.length,10);
+ assert.equal((await client.listTools()).tools.length,12);
  const capabilities=await call('producer_capabilities');assert.equal(capabilities.nativeReadiness,'not-tested');
  const guide=await client.readResource({uri:'producer://authoring/guide'});assert.match(guide.contents[0].text,/producer.design-plan/);
  const schema=await client.readResource({uri:'producer://authoring/schema'});assert.equal(JSON.parse(schema.contents[0].text).type,'object');
@@ -40,6 +40,22 @@ try {
  const roadContext=await call('producer_inspect_set',{file:'road.set.json'});assert(!JSON.stringify(roadContext).includes('base64,'));
  const roadDraft=await call('producer_edit_set',{file:'road.set.json',edit:{schema:'producer.set-edit/1',baseRevision:roadContext.revision,operations:[{op:'duplicate-layout',layout:'sea-landscape',id:'mcp-variant',name:'MCP variant'}]}});
  assert.deepEqual(JSON.parse(await readFile(roadDraft.path,'utf8')).set.assets,JSON.parse(road).set.assets);
+ const canonical=structuredClone(roadContext.context),assetRefs=Object.keys(canonical.set.assets??{});delete canonical.set.assets;
+ const full=await call('producer_compile_set',{plan:{schema:'producer.design-plan/2',package:canonical,assetRefs},assetsFrom:'road.set.json'});
+ assert.equal(full.layouts.length,canonical.set.layouts.length);assert.deepEqual(JSON.parse(await readFile(full.path,'utf8')).set.assets,JSON.parse(road).set.assets);
+ const updated=await call('producer_edit_set',{file:full.file,edit:{schema:'producer.set-edit/2',baseRevision:full.revision,operations:[{op:'replace',path:'/name',value:'Canonical MCP edit'}]}});
+ assert.equal(JSON.parse(await readFile(updated.path,'utf8')).name,'Canonical MCP edit');
+ assert.deepEqual((await call('producer_requirements',{file:full.file})).features,full.features);
+ const focused=await call('producer_schema',{section:'integrations'});assert.equal(focused.schema.type,'object');
+ await rejected('producer_edit_set',{file:updated.file,edit:{schema:'producer.set-edit/2',baseRevision:updated.revision,operations:[{op:'replace',path:'/set/assets',value:{}}]}});
+ const weatherSource=await readFile(new URL('../../docs/shows/atmosphere.json',import.meta.url),'utf8');await writeFile(join(directory,'weather.set.json'),weatherSource);
+ const weather=await call('producer_inspect_set',{file:'weather.set.json'}),operations=[];
+ const collect=(node,path)=>{if(node.id==='temperature'&&node.styles?.height===158)operations.push({op:'replace',path:path+'/styles/height',value:166});node.children?.forEach((child,index)=>collect(child,path+'/children/'+index));};
+ weather.context.set.layouts.forEach((layout,index)=>collect(layout.root,'/set/layouts/'+index+'/root'));assert.equal(operations.length,6);
+ const repairedWeather=await call('producer_edit_set',{file:'weather.set.json',edit:{schema:'producer.set-edit/2',baseRevision:weather.revision,operations}});
+ const weatherRequirements=await call('producer_requirements',{file:repairedWeather.file});assert(weatherRequirements.integrations.some(r=>r.capability==='data.weather@1'));
+ const weatherReview=await call('producer_visual_check',{file:repairedWeather.file});assert.equal(weatherReview.issues.filter(i=>i.code==='text_fit').length,0,'nested weather typography repaired through MCP');assert.equal(weatherReview.admission.length,6);
+ assert.equal(await readFile(join(directory,'weather.set.json'),'utf8'),weatherSource,'weather original remains unchanged');
  const preview=await call('producer_preview_set',{file:edited.file});assert.equal(preview.outputChanged,false);assert.match(await readFile(preview.path,'utf8'),/Browser preview only/);
  // Exercise the real renderer, including switching aspect ratio and hostile text escaping.
  if(process.env.PRODUCER_PLAYWRIGHT_MODULE){
@@ -58,5 +74,5 @@ try {
   }finally{await browser.close();}
  }
  assert.equal(diagnostics,'');
- console.log('PASS: real stdio MCP discovery, compiler, fenced edits, validation, immutable originals, bounded file access, browser previews and resource contract.');
+ console.log('PASS: real stdio MCP, compact and full canonical compilation, fenced nested edits, portable weather contracts, six-layout text-fit repair, immutable originals, bounded file access and browser previews.');
 }finally{await client.close();await rm(directory,{recursive:true,force:true});}

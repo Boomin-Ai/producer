@@ -5,6 +5,120 @@
     "schema": {
       "const": "producer.presentation/2"
     },
+    "integrations": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "producer.integrations/1"
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "capability": {
+                "type": "string",
+                "maxLength": 96,
+                "pattern": "^[a-z][a-z0-9.-]*@[1-9][0-9]*$"
+              },
+              "input": {
+                "type": "string",
+                "maxLength": 96,
+                "pattern": "^[a-z][a-z0-9.-]*@[1-9][0-9]*$"
+              },
+              "output": {
+                "type": "string",
+                "maxLength": 96,
+                "pattern": "^[a-z][a-z0-9.-]*@[1-9][0-9]*$"
+              },
+              "delivery": {
+                "anyOf": [
+                  {
+                    "const": "snapshot"
+                  },
+                  {
+                    "const": "event"
+                  }
+                ]
+              },
+              "optional": {
+                "type": "boolean",
+                "default": false
+              },
+              "transport": {
+                "anyOf": [
+                  {
+                    "const": "poll"
+                  },
+                  {
+                    "const": "request"
+                  },
+                  {
+                    "const": "webhook"
+                  },
+                  {
+                    "const": "stream"
+                  }
+                ]
+              },
+              "refresh": {
+                "type": "boolean"
+              },
+              "adapter": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "maxLength": 96,
+                    "pattern": "^[a-z][a-z0-9.-]*$"
+                  },
+                  "version": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 1000000
+                  },
+                  "operation": {
+                    "type": "string",
+                    "maxLength": 96,
+                    "pattern": "^[a-z][a-z0-9.-]*$"
+                  }
+                },
+                "required": [
+                  "id",
+                  "version",
+                  "operation"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "role",
+              "label",
+              "capability",
+              "input",
+              "output",
+              "delivery"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 32
+        }
+      },
+      "required": [
+        "schema",
+        "requirements"
+      ],
+      "additionalProperties": false
+    },
     "requires": {
       "type": "array",
       "items": {

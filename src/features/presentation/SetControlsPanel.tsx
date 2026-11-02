@@ -1,3 +1,4 @@
+import {SetIntegrationConnections} from './SetIntegrationConnections';
 import {layoutViews,preferredViewLayout,viewForLayout} from './layoutViews';
 import {useDataConnections} from './useDataConnections';
 import {requestModuleData,type ModuleBindings} from './moduleConnections';
@@ -37,7 +38,7 @@ function recordIdentity(record:Record<string,unknown>){return JSON.stringify(Obj
 export function SetControlsPanel(props:PanelProps) {
   const [draft,setDraft]=useState(()=>new RehearsalSession(props.session.exportPreparedPackage(),undefined,'prepare'));
   const [moduleBindings,setModuleBindings]=useState<ModuleBindings>(props.moduleBindings??{});
-  const {connections,connectionError,retryConnections}=useDataConnections(props.endpoint);
+  const {connections,adapters,connectionError,retryConnections}=useDataConnections(props.endpoint);
   const [bindings,setBindings]=useState({...props.output?.bindings});
   const [framing,setFraming]=useState({...props.output?.framing});
   const pending=useRef<{doc:PresentationPackage;phase:string;layout:string}|undefined>(undefined);
@@ -82,10 +83,10 @@ export function SetControlsPanel(props:PanelProps) {
     for(const slot of doc.set.slots){props.output?.bind(slot.id,bindings[slot.id]??'');if(framing[slot.id])props.output?.frame(slot.id,framing[slot.id]);}
     props.onChange(doc,moduleBindings);
   };
-  const workspace=<SetControlsPanelView {...props} moduleBindings={moduleBindings} connections={connections} connectionError={connectionError} onRetryConnections={retryConnections} onModuleBinding={(role,binding)=>setModuleBindings(old=>({...old,[role]:binding}))} session={draft} output={previewOutput} onFieldEdit={undefined} onChange={doc=>setDraft(new RehearsalSession(doc,undefined,'prepare'))} editorOnly onPublish={publish} publishError={publishError||props.output?.error||''} editorStatus={editorStatus}/>;
-  return <SetControlsPanelView {...props} connections={connections} connectionError={connectionError} onRetryConnections={retryConnections} workspace={workspace} onWorkspaceClose={()=>draft.exitRehearsal()}/>;
+  const workspace=<SetControlsPanelView {...props} moduleBindings={moduleBindings} connections={connections} adapters={adapters} connectionError={connectionError} onRetryConnections={retryConnections} onModuleBinding={(role,binding)=>setModuleBindings(old=>({...old,[role]:binding}))} session={draft} output={previewOutput} onFieldEdit={undefined} onChange={doc=>setDraft(new RehearsalSession(doc,undefined,'prepare'))} editorOnly onPublish={publish} publishError={publishError||props.output?.error||''} editorStatus={editorStatus}/>;
+  return <SetControlsPanelView {...props} connections={connections} adapters={adapters} connectionError={connectionError} onRetryConnections={retryConnections} workspace={workspace} onWorkspaceClose={()=>draft.exitRehearsal()}/>;
 }
-function SetControlsPanelView({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, voting, onFieldEdit, workspace, editorOnly=false,onPublish,publishError,onWorkspaceClose,editorStatus='changed',endpoint,serverRoomId,preferenceRoomId,moduleBindings={},connections=[],connectionError='',onRetryConnections,onModuleBinding }: PanelProps & {connections?:SavedConnection[];connectionError?:string;onRetryConnections?:()=>void;onModuleBinding?:(role:string,binding:{id:string;revision:number})=>void;} & {editorStatus?:'changed'|'applying'|'applied'|'error';onWorkspaceClose?:()=>void;workspace?:ReactNode;editorOnly?:boolean;onPublish?:()=>void;publishError?:string}) {
+function SetControlsPanelView({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, voting, onFieldEdit, workspace, editorOnly=false,onPublish,publishError,onWorkspaceClose,editorStatus='changed',endpoint,serverRoomId,preferenceRoomId,moduleBindings={},connections=[],adapters=[],connectionError='',onRetryConnections,onModuleBinding }: PanelProps & {connections?:SavedConnection[];adapters?:import('../../../shared/set-runtime/dataAdapters').DataAdapterManifest[];connectionError?:string;onRetryConnections?:()=>void;onModuleBinding?:(role:string,binding:{id:string;revision:number})=>void;} & {editorStatus?:'changed'|'applying'|'applied'|'error';onWorkspaceClose?:()=>void;workspace?:ReactNode;editorOnly?:boolean;onPublish?:()=>void;publishError?:string}) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const arrangements=useControlArrangement(session.package,JSON.stringify([endpoint??'local',serverRoomId??preferenceRoomId??'preview']));
   const [player, setPlayer] = useState('player-1');
@@ -239,7 +240,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
           {doc.set.layouts.length>1&&<label>Layout<select aria-label="Edit layout" disabled={blocked} value={state.layoutId} onChange={e=>session.send({type:'control',action:{type:'layout.select',layoutId:e.target.value}})}>{doc.set.layouts.map(layout=><option key={layout.id} value={layout.id}>{layout.label} · {layout.width>layout.height?'Landscape':layout.height>layout.width?'Portrait':'Square'}</option>)}</select></label>}
           {state.running&&<p className="set-section-note">{state.paused?'Rehearsal paused for editing.':'Choosing another segment pauses rehearsal.'}</p>}
         </section>
-        {onModuleBinding&&doc.runtime.instances.some(i=>{const b=doc.runtime.definitions[i.definition].behavior;return b&&'integrationRole'in b;})&&<details className="set-section" open><summary>Data connections</summary>{[...new Map(doc.runtime.instances.flatMap(i=>{const b=doc.runtime.definitions[i.definition].behavior;return b&&'integrationRole'in b?[[b.integrationRole,b.type] as const]:[];})).entries()].map(([role,kind])=><label key={role}>{role}<select value={moduleBindings[role]?.id??''} disabled={rehearsing} onChange={e=>{const c=connections.find(c=>c.connection.id===e.target.value);onModuleBinding(role,{id:c?.connection.id??'',revision:c?.revision??1});}}><option value="">Choose saved {kind} connection</option>{connections.filter(c=>c.connection.kind===kind).map(c=><option key={c.connection.id} value={c.connection.id}>{c.connection.name} · {c.connection.provider}</option>)}</select></label>)}{connectionError&&<div role="alert"><p>{connectionError}</p><button type="button" onClick={onRetryConnections}>Retry connections</button></div>}</details>}
+        {onModuleBinding&&<SetIntegrationConnections doc={doc} endpoint={endpoint} connections={connections} adapters={adapters} bindings={moduleBindings} onBind={onModuleBinding} error={connectionError} onRetry={onRetryConnections} disabled={rehearsing||blocked}/>}
         <ModuleConfiguration doc={doc} segment={state.show.phase||undefined} onChange={onChange} disabled={blocked||rehearsing}/>{state.workspaceMode==='prepare'&&doc.runtime.instances.some(i=>doc.runtime.definitions[i.definition].behavior?.type==='weather')&&<p className="set-section-note">Live module controls are available in the room. To change the live city, close Set edit and use Weather desk. Rehearse to test changes privately.</p>}{moduleControls}
         <section className="set-setup" aria-label="Set editing controls">
           <details key={`${state.sandboxId}-setup`} open><summary><strong>Content & sources</strong><span>Changes update the set</span></summary>

@@ -6,7 +6,7 @@ import {negotiateAuthoringTarget} from '../../src/features/presentation/authorin
 import {readFileSync} from 'node:fs';
 import type {Connection} from '../src/dataIntegrations/providers';
 const connection:Connection={id:'claude',name:'Claude',kind:'agent',provider:'anthropic',model:'test-model',webSearch:false,maxOutputTokens:4096};
-const target={catalogRevision:1,features:[...AUTHORING_CATALOG.features]};
+const target={catalogRevision:2,features:[...AUTHORING_CATALOG.features]};
 const plan={schema:'producer.design-plan/1',id:'studio',name:'Studio',background:'#000000',layouts:[{id:'main',name:'Main',orientation:'landscape',elements:[{id:'host',kind:'camera',slot:'host',bounds:[0,0,1920,1080]}]}]};
 const response=(document:unknown,stop_reason='end_turn')=>Response.json({stop_reason,content:[{type:'text',text:JSON.stringify(document)}]});
 describe('compact design generation',()=>{
@@ -15,6 +15,15 @@ describe('compact design generation',()=>{
   const result=await authorDesign(connection,'synthetic-secret',{prompt:'Solo host',target},{fetcher});
   expect(compileDesignPlan(result.document,target).set.slots[0].id).toBe('host');
   const body=JSON.parse(fetcher.mock.calls[0][1]!.body as string);expect(body.max_tokens).toBe(4096);expect(body.system).toContain('producer.design-plan/1');expect(body.messages[0].content).not.toContain('synthetic-secret');expect(fetcher).toHaveBeenCalledTimes(1);
+ });
+ it('accepts canonical generation with portable weather and a user-selected larger budget',async()=>{
+  const original=compileDesignPlan(plan,target),tree=structuredClone(original);delete tree.set.assets;
+  tree.integrations={schema:'producer.integrations/1',requirements:[{role:'forecast',label:'Weather',capability:'data.weather@1',input:'weather.location-query@1',output:'weather.observation@1',delivery:'snapshot',optional:false}]};
+  const document={schema:'producer.design-plan/2',package:tree};
+  const fetcher=vi.fn<typeof fetch>(async()=>response(document));
+  const result=await authorDesign({...connection,maxOutputTokens:16384},'synthetic-secret',{prompt:'Portable weather studio',target},{fetcher});
+  expect(compileDesignPlan(result.document,target).integrations?.requirements[0].role).toBe('forecast');
+  expect(JSON.parse(fetcher.mock.calls[0][1]!.body as string).max_tokens).toBe(16384);expect(fetcher).toHaveBeenCalledTimes(1);
  });
  it('edits the real launch Set without sending embedded artwork',async()=>{
   const base=JSON.parse(readFileSync('../docs/shows/road-to-v1.json','utf8')),baseRevision=await packageRevision(base);
@@ -26,7 +35,7 @@ describe('compact design generation',()=>{
  });
  it('rejects incompatible targets and asset bytes before paid work',async()=>{
   const fetcher=vi.fn<typeof fetch>();
-  await expect(authorDesign(connection,'key',{prompt:'x',target:{...target,catalogRevision:2}},{fetcher})).rejects.toThrow();
+  await expect(authorDesign(connection,'key',{prompt:'x',target:{...target,catalogRevision:999}},{fetcher})).rejects.toThrow();
   expect(()=>parseDesignInput({prompt:'x',target,baseRevision:'a'.repeat(64),context:{image:'data:image/png;base64,AA=='}})).toThrow(/metadata/);expect(fetcher).not.toHaveBeenCalled();
  });
  it('rejects truncation, refusal and wrong edit revision without retry',async()=>{
@@ -36,8 +45,8 @@ describe('compact design generation',()=>{
  });
  it('intersects native and workspace features; unknown releases fail closed',()=>{
   const engine={version:'0.4.78',native:true,effects:['mask@1'],scene3d:false};
-  const result=negotiateAuthoringTarget(engine,{revision:1,features:['core@1','mask@1','scene3d@1']});expect(result.features).toEqual(['core@1','mask@1']);
-  expect(()=>negotiateAuthoringTarget({...engine,version:'0.4.76'},{revision:1,features:['core@1']})).toThrow(/verified/);
+  const result=negotiateAuthoringTarget(engine,{revision:2,features:['core@1','mask@1','scene3d@1']});expect(result.features).toEqual(['core@1','mask@1']);
+  expect(()=>negotiateAuthoringTarget({...engine,version:'0.4.76'},{revision:2,features:['core@1']})).toThrow(/verified/);
  });
 });
 

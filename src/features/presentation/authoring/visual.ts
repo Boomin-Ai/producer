@@ -1,3 +1,4 @@
+import type {estimateRenderPlan} from './preflight';
 import {parsePackage,type PresentationPackage,type PresentationNode} from '../schema';
 import {packageRevision} from './compiler';
 
@@ -7,7 +8,7 @@ export interface VisualIssue {
  measurements?:Record<string,number>;
  severity:'error'|'warning';message:string;repair?:RingRepair;
 }
-export interface VisualReport {issues:VisualIssue[];textChecked:boolean;scope:'configured-layouts';nativeReadiness:'not-tested'}
+export interface VisualReport {admission?:Array<{layout:string}&ReturnType<typeof estimateRenderPlan>>;issues:VisualIssue[];textChecked:boolean;scope:'configured-layouts';nativeReadiness:'not-tested'}
 type Rect={x:number;y:number;width:number;height:number};
 function bounds(node:PresentationNode):Rect|undefined {
  const s=node.styles??{},v=[s.left,s.top,s.width,s.height];
