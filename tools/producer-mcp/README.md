@@ -213,6 +213,17 @@ recording, streaming and production deployment were not part of that check.
 Local receipts are `target/compute-atlas/browser-proof.json` and
 `target/compute-atlas/native-proof.json`.
 
+`node tools/producer-mcp/compute-atlas.mjs --art --edit` makes a new motion/art
+direction revision from `fixtures/compute-atlas-motion.mjs`. It preserves the
+paired chapter identities, editable copy, source slot and data controls. The
+chapter treatments use a map-led opener, cream comparison, dedicated 3D
+construction shot, oversized availability metric, operator dossier and mint CTA.
+Segment-clock wipe masks, staggered entrances and a chapter pacing meter supply
+motion; switching chapters remains manual. Output and evidence are isolated in
+`target/compute-atlas-motion/`. This revision passed all 12 browser layouts,
+seven browser control variations, all 12 native layouts and 17 paired native
+interaction checks. No native renderer change or rebuild was required.
+
 ## Design references
 
 [Remotion parameterized rendering](https://www.remotion.dev/docs/parameterized-rendering)

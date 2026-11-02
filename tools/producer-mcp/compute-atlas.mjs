@@ -2,8 +2,10 @@ import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
-import authoredPlan from './fixtures/compute-atlas.mjs';
-const out=fileURLToPath(new URL('../../target/compute-atlas/',import.meta.url));await mkdir(out,{recursive:true});
+import baselinePlan from './fixtures/compute-atlas.mjs';
+const art=process.argv.includes('--art');
+const authoredPlan=art?(await import('./fixtures/compute-atlas-motion.mjs')).default:baselinePlan;
+const out=fileURLToPath(new URL('../../target/'+(art?'compute-atlas-motion':'compute-atlas')+'/',import.meta.url));await mkdir(out,{recursive:true});
 await writeFile(out+'plan.json',JSON.stringify(authoredPlan,null,2));
 const client=new Client({name:'atlantium-compute-atlas',version:'1'}),transport=new StdioClientTransport({command:process.execPath,args:[fileURLToPath(new URL('./server.mjs',import.meta.url))],stderr:'pipe'});
 const call=async(name,args={})=>{const r=await client.callTool({name,arguments:args});if(r.isError)throw Error(r.content[0]?.text);return JSON.parse(r.content[0].text);};
@@ -18,10 +20,10 @@ try{
  }else{
   let saved;
   if(process.argv.includes('--edit')){
-   const previous=JSON.parse(await readFile(out+'compiled.json','utf8'));
+   const previous=JSON.parse(await readFile(out+'compiled.json','utf8').catch(()=>readFile(fileURLToPath(new URL('../../target/compute-atlas/compiled.json',import.meta.url)),'utf8')));
    const current=await call('producer_inspect_set',{file:previous.file});
    const plan=JSON.parse(await readFile(out+'plan.json','utf8'));
-   saved=await call('producer_edit_set',{file:previous.file,edit:{schema:'producer.set-edit/2',baseRevision:current.revision,operations:[{op:'replace',path:'/set/layouts',value:plan.package.set.layouts},{op:'replace',path:'/set/values',value:plan.package.set.values}]}});
+   saved=await call('producer_edit_set',{file:previous.file,edit:{schema:'producer.set-edit/2',baseRevision:current.revision,operations:[{op:'replace',path:'/set/layouts',value:plan.package.set.layouts},{op:'replace',path:'/set/values',value:plan.package.set.values},{op:'replace',path:'/version',value:plan.package.version}]}});
    await writeFile(out+'compiled.json',JSON.stringify(saved,null,2));
   }else if(process.argv.includes('--review'))saved=JSON.parse(await readFile(out+'compiled.json','utf8'));
   else{const plan=JSON.parse(await readFile(out+'plan.json','utf8'));saved=await call('producer_compile_set',{plan,assetsFrom:'Atlantium-Atlanta-Capacity-35-Second-Cut.set.json'});await writeFile(out+'compiled.json',JSON.stringify(saved,null,2));}
