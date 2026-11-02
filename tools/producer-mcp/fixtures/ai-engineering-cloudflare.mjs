@@ -1,5 +1,6 @@
 import shell from './ai-engineering-essentials.mjs';
 import {signalDesign} from '../signal-design.mjs';
+import {stackWalkthrough} from '../stack-walkthrough.mjs';
 const plan=structuredClone(shell),doc=plan.package;plan.assetRefs.push('cloudflareLogo');
 const defaults={toolName:'CLOUDFLARE',toolCategory:'COMPUTE / DATA / AI / SECURITY',toolMark:'cf',spotlightTitle:'BUILD YOUR\nAI STACK.',whyTitle:'THE FULL STACK.\nONE PLATFORM.',workflowTitle:'ONE APP.\nCONNECTED LAYERS.',demoTitle:'MEET THE\nNEW cf CLI.',setupTitle:'FROM TERMINAL\nTO YOUR APP.',takeawayTitle:'GET THE\nFULL LIST.',before:'Frontend. APIs. Data.\nAI inference. Security.\nEvery app needs a stack.',after:'Cloudflare brings these\nbuilding blocks onto\none developer platform.',input:'Your frontend sends a request to a Worker.',transform:'Workers connect your logic to D1, R2 and Workers AI.',output:'Your app returns a useful answer to the user.',demoLabel:'cf / CLOUDFLARE CLI · BETA · COMMAND WALKTHROUGH',demoCode:'$ cf cli search "list my zones"\n$ cf dev\n$ cf build',demoResult:'2,900+ API commands. Typed project config. Agent-friendly search.\nIllustrative commands — cf is in beta.',step1:'Install: npm install --global cf',step2:'Sign in: cf auth login',step3:'New project: cf init',starterCode:'cf dev\ncf build\ncf deploy',takeaway:'GET THE FULL LIST\nIN MY BIO.\n\nOr comment below.',ctaSupport:'AI Engineering Essentials\nYour next tools. One complete list.',ctaAction:'COMMENT ESSENTIALS'};
 for(const[key,value]of Object.entries(defaults))doc.set.values[key].default=value;
@@ -34,4 +35,4 @@ for(const l of doc.set.layouts){
   find('cta-action').styles.fontSize=p?44:39;
  }
 }
-export default signalDesign(plan,{logoAsset:'cloudflareLogo',cliCaption:'ONE CLI.\nTHE PLATFORM.'});
+export default stackWalkthrough(signalDesign(plan,{logoAsset:'cloudflareLogo',cliCaption:'ONE CLI.\nTHE PLATFORM.'}));

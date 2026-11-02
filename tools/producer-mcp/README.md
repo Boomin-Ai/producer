@@ -304,6 +304,18 @@ rejecting visible backward jumps. Evidence is `motion-proof.json` in the episode
 target directory. The design passed all 12 browser/native layouts and the
 motion check; CLI commands remain illustrative, not executed provider commands.
 
+The full-stack chapter now applies `stack-walkthrough.mjs`: six host buttons in
+**Product walkthrough** select a shared `stackFocus` value for both outputs.
+The selected row expands and shows a short explanation beneath the product name;
+subsequent rows move down within the existing safe area. **Hide descriptions**
+restores the compact list. Description copy is held in the declared Set values
+for future MCP edits. This stays within the 40-control contract.
+`node scripts/test-stack-walkthrough-browser.mjs` clicks the actual host controls
+for every product in both orientations and checks visibility, text fit, row
+overlap and footer clearance. Native acceptance also exercised every product
+and hide control with confirmed paired output revisions. Evidence is
+`walkthrough-proof.json` and `native-walkthrough-proof.json` in the episode target.
+
 [Remotion parameterized rendering](https://www.remotion.dev/docs/parameterized-rendering)
 informs schema-driven inputs and editable controls.
 [Node-RED credentials](https://nodered.org/docs/creating-nodes/credentials) and
