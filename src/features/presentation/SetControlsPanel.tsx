@@ -35,6 +35,12 @@ function designIdentity(doc:PresentationPackage) {
   return JSON.stringify({...doc,set:{...doc.set,initialLayout:'',values:definitions(doc.set.values),feeds:definitions(doc.set.feeds)}});
 }
 function recordIdentity(record:Record<string,unknown>){return JSON.stringify(Object.entries(record).filter(([,value])=>value!==''&&value!==undefined).sort(([a],[b])=>a.localeCompare(b)));}
+function DraftPreparation({session,output,bindings,framing}:{session:RehearsalSession;output?:SetOutputControls;bindings:Record<string,string>;framing:Record<string,import('./schema').SlotFraming>}){
+  const state=useSyncExternalStore(session.subscribe,session.snapshot);
+  useEffect(()=>{output?.prepareDraft?.(session.exportPreparedPackage(),bindings,framing);},[session.package,JSON.stringify(state.values),JSON.stringify(state.feeds),JSON.stringify(bindings),JSON.stringify(framing)]);
+  useEffect(()=>()=>output?.clearDraftPreparation?.(),[]);
+  return null;
+}
 export function SetControlsPanel(props:PanelProps) {
   const [draft,setDraft]=useState(()=>new RehearsalSession(props.session.exportPreparedPackage(),undefined,'prepare'));
   const [moduleBindings,setModuleBindings]=useState<ModuleBindings>(props.moduleBindings??{});
@@ -48,10 +54,6 @@ export function SetControlsPanel(props:PanelProps) {
   const sameDesign=useMemo(()=>designIdentity(draft.package)===designIdentity(props.session.package),[draft.package,props.session.package]);
   const matches=recordIdentity(moduleBindings)===recordIdentity(props.moduleBindings??{})&&sameDesign&&draftState.layoutId===roomState.layoutId&&draftState.show.phase===roomState.show.phase&&recordIdentity(draftState.values)===recordIdentity(roomState.values)&&recordIdentity(draftState.feeds)===recordIdentity(roomState.feeds)&&recordIdentity(bindings)===recordIdentity(props.output?.bindings??{})&&recordIdentity(framing)===recordIdentity(props.output?.framing??{});
   const editorStatus=publishing||props.output?.busy&&matches?'applying':publishError||props.output?.error?'error':props.output?.active&&matches?'applied':'changed';
-  useEffect(()=>{
-    props.output?.prepareDraft?.(draft.exportPreparedPackage(),bindings,framing);
-  },[draft.package,JSON.stringify(draftState.values),JSON.stringify(draftState.feeds),JSON.stringify(bindings),JSON.stringify(framing)]);
-  useEffect(()=>()=>props.output?.clearDraftPreparation?.(),[]);
   useEffect(()=>{
     const next=new RehearsalSession(props.session.exportPreparedPackage(),undefined,'prepare');
     const phase=pending.current?.phase??props.session.snapshot().show.phase;
@@ -83,7 +85,7 @@ export function SetControlsPanel(props:PanelProps) {
     for(const slot of doc.set.slots){props.output?.bind(slot.id,bindings[slot.id]??'');if(framing[slot.id])props.output?.frame(slot.id,framing[slot.id]);}
     props.onChange(doc,moduleBindings);
   };
-  const workspace=<SetControlsPanelView {...props} moduleBindings={moduleBindings} connections={connections} adapters={adapters} connectionError={connectionError} onRetryConnections={retryConnections} onModuleBinding={(role,binding)=>setModuleBindings(old=>({...old,[role]:binding}))} session={draft} output={previewOutput} onFieldEdit={undefined} onChange={doc=>setDraft(new RehearsalSession(doc,undefined,'prepare'))} editorOnly onPublish={publish} publishError={publishError||props.output?.error||''} editorStatus={editorStatus}/>;
+  const workspace=<><DraftPreparation session={draft} output={props.output} bindings={bindings} framing={framing}/><SetControlsPanelView {...props} moduleBindings={moduleBindings} connections={connections} adapters={adapters} connectionError={connectionError} onRetryConnections={retryConnections} onModuleBinding={(role,binding)=>setModuleBindings(old=>({...old,[role]:binding}))} session={draft} output={previewOutput} onFieldEdit={undefined} onChange={doc=>setDraft(new RehearsalSession(doc,undefined,'prepare'))} editorOnly onPublish={publish} publishError={publishError||props.output?.error||''} editorStatus={editorStatus}/></>;
   return <SetControlsPanelView {...props} connections={connections} adapters={adapters} connectionError={connectionError} onRetryConnections={retryConnections} workspace={workspace} onWorkspaceClose={()=>draft.exitRehearsal()}/>;
 }
 function SetControlsPanelView({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, voting, onFieldEdit, workspace, editorOnly=false,onPublish,publishError,onWorkspaceClose,editorStatus='changed',endpoint,serverRoomId,preferenceRoomId,moduleBindings={},connections=[],adapters=[],connectionError='',onRetryConnections,onModuleBinding }: PanelProps & {connections?:SavedConnection[];adapters?:import('../../../shared/set-runtime/dataAdapters').DataAdapterManifest[];connectionError?:string;onRetryConnections?:()=>void;onModuleBinding?:(role:string,binding:{id:string;revision:number})=>void;} & {editorStatus?:'changed'|'applying'|'applied'|'error';onWorkspaceClose?:()=>void;workspace?:ReactNode;editorOnly?:boolean;onPublish?:()=>void;publishError?:string}) {
@@ -278,7 +280,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
     {visibleSlots.size>0&&<section className="set-controls set-editor-source-tray" aria-label="Edit source assignments">{sourceEditor}</section>}
   </>;
   if (blocked) return <div className="set-controls"><p>{blockedReason ?? 'Waiting for the room to finish loading.'}</p></div>;
-  return <div className="set-controls" data-layouts-ready={Object.values(output?.layoutReadiness??{}).filter(s=>s.state==='ready').length} data-layouts-total={Object.keys(output?.layoutReadiness??{}).length}>
+  return <div className="set-controls" data-output-busy={output?.busy?'true':'false'} data-layouts-ready={Object.values(output?.layoutReadiness??{}).filter(s=>s.state==='ready').length} data-layouts-total={Object.keys(output?.layoutReadiness??{}).length}>
     <header className="set-controls-toolbar">
       <div className="set-header-main">
       <span className={`set-mode-badge ${rehearsing ? 'rehearsal' : 'prepared'}`}>{rehearsing ? 'Rehearsal' : state.workspaceMode==='live'&&state.running?'Show':'Prepared'}</span>

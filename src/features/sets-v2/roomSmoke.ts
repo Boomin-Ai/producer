@@ -51,8 +51,11 @@ export async function openSetEditorReview(name:string,roomId?:string){
   await until(()=>document.querySelector('dialog[open] [role="combobox"][aria-label="Choose set"]')?.textContent?.includes(name),'selected Set');
   const hostSource=import.meta.env.VITE_SET_EDITOR_REVIEW_HOST_SOURCE;
   if(hostSource){
+   const inactiveHost=button('Use Host source',document.querySelector('dialog[open]')??document);
+   inactiveHost?.click();
    const source=await until(()=>Array.from(document.querySelectorAll<HTMLSelectElement>('dialog[open] .set-source-card select[aria-label$=" source"]')).find(s=>s.getAttribute('aria-label')?.startsWith('Host')&&Array.from(s.options).some(o=>o.value===hostSource)),'existing review host source');
    if(!source.value)select(source,hostSource);
+   if(inactiveHost)button('Use headshot',document.querySelector('dialog[open]')??document)?.click();
   }
   const layout=import.meta.env.VITE_SET_EDITOR_REVIEW_LAYOUT;
   if(layout){
@@ -90,6 +93,33 @@ export async function openSetEditorReview(name:string,roomId?:string){
     const receipt=await until(async()=>{if(Date.now()>deadline)throw Error('Layout switching deadline exceeded');const s=await status();return s.program.renderedRevision>before.program.renderedRevision&&!s.program.transitioning&&(import.meta.env.VITE_SET_EDITOR_VERIFY_BOTH!=='1'||s.portrait.renderedRevision>before.portrait.renderedRevision&&!s.portrait.transitioning)?s:null;},'room layout '+label,1800);
     checks.push({label,...receipt});
    }
+   const interactiveChecks:Array<{label:string}&Awaited<ReturnType<typeof status>>>=[];
+   if(import.meta.env.VITE_SET_EDITOR_VERIFY_INTERACTIVE==='atlas'){
+    const interactionDeadline=Date.now()+120000;
+    const settle=async(before:Awaited<ReturnType<typeof status>>,label:string)=>{
+     const receipt=await until(async()=>{if(Date.now()>interactionDeadline)throw Error('Interactive handoff deadline exceeded: '+label);const error=document.querySelector('.set-controls .set-error')?.textContent;if(error)throw Error('Interactive update failed: '+error);const s=await status();return s.program.renderedRevision>before.program.renderedRevision&&!s.program.transitioning&&s.portrait.renderedRevision>before.portrait.renderedRevision&&!s.portrait.transitioning?s:null;},'paired control '+label,2400);
+     interactiveChecks.push({label,...receipt});
+     await until(()=>document.querySelector('.set-controls[data-output-busy="false"]'),'paired transaction settled '+label,2400);
+    };
+    const pick=async(prefix:string)=>{
+     const target=Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).find(b=>b.querySelector('span')?.textContent?.startsWith(prefix));
+     if(!target)throw Error('Missing handoff chapter '+prefix);
+     if(target.getAttribute('aria-pressed')==='true')return;
+     const before=await status();target.click();await settle(before,'chapter '+prefix);
+    };
+    const press=async(label:string)=>{
+     const target=button(label,document.querySelector('.set-controls')??document);
+     if(!target)throw Error('Missing handoff control '+label);
+     const before=await status();target.click();
+     await invoke('live_set_v2_report',{result:{kind:'set-output-verifying',name,stage:'interactive: '+label}});
+     await settle(before,label);
+    };
+    await pick('02');await press('Available inventory');await press('Northern Virginia');await press('Existing inventory');await press('Atlanta');
+    await pick('05');await press('QTS');await press('DataBank');await press('Edged');
+    await pick('03');await press('Rack close-up');await press('Power surge');await press('Cool studio');await press('Wide studio');await press('Use Host source');await press('Use headshot');
+    await pick('01');
+    await until(()=>{const p=document.querySelector<HTMLElement>('.set-controls[data-layouts-total]');return p&&Number(p.dataset.layoutsTotal)>0&&p.dataset.layoutsReady===p.dataset.layoutsTotal;},'interactive layouts restored',2400);
+   }
    const {ipc}=await import('../../lib/ipc');
    const savedRoom=(await ipc.liveListRooms()).find(r=>roomId?r.id===roomId:r.name==='Producer authoring acceptance');
    const saved=JSON.parse(savedRoom?.config||'{}');
@@ -101,7 +131,7 @@ export async function openSetEditorReview(name:string,roomId?:string){
    const visibleErrors=Array.from(document.querySelectorAll('.set-error')).map(e=>e.textContent?.trim()).filter(Boolean);
    if(visibleErrors.length)throw Error('Handoff still shows an error: '+visibleErrors.join(' · '));
    const panel=document.querySelector<HTMLElement>('.set-controls[data-layouts-total]');
-   const result={kind:'set-output-verified',ok:true,name,checks,sourceChecks,layoutsReady:Number(panel?.dataset.layoutsReady),layoutsTotal:Number(panel?.dataset.layoutsTotal),visibleErrors,completedAt:new Date().toISOString(),debug:(await import('./preparedScenes')).preparationDebug()};
+   const result={kind:'set-output-verified',ok:true,name,checks,interactiveChecks,sourceChecks,layoutsReady:Number(panel?.dataset.layoutsReady),layoutsTotal:Number(panel?.dataset.layoutsTotal),visibleErrors,completedAt:new Date().toISOString(),debug:(await import('./preparedScenes')).preparationDebug()};
    localStorage.setItem('producer-review-proof:'+verify,JSON.stringify(result));
    await invoke('live_set_v2_report',{result});
    localStorage.setItem('producer-review-take:'+verify,'complete');

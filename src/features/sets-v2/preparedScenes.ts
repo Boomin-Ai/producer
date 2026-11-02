@@ -10,6 +10,11 @@ export type SceneReadiness={state:'queued'|'loading'|'ready'|'error';error?:stri
 export type NativeSceneStatus={preparedRevision:number;renderedRevision:number;ready:boolean;warmed:boolean;transitioning:boolean;queued:boolean;cachedKeys?:string[];cachedBytes?:number;renderSerial:number};
 type Plan=RenderPlan&{motion?:AnimationTrack[];clock?:import('../presentation/animation').AnimationClock;retainedTargets?:string[];assets?:OutputProjection['assets']};
 export type SceneSpec={projection:OutputProjection;phase:string;layout:string;bindings:Record<string,string>;target:OutputTarget;definition:string;instance:string;targets:string[];assetVersion:string;speculative?:boolean};
+/** Keep the current paired view available while a different Set is prepared. */
+export function preparationInventory(inventory:SceneSpec[],candidates:SceneSpec[],currentLayouts:ReadonlySet<string>){
+ const replacing=candidates.length>0&&inventory.length>0&&candidates[0].definition!==inventory[0].definition;
+ return [...candidates,...(replacing?inventory.filter(s=>currentLayouts.has(s.layout)):inventory)];
+}
 type Entry={pins:number;key:string;identity:string;spec:SceneSpec;state:SceneReadiness;plan?:Plan;promise?:Promise<Entry>};
 type Job={priority:number;run:(abort:()=>boolean)=>Promise<unknown>;resolve:(v:any)=>void;reject:(e:unknown)=>void;preemptible:boolean};
 const sleep=(ms:number)=>new Promise(r=>setTimeout(r,ms));
@@ -30,7 +35,7 @@ export class PreparedScenes {
  private inventory?:SceneSpec[];private active=new Map<string,SceneSpec>();
  private outputs=new Set<string>();
  private trace:string[]=[];
- debug(){return {working:this.working,abort:this.abort,queue:this.jobs.map(j=>j.priority),trace:this.trace,entries:[...this.entries.values()].map(e=>({layout:e.spec.layout,target:e.spec.target,key:e.key,state:e.state}))};}
+ debug(){return {working:this.working,abort:this.abort,queue:this.jobs.map(j=>j.priority),trace:this.trace,active:[...this.active.values()].map(s=>({layout:s.layout,target:s.target.id,key:digest(sceneIdentity(s))})),inventory:this.inventory?.map(s=>({layout:s.layout,target:s.target.id,key:digest(sceneIdentity(s))})),entries:[...this.entries.values()].map(e=>({layout:e.spec.layout,target:e.spec.target,key:e.key,pins:e.pins,state:e.state}))};}
  private log(message:string){this.trace=[...this.trace.slice(-15),message];}
  private entries=new Map<string,Entry>();private jobs:Job[]=[];private working=false;private abort=false;private background=false;private disposed=false;private revision=0;
  constructor(private send:(request:Record<string,unknown>)=>Promise<NativeSceneStatus>,private changed:()=>void,private compile=compileRoomScene){debugSessions.add(this);}
@@ -78,6 +83,9 @@ export class PreparedScenes {
  async takeGroup(specs:SceneSpec[],run:(entries:{entry:Entry;revision:number}[])=>Promise<void>){
   const pinned=specs.map(s=>this.get(s));pinned.forEach(e=>e.pins++);
   try{
+   // A live update outranks background work. Reconcile its new inventory first,
+   // or stale layouts can still occupy the texture budget when this take loads.
+   await this.trim(100,specs);
    const entries:Entry[]=[];
    for(const spec of specs){let entry=await this.ensure(spec,100);while(entry.state.state==='queued')entry=await this.ensure(spec,100);entries.push(entry);}
    return await this.enqueue(100,false,async()=>{
@@ -97,17 +105,21 @@ export class PreparedScenes {
  /** Keep authored designs plus the latest presented snapshot per output. Text,
   * scores and segment changes can otherwise accumulate unbounded native scenes.
   * In-flight takes remain pinned; native program ownership protects live frames. */
- private async trim(priority=10){
+ private async trim(priority=10,replacing:SceneSpec[]=[]){
   if(!this.inventory||this.disposed)return;
-  const specs=[...this.inventory,...this.active.values()],wanted=new Set(specs.map(spec=>this.get(spec).key));
+  // Native program ownership keeps the presented frame alive independently of
+  // the reusable cache. An updated version of that same layout may replace its
+  // cache entry before preparation, while its source assets remain retained.
+  const cachedActive=()=>[...this.active.values()].filter(s=>![...(this.inventory??[]),...replacing].some(next=>next.target.id===s.target.id&&next.definition===s.definition&&next.layout===s.layout&&sceneIdentity(next)!==sceneIdentity(s)));
+  const specs=[...this.inventory,...cachedActive()],wanted=new Set(specs.map(spec=>this.get(spec).key));
   for(const [key,entry]of this.entries)if(!wanted.has(key)&&!entry.promise&&!entry.pins)this.entries.delete(key);
   for(const outputId of new Set([...this.outputs,...specs.map(s=>s.target.id)])){
    await this.enqueue(priority,false,async()=>{
     // Recompute inside the queued task: another output can finish a take while
     // this trim waits, and its newly active scene must remain retained.
-    const current=[...(this.inventory??[]),...this.active.values()];
+    const current=[...(this.inventory??[]),...cachedActive()];
     const keys=[...new Set([...current.filter(s=>s.target.id===outputId).map(s=>this.get(s).key),...[...this.entries.values()].filter(e=>e.pins>0&&e.spec.target.id===outputId).map(e=>e.key)])];
-    const retained=[...current,...[...this.entries.values()].filter(e=>e.pins>0).map(e=>e.spec)];
+    const retained=[...current,...this.active.values(),...[...this.entries.values()].filter(e=>e.pins>0).map(e=>e.spec)];
     const assetIds=[...new Set(retained.filter(s=>s.target.id===outputId).flatMap(s=>Object.keys(s.projection.assets??{})))];
     await this.send({op:'retain',outputId,keys,assetIds});
     const sent=this.sentAssets.get(outputId);if(sent)for(const id of sent.keys())if(!assetIds.includes(id))sent.delete(id);

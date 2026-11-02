@@ -9,7 +9,7 @@ import {
 import type { SlotFraming } from "../presentation/schema";
 import { AssetTransport } from "../presentation/assetTransport";
 import {authoredCrossfadeMs} from '../presentation/animation';
-import {PreparedScenes,layoutProjections,moduleViewProjections,warmInventory,morphTargets,runtimePlan,type SceneSpec,type NativeSceneStatus} from './preparedScenes';
+import {PreparedScenes,layoutProjections,moduleViewProjections,warmInventory,preparationInventory,morphTargets,runtimePlan,type SceneSpec,type NativeSceneStatus} from './preparedScenes';
 import {RehearsalSession} from '../presentation/rehearsal';
 type NativeStatus = NativeSceneStatus & {
   generation: number;
@@ -123,17 +123,19 @@ export function useRoomOutput(
   const specsRef=useRef(inventory);specsRef.current=inventory;
   useEffect(()=>{
     if(!enabled||!canvasReady||canvasReadyRoom.current!==roomId)return;let cancelled=false;
-    const authoredSpecs=[...candidates,...inventory];
     // Prepare each design in its own output orientation; don't allocate a second
     // fitted copy of every portrait layout on the landscape renderer.
     const selected=inventory.find(s=>s.layout===state.layoutId);
     const fallback=selected&&selected.target.id!=='program'&&outputLayout(session.package.set,state.layoutId,'landscape')===state.layoutId?{...selected,target:{id:'program',orientation:'landscape' as const,...canvas,scaling:'contain' as const}}:undefined;
     const currentVariants=session.package.set.views&&Object.values(session.package.set.views).find(variants=>Object.values(variants).includes(state.layoutId));
     const currentLayouts=new Set<string>(currentVariants?Object.values(currentVariants):[state.layoutId]);
+    const authoredSpecs=preparationInventory(inventory,candidates,currentLayouts);
     const specs=warmInventory([...authoredSpecs,...(fallback?[fallback]:[])],currentLayouts);
-    void bank.current!.retain(specs).then(()=>bank.current!.preload(specs,()=>cancelled));
+    // A prior take can still pin its outgoing snapshot after the first new
+    // frame appears. Defer speculative work until that transaction releases it.
+    void bank.current!.retain(specs).then(()=>{if(!busy)return bank.current!.preload(specs,()=>cancelled);});
     return()=>{cancelled=true;};
-  },[enabled,canvasReady,inventory,candidates,retryVersion]);
+  },[enabled,canvasReady,inventory,candidates,retryVersion,state.layoutId,busy]);
   const bankDisposal=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
   useEffect(()=>{clearTimeout(bankDisposal.current);return()=>{bankDisposal.current=setTimeout(()=>bank.current?.dispose(),0);};},[]);
   useEffect(()=>{

@@ -174,6 +174,45 @@ integration browser test at a newly generated package. See
 [the acceptance report](../../docs/set-runtime/PROMPT-ACCEPTANCE.md) for outcomes
 and the distinction between browser, native and physical-device coverage.
 
+## Compute Atlas example
+
+`node tools/producer-mcp/compute-atlas.mjs --discover` discovers the live contract.
+Running it without flags compiles the canonical plan in
+`fixtures/compute-atlas.mjs` through the actual MCP transport, then requests a
+preview, requirements and visual checks. `--edit` performs revision-fenced layout
+and field-default edits of its last generated copy; `--review` rechecks that copy. Evidence is written to
+`target/compute-atlas/`. The compiler resolves authorized assets from the local
+`Atlantium-Atlanta-Capacity-35-Second-Cut.set.json` package; no personal images
+or embedded asset bytes are committed. The runner never takes room output.
+
+The example has six paired chapters, a shared managed 3D server studio,
+interactive charts and operator cards, a microphone-reactive portrait surround,
+an optional Host slot, source visibility and editable headlines/CTA copy.
+Its suggested 35-second pacing uses manual layout cues. The default embedded
+photo works without a connected camera or API adapter.
+
+Market figures are a **H1 2026 snapshot**, not a live GPU inventory. The four
+markets are the largest by existing inventory within CBRE's eight primary
+markets. Construction is rounded to approximately 2.9 GW. Capacity, availability
+and actual electricity consumption are distinct. Sources:
+[CBRE inventory table](https://www.cbre.com/press-releases/north-american-data-center-demand-continues-to-outpace-supply-despite-record-construction-activity),
+[Atlanta market chapter](https://www.cbre.com/insights/books/north-america-data-center-trends-h1-2026/atlanta-data-center-market),
+[Edged Atlanta](https://edged.us/atlanta),
+[QTS Atlanta 1](https://q.com/data-centers/atlanta-1/),
+[DataBank Atlanta](https://www.databank.com/data-centers/atlanta/).
+Operator details also use the user's October 28 Atlantium entity register.
+Mixed-stage campus figures are never summed into metro inventory or used to
+infer chip counts, GPU models or inference availability. No recipient-owned
+credentials or live connection are required or included.
+
+The November 2, 2026 dev acceptance passed all 12 browser previews, seven
+browser control variations, all 12 native layouts, six paired chapter switches
+(and return to the opener), and 17 paired native interaction checks. The native
+Host slot used a persisted image source; physical microphone/camera activation,
+recording, streaming and production deployment were not part of that check.
+Local receipts are `target/compute-atlas/browser-proof.json` and
+`target/compute-atlas/native-proof.json`.
+
 ## Design references
 
 [Remotion parameterized rendering](https://www.remotion.dev/docs/parameterized-rendering)

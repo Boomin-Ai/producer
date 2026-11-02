@@ -4,13 +4,18 @@ const browser=await chromium.launch({executablePath:'/Applications/Google Chrome
 try{
  const page=await browser.newPage();await page.goto('http://127.0.0.1:1436/');
  const result=await page.evaluate(async()=>{
-  const {PreparedScenes,layoutProjections,moduleViewProjections,warmInventory,morphTargets,runtimePlan}=await import('/src/features/sets-v2/preparedScenes.ts');
+  const {PreparedScenes,layoutProjections,moduleViewProjections,warmInventory,preparationInventory,morphTargets,runtimePlan}=await import('/src/features/sets-v2/preparedScenes.ts');
   const {HEAD_TO_HEAD}=await import('/src/features/presentation/fixtures.ts');
   const {RehearsalSession}=await import('/src/features/presentation/rehearsal.ts');
   const {compileRoomScene}=await import('/src/features/sets-v2/roomCompiler.ts');
   const session=new RehearsalSession(HEAD_TO_HEAD,undefined,'prepare');
   const inventory=layoutProjections(session),calls=[],cache=new Set();let revision=0,compiles=0,updates=0;
   const specs=inventory.map(i=>({projection:i.projection,layout:i.layout,phase:i.phase,definition:session.package.id,instance:'test-room',bindings:{},target:{id:'program',orientation:'landscape',width:1280,height:720,scaling:'contain'},targets:morphTargets(inventory.map(i=>i.projection),i.projection),assetVersion:'v1'}));
+  const currentPair=new Set(specs.slice(0,2).map(s=>s.layout)),replacement=specs.map(s=>({...s,definition:'replacement'}));
+  const staged=preparationInventory(specs,replacement,currentPair);
+  if(staged.length!==replacement.length+currentPair.size||staged.filter(s=>s.definition===session.package.id).some(s=>!currentPair.has(s.layout)))throw Error('Replacement retained unrelated old layouts');
+  if(preparationInventory(specs,[],currentPair).length!==specs.length)throw Error('Cancelling replacement did not restore full inventory');
+  if(preparationInventory(specs,specs,currentPair).length!==specs.length*2)throw Error('Same-Set edit dropped authored layouts');
   const send=async request=>{await new Promise(r=>setTimeout(r,5));calls.push(request.op);if(request.op==='preload'){revision=request.revision;cache.add(request.key);}if(request.op==='retain')for(const key of cache)if(!request.keys.includes(key))cache.delete(key);return {preparedRevision:revision,renderedRevision:revision,ready:true,warmed:true,transitioning:false,queued:false,cachedKeys:[...cache],renderSerial:1};};
   const bank=new PreparedScenes(send,()=>updates++,async(...args)=>{compiles++;return compileRoomScene(...args);});
   const background=bank.preload(specs,()=>false);await new Promise(r=>setTimeout(r,1));await Promise.all([bank.take(specs[0],async()=>{}),bank.take({...specs[1],target:{...specs[1].target,id:'portrait',orientation:'portrait',width:720,height:1280}},async()=>{})]);await background;const loaded=compiles;
@@ -34,6 +39,31 @@ try{
   }
   if(peak>5)throw Error('Unbounded overlapping preparation');if(!churnCache.has(compiledKeys.at(-1)))throw Error('Active snapshot was evicted');
   for(const spec of specs.slice(0,2))if(!churnCache.has(churn.get(spec).key))throw Error('Authored inventory was evicted');churn.dispose();
+  // A priority take can overtake a queued retain after values invalidate every
+  // authored scene. Evict the superseded inventory before loading that take.
+  const pressureCache=new Set();let pressureRevision=0;
+  const pressure=new PreparedScenes(async request=>{
+   if(request.op==='preload'){await new Promise(r=>setTimeout(r,12));if(!pressureCache.has(request.key)&&pressureCache.size>=4)throw Error('Texture budget reached');pressureCache.add(request.key);pressureRevision=request.revision;}
+   if(request.op==='retain')for(const key of pressureCache)if(!request.keys.includes(key))pressureCache.delete(key);
+   return {preparedRevision:pressureRevision,renderedRevision:pressureRevision,cachedKeys:[...pressureCache],ready:true,warmed:true};
+  },()=>{},async()=>({root:{id:'root',kind:'group',bounds:{x:0,y:0,width:100,height:100},children:[]},assets:{}}));
+  await pressure.retain(specs);await pressure.preload(specs,()=>false);await pressure.take(specs[0],async()=>{});
+  const editedSpecs=specs.map(s=>{const next=structuredClone(s);next.projection.root.styles.background='#123456';return next;});
+  const backgroundPressure=pressure.ensure({...editedSpecs[2],layout:'background'});
+  await new Promise(r=>setTimeout(r,2));const reconcile=pressure.retain(editedSpecs);
+  await pressure.take(editedSpecs[0],async()=>{});await reconcile;await backgroundPressure;
+  if(pressure.readiness(editedSpecs[0]).state!=='ready'||!pressureCache.has(pressure.get(editedSpecs[0]).key))throw Error('Updated take did not survive cache pressure');pressure.dispose();
+  const tightCache=new Set(),tightManifests=[];let tightRevision=0;
+  const tight=new PreparedScenes(async request=>{
+   if(request.op==='preload'){if(!tightCache.has(request.key)&&tightCache.size>=3)throw Error('No spare scene slot');tightCache.add(request.key);tightRevision=request.revision;}
+   if(request.op==='retain'){tightManifests.push(request.assetIds);for(const key of tightCache)if(!request.keys.includes(key))tightCache.delete(key);}
+   return {preparedRevision:tightRevision,renderedRevision:tightRevision,cachedKeys:[...tightCache],ready:true,warmed:true};
+  },()=>{},async projection=>({root:{id:'root',kind:'group',bounds:{x:0,y:0,width:100,height:100},children:[]},assets:projection.assets??{}}));
+  const oldPhoto=structuredClone(specs[0]);oldPhoto.projection.assets={oldPhoto:{name:'photo',mime:'image/png',data:'data:image/png;base64,AA=='}};
+  await tight.retain(specs);await tight.take(oldPhoto,async()=>{});
+  await tight.retain(editedSpecs);await tight.preload(editedSpecs.slice(1),()=>false);
+  await tight.take(editedSpecs[0],async()=>{});
+  if(tight.readiness(editedSpecs[0]).state!=='ready'||!tightManifests.some(ids=>ids.includes('oldPhoto'))||tightManifests.at(-1).includes('oldPhoto'))throw Error('Replacement lost live artwork or retained it after replacement');tight.dispose();
   // A new live text snapshot must not re-upload the loaded artwork. The native
   // retain operation discards only assets outside this explicitly bounded list.
   const uploaded=[],manifests=[];let mediaRev=0;const mediaCache=new Set();
