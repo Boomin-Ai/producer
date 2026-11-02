@@ -226,6 +226,26 @@ interaction checks. No native renderer change or rebuild was required.
 
 ## Design references
 
+### AI Engineering Essentials shell
+
+`node tools/producer-mcp/ai-engineering-essentials.mjs` compiles a new reusable
+Atlantium-branded episode shell through MCP. `--edit` creates a revision-fenced
+layout/default update of its previous output. Six logical chapters each pair
+landscape and portrait: tool spotlight, before/after, input-to-output workflow,
+demo, quick start and takeaway/CTA. Episode copy is exposed in the host controls.
+The demo has an animated placeholder and an optional source slot for a screen,
+image or video; it is a stage for future tool-specific animations, not an
+automatically generated tool demonstration. The embedded headshot is the
+default and both source slots are optional until selected. No provider account
+or physical device is required to display the shell.
+
+Canonical authored input lives in `fixtures/ai-engineering-essentials.mjs`.
+The authorized source assets remain outside Git. Receipts and previews live in
+`target/ai-engineering-essentials/`: all 12 browser/native layouts passed, four
+browser content variations passed, and the native logical chapters switched in
+both orientations. Native source verification covered the bound headshot; an
+external demo stream and physical camera/microphone were not activated.
+
 [Remotion parameterized rendering](https://www.remotion.dev/docs/parameterized-rendering)
 informs schema-driven inputs and editable controls.
 [Node-RED credentials](https://nodered.org/docs/creating-nodes/credentials) and

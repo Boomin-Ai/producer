@@ -125,7 +125,7 @@ export async function openSetEditorReview(name:string,roomId?:string){
    const saved=JSON.parse(savedRoom?.config||'{}');
    const sourceChecks=await until(async()=>{
     const items=(await ipc.liveEngineStatus()).sources?.items??[];
-    const checks=(saved.presentation?.package?.set?.slots??[]).map((slot:{id:string})=>{const id=saved.presentation?.bindings?.[slot.id];const source=items.find(s=>s.id===id);return {slot:slot.id,id,kind:source?.kind,width:source?.src_w??0,height:source?.src_h??0,hasFrame:source?.has_frame===true,persisted:saved.sources?.extras?.some((e:{id:string})=>e.id===id)===true};});
+    const checks=(saved.presentation?.package?.set?.slots??[]).filter((slot:{id:string})=>saved.presentation?.bindings?.[slot.id]).map((slot:{id:string})=>{const id=saved.presentation?.bindings?.[slot.id];const source=items.find(s=>s.id===id);return {slot:slot.id,id,kind:source?.kind,width:source?.src_w??0,height:source?.src_h??0,hasFrame:source?.has_frame===true,persisted:saved.sources?.extras?.some((e:{id:string})=>e.id===id)===true};});
     return checks.every((c:{hasFrame:boolean;width:number;height:number;persisted:boolean})=>c.hasFrame&&c.width>0&&c.height>0&&c.persisted)?checks:null;
    },'persisted Host frames');
    const visibleErrors=Array.from(document.querySelectorAll('.set-error')).map(e=>e.textContent?.trim()).filter(Boolean);
