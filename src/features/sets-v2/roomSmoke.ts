@@ -93,7 +93,7 @@ export async function openSetEditorReview(name:string,roomId?:string){
     const receipt=await until(async()=>{if(Date.now()>deadline)throw Error('Layout switching deadline exceeded');const s=await status();return s.program.renderedRevision>before.program.renderedRevision&&!s.program.transitioning&&(import.meta.env.VITE_SET_EDITOR_VERIFY_BOTH!=='1'||s.portrait.renderedRevision>before.portrait.renderedRevision&&!s.portrait.transitioning)?s:null;},'room layout '+label,1800);
     checks.push({label,...receipt});
    }
-   const interactiveChecks:Array<{label:string}&Awaited<ReturnType<typeof status>>>=[];
+   const interactiveChecks:Array<{label:string;clickToSettledMs?:number;timingEvents?:Array<Record<string,unknown>>}&Awaited<ReturnType<typeof status>>>=[];
    if(import.meta.env.VITE_SET_EDITOR_VERIFY_INTERACTIVE==='atlas'){
     const interactionDeadline=Date.now()+120000;
     const settle=async(before:Awaited<ReturnType<typeof status>>,label:string)=>{
@@ -121,15 +121,20 @@ export async function openSetEditorReview(name:string,roomId?:string){
     await until(()=>{const p=document.querySelector<HTMLElement>('.set-controls[data-layouts-total]');return p&&Number(p.dataset.layoutsTotal)>0&&p.dataset.layoutsReady===p.dataset.layoutsTotal;},'interactive layouts restored',2400);
    }
    if(import.meta.env.VITE_SET_EDITOR_VERIFY_INTERACTIVE==='stack'){
+    let clickAt=performance.now();
+    const timingEvents:Array<Record<string,unknown>>=[];
+    const receiveTiming=(event:Event)=>timingEvents.push((event as CustomEvent).detail);
+    window.addEventListener('producer:set-render-timing',receiveTiming);
     const settle=async(before:Awaited<ReturnType<typeof status>>,label:string)=>{
      const receipt=await until(async()=>{const error=document.querySelector('.set-controls .set-error')?.textContent;if(error)throw Error('Product walkthrough failed: '+error);const s=await status();return s.program.renderedRevision>before.program.renderedRevision&&s.portrait.renderedRevision>before.portrait.renderedRevision&&!s.program.transitioning&&!s.portrait.transitioning?s:null;},'paired product '+label,2400);
-     interactiveChecks.push({label,...receipt});await until(()=>document.querySelector('.set-controls[data-output-busy="false"]'),'product settled '+label,2400);
+     interactiveChecks.push({label,clickToSettledMs:performance.now()-clickAt,timingEvents:[...timingEvents],...receipt});await until(()=>document.querySelector('.set-controls[data-output-busy="false"]'),'product settled '+label,2400);
     };
     const layout=Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).find(b=>b.querySelector('span')?.textContent?.startsWith('02'));
-    if(!layout)throw Error('Missing full-stack layout');const previous=await status();layout.click();await settle(previous,'Full stack');
+    if(!layout)throw Error('Missing full-stack layout');const previous=await status();clickAt=performance.now();timingEvents.length=0;layout.click();await settle(previous,'Full stack');
     for(const label of ['Workers Static Assets','Workers','D1','R2','Workers AI','Access / WAF','Hide descriptions']){
-     const target=await until(()=>button(label,document.querySelector('.set-controls')??document),'product control '+label);const before=await status();target.click();await invoke('live_set_v2_report',{result:{kind:'set-output-verifying',name,stage:'product: '+label}});await settle(before,label);
+     const target=await until(()=>button(label,document.querySelector('.set-controls')??document),'product control '+label);const before=await status();clickAt=performance.now();timingEvents.length=0;target.click();await invoke('live_set_v2_report',{result:{kind:'set-output-verifying',name,stage:'product: '+label}});await settle(before,label);
     }
+    window.removeEventListener('producer:set-render-timing',receiveTiming);
    }
    const {ipc}=await import('../../lib/ipc');
    const savedRoom=(await ipc.liveListRooms()).find(r=>roomId?r.id===roomId:r.name==='Producer authoring acceptance');
