@@ -127,6 +127,8 @@ export interface RoomControlOptions {
   parse?: (raw: unknown) => ControlFrame | null;
   /** Re-authorize long-running sockets before the short-lived room ticket expires. */
   renewAfterMs?: number;
+  /** Hosted rooms acknowledge publisher ownership separately from OPEN. */
+  requirePublishAck?: boolean;
 }
 
 /** A self-healing control socket. `send` queues while offline; the newest
@@ -144,9 +146,11 @@ export class RoomControlLink {
   private latestPublish: string | null = null;
   private registerRetryAt = 0;
   private pendingSources: string | null = null;
+  private latestSources: string | null = null;
   // OPEN describes transport readiness, not whether this socket has sent the
   // host registration. IPC source updates can arrive before the open callback.
   private scenesPublished = false;
+  private publisherRejected = false;
   private generation = 0;
 
   constructor(private readonly opts: RoomControlOptions) {}
@@ -173,7 +177,9 @@ export class RoomControlLink {
     this.latestPublish = null;
     this.registerRetryAt = 0;
     this.pendingSources = null;
+    this.latestSources = null;
     this.scenesPublished = false;
+    this.publisherRejected = false;
     try {
       this.ws?.close();
     } catch {
@@ -193,7 +199,7 @@ export class RoomControlLink {
     this.latestPublish = frame;
     if (this.open) {
       this.ws!.send(frame);
-      this.scenesPublished = true;
+      if (!this.opts.requirePublishAck && !this.publisherRejected) this.scenesPublished = true;
       this.flushSources();
     }
     else this.pendingPublish = frame;
@@ -202,6 +208,7 @@ export class RoomControlLink {
   publishSources(sources: RoomSource[], participants: string[], onStage: string[]): boolean {
     if (this.closed) return false;
     this.pendingSources = JSON.stringify({ type: "room.sources.publish", sources, participants, on_stage: onStage });
+    this.latestSources = this.pendingSources;
     return this.flushSources();
   }
 
@@ -233,11 +240,12 @@ export class RoomControlLink {
 
   send(frame: Record<string, unknown>): boolean {
     if (!this.open) return false;
+    if (this.publisherRejected && ["set.presented", "audience.configure", "audience.signal", "room.action.ack", "scene.ack"].includes(String(frame.type))) return false;
     this.ws!.send(JSON.stringify(frame)); return true;
   }
 
   acknowledge(commandId: string, status: "applied" | "failed", error?: string): void {
-    if (this.open) this.ws!.send(JSON.stringify({ type: "scene.ack", command_id: commandId, status, error }));
+    this.send({ type: "scene.ack", command_id: commandId, status, error });
   }
 
   private async connect(): Promise<void> {
@@ -260,6 +268,7 @@ export class RoomControlLink {
     }
     this.ws = ws;
     this.scenesPublished = false;
+    this.publisherRejected = false;
     ws.onopen = () => {
       if (this.closed || this.ws !== ws || generation !== this.generation) { ws.close(); return; }
       this.retryMs = 1000;
@@ -267,7 +276,7 @@ export class RoomControlLink {
       if (this.pendingPublish) {
         ws.send(this.pendingPublish);
         this.pendingPublish = null;
-        this.scenesPublished = true;
+        if (!this.opts.requirePublishAck) this.scenesPublished = true;
         this.flushSources();
       }
       if (this.ping) window.clearInterval(this.ping);
@@ -281,6 +290,17 @@ export class RoomControlLink {
     ws.onmessage = (ev) => {
       if (this.closed || this.ws !== ws || generation !== this.generation) return;
       const frame = (this.opts.parse ?? parseControlFrame)(ev.data);
+      if (frame?.type === "scene.published") {
+        this.publisherRejected = false;
+        this.scenesPublished = true;
+        this.flushSources();
+      }
+      if (frame?.type === "error" && typeof frame.code === "string" &&
+          ["publisher_busy", "stale_publisher", "host_unavailable"].includes(frame.code)) {
+        this.publisherRejected = true;
+        this.scenesPublished = false;
+        this.pendingSources = this.latestSources;
+      }
       if (frame?.type === "room.authorized" && frame.request_id === this.renewalId && this.renewalId) {
         if (this.renewalAck) window.clearTimeout(this.renewalAck);
         this.renewalAck = null; this.renewalId = null;
@@ -292,6 +312,13 @@ export class RoomControlLink {
       if (frame?.type === "error" && frame.code === "host_unavailable" && this.latestPublish && Date.now() >= this.registerRetryAt) {
         this.registerRetryAt = Date.now() + 5000;
         ws.send(this.latestPublish);
+        // Older hosted deployments confirm only with a broadcast scene.state.
+        // Preserve their ordered protocol; the server still fences every write.
+        if (!this.opts.requirePublishAck) {
+          this.publisherRejected = false;
+          this.scenesPublished = true;
+          this.flushSources();
+        }
       }
       if (frame && frame.type !== "pong") this.opts.onFrame(frame);
     };
@@ -299,6 +326,7 @@ export class RoomControlLink {
       if (this.closed || this.ws !== ws || generation !== this.generation) return;
       this.ws = null;
       this.scenesPublished = false;
+      this.pendingSources = this.latestSources;
       if (this.ping) window.clearInterval(this.ping);
       this.ping = null;
       if (this.renewal) window.clearTimeout(this.renewal);

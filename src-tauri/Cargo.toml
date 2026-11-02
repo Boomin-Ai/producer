@@ -8,7 +8,7 @@ repository = "https://github.com/Boomin-Ai/producer"
 edition = "2021"
 
 [features]
-# Isolated development-only Sets v2 room adapter. Native backend currently Mac.
+# Isolated development-only Sets v2 room adapter (macOS and Windows engines).
 sets-v2-dev = []
 # Isolated local room/storage for the signed portrait-camera candidate.
 portrait-camera-dev = []

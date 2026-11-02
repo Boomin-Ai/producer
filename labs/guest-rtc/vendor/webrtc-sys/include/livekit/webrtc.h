@@ -40,6 +40,8 @@ class LogSink;
 
 namespace livekit_ffi {
 
+bool diagnostic_process_flag_enabled(rust::Str name);
+
 class MediaStreamTrack;
 class RtpReceiver;
 class RtpSender;

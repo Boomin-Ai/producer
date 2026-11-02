@@ -180,7 +180,54 @@ extern "C" {
     pub fn gs_render_start(b_new: bool);
     pub fn gs_render_stop(mode: c_int);
     pub fn gs_vertex2f(x: f32, y: f32);
+    // Shared Set compositor C sources also use these on Windows. raw-dylib
+    // must synthesize their import stubs even though Rust does not call them.
+    pub fn gs_render_save() -> *mut c_void;
+    pub fn gs_vertexbuffer_destroy(buffer: *mut c_void);
+    pub fn gs_load_vertexbuffer(buffer: *mut c_void);
+    pub fn gs_load_indexbuffer(buffer: *mut c_void);
+    pub fn gs_draw(mode: c_int, start: u32, count: u32);
+    pub fn gs_color(color: u32);
+    pub fn gs_get_linear_srgb() -> bool;
+    pub fn gs_set_linear_srgb(linear: bool) -> bool;
+    pub fn gs_matrix_rotaa4f(x: f32, y: f32, z: f32, angle: f32);
+    pub fn gs_effect_set_texture_srgb(param: *mut c_void, texture: *mut c_void);
     pub fn gs_matrix_scale3f(x: f32, y: f32, z: f32);
+    #[cfg(target_os = "windows")]
+    pub fn gs_texture_create(
+        width: u32,
+        height: u32,
+        format: i32,
+        levels: u32,
+        data: *const *const u8,
+        flags: u32,
+    ) -> *mut c_void;
+    #[cfg(target_os = "windows")]
+    pub fn gs_texture_set_image(texture: *mut c_void, data: *const u8, stride: u32, invert: bool);
+    #[cfg(target_os = "windows")]
+    pub fn gs_texture_destroy(texture: *mut c_void);
+    #[cfg(target_os = "windows")]
+    pub fn gs_texrender_begin_with_color_space(
+        target: *mut c_void,
+        width: u32,
+        height: u32,
+        space: i32,
+    ) -> bool;
+    #[cfg(target_os = "windows")]
+    pub fn obs_source_get_color_space(
+        source: *mut obs_source_t,
+        count: usize,
+        preferred: *const i32,
+    ) -> i32;
+    #[cfg(target_os = "windows")]
+    pub fn gs_blend_function_separate(src_c: i32, dst_c: i32, src_a: i32, dst_a: i32);
+    #[cfg(target_os = "windows")]
+    pub fn obs_canvas_get_ref(canvas: *mut super::portrait::Canvas)
+        -> *mut super::portrait::Canvas;
+    #[cfg(target_os = "windows")]
+    pub fn obs_canvas_render(canvas: *mut super::portrait::Canvas);
+    #[cfg(target_os = "windows")]
+    pub fn obs_canvas_release(canvas: *mut super::portrait::Canvas);
     pub fn gs_get_color_space() -> c_int;
     pub fn gs_effect_set_texture(param: *mut c_void, val: *mut c_void);
     pub fn gs_enable_framebuffer_srgb(enable: bool);
@@ -511,10 +558,27 @@ extern "C" {
     pub fn producer_drag_chip_show();
     pub fn producer_drag_chip_hide();
     /// Cutout: register the `producer_person_mask` video filter with libobs.
-    /// macOS = Vision person segmentation (person_mask.m); Windows = a
-    /// pass-through under the same id so scene configs round-trip. Call once,
+    /// macOS = Vision; Windows = local ONNX person segmentation. Call once,
     /// after obs_startup and before any source is created.
     pub fn producer_person_mask_register();
+    #[cfg(target_os = "windows")]
+    pub fn producer_person_mask_status(filter: *mut obs_source_t) -> i32;
+    #[cfg(target_os = "windows")]
+    pub fn producer_person_mask_completed(filter: *mut obs_source_t) -> u64;
+    #[cfg(target_os = "windows")]
+    pub fn producer_vcam_mirror_register();
+    #[cfg(target_os = "windows")]
+    pub fn producer_vcam_in_use() -> c_int;
+    #[cfg(target_os = "windows")]
+    pub fn producer_vcam_mirror_source(
+        source: *mut obs_source_t,
+        child: *mut obs_source_t,
+        canvas: *mut super::portrait::Canvas,
+        width: u32,
+        height: u32,
+    ) -> bool;
+    #[cfg(target_os = "windows")]
+    pub fn producer_vcam_mirror_set(source: *mut obs_source_t, on: bool);
     pub fn producer_source_appearance_register();
     pub fn producer_shader_create(
         settings: *const c_char,
@@ -601,6 +665,8 @@ extern "C" {
     pub fn obs_view_destroy(view: *mut obs_view_t);
     pub fn obs_view_set_source(view: *mut obs_view_t, channel: u32, source: *mut obs_source_t);
     pub fn obs_view_add(view: *mut obs_view_t) -> *mut video_t;
+    #[cfg(target_os = "windows")]
+    pub fn obs_view_add2(view: *mut obs_view_t, info: *mut obs_video_info) -> *mut video_t;
     pub fn obs_view_remove(view: *mut obs_view_t);
     pub fn obs_output_set_media(
         output: *mut obs_output_t,
@@ -803,6 +869,7 @@ extern "C" {
     // The opt-in guest ingress C boundary needs these Windows import stubs.
     // Frame/audio layouts stay in guest_ingest.c, pinned to the engine ABI.
     pub fn obs_source_output_video(source: *mut obs_source_t, frame: *const c_void);
+    pub fn os_gettime_ns() -> u64;
     #[cfg(target_os = "windows")]
     pub fn obs_source_output_audio(source: *mut obs_source_t, audio: *const c_void);
     #[cfg(target_os = "windows")]

@@ -6,6 +6,7 @@ use std::{
     sync::{Arc, Mutex},
     time::Instant,
 };
+#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
 extern "C" {
     fn os_gettime_ns() -> u64;
 }

@@ -1,0 +1,5 @@
+# LiveKit's pinned Windows WebRTC archive uses the static MSVC runtime.
+# Match it in Rust and cc-built dependencies (SoundTouch, SQLite, OBS shims)
+# so the native guest feature does not mix /MD and /MT at the final link.
+[target.'cfg(all(target_os = "windows", target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]

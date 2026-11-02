@@ -114,27 +114,108 @@ pub struct Studio {
 pub struct RoomMix {
     view: *mut ffi::obs_view_t,
     video: *mut ffi::video_t,
+    #[cfg(target_os = "windows")]
+    mirror: *mut ffi::obs_source_t,
+}
+impl Drop for RoomMix {
+    fn drop(&mut self) {
+        unsafe {
+            self.teardown();
+        }
+    }
 }
 
 impl RoomMix {
     /// `room` is the channel-0 scene source (borrowed; `obs_view_set_source`
     /// takes its own reference). Engine-thread only (§5.1).
     pub unsafe fn build(room: *mut ffi::obs_source_t) -> Result<RoomMix, String> {
-        if room.is_null() {
-            return Err("the room scene is not on the program".into());
+        #[cfg(target_os = "windows")]
+        {
+            return Self::build_windows(room, ptr::null_mut());
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            if room.is_null() {
+                return Err("the room scene is not on the program".into());
+            }
+            let view = ffi::obs_view_create();
+            if view.is_null() {
+                return Err("room mix view creation failed".into());
+            }
+            ffi::obs_view_set_source(view, 0, room);
+            let video = ffi::obs_view_add(view);
+            if video.is_null() {
+                ffi::obs_view_set_source(view, 0, ptr::null_mut());
+                ffi::obs_view_destroy(view);
+                return Err("room mix creation failed".into());
+            }
+            Ok(RoomMix { view, video })
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    pub unsafe fn build_windows(
+        room: *mut ffi::obs_source_t,
+        canvas: *mut super::portrait::Canvas,
+    ) -> Result<Self, String> {
+        #[link(name = "obs", kind = "raw-dylib")]
+        extern "C" {
+            fn obs_canvas_get_video_info(
+                canvas: *mut super::portrait::Canvas,
+                info: *mut ffi::obs_video_info,
+            ) -> bool;
+        }
+        let mut info = std::mem::MaybeUninit::zeroed();
+        let valid = if canvas.is_null() {
+            ffi::obs_get_video_info(info.as_mut_ptr())
+        } else {
+            obs_canvas_get_video_info(canvas, info.as_mut_ptr())
+        };
+        if !valid || (room.is_null() && canvas.is_null()) {
+            return Err("Virtual camera canvas is not ready".into());
+        }
+        let mut info = info.assume_init();
+        let mirror = ffi::obs_source_create_private(
+            b"producer_vcam_mirror\0".as_ptr().cast(),
+            b"Virtual camera placement\0".as_ptr().cast(),
+            ptr::null_mut(),
+        );
+        if mirror.is_null() {
+            return Err("Virtual camera placement creation failed".into());
+        }
+        if !ffi::producer_vcam_mirror_source(
+            mirror,
+            room,
+            canvas,
+            info.base_width,
+            info.base_height,
+        ) {
+            ffi::obs_source_release(mirror);
+            return Err("Virtual camera placement binding failed".into());
         }
         let view = ffi::obs_view_create();
         if view.is_null() {
-            return Err("room mix view creation failed".into());
+            ffi::obs_source_release(mirror);
+            return Err("Virtual camera view creation failed".into());
         }
-        ffi::obs_view_set_source(view, 0, room);
-        let video = ffi::obs_view_add(view);
+        ffi::obs_view_set_source(view, 0, mirror);
+        let video = ffi::obs_view_add2(view, &mut info);
         if video.is_null() {
             ffi::obs_view_set_source(view, 0, ptr::null_mut());
             ffi::obs_view_destroy(view);
-            return Err("room mix creation failed".into());
+            ffi::obs_source_release(mirror);
+            return Err("Virtual camera mix creation failed".into());
         }
-        Ok(RoomMix { view, video })
+        Ok(Self {
+            view,
+            video,
+            mirror,
+        })
+    }
+
+    #[cfg(target_os = "windows")]
+    pub unsafe fn set_mirrored(&self, on: bool) {
+        ffi::producer_vcam_mirror_set(self.mirror, on);
     }
 
     /// The mix to hand `obs_output_set_media`.
@@ -155,6 +236,21 @@ impl RoomMix {
         if src.is_null() {
             return;
         }
+        #[cfg(target_os = "windows")]
+        {
+            let mut info = std::mem::MaybeUninit::zeroed();
+            if ffi::obs_get_video_info(info.as_mut_ptr()) {
+                let info = info.assume_init();
+                ffi::producer_vcam_mirror_source(
+                    self.mirror,
+                    src,
+                    ptr::null_mut(),
+                    info.base_width,
+                    info.base_height,
+                );
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
         ffi::obs_view_set_source(self.view, 0, src);
     }
 
@@ -168,6 +264,11 @@ impl RoomMix {
             ffi::obs_view_set_source(self.view, 0, ptr::null_mut());
             ffi::obs_view_destroy(self.view);
             self.view = ptr::null_mut();
+        }
+        #[cfg(target_os = "windows")]
+        if !self.mirror.is_null() {
+            ffi::obs_source_release(self.mirror);
+            self.mirror = ptr::null_mut();
         }
     }
 }

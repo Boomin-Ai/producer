@@ -169,6 +169,7 @@ impl Drop for Source {
 struct GraphicsLayer {
     browser: Source,
     clip: Source,
+    bytes: usize,
 }
 // Prepared HTML is immutable, but CEF visibility is asynchronous. Keep its
 // paint producer showing for the full cached-layer lease, not only while one
@@ -190,6 +191,44 @@ struct Draft {
     bytes: usize,
     captures: HashMap<String, usize>,
     asset_versions: String,
+}
+
+#[derive(Default)]
+struct TextureUsage {
+    allocations: std::collections::HashSet<(u8, usize)>,
+    bytes: usize,
+}
+impl TextureUsage {
+    fn include(&mut self, kind: u8, identity: usize, bytes: usize) {
+        if self.allocations.insert((kind, identity)) {
+            self.bytes += bytes;
+        }
+    }
+}
+fn texture_usage<'a>(drafts: impl Iterator<Item = &'a Rc<Draft>>) -> usize {
+    let mut usage = TextureUsage::default();
+    for draft in drafts {
+        usage.include(0, Rc::as_ptr(draft) as usize, draft.bytes);
+        for graphics in &draft._graphics {
+            usage.include(1, Rc::as_ptr(graphics) as usize, graphics.bytes);
+        }
+    }
+    usage.bytes
+}
+
+#[cfg(test)]
+#[test]
+fn texture_budget_counts_shared_rasters_once_and_distinct_scenes_separately() {
+    let mut usage = TextureUsage::default();
+    // Two cached compositions retain one immutable raster. Repeated references
+    // from the active/pending scene must not consume its budget a second time.
+    for scene in [1, 2, 1] {
+        usage.include(0, scene, 96);
+        usage.include(1, 3, 32);
+    }
+    assert_eq!(usage.bytes, 224);
+    usage.include(1, 4, 40); // Edited raster is a distinct allocation.
+    assert_eq!(usage.bytes, 264);
 }
 struct Capture(Source);
 impl Drop for Capture {
@@ -347,11 +386,17 @@ impl<'a> Arena<'a> {
             }
             ffi::obs_source_inc_active(browser.0);
             ffi::obs_source_inc_showing(browser.0);
-            let layer = Rc::new(GraphicsLayer { browser, clip });
+            let bytes = (pixels + pw as usize * ph as usize) * 4 + 1024 * 1024;
+            let layer = Rc::new(GraphicsLayer {
+                browser,
+                clip,
+                bytes,
+            });
             cache.insert(identity, Rc::downgrade(&layer));
             layer
         };
-        // Account conservatively per scene even when the raster is shared.
+        // Keep the per-scene preflight conservative. The resident cache counts
+        // this immutable browser/crop lease once across its owning scenes.
         self.intermediate_pixels += (pw as usize) * (ph as usize);
         let surface = layer.clip.0;
         self.markers
@@ -908,7 +953,8 @@ impl RoomProgram {
         }
         let bytes = producer_set_v2_scene_texture_bytes(scene)
             + (arena.browser_pixels + arena.intermediate_pixels) * 4
-            + arena.markers.len() * 1024 * 1024;
+            + arena.markers.len() * 1024 * 1024
+            - arena.graphics.iter().map(|g| g.bytes).sum::<usize>();
         let draft = Draft {
             scene,
             markers: std::mem::take(&mut arena.markers),
@@ -1117,8 +1163,14 @@ impl RoomProgram {
             }
             if native.ready && native.warmed {
                 if let Some((key, signature)) = self.preparing_key.take() {
-                    let bytes = self.bank.values().map(|(_, d)| d.bytes).sum::<usize>();
-                    if bytes + draft.bytes > 768 * 1024 * 1024 {
+                    let bytes = texture_usage(
+                        self.bank
+                            .values()
+                            .map(|(_, d)| d)
+                            .chain(self.current.iter())
+                            .chain(std::iter::once(draft)),
+                    );
+                    if bytes > 768 * 1024 * 1024 {
                         return Err("Loaded set texture budget reached".into());
                     }
                     self.bank.insert(key, (signature, draft.clone()));
@@ -1147,7 +1199,7 @@ impl RoomProgram {
             scene3d_contexts: scene3d::live_count(),
             graphics_layers: self.resources.graphics_count(),
             cached_keys: self.bank.keys().cloned().collect(),
-            cached_bytes: self.bank.values().map(|(_, d)| d.bytes).sum(),
+            cached_bytes: texture_usage(self.bank.values().map(|(_, d)| d)),
             generation: self.generation,
             prepared_revision: self
                 .building

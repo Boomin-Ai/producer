@@ -95,4 +95,7 @@ jobs:
         env:
           CXXFLAGS: ${{ runner.os == 'Linux' && '-fPIC' || '' }}
       - run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+      - name: Check Windows native guest runtime and static CRT linkage
+        if: runner.os == 'Windows'
+        run: cargo test --manifest-path src-tauri/Cargo.toml --features guest-rtc-production --lib
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check

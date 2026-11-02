@@ -1,5 +1,6 @@
 //! Trusted, room-owned WebGL resource. Packages cannot choose URLs or scripts.
 use super::{contract::Clock, ffi, Source};
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -407,8 +408,8 @@ impl Bridge {
         let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
         let mut entropy = [0u8; 32];
-        std::fs::File::open("/dev/urandom")
-            .and_then(|mut f| f.read_exact(&mut entropy))
+        rand::rngs::OsRng
+            .try_fill_bytes(&mut entropy)
             .map_err(|e| e.to_string())?;
         let token = entropy
             .iter()
@@ -820,4 +821,43 @@ pub fn key(instance: &str, spec: &Spec, w: u32, h: u32) -> String {
         spec.pass,
         Sha256::digest(spec.world.to_string().as_bytes())
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bridge_uses_os_entropy_and_releases_loopback_listener() {
+        let spec = Spec {
+            cue_sequence: None,
+            id: "test".into(),
+            pass: "background".into(),
+            world: json!({}),
+            cue: "idle".into(),
+            view: None,
+        };
+        let first = Bridge::start(&spec, 320, 180).unwrap();
+        let second = Bridge::start(&spec, 320, 180).unwrap();
+        assert_eq!(first.token.len(), 64);
+        assert!(first.token.bytes().all(|b| b.is_ascii_hexdigit()));
+        assert_ne!(first.token, second.token);
+        let address = first.origin.trim_start_matches("http://").to_owned();
+        let weak = Arc::downgrade(&first);
+        first.stop();
+        second.stop();
+        drop(first);
+        drop(second);
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            if weak.upgrade().is_none() {
+                if let Ok(listener) = TcpListener::bind(&address) {
+                    drop(listener);
+                    break;
+                }
+            }
+            assert!(Instant::now() < deadline, "3D bridge did not shut down");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
 }
