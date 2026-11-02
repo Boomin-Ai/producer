@@ -1,5 +1,6 @@
 import shell from './ai-engineering-essentials.mjs';
-const plan=structuredClone(shell),doc=plan.package;
+import {signalDesign} from '../signal-design.mjs';
+const plan=structuredClone(shell),doc=plan.package;plan.assetRefs.push('cloudflareLogo');
 const defaults={toolName:'CLOUDFLARE',toolCategory:'COMPUTE / DATA / AI / SECURITY',toolMark:'cf',spotlightTitle:'BUILD YOUR\nAI STACK.',whyTitle:'THE FULL STACK.\nONE PLATFORM.',workflowTitle:'ONE APP.\nCONNECTED LAYERS.',demoTitle:'MEET THE\nNEW cf CLI.',setupTitle:'FROM TERMINAL\nTO YOUR APP.',takeawayTitle:'GET THE\nFULL LIST.',before:'Frontend. APIs. Data.\nAI inference. Security.\nEvery app needs a stack.',after:'Cloudflare brings these\nbuilding blocks onto\none developer platform.',input:'Your frontend sends a request to a Worker.',transform:'Workers connect your logic to D1, R2 and Workers AI.',output:'Your app returns a useful answer to the user.',demoLabel:'cf / CLOUDFLARE CLI · BETA · COMMAND WALKTHROUGH',demoCode:'$ cf cli search "list my zones"\n$ cf dev\n$ cf build',demoResult:'2,900+ API commands. Typed project config. Agent-friendly search.\nIllustrative commands — cf is in beta.',step1:'Install: npm install --global cf',step2:'Sign in: cf auth login',step3:'New project: cf init',starterCode:'cf dev\ncf build\ncf deploy',takeaway:'GET THE FULL LIST\nIN MY BIO.\n\nOr comment below.',ctaSupport:'AI Engineering Essentials\nYour next tools. One complete list.',ctaAction:'COMMENT ESSENTIALS'};
 for(const[key,value]of Object.entries(defaults))doc.set.values[key].default=value;
 const R=(x,y,w,h)=>({position:'absolute',left:x,top:y,width:w,height:h}),V=k=>({get:'values.'+k});
@@ -12,7 +13,7 @@ for(const l of doc.set.layouts){
  const replace=(id,node)=>{const i=n.findIndex(n=>n.id===id);if(i>=0)n[i]=node;};
  if(id==='spotlight'){
   replace('tool-hero',B('tool-hero',p?72:84,p?730:480,p?936:1160,p?365:400,'#112137',[B('cf-stripe',0,0,8,p?365:400,'#f6821f',[],0),T('tool-category',30,28,p?876:1100,85,V('toolCategory'),p?28:30,'#a9c9dd'),T('tool-name',28,140,p?880:1100,195,V('toolName'),p?102:125,'#eef5fa',900)]));
-  const card=B('tool-mark-panel',p?72:1320,p?1180:480,p?936:516,p?370:400,'#142b43',[T('cf-cli-mark',p?500:40,p?55:35,p?380:430,230,'cf',p?170:175,'#f6a55d',900),T('cf-cli-caption',30,p?65:285,p?450:450,p?240:100,p?'ONE CLI.\nTHE\nPLATFORM.':'ONE CLI.\nTHE PLATFORM.',p?45:36,'#d5e5f1',800)]);card.mask={kind:'wipe',direction:'right',progress:1};replace('tool-mark-panel',card);
+  const card=B('tool-mark-panel',p?72:1320,p?1180:480,p?936:516,p?370:400,'#142b43',[{id:'cloudflare-logo',type:'media',assetId:'cloudflareLogo',fit:'contain',styles:R(p?480:40,p?70:35,p?410:430,p?220:200)},T('cf-cli-caption',30,p?65:285,p?450:450,p?240:100,p?'ONE CLI.\nTHE\nPLATFORM.':'ONE CLI.\nTHE PLATFORM.',p?45:36,'#d5e5f1',800)]);card.mask={kind:'wipe',direction:'right',progress:1};replace('tool-mark-panel',card);
  }
  if(id==='why'){
   const remove=new Set(['before-card','after-card','change-arrow']);l.root.children=n.filter(node=>!remove.has(node.id));l.animation.tracks=l.animation.tracks.filter(t=>!remove.has(t.target));
@@ -33,4 +34,4 @@ for(const l of doc.set.layouts){
   find('cta-action').styles.fontSize=p?44:39;
  }
 }
-export default plan;
+export default signalDesign(plan,{logoAsset:'cloudflareLogo',cliCaption:'ONE CLI.\nTHE PLATFORM.'});

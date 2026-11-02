@@ -272,6 +272,38 @@ configuration and supported behavior can change during beta. The six full-stack
 cards are selected product capabilities, not a claim that every application
 requirement or third-party integration is covered by one service.
 
+The Cloudflare opener uses [SVGL's Cloudflare SVG](https://github.com/pheralb/svgl/blob/main/static/library/cloudflare.svg).
+Its transparent 1024px raster conversion is embedded through the local asset
+carrier because the current Set media contract accepts raster images, not SVG.
+The original SVG remains available separately; personal and brand asset bytes
+are not committed in the fixture.
+
+### SIGNAL / V1 reusable design system
+
+The latest Cloudflare episode applies `signal-design.mjs` to the editable
+canonical episode plan. Main tokens are canvas `#030B16`, surface `#0B1D30`,
+raised `#152F49`, signal `#36DFFF`, accent `#FF8A24`, text `#EAF4FF`.
+Tool branding and the CLI caption are parameters; the larger portrait Host,
+panel gradients, icon hierarchy, CLI line reveals and motion grammar are shared.
+The Set name remains **AI Engineering Essentials**.
+
+The generated backdrop, exact image prompt and original SVG/PNG line icons are
+in `assets/sets/signal-v1/`. The backdrop was made with the built-in image tool.
+Text, panels, diagrams and individual CLI lines remain editable native nodes.
+`node tools/producer-mcp/prepare-signal-assets.mjs` prepares the local authorized
+asset carrier using the existing brand carrier and these workspace assets.
+Run from the repository root; `PRODUCER_SETS_DIR` overrides the local Set folder.
+Then run the normal `--cloudflare` MCP compile. Exported Sets embed the artwork
+and do not need the source repository on the recipient's machine.
+
+Packet motion uses one-way linear travel with synchronized fade-in/fade-out
+and an invisible interval at each loop boundary. It never uses ping-pong for
+flow direction. `node scripts/test-signal-motion-browser.mjs` samples actual
+preview positions and opacity across repeated cycles in both orientations,
+rejecting visible backward jumps. Evidence is `motion-proof.json` in the episode
+target directory. The design passed all 12 browser/native layouts and the
+motion check; CLI commands remain illustrative, not executed provider commands.
+
 [Remotion parameterized rendering](https://www.remotion.dev/docs/parameterized-rendering)
 informs schema-driven inputs and editable controls.
 [Node-RED credentials](https://nodered.org/docs/creating-nodes/credentials) and
