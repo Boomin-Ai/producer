@@ -7,9 +7,34 @@ async function until<T>(read: () => T | Promise<T>, label: string,attempts=600):
 }
 const button = (label: string, root: ParentNode = document) => Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(b => (b.getAttribute('aria-label')===label || b.textContent?.trim()===label) && !b.disabled);
 /** Private editor review by default; output verification is a separate opt-in. */
-export async function openSetEditorReview(name:string){
+export async function openSetEditorReview(name:string,roomId?:string){
  if(!import.meta.env.DEV)return;
  try{
+  const repairImage=import.meta.env.VITE_SET_EDITOR_REPAIR_HOST_IMAGE;
+  const repairRun=import.meta.env.VITE_SET_EDITOR_VERIFY_OUTPUT;
+  if(repairImage&&repairRun&&localStorage.getItem('producer-review-repair:'+repairRun)!=='complete'){
+   await until(()=>button('Set settings'),'room host repair');
+   const {ipc}=await import('../../lib/ipc');
+   const room=(await ipc.liveListRooms()).find(r=>roomId?r.id===roomId:r.name==='Producer authoring acceptance');
+   if(!room)throw Error('Acceptance room is unavailable');
+   const config=JSON.parse(room.config||'{}');
+   if(!config.presentation?.package?.set?.slots.some((s:{id:string})=>s.id==='host'))throw Error('Acceptance Set has no Host slot');
+   const id='authoring-host-headshot';
+   config.sources={...config.sources,extras:[...(config.sources?.extras??[]).filter((s:{id:string})=>s.id!==id),{id,label:'Kleveland headshot',spec:{kind:'image',path:repairImage}}]};
+   config.presentation.bindings={...config.presentation.bindings,host:id};
+   await ipc.liveUpdateRoom(room.id,{config:JSON.stringify(config)});
+   localStorage.setItem('producer-review-repair:'+repairRun,'complete');
+   await invoke('live_set_v2_report',{result:{kind:'native-handoff-host-repaired',roomId:room.id,sourceId:id}});
+   location.reload();return;
+  }
+  if(import.meta.env.VITE_SET_EDITOR_INSPECT_ONLY==='1'){
+   await until(()=>button('Set settings'),'room handoff inspection');
+   const {ipc,devices}=await import('../../lib/ipc');
+   const permissions=await ipc.livePermissions();
+   const engine=await ipc.liveEngineStatus();
+   await invoke('live_set_v2_report',{result:{kind:'native-handoff-inspection',permissions,engine:{engine_ready:engine.engine_ready,sources:engine.sources},devices:permissions.camera==='granted'?await devices.list('camera'):[],rooms:(await ipc.liveListRooms()).filter(r=>r.name==='Producer authoring acceptance').map(r=>({id:r.id,name:r.name,sources:JSON.parse(r.config||'{}').sources,bindings:JSON.parse(r.config||'{}').presentation?.bindings}))}});
+   return;
+  }
   const dock=await until(()=>document.querySelector<HTMLElement>('[aria-label="Show the bottom row"]')||button('Set settings'),'Set controls');
   if(dock.getAttribute('aria-label')==='Show the bottom row')dock.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
   if(!document.querySelector('dialog[open]'))(await until(()=>button('Set settings'),'Set settings')).click();
@@ -39,26 +64,44 @@ export async function openSetEditorReview(name:string){
   const verify=import.meta.env.VITE_SET_EDITOR_VERIFY_OUTPUT;
   if(verify&&localStorage.getItem('producer-review-take:'+verify)!=='complete'){
    localStorage.setItem('producer-review-take:'+verify,'started');
-   const status=async()=>{const {generation}=await invoke<{generation:number}>('live_set_status');return invoke<{renderedRevision:number;transitioning:boolean}>('live_set_v2',{request:{op:'status',generation}});};
-   const deadline=Date.now()+90000;
+   const status=async()=>{const {generation}=await invoke<{generation:number}>('live_set_status');const read=(outputId:string)=>invoke<{renderedRevision:number;transitioning:boolean}>('live_set_v2',{request:{op:'status',generation,outputId}});return {program:await read('program'),portrait:import.meta.env.VITE_SET_EDITOR_VERIFY_BOTH==='1'?await read('portrait'):{renderedRevision:0,transitioning:false}};};
+   const deadline=Date.now()+120000;
    (await until(()=>button('Show on output')??document.querySelector('.set-editor-apply-status.applied'),'review take')).dispatchEvent(new MouseEvent('click',{bubbles:true}));
    await invoke('live_set_v2_report',{result:{kind:'set-output-verifying',name,stage:'take requested'}});
    await until(()=>{if(Date.now()>deadline)throw Error('Review take deadline exceeded');const error=document.querySelector('dialog[open] [role=alert]')?.textContent;if(error)throw Error(error);return document.querySelector('.set-editor-apply-status.applied');},'review taken',1800);
    button('Close editor')?.click();
+   if(import.meta.env.VITE_SET_EDITOR_VERIFY_BOTH==='1'){
+    (await until(()=>button('Output settings'),'handoff output settings')).click();
+    const views=await until(()=>document.querySelector('[aria-label="Room output view"]'),'handoff output view');
+    (await until(()=>button('Both',views),'handoff paired outputs')).click();
+    await until(async()=>{const s=await status().catch(()=>null);return s&&s.program.renderedRevision>0&&s.portrait.renderedRevision>0&&!s.program.transitioning&&!s.portrait.transitioning?s:null;},'both handoff outputs',1800);
+    button('Close output settings')?.click();
+   }
    await invoke('live_set_v2_report',{result:{kind:'set-output-verifying',name,stage:'taken; waiting for all layouts'}});
    await until(()=>{if(Date.now()>deadline)throw Error('Layout readiness deadline exceeded');const panel=document.querySelector<HTMLElement>('.set-controls[data-layouts-total]');return panel&&Number(panel.dataset.layoutsTotal)>0&&panel.dataset.layoutsReady===panel.dataset.layoutsTotal;},'all room layouts ready',1800);
    const checks=[];
    const view=(label:string)=>label.replace(/ · (Landscape|Portrait)$/,'');
    const labels=Array.from(new Map(Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).map(b=>{const label=b.querySelector('span')?.textContent??'';return [view(label),label] as const;})).values());
-   for(const label of labels){
+   for(const label of [...labels,...labels.slice(0,1)]){
     const target=Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).find(b=>b.querySelector('span')?.textContent===label)!;
     const selected=document.querySelector('.set-layouts button[aria-pressed="true"] span')?.textContent??'';
-    if(view(selected)===view(label)){checks.push({label,alreadySelected:true});continue;}
+    if(view(selected)===view(label)){checks.push({label,alreadySelected:true,...await status()});continue;}
     const before=await status();target.click();
-    const receipt=await until(async()=>{if(Date.now()>deadline)throw Error('Layout switching deadline exceeded');const s=await status();return s.renderedRevision>before.renderedRevision&&!s.transitioning?s:null;},'room layout '+label,1800);
-    checks.push({label,renderedRevision:receipt.renderedRevision});
+    const receipt=await until(async()=>{if(Date.now()>deadline)throw Error('Layout switching deadline exceeded');const s=await status();return s.program.renderedRevision>before.program.renderedRevision&&!s.program.transitioning&&(import.meta.env.VITE_SET_EDITOR_VERIFY_BOTH!=='1'||s.portrait.renderedRevision>before.portrait.renderedRevision&&!s.portrait.transitioning)?s:null;},'room layout '+label,1800);
+    checks.push({label,...receipt});
    }
-   const result={kind:'set-output-verified',ok:true,name,checks,completedAt:new Date().toISOString(),debug:(await import('./preparedScenes')).preparationDebug()};
+   const {ipc}=await import('../../lib/ipc');
+   const savedRoom=(await ipc.liveListRooms()).find(r=>roomId?r.id===roomId:r.name==='Producer authoring acceptance');
+   const saved=JSON.parse(savedRoom?.config||'{}');
+   const sourceChecks=await until(async()=>{
+    const items=(await ipc.liveEngineStatus()).sources?.items??[];
+    const checks=(saved.presentation?.package?.set?.slots??[]).map((slot:{id:string})=>{const id=saved.presentation?.bindings?.[slot.id];const source=items.find(s=>s.id===id);return {slot:slot.id,id,kind:source?.kind,width:source?.src_w??0,height:source?.src_h??0,hasFrame:source?.has_frame===true,persisted:saved.sources?.extras?.some((e:{id:string})=>e.id===id)===true};});
+    return checks.every((c:{hasFrame:boolean;width:number;height:number;persisted:boolean})=>c.hasFrame&&c.width>0&&c.height>0&&c.persisted)?checks:null;
+   },'persisted Host frames');
+   const visibleErrors=Array.from(document.querySelectorAll('.set-error')).map(e=>e.textContent?.trim()).filter(Boolean);
+   if(visibleErrors.length)throw Error('Handoff still shows an error: '+visibleErrors.join(' · '));
+   const panel=document.querySelector<HTMLElement>('.set-controls[data-layouts-total]');
+   const result={kind:'set-output-verified',ok:true,name,checks,sourceChecks,layoutsReady:Number(panel?.dataset.layoutsReady),layoutsTotal:Number(panel?.dataset.layoutsTotal),visibleErrors,completedAt:new Date().toISOString(),debug:(await import('./preparedScenes')).preparationDebug()};
    localStorage.setItem('producer-review-proof:'+verify,JSON.stringify(result));
    await invoke('live_set_v2_report',{result});
    localStorage.setItem('producer-review-take:'+verify,'complete');

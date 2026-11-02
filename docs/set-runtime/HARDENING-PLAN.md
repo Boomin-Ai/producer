@@ -1126,4 +1126,9 @@ recording and simultaneous full-3D paired resource coverage remain separate gate
 See [the detailed acceptance report](PROMPT-ACCEPTANCE.md) for reproducible commands,
 evidence locations and limits. Native dev has subsequently been rebuilt from
 `fdf4e9e`, signed and relaunched with the pinned Metal backend; signature and
-visible-window checks passed. Its existing test camera remains disconnected.
+visible-window checks passed. A subsequent actual-room handoff check found a
+dangling Host binding with no saved source. It was repaired using the supplied
+headshot. All ten CTA layouts, five paired view switches, source persistence
+across a full restart and a normal launch without test automation were verified.
+The handoff gate now also requires persisted source frames and zero visible Set
+errors; see the report's actual desktop handoff correction.

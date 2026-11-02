@@ -76,8 +76,8 @@ The native startup patch was compiled into the isolated acceptance executable.
 After this exercise, native dev was rebuilt from `fdf4e9e`, signed and relaunched
 under `ai.boomin.producer.sets-v2-dev`. The pinned Metal backend was included and
 the local workspace refreshed. Signature, process and visible-window checks
-passed; the receipt is `target/native-rebuild/receipt.json`. The existing test
-camera still reports no ready frame. Production was not rebuilt or deployed.
+passed; the receipt is `target/native-rebuild/receipt.json`. Production was not
+rebuilt or deployed. The subsequent actual-room correction is described below.
 
 These three packages have not been recorded with physical camera/microphone
 devices. The existing dev room's acceptance camera had no ready frame. The native
@@ -89,3 +89,26 @@ request. No recording, stream, provider charge or production output was started.
 Next gate: run physical capture and paired recording acceptance for these exact
 package revisions in the refreshed dev app. Expand the prompt corpus and repair evaluation before
 claiming broad generation reliability.
+
+## Actual desktop handoff correction
+
+The first rebuilt app was handed back with a broken room despite the successful
+isolated tests. Inspection showed an empty saved source list and an empty engine
+source list, while `host` remained bound to `authoring-acceptance-camera`. This
+was a dangling binding, rather than proof of a merely disconnected camera.
+
+The room now persists a real image source using the user's supplied headshot and
+binds Host to it. Actual desktop verification took the original Five Offer CTAs
+Set to output, required all ten native layouts ready, switched all five logical
+views on both native outputs and returned to the first CTA. Both rendered
+revisions must advance on each switch. It additionally checks every declared
+source slot against a persisted source and a real video frame, and refuses a
+handoff while any visible Set error remains.
+
+The check passed after a full native app restart. The Host image reported a
+706 × 576 frame, ten of ten layouts were ready, and there were no visible errors.
+One-time repair and output-verification flags were then removed. A normal app
+launch without those flags was visually checked with the first CTA and headshot
+on output. Evidence: `target/native-handoff/final-proof.json`,
+`cold-restart-pass.json`, and `normal-window.png`. This verifies the headshot
+workflow; physical camera/microphone acceptance remains a separate gate.

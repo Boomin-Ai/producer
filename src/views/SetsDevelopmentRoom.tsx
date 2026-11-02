@@ -23,7 +23,7 @@ export function SetsDevelopmentRoom() {
   const editorReviewStarted=useRef(false);
   useEffect(()=>{
     const name=import.meta.env.DEV&&import.meta.env.VITE_SET_EDITOR_REVIEW_NAME;
-    if(room&&name&&!editorReviewStarted.current){editorReviewStarted.current=true;void import('../features/sets-v2/roomSmoke').then(m=>m.openSetEditorReview(name));}
+    if(room&&name&&!editorReviewStarted.current){editorReviewStarted.current=true;void import('../features/sets-v2/roomSmoke').then(m=>m.openSetEditorReview(name,room.id));}
   },[room]);
   const studioStarted=useRef(false);
   const atmosphere=import.meta.env.DEV&&import.meta.env.VITE_ATMOSPHERE_STUDIO==='1';
