@@ -73,9 +73,11 @@ was regenerated through MCP and checked again after this correction.
 ## Boundaries and remaining gates
 
 The native startup patch was compiled into the isolated acceptance executable.
-The currently running dev app and installed production app were not rebuilt or
-deployed during this exercise. The next native build must include the patch;
-existing running binaries can still exhibit the old startup failure.
+After this exercise, native dev was rebuilt from `fdf4e9e`, signed and relaunched
+under `ai.boomin.producer.sets-v2-dev`. The pinned Metal backend was included and
+the local workspace refreshed. Signature, process and visible-window checks
+passed; the receipt is `target/native-rebuild/receipt.json`. The existing test
+camera still reports no ready frame. Production was not rebuilt or deployed.
 
 These three packages have not been recorded with physical camera/microphone
 devices. The existing dev room's acceptance camera had no ready frame. The native
@@ -84,7 +86,6 @@ the glass opacity track, arbitrary animation states, simultaneous retained 3D
 budgets, all renderer features, real weather delivery or a saved-Claude provider
 request. No recording, stream, provider charge or production output was started.
 
-Next gate: refresh the native dev binary with these fixes when build space is
-available, then run physical capture and paired recording acceptance for these
-exact package revisions. Expand the prompt corpus and repair evaluation before
+Next gate: run physical capture and paired recording acceptance for these exact
+package revisions in the refreshed dev app. Expand the prompt corpus and repair evaluation before
 claiming broad generation reliability.

@@ -1124,4 +1124,6 @@ preview and output. Recipient-owned weather setup and paired routing recovery
 were also checked. The running app was not rebuilt or deployed; physical capture,
 recording and simultaneous full-3D paired resource coverage remain separate gates.
 See [the detailed acceptance report](PROMPT-ACCEPTANCE.md) for reproducible commands,
-evidence locations and limits.
+evidence locations and limits. Native dev has subsequently been rebuilt from
+`fdf4e9e`, signed and relaunched with the pinned Metal backend; signature and
+visible-window checks passed. Its existing test camera remains disconnected.
