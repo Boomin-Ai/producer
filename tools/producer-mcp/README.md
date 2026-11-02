@@ -246,6 +246,13 @@ browser content variations passed, and the native logical chapters switched in
 both orientations. Native source verification covered the bound headshot; an
 external demo stream and physical camera/microphone were not activated.
 
+The brand revision uses Atlantium's `src/brand-navy.css` palette and the existing
+`public/images/paths/atlantium-atlanta-background-v2.jpg` artwork. An authorized
+local `ai-engineering-brand-assets.set.json` asset carrier supplies the embedded
+art to MCP; no repo artwork or personal photo bytes are committed here. Portrait
+Host diameter is 360px on the 1080px canvas, with a narrower headline column.
+Shared artwork, stable Host placement and 360ms crossfades tie chapters together.
+
 [Remotion parameterized rendering](https://www.remotion.dev/docs/parameterized-rendering)
 informs schema-driven inputs and editable controls.
 [Node-RED credentials](https://nodered.org/docs/creating-nodes/credentials) and
