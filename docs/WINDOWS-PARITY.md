@@ -70,9 +70,11 @@ was enabled and no public broadcast was started. The account credential stays
 in the OS vault; tokens are not exported to the webview or test artifacts.
 
 Two browser guest cycles on the rebuilt app confirm nonzero native video,
-actual on-screen placement, advancing 1280×720 host return video, audible
+actual on-screen placement, advancing host return video, audible
 synthetic host audio, revocation and source retirement. Evidence:
 `D:/CodexBuilds/windows-live-qualified-guest-report.json`.
+The final rerun waits for the native room owner and player startup before
+measuring playback. LiveKit can adapt received resolution during startup.
 
 Virtual camera is received through the actual `Producer Virtual Camera`
 DirectShow device. Both landscape and portrait receiver tests pass. The
