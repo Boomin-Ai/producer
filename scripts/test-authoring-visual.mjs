@@ -19,6 +19,10 @@ await assert.rejects(api.repairCameraRing(edge,{layout:'landscape',ring:'ring',c
 const ambiguous=structuredClone(original),clone=structuredClone(ambiguous.set.layouts[0].root.children[1]);clone.id='second';ambiguous.set.layouts[0].root.children.push(clone);
 assert(api.checkVisualGeometry(ambiguous).issues.some(i=>i.code==='ring_association'&&!i.repair));
 const clean=await checkRenderedSet(fixed);assert.equal(clean.textChecked,true);assert.deepEqual(clean.issues,[]);
+const multiline=structuredClone(plan);
+for(const layout of multiline.layouts){const title=layout.elements.find(n=>n.id==='title');title.text='LINE ONE\nLINE TWO';title.bounds=[40,40,950,80];}
+const multilineReport=await checkRenderedSet(api.compileDesignPlan(multiline,target));
+assert.equal(multilineReport.issues.filter(i=>i.code==='text_fit'&&i.node==='title').length,2,'Explicit line breaks must be measured as two lines, matching native output');
 const overflow=structuredClone(fixed);for(const layout of overflow.set.layouts){const text=layout.root.children.find(n=>n.id==='title');text.styles.width=160;text.styles.height=40;text.styles.fontSize=70;}
 const report=await checkRenderedSet(overflow);assert.equal(report.issues.filter(i=>i.code==='text_fit').length,2,'Both orientations measure clipped glyphs');
 assert(report.issues.filter(i=>i.code==='text_fit').every(i=>i.node==='title'&&i.measurements.contentHeight>i.measurements.height&&i.path==='output/root/title'));

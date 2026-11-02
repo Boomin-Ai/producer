@@ -155,6 +155,25 @@ These establish compiler/transport/setup behavior, not a statistical natural-
 language generation success rate. Paid model acceptance remains opt-in through
 `scripts/test-design-generation-live.mjs --live` with an existing saved connection.
 
+Fresh agent-authored acceptance scenarios are reproducible through real MCP:
+
+```sh
+node tools/producer-mcp/prompt-acceptance.mjs
+node tools/producer-mcp/review-acceptance.mjs
+```
+
+The first command writes new CTA, portable-weather and reactive-3D Sets plus
+previews; it never takes room output. `--scenario prompt-five-offers` (or
+`prompt-weather` / `prompt-reactive-studio`) refreshes one scenario in an existing
+report. The review command captures all 14 previews and requires ready 3D canvases.
+Both write local evidence under `target/prompt-acceptance/`. Native tests remain
+separate: `scripts/test-authoring-native.mjs --package /path/to/new.set.json`,
+with `--reactive` for voice effects, uses synthetic sources without recording.
+`PRODUCER_PORTABILITY_PACKAGE=/path/to/weather.set.json` points the recipient
+integration browser test at a newly generated package. See
+[the acceptance report](../../docs/set-runtime/PROMPT-ACCEPTANCE.md) for outcomes
+and the distinction between browser, native and physical-device coverage.
+
 ## Design references
 
 [Remotion parameterized rendering](https://www.remotion.dev/docs/parameterized-rendering)

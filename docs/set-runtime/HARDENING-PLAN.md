@@ -1112,3 +1112,16 @@ No production deployment occurred. Next: broader design/typography capability
 and quality evaluation, hosted MCP preparation access, then WYSIWYG edits on
 stable document IDs; keep native canvas/display and diagnostic fixes covered by
 the build gates rather than changing generated Set geometry to compensate.
+
+### Fresh MCP generation acceptance — 2026-11-01
+
+Three fresh agent-authored designs now exercise the actual MCP transport: five
+paired offer CTAs, a portable weather desk and a managed 3D voice studio. All 14
+layouts passed browser review and isolated native rendering with synthetic
+sources. The exercise found and fixed nonblocking loopback socket truncation of
+the native 3D renderer and compact text newline/line-height disagreement between
+preview and output. Recipient-owned weather setup and paired routing recovery
+were also checked. The running app was not rebuilt or deployed; physical capture,
+recording and simultaneous full-3D paired resource coverage remain separate gates.
+See [the detailed acceptance report](PROMPT-ACCEPTANCE.md) for reproducible commands,
+evidence locations and limits.

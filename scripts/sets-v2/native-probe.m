@@ -673,14 +673,19 @@ static NSArray *real_room_proof(NSString *out) {
     obs_set_output_source(0, source);
     void *owner = sets_v2_rust_attach(room,w,h);
     require(owner != NULL,"authored room attaches");
+    double preparationStart=CFAbsoluteTimeGetCurrent()*1000.;
+    // Match RoomProgram's 60s cold WebGL deadline (media-only plans use 12s).
+    const int readinessPolls=[plan[@"scenes3d"] count]?3100:700;
     rust_call(owner,@{@"op":@"prepare",@"generation":@7,@"revision":@1,@"plan":plan},camera,true);
     NSDictionary *status = nil;
-    for (int i=0;i<700;i++) {
+    for (int i=0;i<readinessPolls;i++) {
       status=rust_call(owner,@{@"op":@"status",@"generation":@7},camera,true);
       if ([status[@"ready"] boolValue] && [status[@"warmed"] boolValue]) break;
       usleep(20000);
     }
+    if(![status[@"ready"] boolValue]||![status[@"warmed"] boolValue])fprintf(stderr,"Authored readiness: %s\n",status.description.UTF8String);
     require([status[@"ready"] boolValue] && [status[@"warmed"] boolValue],"authored set first paint and resource readiness");
+    double firstPaintMs=CFAbsoluteTimeGetCurrent()*1000.-preparationStart;
     rust_call(owner,@{@"op":@"take",@"generation":@7,@"revision":@1,@"durationMs":@0,@"mode":@"dissolve"},camera,true);
     for(int i=0;i<250;i++) {
       status=rust_call(owner,@{@"op":@"status",@"generation":@7},camera,true);
@@ -692,7 +697,7 @@ static NSArray *real_room_proof(NSString *out) {
     for(int index=0;index<2;index++){
       NSString *key=index?@"prepared-b":@"prepared-a";
       rust_call(owner,@{@"op":@"preload",@"generation":@7,@"revision":@(index+2),@"key":key,@"plan":plan},camera,true);
-      for(int i=0;i<700;i++){
+      for(int i=0;i<readinessPolls;i++){
         status=rust_call(owner,@{@"op":@"status",@"generation":@7},camera,true);
         if([status[@"cachedKeys"] containsObject:key])break;usleep(20000);
       }
@@ -714,6 +719,17 @@ static NSArray *real_room_proof(NSString *out) {
     NSMutableDictionary *changedRoot=[plan[@"root"] mutableCopy];
     NSMutableDictionary *properties=[changedRoot[@"properties"] mutableCopy]?:[NSMutableDictionary dictionary];properties[@"opacity"]=@0.25;changedRoot[@"properties"]=properties;stale[@"root"]=changedRoot;
     rust_call(owner,@{@"op":@"activate",@"generation":@7,@"revision":@6,@"key":@"prepared-a",@"plan":stale},camera,false);
+#ifdef PRODUCER_AUDIO_REACTIVE
+    // Freeze authored 3D motion before measuring the audio response. Otherwise
+    // moving scenery can both fake a response and fail the silence comparison.
+    if(getenv("PRODUCER_PROBE_REACTIVE")&&[plan[@"scenes3d"] count]){
+      NSData *beforeMotion=capture(source,w,h,w,h);usleep(600000);
+      NSData *afterMotion=capture(source,w,h,w,h);
+      require(![beforeMotion isEqualToData:afterMotion],"authored managed 3D moves on native output");
+      rust_call(owner,@{@"op":@"pause",@"generation":@7,@"paused":@YES},camera,true);
+      usleep(600000); // The room-owned renderer receives the paused clock.
+    }
+#endif
     NSData *frame=capture(source,w,h,w,h);
 #ifdef PRODUCER_AUDIO_REACTIVE
     if(getenv("PRODUCER_PROBE_REACTIVE")){
@@ -758,9 +774,10 @@ static NSArray *real_room_proof(NSString *out) {
       }
     }
     png(frame,w,h,[out stringByAppendingPathComponent:[[file stringByDeletingPathExtension] stringByAppendingString:@"-room.png"]]);
-    [checks addObject:@{@"file":file,@"rendered":@YES,@"resources":plan[@"resources"]}];
+    [checks addObject:@{@"file":file,@"rendered":@YES,@"firstPaintMs":@(firstPaintMs),@"resources":plan[@"resources"]}];
     fprintf(stderr,"Authored room rendered: %s\n",file.UTF8String);
     sets_v2_rust_release(owner);obs_set_output_source(0,NULL);obs_scene_release(room);obs_source_release(camera);
+    obs_wait_for_destroy_queue();
     for(int i=0;i<300 && producer_set_v2_live_groups();i++) usleep(10000);
     require(!producer_set_v2_live_groups(),"authored room groups released");
   }

@@ -40,7 +40,7 @@ export function compileDesignPlan(input: unknown, target: AuthoringTarget, asset
       if(e.kind==='text'){
         const label=text(e.text,4096);let binding:any=label;
         if(e.field!==undefined){const key=id(e.field);if(values[key]&&values[key].default!==label)throw Error('Shared text field has conflicting defaults.');if(!values[key])controls.push({id:key,type:'text',label:key,key});values[key]={type:'text',default:label,maxLength:4096};binding={get:`values.${key}`};}
-        return {...node,type:'text',text:binding,styles:{...node.styles,fontSize:e.size??48,fontFamily:e.font??'Arial',color:color(e.color??'#ffffff'),textAlign:e.align??'left',overflow:'hidden'}};
+        return {...node,type:'text',text:binding,styles:{...node.styles,fontSize:e.size??48,fontFamily:e.font??'Arial',color:color(e.color??'#ffffff'),textAlign:e.align??'left',whiteSpace:'pre-wrap',lineHeight:1.15,overflow:'hidden'}};
       }
       if(e.kind==='camera'){const role=id(e.slot);slots.set(role,role);return {...node,type:'slot',slotId:role,framing:{mode:'fill',x:.5,y:.5},appearance:{shape:'rectangle',cornerRadius:e.radius??0}};}
       if(e.kind==='image'){const asset=id(e.asset);if(!assets?.[asset])throw Error(`Missing authorized asset: ${asset}`);usedAssets[asset]=assets[asset];return {...node,type:'media',assetId:asset,fit:'contain'};}
