@@ -106,7 +106,7 @@ with older hosted deployments that send only scene-state broadcasts.
 The fresh-room Atmosphere check passes all six layouts, Today / Hourly /
 7 day / Now, and a room-specific city change to Denver. Both native program
 and portrait rendered receipts match the fresh weather commit; the captured
-portrait shows Denver at 50°F with populated conditions. The shared integration
+portrait shows Denver with populated current conditions. The shared integration
 was not edited. Peak observed cache use in the layout sweep was below 768 MiB.
 Evidence: `D:/CodexBuilds/windows-atmosphere-qualified-report.json` and
 `D:/CodexBuilds/windows-atmosphere-qualified-portrait.jpg`.
@@ -129,6 +129,7 @@ QA evidence. Extract the whole directory and run `producer.exe`; keep the DLLs,
 not a signed release, updater promotion or replacement of the installed app.
 
 Source worktree: `C:/Users/motiv/Documents/New project/producer-windows`, branch
-`fix/windows-feature-parity`. The Windows build is a local preview, not a
+`fix/windows-feature-parity`, [draft PR #118](https://github.com/Boomin-Ai/producer/pull/118).
+The Windows build is a local preview, not a
 published app release. GitHub CLI access works. Cloudflare sign-in was refreshed
 and the hosted fix above was deployed. Builds and test media are on D:.
