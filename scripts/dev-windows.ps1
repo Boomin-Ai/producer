@@ -23,15 +23,16 @@ try {
   # obs-amf-test.exe from the EXECUTABLE's directory (the installer flattens
   # bin/ beside producer.exe). The dev exe lives in target\debug, so without
   # this copy every probe fails and a GPU box silently streams x264.
-  $dbg = Join-Path $RepoRoot "src-tauri\target\debug"
+  $dbg = Join-Path (Get-CargoTargetDir) "debug"
   New-Item -ItemType Directory -Force $dbg | Out-Null
+  Sync-WindowsCutout $dbg
   Get-ChildItem (Join-Path $eng "bin") -Filter "obs-*-test.exe" | ForEach-Object { Copy-Item $_.FullName $dbg -Force }
   Write-Host "encoder probe helpers beside the dev exe: $((Get-ChildItem $dbg -Filter 'obs-*-test.exe').Name -join ', ')"
   if ($Build) {
-    cargo build --manifest-path src-tauri\Cargo.toml
+    cargo build --manifest-path src-tauri\Cargo.toml --features guest-rtc-production
     if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
-    Write-Host "debug exe: src-tauri\target\debug\producer.exe (run with PATH=$eng\bin)"
+    Write-Host "debug exe: $dbg\producer.exe (run with PATH=$eng\bin)"
   } else {
-    bun run tauri dev
+    bun run tauri dev --features guest-rtc-production
   }
 } finally { Pop-Location }

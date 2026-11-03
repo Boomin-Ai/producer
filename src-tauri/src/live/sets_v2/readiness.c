@@ -166,3 +166,41 @@ bool producer_set_v2_surface_fence(obs_source_t *source, uint32_t y,
                             .y = y, .expected = expected};
   return probe(&p);
 }
+
+struct marker_batch {
+  obs_source_t *const *sources;
+  const uint32_t *rows;
+  size_t count;
+  bool ready;
+};
+static void markers_on_graphics(void *data) {
+  struct marker_batch *batch = data;
+  batch->ready = true;
+  for (size_t i = 0; i < batch->count; i++) {
+    if (!surface_marker(batch->sources[i], 0, batch->rows[i], 1, 254, 3)) {
+      batch->ready = false;
+      break;
+    }
+  }
+}
+bool producer_set_v2_surface_markers(obs_source_t *const *sources,
+                                   const uint32_t *rows, size_t count) {
+  if (count > 16 || (count && (!sources || !rows))) return false;
+  if (!count) return true;
+  /* Queueing each marker separately can wait one video tick per layer.
+   * Preserve every actual pixel check, but perform the whole scene's checks
+   * in one graphics task. The owner retains all sources until it returns. */
+  struct marker_batch batch = {sources, rows, count, false};
+  obs_queue_task(1, markers_on_graphics, &batch, true);
+  return batch.ready;
+}
+
+struct warm_batch {obs_source_t *const *sources;size_t count;bool ready;};
+static void warm_on_graphics(void *data){
+ struct warm_batch *batch=data;batch->ready=true;
+ for(size_t i=0;i<batch->count;i++)if(!surface_warm(batch->sources[i])){batch->ready=false;break;}
+}
+bool producer_set_v2_surfaces_warm(obs_source_t *const *sources,size_t count){
+ if(count>64||(count&&!sources))return false;if(!count)return true;
+ struct warm_batch batch={sources,count,false};obs_queue_task(1,warm_on_graphics,&batch,true);return batch.ready;
+}

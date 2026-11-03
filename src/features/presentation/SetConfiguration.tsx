@@ -47,7 +47,7 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
     ...(!BUILTIN_SETS.map(doc=>doc.id).includes(session.package.id)&&!library.some(entry=>entry.id===session.package.id)?[{value:'imported',label:session.package.name,group:'Current set',load:async()=>session.package}]:[]),
   ],[library,session.package]);
   return <>
-    <section className="set-configuration" role="toolbar" aria-label="Set configuration">
+    <section className="set-configuration" role="toolbar" aria-label="Set configuration" data-set-id={session.package.id} data-set-version={session.package.version}>
       <div className="set-menu-section">
       <span className="set-picker-label">Choose set</span><SetPicker value={library.some(entry=>entry.file===selectedFile&&entry.id===session.package.id)?`file:${selectedFile}`:BUILTIN_SETS.some(doc=>doc.id===session.package.id&&doc.version===session.package.version)?`builtin:${session.package.id}`:library.some(entry=>entry.id===session.package.id)?`file:${library.find(entry=>entry.id===session.package.id)!.file}`:'imported'}
         options={choices}

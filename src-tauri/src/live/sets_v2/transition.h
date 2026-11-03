@@ -10,6 +10,10 @@ enum producer_set_v2_transition_mode {
   PRODUCER_SET_V2_SLIDE
 };
 void producer_set_v2_transition_register(void);
+/* Native program lifetime leases; graphics context must be held. */
+bool producer_set_v2_transition_program_acquire(void);
+void producer_set_v2_transition_program_release(void);
+size_t producer_set_v2_transition_effect_compilations(void);
 /* Off-air native owner only. Inputs remain live and are reference-counted. */
 obs_source_t *
 producer_set_v2_transition_create(obs_source_t *from, obs_source_t *to,

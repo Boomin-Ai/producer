@@ -16,7 +16,9 @@ pub mod transcription;
 pub use producer_guest_session as guest_session;
 #[cfg(have_engine)]
 pub mod dj;
-#[cfg(all(have_engine, target_os = "macos"))]
+#[cfg(all(have_engine, target_os = "windows"))]
+mod person_mask_win;
+#[cfg(have_engine)]
 mod portrait;
 pub mod presence;
 pub mod presentation;
@@ -30,9 +32,11 @@ pub mod rtc_ingest;
 pub mod rtc_media;
 #[cfg(all(have_engine, feature = "guest-rtc-pilot"))]
 pub mod rtc_program;
-#[cfg(all(have_engine, target_os = "macos"))]
+#[cfg(have_engine)]
 pub mod sets_v2;
 pub mod shaders;
+#[cfg(have_engine)]
+pub mod soundboard;
 
 /// The virtual camera's label, identical on both platforms: macOS bakes it
 /// into the camera extension (build-camera-extension.sh), Windows patches it
@@ -383,6 +387,28 @@ impl Live {
             Err("live engine not bundled in this build".into())
         }
     }
+    pub fn clone_handle_for_soundboard(
+        &self,
+    ) -> Result<
+        Box<
+            dyn FnOnce(crate::soundboard::Native) -> Result<crate::soundboard::Reply, String>
+                + Send,
+        >,
+        String,
+    > {
+        #[cfg(have_engine)]
+        {
+            self.handle
+                .as_ref()
+                .ok_or("Open a room first")?
+                .soundboard_dispatch()
+        }
+        #[cfg(not(have_engine))]
+        {
+            Err("Soundboard requires the native audio engine".into())
+        }
+    }
+
     pub fn clone_handle_for_dj(
         &self,
     ) -> Result<

@@ -24,3 +24,17 @@ node scripts/test-preview-session.mjs
 This concerns preview placement in the desktop window. It does not move the authored canvas, camera slots or recorded/streamed output. Page zoom and arbitrary CSS transforms of the viewport are not newly supported by this change.
 
 The rebuilt dev window was visually checked using a window-only capture: the native image and HTML canvas outline now align. The temporary native hierarchy probe and one-off DOM logger were removed from normal operation. Measured geometry and checks are recorded in [preview-geometry-proof.json](preview-geometry-proof.json).
+
+## Rebuild regression caught — 2026-11-01
+
+A later shim revision removed the safe-area correction while retaining the
+earlier tests and documentation. A fresh native build consequently reproduced
+the upward displacement on both outputs. The real AppKit test passed ordinary
+containers and failed the full-size titlebar case before this repair; restoring
+the measured safe-area origin makes all three cases pass again.
+
+`dev-room.py` now compiles and runs this native test before building/staging,
+and the macOS release workflow runs it before building the app. The rebuilt
+desktop was checked with both outputs visible; their images align with the HTML
+outlines. Evidence is in `target/visual-acceptance/desktop-aligned.png`. This is
+a preview-coordinate correction, not a change to Set geometry or encoded video.

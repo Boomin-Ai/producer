@@ -48,6 +48,38 @@ Define unknown-field handling, defaults, units, numeric precision, identifier/re
 
 Ship machine-readable schemas, valid/invalid fixtures, an authoring guide and an offline validation command. Validator success means structurally supported, not guaranteed affordable on every device.
 
+### Authoring completeness and portable dependencies — local implementation, 2026-11-01
+
+The MCP and CLI now expose the complete canonical package codec through
+`producer.design-plan/2`, and revision-fenced nested JSON-pointer edits through
+`producer.set-edit/2`. Compact v1 remains supported, with up to 32 individual
+layouts and explicit view mappings. Advanced capabilities no longer require an
+agent to bypass the authoring tools and hand-write a separate package pipeline.
+All trusted existing shader parameters, managed 3D, animation, components,
+controls, modules, charts, masks, blur, bindings and optional Shows remain bounded
+by existing schema/native limits; this is not arbitrary code execution.
+
+Portable integration requirements declare roles and versioned data contracts,
+not saved accounts or secrets. Existing weather/agent modules imply requirements.
+Missing adapters/connections do not invalidate a downloadable/importable Set.
+Set edit supports adding a recipient-owned weather/agent connection, compatible
+binding selection and stale-revision recovery. Future webhook/stream contracts
+can be declared; trusted executable adapters and runtime delivery still require
+implementation. Registration metadata is not an execution grant.
+
+Browser review now includes advisory lowered-graph batching estimates at 1080p.
+These address early visibility of likely node/surface/graphics-pixel failures;
+they do not establish native affordability, decoded-resource limits, peak
+retention/transition budgets or native first-frame readiness. Full GPU admission,
+provider-specific strict response schemas, staged generation/evals and broad
+hardware/fault/reconnect tests remain required before stronger release claims.
+
+Local evidence includes six full-schema fixture round trips (launch, weather,
+visual-effects, managed 3D, signal graphics and a Show), atomic nested edits, actual MCP
+stdio and CLI execution, plus recipient weather setup using mocked provider
+storage. No paid model requests or production deployment are implied. See
+[authoring contract and commands](../../tools/producer-mcp/README.md).
+
 ## 3. Validation and admission control
 
 Validate before decoding assets, creating sources, opening connections or allocating GPU resources. Revalidate at native/server trust boundaries; frontend validation is not authority.
@@ -64,6 +96,17 @@ Required checks include:
 Imports must produce useful field-path errors without freezing the UI. An invalid new package leaves the current set and room configuration usable. Credentials, filesystem access, provider calls and arbitrary network URLs are not granted by importing JSON.
 
 ## 4. Resource budgets and runtime enforcement
+
+The 2026-11-01 Atlantium capacity Set exposed an authoring preflight gap:
+schema and browser validation accepted layouts that exceeded native limits
+(128 nodes, 16 graphics surfaces and 8 Mi graphics pixels). The capacity bars
+split graphics batches; 67 map markers expanded into too many native nodes.
+The package was repaired within the existing limits by consolidating painted
+bars and using five regional map images containing the same 67 record points.
+All 12 repaired native layouts pass. Native limits were not raised. Add lowered
+graph node/surface/pixel estimates to generator admission checks so authors
+receive actionable errors before room preparation. Canonical validation alone
+still does not establish native affordability.
 
 Current documented 3D bounds include up to two passes per layout, six retained contexts and 24 Mi logical pixels per output store; world limits include 128 meshes, eight lights, eight slots, twelve views and thirty-two cues. These are existing bounds, not a complete hardware safety model.
 
@@ -831,3 +874,261 @@ User-reported production issues require an audit of the complete canvas-output s
 - Design the JSON-backed WYSIWYG editor alongside the renderer audit. Authored JSON remains authoritative for drag, resize, grouping, masks and stacking; use the same viewport transforms and bounds in editor and native output. Support undo/redo, validation, off-air editing and explicit take semantics. Audit every authored node type rather than only camera slots.
 - Keep imported bitmaps atomic; independently movable title/artwork elements require separate authored assets or nodes. The initial Road To V1 clean plates combine the fixed Road To lettering with the road, while V1 and the host are independent nodes. Split clean-plate layers before promising independent title dragging.
 - Add regression cases for outline changes, camera disconnect/reconnect, clipping, scaling, and JSON edit/preview/native round trips. Scope production fixes separately from the launch artwork; Kleveland Set follows this work.
+
+## Design-plan compiler milestone — 2026-11-01
+
+The platform audit identified the one-shot restricted authoring profile as the
+immediate generation bottleneck. Improve authoring before extending managed 3D.
+The agreed direction is capability discovery, compact design plans, deterministic
+compilation, stable edits, visual checks and bounded repair. Keep the existing
+package admission, native preparation and explicit take boundaries.
+
+Initial dev implementation:
+- `authoring/catalog.ts` defines a versioned compiler profile, supported element
+  kinds, edit operations and budgets. This is a compiler capability snapshot;
+  installed native-engine and hosted-server negotiation is **not implemented**.
+- `authoring/compiler.ts` compiles compact independent orientation layouts into
+  canonical presentation/2 packages, sharing field/slot identities and generating
+  controls. Supports panels, editable text, cameras, existing images, and four
+  approved audio-effect presets. Full schema validation remains mandatory.
+- Asset-free design context contains asset IDs/name/MIME. Original bytes remain
+  local. Edits require a SHA-256 base revision, operate atomically on a clone,
+  target existing direct-child IDs and preserve untouched data. Initial edits:
+  move, literal text, camera replacement, and layout duplication. Nested edits
+  and replacement of bound text are rejected explicitly.
+- The dev-only authoring dialog offers Copy design brief and Compile design plan.
+  Agent responses enter the existing manual text area. Compilation previews a
+  candidate; only the existing Load preparation button changes preparation.
+  The saved-Claude one-shot production route remains unchanged.
+
+Acceptance covers deterministic landscape/portrait compilation, target mismatch,
+invalid geometry/fields, stale revision, atomic failure, missing/nested targets,
+asset-free context, and Road To V1 duplicate-layout/caption-to-camera edits that
+preserve original layouts, asset bytes and control arrangement. Browser tests
+cover compilation, private preview and explicit loading without provider calls.
+These tests do not establish live-model generation success or native output parity.
+
+Next implementation gates, in order:
+1. Negotiate compiler/native/workspace capability versions and deploy matching
+   generated contracts. Do not infer support from the requested model output.
+2. Wire saved-provider generation to compact plan/edit responses with references
+   resolved locally; use a bounded generation job with progress/cancellation and
+   revision checks. Keep paid repair within an explicit request budget.
+3. Add measured text-fit and intent-aware overlap checks, render both orientations,
+   and introduce a bounded repair pass with a real held-out prompt corpus.
+4. Move high-frequency content updates onto retained property updates, then
+   expand existing typed adapter/signal contracts. Deepgram/liveCaption currently
+   remains a dedicated path. Generic webhook/stream execution is still pending.
+5. Build dragging/undo against these stable document identities and edit semantics.
+   Broader 3D assets and arbitrary effects remain deferred until this path works.
+
+### Saved-Claude design generation — 2026-11-01
+
+Dev now exposes **Use design compiler** in Generate Set draft. It discovers the
+workspace authoring catalog, probes the installed app's native Set/effect/3D
+support, and intersects supported features before enabling generation. The
+0.4.78 engine predates a unified capability descriptor: discovery uses an explicit
+compatibility manifest for that exact verified release, plus native feature
+probes. Unknown versions and unavailable engines fail closed. Future releases
+must supply/update their profile; a general native descriptor remains follow-up.
+
+The local workspace adds authenticated authoring-capabilities and saved-connection
+`author-design` routes. The existing primary-role, encrypted secret, revision,
+request budget and rate-limit boundaries apply. Provider transport is shared with
+legacy authoring. The provider returns an untrusted plan/edit document; the client
+compiles against retained local assets, validates the canonical package, and only
+then previews. Base revisions protect edits; local draft generation fences cancel,
+changed inputs, replaced documents and closed dialogs. Cancellation still does
+not guarantee the upstream paid request stops. No automatic repair/retry exists.
+
+Edits send bounded asset-free structural context and a SHA-256 base revision.
+Fresh plans send a prompt and negotiated target. Embedded images remain local.
+The hosted Boomin API export/routes have not been updated or deployed; a workspace
+without this catalog reports incompatibility. Production UI keeps the original
+flow; the compiler switch is dev-only.
+
+Verification: 15 provider/route regressions, including real Road To V1 context and
+edit preservation; browser prompt-to-preview with simulated native/provider
+responses; existing authoring browser regression; desktop and server typechecks.
+These are not paid live-model quality measurements or new native output proof.
+The isolated local backend was refreshed with the new routes. Next: controlled
+live-provider acceptance on the compatible native dev build, resumable generation
+jobs, visual checks and the bounded repair/evaluation loop.
+
+### Local agent authoring and first live-provider acceptance — 2026-11-01
+
+Added `tools/producer-mcp`, a stdio MCP server using the official SDK, and the
+Claude-compatible `producer-sets` skill. Seven tools discover compiler
+capabilities, list/inspect local packages, compile plans, apply revision-fenced
+edits, validate full packages and create standalone browser previews. The full
+canonical schema is also available as an on-demand MCP resource. The same
+compiler, codec, RehearsalSession and SetPreview are reused; no parallel schema or
+renderer was introduced. Skills and project MCP config are checked in. The local
+Codex MCP registration and personal Claude/Codex skill copies were installed.
+
+File access is confined to an operator-configured artifact directory; source files
+are bounded regular files, symlinks/path traversal are rejected, original Sets
+are retained and edits save unique new drafts. Asset bytes remain local. The agent
+can author a plan itself without a second paid model call or provider credential.
+This is not a hosted MCP connector, a native capability probe or an automatic
+room-preparation/output-control bridge. Every tool reports native readiness as
+untested; browser previews have placeholder sources and simulated audio.
+
+Three manually initiated provider acceptance calls exercised the local saved
+Claude connection. The first exposed rejection of thinking content in the
+one-shot provider parser. It now extracts only final text from documented
+thinking/redacted-thinking responses and continues to reject tool/unknown content,
+empty final text, truncation and over-budget responses. Thinking is not returned
+or persisted. The second compiled two layouts in 17.7 seconds, but visual review
+found an omitted voiceRing radius concealed by the host camera. Compact plans now
+require a positive ring radius and the shared instructions describe concentric
+camera/ring geometry. The third compiled two layouts in 16.2 seconds: 1,979-byte
+plan, 4,636-byte canonical package. These are individual acceptance observations,
+not a measured success rate or a claim of production-ready visual design.
+
+Tests cover the real stdio handshake/tool/resource protocol, two-format drafting,
+revision conflicts, immutable originals, asset-free inspection and preserved
+artwork, invalid geometry, directory boundaries, standalone preview rendering,
+layout switching and script-tag escaping. Provider/route regressions pass (16
+tests), along with compiler checks and desktop/server typechecks. The skill passed
+its frontmatter/scaffold validator. Native rendering of these new generated drafts
+remains pending: the dev app needs a compatible build and this machine has about
+1 GB free. No production deployment was performed.
+
+Next: native acceptance on a compatible build; automated text-fit and relational
+geometry checks (ring/camera alignment and padding still need semantic checks);
+bounded visual repair/evaluation; authenticated hosted MCP with scoped preparation
+commands. Keep taking output, recording and streaming distinct from drafting.
+
+### Visual review, targeted repairs and native pixel acceptance — 2026-11-01
+
+Dev draft previews now run sequential offscreen reviews of every configured
+layout. Text measurements come from the same sandboxed frame document used by
+SetPreview after fonts are ready; no parallel text-layout approximation is used.
+Findings include stable layout/node IDs, rendered paths and measured content/box
+sizes. The geometry review detects ambiguous ring/camera associations, wrong
+centers/radii, nonsquare ring bounds, insufficient wave padding and possible
+text-box collisions. Text overlaps are advisory: magazine layering can be
+intentional. Reviews are advisory and do not silently modify or take output.
+
+A targeted local ring repair preserves a selected circular camera, centers its
+ring, matches the radius and reserves 90px for voice peaks. It is fenced by the
+package revision, saves a new draft and refuses insufficient canvas space or
+unsupported transformed/dynamic geometry. No provider retry or paid repair is
+triggered. Text findings can be addressed with existing bounds edits or a revised
+plan; automated typography rewriting is not implemented.
+
+MCP now has ten tools, adding `producer_check_geometry`, `producer_visual_check`
+and `producer_repair_ring`. The visual tool uses installed Chromium via
+playwright-core, without downloading a browser or capturing devices. Previews
+also show the report. The Claude/Codex skill documents these tools and their
+limits. Checks cover configured/default content and direct absolute numeric ring
+geometry; future feed values, nested/transformed relationships and animated
+states remain outside this first pass. They do not prove visual design quality.
+
+The actual Claude-generated two-format package from the previous milestone had
+five ring findings. Targeted repairs removed them while preserving controls,
+slots, camera geometry and text. Both repaired layouts passed browser text checks.
+They were lowered through compileRoomScene and rendered using the exact Rust
+room adapter, native OBS sources, CEF graphics and GPU shaders in the isolated
+native probe linked against the installed Producer engine. Native repeated-take
+readiness, pixels and resource cleanup passed for 1920×1080 and 1080×1920.
+Synthetic loud input changed 65,411 and 69,067 pixels respectively; after silence,
+both returned to their baseline with zero pixels above the comparison threshold.
+No physical camera/microphone was captured and no recording was made. This is
+native-engine acceptance, not a completed end-to-end device/recording check.
+
+The first native build failed for lack of disk space. Reclaimed the obsolete
+staged dev app bundle and download/validation caches; installed production and
+user data were retained. The smaller isolated native probe then built and passed.
+A fresh compatible Tauri dev bundle is still required for desktop UI/device
+acceptance; the removed staging bundle must not be assumed launchable.
+
+Validation includes browser text-overflow cases in both formats, ambiguity/edge/
+stale-revision refusal, original/control preservation, the dev repair UI with no
+native IPC, renderer cleanup on unmount, real stdio MCP tools, the existing saved-
+Claude authoring flow, TypeScript and the frontend build. Evidence is under
+`target/visual-acceptance` and `target/authoring-native`; a repaired importable
+sample is in `~/Documents/Producer Sets/claude-magazine-repaired.set.json`.
+
+Next gates: physical camera/mic plus recording acceptance in a compatible app;
+stronger intent-aware visual evaluation and typography repair; authenticated
+hosted MCP preparation access; WYSIWYG edits and undo on the same document IDs.
+No production deployment in this milestone.
+
+### Desktop acceptance preparation — 2026-11-01
+
+The remaining native dev executable contains the older 0.4.77 version and is
+not accepted by the compiler's verified 0.4.78 profile. Do not bypass discovery
+or relabel that binary. The build script and reopen launcher now agree on
+`src-tauri/target/sets-v2-dev/Producer Sets v2 Dev.app`, and the development-only
+camera/audio/library-validation entitlements are checked into the repository.
+A conservative 3 GiB free-space preflight runs before profile changes or builds.
+
+Removed only the disposable Cache and Code Cache directories of the inactive
+`.hiringcafe-chrome-profile`, recovering about 1 GiB. Available space is about
+1.4 GiB; the build preflight correctly refused to start. Launcher syntax,
+entitlement plist and diff checks passed. No new native app was built or opened;
+physical capture and recording acceptance remain pending. Installed production,
+recordings, photos, browser sessions and conversation history were retained.
+
+### Desktop camera, microphone and dual recording acceptance — 2026-11-01
+
+Built and signed the compatible 0.4.78 isolated Tauri app after reclaiming
+disposable Google updater downloads, an unused older Codex executable, compiler
+cache and closed Wrangler logs older than 24 hours. The first build's completed
+compiler intermediates were removed when disk headroom tightened; the signed
+app and user data were retained. The final build includes the restored native
+safe-area mapping described in `docs/sets-v2/PREVIEW-GEOMETRY.md`. Dev staging and
+the macOS release workflow now gate builds on that real AppKit regression test.
+
+The repaired Claude-generated package was loaded into its own dev room with the
+FaceTime HD Camera and MacBook Air Microphone. Both native layouts rendered, and
+a simultaneous recording produced 1920×1080 and 1080×1920 files at 30 fps. The
+system decoder verified 10.400s landscape and 10.133s portrait recordings with
+microphone audio in both (decoded peaks 0.088919 and 0.089172). Decoded frames
+preserve the authored layout. A window-only screenshot confirms that both
+native previews now align with their HTML canvas outlines. The proof and decoded
+recording reports are in `target/visual-acceptance/desktop-proof.json` and the
+two `*-recording.json` files; recorded frame PNGs are alongside them.
+
+The acceptance harness now waits for asynchronous portrait preparation, scopes
+its run guard to the actual web document, serializes progress reports, bounds
+recording start/stop and cleans up attempted recording on failure. Its fixture
+explicitly activates the mic in the room scene; unmuting a hidden mic alone
+produced silent initial test files. Automatic recording is disabled after the
+test using local `VITE_AUTHORING_DESKTOP_PROOF=review`, which opens the saved
+room without resetting it.
+
+An additional diagnostic issue remains: the legacy `live_portrait_frame` readback
+enables continuous full-resolution CPU JPEG encoding on the video callback. A
+sample showed an unoptimized debug build spending its callback time there while
+encoder startup waited on the video output mutex. Acceptance now inspects the
+actual recorded files without enabling that diagnostic. This does not claim the
+diagnostic path is fixed, nor quantify release-build performance. Its work should
+be bounded or moved off the video callback in the canvas subsystem follow-up.
+
+No production deployment occurred. Next: broader design/typography capability
+and quality evaluation, hosted MCP preparation access, then WYSIWYG edits on
+stable document IDs; keep native canvas/display and diagnostic fixes covered by
+the build gates rather than changing generated Set geometry to compensate.
+
+### Fresh MCP generation acceptance — 2026-11-01
+
+Three fresh agent-authored designs now exercise the actual MCP transport: five
+paired offer CTAs, a portable weather desk and a managed 3D voice studio. All 14
+layouts passed browser review and isolated native rendering with synthetic
+sources. The exercise found and fixed nonblocking loopback socket truncation of
+the native 3D renderer and compact text newline/line-height disagreement between
+preview and output. Recipient-owned weather setup and paired routing recovery
+were also checked. The running app was not rebuilt or deployed; physical capture,
+recording and simultaneous full-3D paired resource coverage remain separate gates.
+See [the detailed acceptance report](PROMPT-ACCEPTANCE.md) for reproducible commands,
+evidence locations and limits. Native dev has subsequently been rebuilt from
+`fdf4e9e`, signed and relaunched with the pinned Metal backend; signature and
+visible-window checks passed. A subsequent actual-room handoff check found a
+dangling Host binding with no saved source. It was repaired using the supplied
+headshot. All ten CTA layouts, five paired view switches, source persistence
+across a full restart and a normal launch without test automation were verified.
+The handoff gate now also requires persisted source frames and zero visible Set
+errors; see the report's actual desktop handoff correction.

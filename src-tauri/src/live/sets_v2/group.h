@@ -15,6 +15,8 @@ bool producer_set_v2_group_add(obs_source_t *group, obs_source_t *child,
                                float x, float y, float width, float height,
                                bool contain);
 bool producer_set_v2_group_seal(obs_source_t *group);
+/* Opaque black bars outside the fitted viewport; authored alpha stays intact. */
+bool producer_set_v2_group_viewport_inset(obs_source_t *group, float x, float y);
 /* In graphics context only; geometry belongs to this placement/group, not
  * shared capture. */
 bool producer_set_v2_group_frame(obs_source_t *group, float radius,
@@ -28,6 +30,8 @@ bool producer_set_v2_group_layer_frame(obs_source_t *group, size_t index,
 bool producer_set_v2_group_effects(obs_source_t *group,int kind,float progress,float x,float y,float feather,bool invert,int direction,float blur);
 bool producer_set_v2_group_mask_progress(obs_source_t *group,float progress);
 size_t producer_set_v2_live_groups(void);
+/* Diagnostic: successful shared-program compilations in this process. */
+size_t producer_set_v2_group_effect_compilations(void);
 bool producer_set_v2_group_layer_transform(obs_source_t *group, size_t index,
                                            float rotation, float scale_x,
                                            float scale_y);

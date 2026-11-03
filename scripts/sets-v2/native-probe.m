@@ -80,6 +80,11 @@ static const char CODE[] =
     "lerp(tint,float4(1,1,1,1),marker);}"
     "technique Draw{pass{vertex_shader=VS(v);pixel_shader=PS(v);}}";
 static atomic_uint source_live = 0;
+#ifdef PRODUCER_AUDIO_REACTIVE
+/* Probe-only input to the same native reactive path. Never captures a mic. */
+static atomic_int probe_audio_milli=0;
+float producer_audio_reactive_level(void){return atomic_load(&probe_audio_milli)/1000.f;}
+#endif
 static const char *test_name(void *x) {
   (void)x;
   return "Synthetic moving capture";
@@ -648,6 +653,12 @@ static NSArray *rust_adapter_proof(NSString *out) {
 }
 
 
+static bool authored_asset_rect(NSDictionary *node, NSString *resource, double px, double py, CGRect *result) {
+  NSDictionary *b=node[@"bounds"]; double x=px+[b[@"x"] doubleValue],y=py+[b[@"y"] doubleValue];
+  if([node[@"resource"] isEqual:resource]){*result=CGRectMake(x,y,[b[@"width"] doubleValue],[b[@"height"] doubleValue]);return true;}
+  for(NSDictionary *child in node[@"children"])if(authored_asset_rect(child,resource,x,y,result))return true;
+  return false;
+}
 static NSArray *real_room_proof(NSString *out) {
   NSString *folder = @(getenv("PRODUCER_ROOM_FIXTURES") ?: "/private/tmp/producer-sets-v2-room-fixtures");
   NSArray *files = [[[NSFileManager defaultManager] contentsOfDirectoryAtPath:folder error:nil] sortedArrayUsingSelector:@selector(compare:)];
@@ -658,18 +669,23 @@ static NSArray *real_room_proof(NSString *out) {
     NSDictionary *plan = [NSJSONSerialization JSONObjectWithData:[NSData dataWithContentsOfFile:[folder stringByAppendingPathComponent:file]] options:0 error:nil];
     uint32_t w = [plan[@"target"][@"width"] unsignedIntValue], h = [plan[@"target"][@"height"] unsignedIntValue];
     obs_scene_t *room = obs_scene_create_private("Authored room integration");
-    obs_source_t *source = obs_scene_get_source(room), *camera = solid(640,480,0,1,0,true);
+    obs_source_t *source = obs_scene_get_source(room), *camera = solid(640,480,0,1,0,!getenv("PRODUCER_PROBE_REACTIVE"));
     obs_set_output_source(0, source);
     void *owner = sets_v2_rust_attach(room,w,h);
     require(owner != NULL,"authored room attaches");
+    double preparationStart=CFAbsoluteTimeGetCurrent()*1000.;
+    // Match RoomProgram's 60s cold WebGL deadline (media-only plans use 12s).
+    const int readinessPolls=[plan[@"scenes3d"] count]?3100:700;
     rust_call(owner,@{@"op":@"prepare",@"generation":@7,@"revision":@1,@"plan":plan},camera,true);
     NSDictionary *status = nil;
-    for (int i=0;i<700;i++) {
+    for (int i=0;i<readinessPolls;i++) {
       status=rust_call(owner,@{@"op":@"status",@"generation":@7},camera,true);
       if ([status[@"ready"] boolValue] && [status[@"warmed"] boolValue]) break;
       usleep(20000);
     }
+    if(![status[@"ready"] boolValue]||![status[@"warmed"] boolValue])fprintf(stderr,"Authored readiness: %s\n",status.description.UTF8String);
     require([status[@"ready"] boolValue] && [status[@"warmed"] boolValue],"authored set first paint and resource readiness");
+    double firstPaintMs=CFAbsoluteTimeGetCurrent()*1000.-preparationStart;
     rust_call(owner,@{@"op":@"take",@"generation":@7,@"revision":@1,@"durationMs":@0,@"mode":@"dissolve"},camera,true);
     for(int i=0;i<250;i++) {
       status=rust_call(owner,@{@"op":@"status",@"generation":@7},camera,true);
@@ -681,7 +697,7 @@ static NSArray *real_room_proof(NSString *out) {
     for(int index=0;index<2;index++){
       NSString *key=index?@"prepared-b":@"prepared-a";
       rust_call(owner,@{@"op":@"preload",@"generation":@7,@"revision":@(index+2),@"key":key,@"plan":plan},camera,true);
-      for(int i=0;i<700;i++){
+      for(int i=0;i<readinessPolls;i++){
         status=rust_call(owner,@{@"op":@"status",@"generation":@7},camera,true);
         if([status[@"cachedKeys"] containsObject:key])break;usleep(20000);
       }
@@ -703,7 +719,41 @@ static NSArray *real_room_proof(NSString *out) {
     NSMutableDictionary *changedRoot=[plan[@"root"] mutableCopy];
     NSMutableDictionary *properties=[changedRoot[@"properties"] mutableCopy]?:[NSMutableDictionary dictionary];properties[@"opacity"]=@0.25;changedRoot[@"properties"]=properties;stale[@"root"]=changedRoot;
     rust_call(owner,@{@"op":@"activate",@"generation":@7,@"revision":@6,@"key":@"prepared-a",@"plan":stale},camera,false);
+#ifdef PRODUCER_AUDIO_REACTIVE
+    // Freeze authored 3D motion before measuring the audio response. Otherwise
+    // moving scenery can both fake a response and fail the silence comparison.
+    if(getenv("PRODUCER_PROBE_REACTIVE")&&[plan[@"scenes3d"] count]){
+      NSData *beforeMotion=capture(source,w,h,w,h);usleep(600000);
+      NSData *afterMotion=capture(source,w,h,w,h);
+      require(![beforeMotion isEqualToData:afterMotion],"authored managed 3D moves on native output");
+      rust_call(owner,@{@"op":@"pause",@"generation":@7,@"paused":@YES},camera,true);
+      usleep(600000); // The room-owned renderer receives the paused clock.
+    }
+#endif
     NSData *frame=capture(source,w,h,w,h);
+#ifdef PRODUCER_AUDIO_REACTIVE
+    if(getenv("PRODUCER_PROBE_REACTIVE")){
+      atomic_store(&probe_audio_milli,1000);
+      for(int i=0;i<30;i++){capture(source,w,h,w,h);usleep(33000);}
+      NSData *loud=capture(source,w,h,w,h);
+      atomic_store(&probe_audio_milli,0);
+      for(int i=0;i<60;i++){capture(source,w,h,w,h);usleep(33000);}
+      NSData *quiet=capture(source,w,h,w,h);
+      unsigned changed=0,remaining=0;
+      for(uint32_t y=0;y<h;y++)for(uint32_t x=0;x<w;x++){
+        const uint8_t *a=pixel(frame,w,x,y),*b=pixel(loud,w,x,y),*c=pixel(quiet,w,x,y);
+        if(abs(a[0]-b[0])+abs(a[1]-b[1])+abs(a[2]-b[2])>40)changed++;
+        if(abs(a[0]-c[0])+abs(a[1]-c[1])+abs(a[2]-c[2])>40)remaining++;
+      }
+      require(changed>500,"native voice ring visibly responds to loud input");
+      require(remaining<changed/10+10,"native voice ring settles near silence after release");
+      NSString *stem=[file stringByDeletingPathExtension];
+      png(loud,w,h,[out stringByAppendingPathComponent:[stem stringByAppendingString:@"-loud.png"]]);
+      png(quiet,w,h,[out stringByAppendingPathComponent:[stem stringByAppendingString:@"-quiet.png"]]);
+      NSDictionary *audioReport=@{@"input":@"synthetic-level",@"changedPixels":@(changed),@"remainingPixels":@(remaining),@"microphoneCaptured":@NO};
+      [[NSJSONSerialization dataWithJSONObject:audioReport options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:[stem stringByAppendingString:@"-reactive.json"]] atomically:YES];
+    }
+#endif
     if(getenv("PRODUCER_PROBE_SHOWCASE_ONLY")){
       unsigned titlePixels=0,videoPixels=0;
       for(uint32_t y=0;y<h;y++)for(uint32_t x=0;x<w;x++){
@@ -713,12 +763,21 @@ static NSArray *real_room_proof(NSString *out) {
       }
       require(titlePixels>200,"prepared native graphics remain painted after repeated takes");
       if(getenv("PRODUCER_PROBE_DYNAMIC_SHOWCASE")&&[file hasPrefix:@"atmosphere"]){unsigned heading=0;for(uint32_t y=52;y<110;y++)for(uint32_t x=80;x<520;x++){const uint8_t *p=pixel(frame,w,x,y);if(p[0]>220&&p[1]>220&&p[2]>220)heading++;}require(heading>200,"weather shaders preserve following heading graphics");const uint8_t *bottom=pixel(frame,w,w>h?1480:540,w>h?620:1200);require(bottom[1]>245&&bottom[0]<10&&bottom[2]<10,"camera fills the lower transparent bezel opening");}
-      require(videoPixels>5000,"native camera remains visible through transparent bezel");
+      if(!getenv("PRODUCER_PROBE_STATIC_AUTHORING"))require(videoPixels>5000,"native camera remains visible through transparent bezel");
+      if(getenv("PRODUCER_PROBE_HOST_ASSET")){
+        CGRect image;require(authored_asset_rect(plan[@"root"],[NSString stringWithUTF8String:getenv("PRODUCER_PROBE_HOST_ASSET")],0,0,&image),"authored host image exists in the native plan");
+        unsigned visible=0,total=0;
+        for(uint32_t y=fmax(0,image.origin.y+image.size.height*.25);y<fmin(h,image.origin.y+image.size.height*.75);y++)for(uint32_t x=fmax(0,image.origin.x+image.size.width*.25);x<fmin(w,image.origin.x+image.size.width*.75);x++){
+          const uint8_t *p=pixel(frame,w,x,y);total++;if(p[0]>55&&p[1]>35&&p[2]>20)visible++;
+        }
+        require(total>100&&visible>total/10,"provided host headshot is visible in native output");
+      }
     }
     png(frame,w,h,[out stringByAppendingPathComponent:[[file stringByDeletingPathExtension] stringByAppendingString:@"-room.png"]]);
-    [checks addObject:@{@"file":file,@"rendered":@YES,@"resources":plan[@"resources"]}];
+    [checks addObject:@{@"file":file,@"rendered":@YES,@"firstPaintMs":@(firstPaintMs),@"resources":plan[@"resources"]}];
     fprintf(stderr,"Authored room rendered: %s\n",file.UTF8String);
     sets_v2_rust_release(owner);obs_set_output_source(0,NULL);obs_scene_release(room);obs_source_release(camera);
+    obs_wait_for_destroy_queue();
     for(int i=0;i<300 && producer_set_v2_live_groups();i++) usleep(10000);
     require(!producer_set_v2_live_groups(),"authored room groups released");
   }
@@ -865,6 +924,55 @@ static void wait_program(obs_source_t *p, uint64_t revision) {
     usleep(10000);
   require(program_status(p).rendered_revision == revision,
           "candidate endpoint rendered receipt");
+}
+OBS_IMPORT void obs_queue_task(int,void (*)(void *),void *,bool);
+struct graphics_hold {atomic_bool entered,finished;};
+static void hold_graphics_for_status_proof(void *data){
+ struct graphics_hold *hold=data;obs_enter_graphics();atomic_store(&hold->entered,true);usleep(200000);obs_leave_graphics();atomic_store(&hold->finished,true);
+}
+static NSDictionary *paired_program_proof(void) {
+  size_t shaderCompiles=producer_set_v2_transition_effect_compilations();
+  obs_scene_t *room=obs_scene_create_private("Paired output proof");
+  obs_source_t *a=producer_set_v2_program_create(640,360),*b=producer_set_v2_program_create(360,640);
+  obs_source_t *red=solid(640,360,1,0,0,false),*green=solid(360,640,0,1,0,false),*nextA=solid(640,360,0,1,0,false),*nextB=solid(360,640,1,0,0,false);
+  require(a&&b&&obs_scene_add(room,a)&&obs_scene_add(room,b),"attach paired programs");
+  obs_set_output_source(0,obs_scene_get_source(room));
+  require(producer_set_v2_program_prepare(a,red,1)&&producer_set_v2_program_prepare(b,green,1),"prepare both candidates");
+  capture(obs_scene_get_source(room),640,360,640,360);
+  require(producer_set_v2_program_ready(a,1),"landscape candidate ready");
+  require(!producer_set_v2_program_take_pair(a,1,b,1,0,0),"unready portrait rejects the entire take");
+  require(!program_status(a).queued&&!program_status(b).queued,"failed pair leaves both unqueued");
+  require(producer_set_v2_program_ready(b,1),"portrait candidate ready");
+  require(!producer_set_v2_program_take_pair(a,1,b,99,0,0),"stale portrait rejects the entire take");
+  require(!program_status(a).queued&&!program_status(b).queued,"stale pair leaves both unqueued");
+  require(producer_set_v2_program_take_pair(a,1,b,1,0,0),"queue initial paired cut");
+  wait_program(a,1);wait_program(b,1);
+  color(capture(a,640,360,640,360),640,320,180,255,0,0,255,"landscape receives its own design");
+  color(capture(b,360,640,360,640),360,180,320,0,255,0,255,"portrait receives its own design");
+  require(producer_set_v2_program_collect(a)&&producer_set_v2_program_collect(b),"collect pair");
+  struct graphics_hold hold={0};obs_queue_task(1,hold_graphics_for_status_proof,&hold,false);
+  for(int i=0;i<2000&&!atomic_load(&hold.entered);i++)usleep(1000);require(atomic_load(&hold.entered),"graphics contention fixture started");
+  double snapshotStart=CFAbsoluteTimeGetCurrent()*1000.;
+  for(int i=0;i<1000;i++){require(program_status(a).rendered_revision==1,"published snapshot remains coherent");require(producer_set_v2_program_collect(a),"idle collect needs no graphics context");}
+  double snapshotMs=CFAbsoluteTimeGetCurrent()*1000.-snapshotStart;
+  require(snapshotMs<100,"status snapshots do not wait behind a blocked graphics thread");
+  while(!atomic_load(&hold.finished))usleep(1000);
+  for(uint64_t r=2;r<=5;r++){
+    require(producer_set_v2_program_prepare(a,r%2?red:nextA,r)&&producer_set_v2_program_prepare(b,r%2?green:nextB,r),"prepare repeated paired view");
+    capture(obs_scene_get_source(room),640,360,640,360);
+    require(producer_set_v2_program_ready(a,r)&&producer_set_v2_program_ready(b,r),"both repeated candidates ready");
+    require(!producer_set_v2_program_take_pair(a,r,b,r,-1,0),"invalid duration retains both outputs");
+    require(program_status(a).rendered_revision==r-1&&program_status(b).rendered_revision==r-1,"rejected pair preserves previous revisions");
+    require(producer_set_v2_program_take_pair(a,r,b,r,90,0),"queue repeated paired transition");
+    require(!producer_set_v2_program_take_pair(a,r,b,r,90,0),"reject overlapping paired take");
+    wait_program(a,r);wait_program(b,r);
+    require(producer_set_v2_program_collect(a)&&producer_set_v2_program_collect(b),"collect completed pair");
+  }
+  require(producer_set_v2_transition_effect_compilations()==shaderCompiles+1,"paired transitions reuse the warm compositor program");
+  obs_set_output_source(0,NULL);obs_scene_release(room);obs_source_release(a);obs_source_release(b);obs_source_release(red);obs_source_release(green);obs_source_release(nextA);obs_source_release(nextB);
+  for(int i=0;i<200&&producer_set_v2_live_programs();i++)usleep(10000);
+  require(!producer_set_v2_live_programs(),"paired programs release all ownership");
+  return @{@"readyGate":@YES,@"staleGate":@YES,@"bothRendered":@YES,@"repeatedTransitions":@YES,@"cleanup":@YES,@"nonblockingStatusMs":@(snapshotMs),@"transitionShaderCompiles":@1};
 }
 static NSArray *program_proof(NSString *out) {
 
@@ -1111,7 +1219,7 @@ static NSDictionary *owner_proof(NSString *out) {
     color(frame, 640, 320, 180, 0, 255, 0, 255,
           "viewport center retains source");
     if (mode == SET_V2_CONTAIN) {
-      color(frame, 640, 10, 180, 0, 0, 0, 0, "contain transparent letterbox");
+      color(frame, 640, 10, 180, 0, 0, 0, 255, "contain opaque letterbox hides underlying room video");
       color(frame, 640, 180, 180, 0, 0, 255, 255,
             "contain preserves canvas aspect");
     } else {
@@ -1142,6 +1250,23 @@ static NSDictionary *owner_proof(NSString *out) {
     require(!producer_set_v2_live_groups(),
             "native owner releases complete graph");
   }
+  // Preserve intentional alpha within the design while hiding room pixels only
+  // in aspect-fit margins, in both orientations and at matching aspect.
+  root.children = &children[1]; root.child_count = 1;
+  const uint32_t widths[] = {640, 240, 320};
+  const uint32_t heights[] = {360, 640, 240};
+  for (int i=0;i<3;i++) {
+    uint32_t w=widths[i],h=heights[i];
+    struct producer_set_v2_scene *scene=producer_set_v2_scene_prepare(&root,w,h,SET_V2_CONTAIN,budget,error,sizeof(error));
+    require(scene!=NULL,"prepare transparent fitted design");
+    NSData *frame=capture(producer_set_v2_scene_source(scene),w,h,w,h);
+    color(frame,w,w/2,h/2,0,255,0,255,"fitted design stays centered");
+    if(i==0)color(frame,w,1,h/2,0,0,0,255,"pillarbox margin is opaque black");
+    if(i==1)color(frame,w,w/2,1,0,0,0,255,"letterbox margin is opaque black");
+    const int alphaY=i==1?h/2-80:1;
+    color(frame,w,w/2,alphaY,0,0,0,0,"authored transparency inside viewport is preserved");
+    producer_set_v2_scene_release(scene);
+  }
   obs_source_release(blue);
   obs_source_release(green);
   for (int i = 0; i < 200 && atomic_load(&source_live); i++)
@@ -1152,6 +1277,8 @@ static NSDictionary *owner_proof(NSString *out) {
     @"contain" : @YES,
     @"cover" : @YES,
     @"stretch" : @YES,
+    @"opaqueFitMargins" : @YES,
+    @"authoredAlphaPreserved" : @YES,
     @"actualColorTargetBudget" : @YES,
     @"preflightRejectsInvalidGraph" : @YES,
     @"failedPreparePreservesExistingGraph" : @YES,
@@ -1421,6 +1548,16 @@ static int runProbe(int argc, char **argv) {
     producer_source_appearance_register();
     sets_v2_rust_register();
     register_test();
+    if(getenv("PRODUCER_PROBE_PAIR_ONLY")){
+      NSDictionary *report=paired_program_proof();
+      [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:@"paired-output-proof.json"] atomically:YES];
+      obs_shutdown();puts("PASS: coordinated paired takes, readiness/stale gates, repeated transitions and cleanup");return 0;
+    }
+    if(getenv("PRODUCER_PROBE_VIEWPORT_ONLY")){
+      NSDictionary *report=owner_proof(out);
+      [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:@"viewport-proof.json"] atomically:YES];
+      obs_shutdown();puts("PASS: opaque fit margins, preserved authored alpha, contain/cover/stretch and cleanup");return 0;
+    }
     if(getenv("PRODUCER_PROBE_VISUAL_EFFECTS_ONLY")){
       NSDictionary *report=getenv("PRODUCER_PROBE_CHART")?chart_proof(out):getenv("PRODUCER_PROBE_GRAPHICS_CACHE")?graphics_cache_proof(app,out):visual_effects_proof(out);
       [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:@"visual-effects-proof.json"] atomically:YES];

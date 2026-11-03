@@ -54,16 +54,7 @@ for name in [f'Producer_{version}_aarch64.dmg', f'Producer_{version}_x64.dmg']:
 receipt = {'version': version, 'sha': sha, 'checks': checks}
 (out / 'verification.json').write_text(json.dumps(receipt, indent=2) + '\n')
 subprocess.run(['gh', 'release', 'upload', tag, str(out / 'verification.json'), '--clobber', '--repo', repo], check=True)
-(out / 'release-notes.md').write_text(f'''Producer {version} introduces Atmosphere, a standalone weather observatory with larger host video, three camera compositions in portrait and landscape, and Now / Today / Hourly / 7 day forecasts.
-
-Choose a city directly in the room's Weather desk controls. Each Set instance owns its city selection; saved Integration defaults and credentials stay in Integrations. Forecast delivery is bounded and late replies cannot put a previous city's numbers under a newly selected city.
-
-Generated day/night architecture, restrained GPU 3D lighting and weather effects compose behind native camera video and crisp text. Camera compositions use coordinated native transitions. No Show is required. Open-Meteo supplies model forecasts; Map, radar, air quality and severe-weather alerts are not included.
-
-The hosted module authority and audience runtime support the same forecast contract, bounded city caching, explicit refresh and honest stale-data labels. Hourly forecasts include animated temperature and precipitation charts. Shared renderer updates add bounded mask/backdrop/chart capabilities, retained graphics surfaces and preview placement fixes. Atmosphere is the only bundled built-in Set. Other authored presentation/2 packages, including Attention Is Currency, can be imported without adding them to the built-in catalog.
-
-macOS installers are Apple signed, notarized and stapled by the platform release jobs. All four primary updater payloads passed signature verification against Producer's pinned public key before publication. verification.json contains the exact artifact hashes.
-
-Requires presentation/2 packages. API keys are never bundled. The 3D/native compositor capability is macOS Apple Silicon only. Windows retains its existing Live engine; Intel macOS and Linux retain their engine-less scope. Cameras, mixer and output remain room-owned.
-''')
+notes_path = Path('docs') / f'RELEASE-{version}.md'
+assert notes_path.is_file(), f'Missing release notes: {notes_path}'
+(out / 'release-notes.md').write_text(notes_path.read_text() + "\n\nAll four primary updater payloads passed signature verification against Producer’s pinned public key before publication. macOS installers passed the platform signing, notarization and stapling jobs. See verification.json for exact artifact hashes.\n")
 print(json.dumps(receipt, indent=2))

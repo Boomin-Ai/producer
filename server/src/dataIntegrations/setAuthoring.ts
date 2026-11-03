@@ -32,11 +32,11 @@ export function parseSetAuthoringInput(value:unknown):SetAuthoringInput{
  if(v.package!==undefined){let raw:string;try{raw=JSON.stringify(v.package);}catch{throw new ProviderError('invalid_request','Base Set must be JSON.');}base=packageDraft(raw,'input');}
  return {prompt:v.prompt.trim(),...(base?{package:base}:{})};
 }
-async function readResponse(response:Response):Promise<Record<string,unknown>>{
+async function readResponse(response:Response,maxBytes=RESPONSE_BYTES):Promise<Record<string,unknown>>{
  if(!response.ok){await response.body?.cancel();throw new ProviderError(response.status===401||response.status===403?'provider_auth':response.status===429?'provider_rate_limit':'provider_error','The saved Claude connection could not complete Set authoring.');}
  const reader=response.body?.getReader();if(!reader)throw new ProviderError('provider_response','Claude returned no response.');
  const chunks:Uint8Array[]=[];let length=0;
- try{while(true){const {done,value}=await reader.read();if(done)break;length+=value.byteLength;if(length>RESPONSE_BYTES)throw new ProviderError('provider_response','Claude response exceeded the authoring size budget.');chunks.push(value);}}
+ try{while(true){const {done,value}=await reader.read();if(done)break;length+=value.byteLength;if(length>maxBytes)throw new ProviderError('provider_response','Claude response exceeded the authoring size budget.');chunks.push(value);}}
  catch(error){await reader.cancel().catch(()=>{});throw error;}
  const buffer=new Uint8Array(length);let offset=0;for(const chunk of chunks){buffer.set(chunk,offset);offset+=chunk.length;}
  let value:unknown;try{value=JSON.parse(new TextDecoder().decode(buffer));}catch{throw new ProviderError('provider_response','Claude returned invalid response JSON.');}
@@ -44,20 +44,35 @@ async function readResponse(response:Response):Promise<Record<string,unknown>>{
 }
 /** Provider-neutral draft boundary. Claude is the first explicitly supported
  * authoring transport; answer/research adapters are not reused as generators. */
-export async function authorSet(connection:Connection,key:string,value:unknown,options:{signal?:AbortSignal;fetcher?:typeof fetch}={}):Promise<SetAuthoringResult>{
- const input=parseSetAuthoringInput(value);
+export async function requestAuthoringText(connection:Connection,key:string,input:unknown,systemPrompt:string,options:{signal?:AbortSignal;fetcher?:typeof fetch;maxResponseBytes?:number}={}):Promise<string>{
  if(connection.kind!=='agent'||connection.provider!=='anthropic')throw new ProviderError('invalid_request','Select a saved Claude connection for Set authoring.');
  if(!key.trim())throw new ProviderError('provider_auth','The saved Claude connection has no API key.');
- if(!Number.isSafeInteger(connection.maxOutputTokens)||connection.maxOutputTokens<256||connection.maxOutputTokens>4096)throw new ProviderError('invalid_request','Invalid saved output token budget.');
+ if(!Number.isSafeInteger(connection.maxOutputTokens)||connection.maxOutputTokens<256||connection.maxOutputTokens>32768)throw new ProviderError('invalid_request','Invalid saved output token budget.');
  const signal=options.signal?AbortSignal.any([options.signal,AbortSignal.timeout(90000)]):AbortSignal.timeout(90000);signal.throwIfAborted();
  let timer:ReturnType<typeof setTimeout>|undefined;
- const operation=async()=>readResponse(await (options.fetcher??fetch)('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':key,'anthropic-version':'2023-06-01','Content-Type':'application/json',...(connection.workspaceId?{'anthropic-workspace-id':connection.workspaceId}:{})},signal,redirect:'manual',body:JSON.stringify({model:connection.model,max_tokens:connection.maxOutputTokens,system,messages:[{role:'user',content:JSON.stringify(input)}]})}));
+ const operation=async()=>readResponse(await (options.fetcher??fetch)('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':key,'anthropic-version':'2023-06-01','Content-Type':'application/json',...(connection.workspaceId?{'anthropic-workspace-id':connection.workspaceId}:{})},signal,redirect:'manual',body:JSON.stringify({model:connection.model,max_tokens:connection.maxOutputTokens,system:systemPrompt,messages:[{role:'user',content:JSON.stringify(input)}]})}),options.maxResponseBytes??RESPONSE_BYTES);
  let result:Record<string,unknown>;
  try{result=await Promise.race([operation(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new ProviderError('provider_timeout','Claude generation timed out. No automatic retry was started.')),90000);})]);}finally{if(timer!==undefined)clearTimeout(timer);}
  signal.throwIfAborted();
  if(result.stop_reason!=='end_turn')throw new ProviderError('provider_incomplete','Claude did not finish the Set draft. Try a simpler prompt or adjust the saved token budget; no automatic retry was made.');
- if(!Array.isArray(result.content)||!result.content.length||result.content.length>8||result.content.some(block=>!block||typeof block!=='object'||block.type!=='text'||typeof block.text!=='string'))throw new ProviderError('provider_response','Claude returned unsupported authoring content.');
- const text=result.content.map(block=>block.text).join('');
+ // Some Claude models include thinking even in a one-shot authoring reply.
+ // Only final text is a design candidate. Never expose/store reasoning, and
+ // still reject tool calls or unfamiliar content rather than executing them.
+ if(!Array.isArray(result.content)||!result.content.length||result.content.length>8||result.content.some(block=>{
+  if(!block||typeof block!=='object')return true;
+  if(block.type==='text')return typeof block.text!=='string';
+  if(block.type==='thinking')return typeof block.thinking!=='string'||typeof block.signature!=='string';
+  if(block.type==='redacted_thinking')return typeof block.data!=='string';
+  return true;
+ }))throw new ProviderError('provider_response','Claude returned unsupported authoring content.');
+ const text=result.content.filter(block=>block.type==='text').map(block=>block.text).join('');
+ if(!text.trim())throw new ProviderError('provider_response','Claude returned no final authoring text.');
+ return text;
+}
+export async function authorSet(connection:Connection,key:string,value:unknown,options:{signal?:AbortSignal;fetcher?:typeof fetch;maxResponseBytes?:number}={}):Promise<SetAuthoringResult>{
+ const input=parseSetAuthoringInput(value);
+ if(connection.kind!=='agent')throw new ProviderError('invalid_request','Select a saved Claude connection.');
+ const text=await requestAuthoringText(connection,key,input,system,options);
  // A refusal is not a degraded success or a request for an automatic repair.
  let refusal:unknown;try{refusal=JSON.parse(text);}catch{/* Canonical text validation below reports malformed JSON. */}
  if(refusal&&typeof refusal==='object'&&!Array.isArray(refusal)&&'error'in refusal){const error=(refusal as {error?:unknown}).error;if(error&&typeof error==='object'&&'code'in error&&error.code==='unsupported_request')throw new ProviderError('unsupported_request','The requested Set needs features outside this layout and voiceBars authoring preview. No draft was applied and no automatic retry was made.');}

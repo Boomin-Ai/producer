@@ -24,6 +24,8 @@ pub struct FilterState {
     pub enabled: bool,
     /// Current settings, flattened to JSON for the property forms.
     pub settings: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 struct EnumCtx {
@@ -55,6 +57,12 @@ extern "C" fn collect(
             return;
         }
         ctx.out.push(FilterState {
+            error: {
+                #[cfg(target_os = "windows")]
+                { if CStr::from_ptr(kind).to_bytes() == b"producer_person_mask" && ffi::producer_person_mask_status(filter) < 0 { Some("Cutout could not start. Reinstall Producer or remove and retry the filter.".into()) } else { None } }
+                #[cfg(not(target_os = "windows"))]
+                { None }
+            },
             name: CStr::from_ptr(name).to_string_lossy().into_owned(),
             kind: CStr::from_ptr(kind).to_string_lossy().into_owned(),
             enabled: ffi::obs_source_enabled(filter),

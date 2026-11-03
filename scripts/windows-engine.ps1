@@ -11,6 +11,14 @@
 # Dot-source it:  . "$PSScriptRoot\windows-engine.ps1"
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+. "$PSScriptRoot\windows-cutout.ps1"
+
+function Get-CargoTargetDir {
+  # Respect CARGO_TARGET_DIR, including a build cache moved off a full C: drive.
+  $metadata = cargo metadata --manifest-path (Join-Path $RepoRoot 'src-tauri\Cargo.toml') --no-deps --format-version 1 | ConvertFrom-Json
+  if ($LASTEXITCODE -ne 0) { throw 'Could not resolve Cargo target directory' }
+  return $metadata.target_directory
+}
 
 function Get-LockHash {
   (Get-FileHash -Algorithm SHA256 (Join-Path $RepoRoot "engine\obs.lock")).Hash.ToLower().Substring(0, 12)
@@ -90,6 +98,7 @@ function Sync-WindowsBundle([string]$dir) {
     if ($LASTEXITCODE -ge 8) { throw "robocopy $sub failed ($LASTEXITCODE)" }
   }
   Copy-Item (Join-Path $dir "manifest.json") (Join-Path $stage "manifest.json") -Force
+  Sync-WindowsCutout $stage
   $n = (Get-ChildItem $stage -Recurse -File | Measure-Object).Count
   Write-Host "windows-bundle staged: $n files from $(Split-Path $dir -Leaf)"
   return $stage

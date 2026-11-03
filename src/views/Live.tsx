@@ -1,3 +1,4 @@
+import { listen as listenSoundboard } from "@tauri-apps/api/event";
 import {LiveCaptions} from '../features/transcription/LiveCaptions';
 import {PresentationRelay} from "../features/presentation/presentationRelay";
 import {RoomSetControls} from "../features/presentation/RoomSetControls";
@@ -18,6 +19,8 @@ import { RehearsalSession } from "../features/presentation/rehearsal";
 import { roomSession } from "../lib/roomSession";
 import { sharedProgramCapture } from "../lib/programCapture";
 import { openingScene, scenePlan } from "../lib/scenePlan";
+import { SoundboardPanel } from "../components/SoundboardPanel";
+import { sounds } from "../lib/soundboard";
 import { DJPanel } from "../components/DJPanel";
 import { DJSlider } from "../components/DJSlider";
 import { AudienceDestination, AudienceDestinationMark } from "../components/AudienceDestination";
@@ -1397,6 +1400,12 @@ function FilterEditor({
   }, [run]);
 
   const available = FILTER_CATALOG.filter((f) => f.media === media);
+  const hasCutout = !!chain?.some(f => f.kind === "producer_person_mask");
+  useEffect(() => {
+    if (!hasCutout) return;
+    const timer = setInterval(() => void run({ op: "list" }), 1500);
+    return () => clearInterval(timer);
+  }, [hasCutout, run]);
   const current = chain?.find((f) => f.name === open) ?? null;
   const spec = current ? specOf(current.kind) : null;
 
@@ -1419,6 +1428,7 @@ function FilterEditor({
           <span className="rm-filters-title">{current.name}</span>
         </div>
         <div className="rm-props">
+          {current.error && <div role="alert">{current.error}</div>}
           {spec.props.map((pr) => {
             const raw = current.settings[pr.key];
             if (pr.showWhen && String(current.settings[pr.showWhen.key]) !== pr.showWhen.value) {
@@ -1520,6 +1530,7 @@ function FilterEditor({
 
       {!adding && (
         <div className="rm-rows">
+          {chain?.filter(f => f.error).map(f => <div key={f.name} role="alert">{f.name}: {f.error}</div>)}
           {chain === null && <div className="rm-rows-empty">Reading the chain…</div>}
           {chain?.length === 0 && (
             <div className="rm-rows-empty">
@@ -3463,6 +3474,7 @@ export function LiveView({
    * stays hidden rather than flashing GO LIVE at a mod. */
   const [accessPending, setAccessPending] = useState(false);
   const isHost = setEditingAllowed({ role: roomRole }, accessPending);
+  useEffect(()=>{let ended=false;let off:(()=>void)|undefined;void listenSoundboard<string>('soundboard-error',event=>notifyError(event.payload,{key:'soundboard'})).then(fn=>{if(ended)fn();else off=fn;});return()=>{ended=true;off?.();}},[]);
   const isHostRef = useRef(isHost);
   isHostRef.current = isHost;
   /** Belt and braces under the hidden chrome: every set-editing IPC path
@@ -4455,6 +4467,11 @@ export function LiveView({
    * NOT applied and the engine cleared, once per room open. */
   const localSetSkipped = useRef(false);
   const roomId = room?.id ?? null;
+  useEffect(() => {
+    if (!docApplied || !isHost) return;
+    void roomEngineRef.current?.run(async () => { await sounds.activate(roomId ?? "local"); }).catch(error => notifyError(error, {key:"soundboard"}));
+  }, [docApplied, isHost, roomId]);
+
   const setOutput=useSetOutput(setRehearsal,roomId,sources,docApplied && isHost && !(import.meta.env.DEV && import.meta.env.VITE_SCENE3D_PROOF),cfg.presentation?.bindings ?? {},bindings=>writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.exportPreparedPackage(),bindings,framing:cfgRef.current.presentation?.framing}}),cfg.presentation?.framing ?? {},framing=>writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.exportPreparedPackage(),bindings:cfgRef.current.presentation?.bindings ?? {},framing}}));
   if(setOutput.renderer==='native')setOutput.createSource=async(slot,spec,label,assign=true)=>{
     const id='set-source-'+crypto.randomUUID();
@@ -6842,6 +6859,8 @@ export function LiveView({
         return <SetControlsPanel preferenceRoomId={roomId??undefined} endpoint={endpointRef.current??activeEndpointId()??undefined} serverRoomId={cfg.server_room_id??undefined} moduleBindings={cfg.presentation?.moduleBindings} voting={roomAccess.can.interactions?<SetRoomVoting vote={vote} savedVotes={savedVotes} onSelectVote={selectSavedVote} onOpen={openVote} onTransition={(action,hold)=>void transitionVote(action,hold)}/>:undefined} sourceNames={setSourceNames} onFieldEdit={editSetField} session={setRehearsal} output={setOutput} blocked={!docApplied}
           blockedReason={!docApplied ? "Waiting for the room to finish loading." : undefined}
           onChange={changeSet} />;
+      case "sounds":
+        return isHost ? <SoundboardPanel key={roomId??"local"} roomId={roomId??"local"} enabled={docApplied}/> : <div className="rm-rows-empty">The host controls room sounds.</div>;
       case "dj":
         return isHost ? <DJPanel key={roomId ?? "local"} roomId={roomId ?? "local"} enabled={docApplied} mini={formDockOf("dj") === "top"} /> : <div className="rm-rows-empty">The host controls the room’s DJ mix.</div>;
       case "scenes":
@@ -7420,7 +7439,7 @@ export function LiveView({
                 ))}
                 {mixerItems.length === 0 && (
                   <div className="rm-rows-empty">
-                    This scene has no audio. Add a microphone from Sources — each scene carries its own.
+                    This scene has no microphone or media audio. Room sounds and DJ music can still play.
                   </div>
                 )}
               </div>

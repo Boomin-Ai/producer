@@ -8,6 +8,8 @@ import plistlib
 import shutil
 import shlex
 import subprocess
+import signal
+import time
 import sys
 import urllib.request
 
@@ -18,6 +20,22 @@ stage = root / 'src-tauri/target/sets-v2-dev/Producer Sets v2 Dev.app'
 config = json.loads((root / 'src-tauri/tauri.sets-v2-dev.conf.json').read_text())
 if config['identifier'] != 'ai.boomin.producer.sets-v2-dev':
     raise SystemExit('Refusing to build the v2 development app without its isolated identity')
+# A cold Tauri build needs room for dependencies, linking and the staged app.
+# This is a conservative preflight, not a prediction of exact compiler usage.
+# A cached desktop build needs relink/staging headroom, not a second cold
+# dependency build. Keep a conservative 1 GiB floor for that bounded case.
+warm_build=(target/'debug/deps').is_dir() and ((target/'debug/producer').is_file() or len(list((target/'debug/deps').glob('*.rlib')))>=100)
+compact_build=os.environ.get('PRODUCER_SETS_V2_COMPACT_BUILD')=='1'
+required_free=(.75 if warm_build and compact_build else 1 if warm_build else 1.5 if compact_build else 3)*1024**3
+for destination in [target, stage.parent]:
+    existing = destination.resolve()
+    while not existing.exists():
+        existing = existing.parent
+    free = shutil.disk_usage(existing).free
+    if free < required_free:
+        raise SystemExit(f'Native dev build needs at least {required_free/1024**3:g} GiB free on {existing}; '
+                         f'only {free / 1024**3:.2f} GiB is available. '
+                         'Free space before rebuilding; no build or staging changes were made.')
 if not (runtime / 'Contents/Frameworks/libobs.framework').is_dir():
     raise SystemExit('Installed Producer runtime not found')
 # Keep local staging aligned with the versioned Metal fixes. The installed
@@ -35,10 +53,25 @@ if metal_patches:
         raise SystemExit('Build and test the pinned Metal backend first: bash scripts/build-cutout-metal-lab.sh')
 if subprocess.run(['pgrep', '-f', str(stage / 'Contents/MacOS/producer')], stdout=subprocess.DEVNULL).returncode == 0:
     raise SystemExit('Close only Producer Sets v2 Dev before replacing its bundle')
+# Exercise the exact shim before spending time compiling or replacing the app.
+# This catches the full-size titlebar inset regression shared by both previews.
+stage.parent.mkdir(parents=True, exist_ok=True)
+geometry_probe = stage.parent / 'preview-geometry-test'
+subprocess.run(['clang', '-fobjc-arc', '-fblocks',
+                str(root / 'scripts/test-preview-geometry.m'),
+                str(root / 'src-tauri/src/live/shim.m'),
+                '-framework', 'AppKit', '-framework', 'WebKit',
+                '-framework', 'AVFoundation', '-framework', 'CoreMediaIO',
+                '-framework', 'SystemExtensions', '-framework', 'CoreGraphics',
+                '-o', str(geometry_probe)], check=True)
+subprocess.run([str(geometry_probe)], check=True)
 with urllib.request.urlopen('http://127.0.0.1:1436/', timeout=3) as response:
     if response.status != 200:
         raise SystemExit('Start npm run dev:sets-v2 on port 1436 first')
 env = dict(os.environ, CARGO_TARGET_DIR=str(target), CARGO_PROFILE_DEV_DEBUG='0', CARGO_INCREMENTAL='0', CARGO_BUILD_JOBS='1', PRODUCER_ENGINE_DIR=str(runtime / 'Contents'), TAURI_CONFIG=json.dumps(config))
+if compact_build:
+    env['CARGO_PROFILE_DEV_OPT_LEVEL']='1'
+
 # Fresh catalog: never seed retired sets back into the development library.
 # Grand Arena's configured copy is preserved; new showcase packages will be
 # added explicitly after their capability and output acceptance checks pass.
@@ -62,7 +95,25 @@ manifest=root/'src-tauri/Cargo.toml'
 original_manifest=manifest.read_text()
 try:
     manifest.write_text(original_manifest.replace('crate-type = ["staticlib", "cdylib", "rlib"]','crate-type = ["rlib"]'))
-    subprocess.run(['cargo', 'build', '--offline', *shlex.split(os.environ.get('PRODUCER_SETS_V2_CARGO_ARGS','')), '--manifest-path', str(manifest), '--features', 'sets-v2-dev'], cwd=root, env=env, check=True)
+    command=['cargo', 'build', '--offline', *shlex.split(os.environ.get('PRODUCER_SETS_V2_CARGO_ARGS','')), '--manifest-path', str(manifest), '--features', 'sets-v2-dev']
+    if compact_build:
+        # Lower code size reduces the cold dependency cache. Stop our build
+        # process group before exhausting the volume; preserve the staged app.
+        process=subprocess.Popen(command,cwd=root,env=env,start_new_session=True)
+        try:
+            while process.poll() is None:
+                if shutil.disk_usage(target if target.exists() else target.parent).free < 256*1024**2:
+                    raise SystemExit('Compact build stopped before exhausting disk space; staged app retained.')
+                time.sleep(.5)
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid,signal.SIGTERM)
+                try:process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    os.killpg(process.pid,signal.SIGKILL);process.wait()
+        if process.returncode:raise subprocess.CalledProcessError(process.returncode,command)
+    else:
+        subprocess.run(command,cwd=root,env=env,check=True)
 finally:
     manifest.write_text(original_manifest)
 stage.parent.mkdir(parents=True, exist_ok=True)
@@ -82,7 +133,8 @@ with plist.open('rb') as stream:
 info.update(CFBundleIdentifier=config['identifier'], CFBundleDisplayName='Producer Sets v2 Dev', CFBundleName='producer', CFBundleExecutable='producer')
 with plist.open('wb') as stream:
     plistlib.dump(info, stream)
-subprocess.run(['codesign', '--force', '--sign', '-', str(stage)], check=True)
+subprocess.run(['codesign', '--force', '--sign', '-', '--entitlements',
+                str(root / 'scripts/sets-v2/dev-entitlements.plist'), str(stage)], check=True)
 subprocess.run(['codesign', '--verify', '--deep', '--strict', str(stage)], check=True)
 print(f'Prepared isolated app: {stage}', flush=True)
 if '--prepare' not in sys.argv:

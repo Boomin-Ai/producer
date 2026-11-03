@@ -191,8 +191,15 @@ const show = object({ id, version: string(32), initialPhase: id,
   choices: defaulted(array(object({ id, label: string(80) }), 6), []),
 });
 const moduleCodec:Codec<RuntimeDefinition>={json:runtimeSchemaBody,read(v,p){try{return parseRuntimeDefinition(v);}catch(error){return fail(p,error instanceof Error?error.message:'Invalid module configuration');}}};
+const integrationRequirement=object({
+ role:id,label:string(80),capability:string(96,'^[a-z][a-z0-9.-]*@[1-9][0-9]*$'),
+ input:string(96,'^[a-z][a-z0-9.-]*@[1-9][0-9]*$'),output:string(96,'^[a-z][a-z0-9.-]*@[1-9][0-9]*$'),
+ delivery:union(literal('snapshot'),literal('event')),optional:defaulted(boolean,false),
+ transport:optional(union(literal('poll'),literal('request'),literal('webhook'),literal('stream'))),refresh:optional(boolean),
+ adapter:optional(object({id:string(96,'^[a-z][a-z0-9.-]*$'),version:number(1,1000000),operation:string(96,'^[a-z][a-z0-9.-]*$')})),
+});
 const codec = object({
-  schema: literal('producer.presentation/2'),requires:optional(array(union(literal('mask@1'),literal('backdrop@1'),literal('chart@1')),3)), runtime:defaulted(moduleCodec,{schema:'producer.modules/1',definitions:{},instances:[]}), id, version: string(32), name: string(80),
+  schema: literal('producer.presentation/2'),integrations:optional(object({schema:literal('producer.integrations/1'),requirements:array(integrationRequirement,32)})),requires:optional(array(union(literal('mask@1'),literal('backdrop@1'),literal('chart@1')),3)), runtime:defaulted(moduleCodec,{schema:'producer.modules/1',definitions:{},instances:[]}), id, version: string(32), name: string(80),
   set: object({ viewController:optional(id),views:optional(dictionary(object({landscape:optional(id),portrait:optional(id),square:optional(id)}),32)),initialView:optional(id),styles:optional(dictionary(styles,32)), tokens:optional(dictionary(union(string(240),number(-10000,10000)),64)), assets:optional(dictionary(object({name:string(160),mime:string(40),data:string(ASSET_BYTES*4/3+100),playback:optional(object({start:union(literal('entry'),literal('manual')),loop:boolean,exit:union(literal('reset'),literal('pause'),literal('continue')),return:union(literal('restart'),literal('resume')),hostControls:boolean}))}),24)),initialLayout: id, values: dictionary(valueDefinition),
     feeds: dictionary(valueDefinition), slots: array(object({ id, label: string(80) }), 8),
     components: dictionary(object({ props: dictionary(scalar), root: ref('node', () => node) }), 16),
@@ -207,6 +214,10 @@ export const presentationJsonSchema = { $schema: 'https://json-schema.org/draft/
 
 export function parsePackage(value: unknown): PresentationPackage {
   const doc = codec.read(value, '$', 0);
+  const roles=new Map<string,string>();
+  for(const r of doc.integrations?.requirements??[]){if(roles.has(r.role))fail('$.integrations.requirements','Duplicate integration role.');roles.set(r.role,r.capability);if(r.refresh&&(r.transport==='webhook'||r.transport==='stream'))fail('$.integrations.requirements','Push integrations cannot promise request refresh.');if(r.adapter&&!Number.isSafeInteger(r.adapter.version))fail('$.integrations.requirements','Adapter version must be an integer.');}
+  for(const instance of doc.runtime.instances){const behavior=doc.runtime.definitions[instance.definition]?.behavior;if(behavior&&'integrationRole'in behavior){const capability=`data.${behavior.type}@1`,existing=roles.get(behavior.integrationRole);if(existing&&existing!==capability)fail('$.integrations.requirements','Integration role conflicts with module capability.');const requirement=doc.integrations?.requirements.find(r=>r.role===behavior.integrationRole);if(requirement){const weather=behavior.type==='weather';if(requirement.input!==(weather?'weather.location-query@1':'agent.question@1')||requirement.output!==(weather?'weather.observation@1':'agent.answer@1')||requirement.delivery!=='snapshot')fail('$.integrations.requirements','Module integration contracts must match their versioned input/output.');}roles.set(behavior.integrationRole,capability);}}
+
   if(doc.set.controlArrangement){
     const known=new Set(arrangementCatalog(doc).controls.map(c=>c.id));
     const sections=new Set<string>(),placed=new Set<string>(),minimized=new Set<string>();

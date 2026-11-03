@@ -36,6 +36,7 @@ fn link_live_engine() {
     println!("cargo:rerun-if-changed=src/live/guest_ingest.c");
     println!("cargo:rerun-if-changed=src/live/guest_ingest.h");
     println!("cargo:rerun-if-changed=src/live/source_appearance.c");
+    println!("cargo:rerun-if-changed=src/live/soundboard.c");
     println!("cargo:rerun-if-changed=src/live/source_appearance.effect.h");
     // The one seam that decides whether this is a live build. Each supported OS
     // resolves its own artifact and emits its own link flags; anything else
@@ -69,23 +70,7 @@ fn link_live_engine_macos() {
     }
 
     println!("cargo:rustc-cfg=have_engine");
-    {
-        let mut build = cc::Build::new();
-        for name in [
-            "group",
-            "scene",
-            "transition",
-            "program",
-            "readiness",
-            "chart",
-        ] {
-            let file = format!("src/live/sets_v2/{name}.c");
-            println!("cargo:rerun-if-changed={file}");
-            println!("cargo:rerun-if-changed=src/live/sets_v2/{name}.h");
-            build.file(file);
-        }
-        build.flag("-std=c11").compile("producer_sets_v2");
-    }
+    compile_sets_v2();
     compile_guest_ingest();
     println!("cargo:rustc-link-search=framework={}", frameworks.display());
     println!("cargo:rustc-link-lib=framework=libobs");
@@ -103,6 +88,8 @@ fn link_live_engine_macos() {
         .file("src/live/capture_guard.m")
         .file("src/live/person_mask.m")
         .file("src/live/source_appearance.c")
+        .file("src/live/soundboard.c")
+        .std("c11")
         .define("PRODUCER_AUDIO_REACTIVE", None)
         .flag("-fobjc-arc")
         .flag("-fmodules")
@@ -214,6 +201,7 @@ fn link_live_engine_windows() {
     };
 
     println!("cargo:rustc-cfg=have_engine");
+    compile_sets_v2();
     compile_guest_ingest();
     println!("cargo:rustc-link-search=native={}", libdir.display());
 
@@ -228,10 +216,18 @@ fn link_live_engine_windows() {
     // The Win32 half of shim.m. Same exported symbols, so ffi.rs is unchanged;
     // see src/live/shim_win.c for what is real and what is a deliberate no-op.
     println!("cargo:rerun-if-changed=src/live/shim_win.c");
+    println!("cargo:rerun-if-changed=src/live/virtual_camera_win.c");
+    println!("cargo:rerun-if-changed=src/live/person_mask_win.c");
+    println!("cargo:rerun-if-changed=src/live/person_mask.effect.h");
+    println!("cargo:rerun-if-changed=src/live/vendor");
     println!("cargo:rerun-if-changed=src/live/obs_min.h");
     cc::Build::new()
         .file("src/live/shim_win.c")
+        .file("src/live/virtual_camera_win.c")
+        .file("src/live/person_mask_win.c")
         .file("src/live/source_appearance.c")
+        .file("src/live/soundboard.c")
+        .std("c11")
         .define("PRODUCER_AUDIO_REACTIVE", None)
         .compile("producer_live_shim");
     // User32/Gdi32: the preview child HWND. Ole32: COM init for the DirectShow
@@ -239,6 +235,30 @@ fn link_live_engine_windows() {
     println!("cargo:rustc-link-lib=dylib=user32");
     println!("cargo:rustc-link-lib=dylib=gdi32");
     println!("cargo:rustc-link-lib=dylib=ole32");
+}
+
+/// The compositor uses libobs' portable graphics API on Metal and D3D11.
+/// Keep its translation units shared so a new Set feature ships on both hosts.
+fn compile_sets_v2() {
+    let mut build = cc::Build::new();
+    for name in [
+        "group",
+        "scene",
+        "transition",
+        "program",
+        "readiness",
+        "chart",
+    ] {
+        let file = format!("src/live/sets_v2/{name}.c");
+        println!("cargo:rerun-if-changed={file}");
+        println!("cargo:rerun-if-changed=src/live/sets_v2/{name}.h");
+        build.file(file);
+    }
+    build.std("c11");
+    if build.get_compiler().is_like_msvc() {
+        build.flag("/experimental:c11atomics");
+    }
+    build.compile("producer_sets_v2");
 }
 
 fn compile_guest_ingest() {

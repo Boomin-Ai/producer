@@ -450,8 +450,9 @@ fn bootstrap_inner(
     // whenever a scene config that names it is read.
     unsafe {
         ffi::producer_person_mask_register();
+        #[cfg(target_os = "windows")]
+        ffi::producer_vcam_mirror_register();
         ffi::producer_source_appearance_register();
-        #[cfg(all(target_os = "macos"))]
         super::sets_v2::register();
         #[cfg(feature = "guest-rtc-pilot")]
         super::rtc_ingest::register_type();
@@ -727,14 +728,12 @@ pub enum Command {
     PresentationStatus {
         reply: mpsc::Sender<super::presentation::Status>,
     },
-    #[cfg(all(target_os = "macos"))]
     SetSourceCreate {
         id: String,
         label: String,
         spec: graph::ExtraSpec,
         reply: mpsc::Sender<Result<graph::SourcesState, String>>,
     },
-    #[cfg(all(target_os = "macos"))]
     SetsV2 {
         action: super::sets_v2::contract::Action,
         reply: mpsc::Sender<Result<super::sets_v2::contract::Status, String>>,
@@ -759,6 +758,10 @@ pub enum Command {
     PresentationReturn {
         lease: Option<String>,
         reply: mpsc::Sender<Result<super::presentation::Status, String>>,
+    },
+    Soundboard {
+        action: crate::soundboard::Native,
+        reply: std::sync::mpsc::Sender<Result<crate::soundboard::Reply, String>>,
     },
     Dj {
         action: crate::dj::Action,
@@ -915,6 +918,7 @@ pub enum Command {
 /// Variant name for the engine-loop stall log (no reflection in Rust).
 fn cmd_name(c: &Command) -> &'static str {
     match c {
+        Command::Soundboard { .. } => "Soundboard",
         Command::Dj { .. } => "Dj",
         Command::SetPreviewSources { .. } => "SetPreviewSources",
         Command::SetThumbRate { .. } => "SetThumbRate",
@@ -926,9 +930,7 @@ fn cmd_name(c: &Command) -> &'static str {
         Command::ApplyScene { .. } => "ApplyScene",
         Command::PresentationWarm { .. } => "PresentationWarm",
         Command::PresentationStatus { .. } => "PresentationStatus",
-        #[cfg(all(target_os = "macos"))]
         Command::SetsV2 { .. } => "SetsV2",
-        #[cfg(all(target_os = "macos"))]
         Command::SetSourceCreate { .. } => "SetSourceCreate",
         Command::PortraitRoom { .. } => "PortraitRoom",
         Command::PortraitState { .. } => "PortraitState",
@@ -1235,7 +1237,6 @@ impl LiveHandle {
         rx.recv_timeout(Duration::from_secs(5))
             .map_err(|_| "Set engine did not answer".into())
     }
-    #[cfg(all(target_os = "macos"))]
     pub fn set_source_create(
         &self,
         id: String,
@@ -1254,7 +1255,6 @@ impl LiveHandle {
         rx.recv_timeout(Duration::from_secs(10))
             .map_err(|_| "Source creation did not answer".to_string())?
     }
-    #[cfg(all(target_os = "macos"))]
     pub fn sets_v2(
         &self,
         action: super::sets_v2::contract::Action,
@@ -1483,6 +1483,25 @@ impl LiveHandle {
             .map_err(|e| e.to_string())
     }
 
+    pub fn soundboard_dispatch(
+        &self,
+    ) -> Result<
+        Box<
+            dyn FnOnce(crate::soundboard::Native) -> Result<crate::soundboard::Reply, String>
+                + Send,
+        >,
+        String,
+    > {
+        let sender = self.cmd.clone();
+        Ok(Box::new(move |action| {
+            let (tx, rx) = std::sync::mpsc::channel();
+            sender
+                .send(Command::Soundboard { action, reply: tx })
+                .map_err(|e| e.to_string())?;
+            rx.recv_timeout(Duration::from_secs(5))
+                .map_err(|_| "Soundboard did not answer".to_string())?
+        }))
+    }
     pub fn dj_dispatch(
         &self,
     ) -> Result<
@@ -1927,10 +1946,10 @@ extern "C" fn preview_draw(_param: *mut std::os::raw::c_void, cx: u32, cy: u32) 
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub(super) static PORTRAIT_DRAWS: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0);
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 extern "C" fn portrait_draw(canvas: *mut std::os::raw::c_void, _: u32, _: u32) {
     unsafe {
         let mut info = std::mem::MaybeUninit::<ffi::obs_video_info>::zeroed();
@@ -1971,6 +1990,187 @@ fn on_window_thread<T: Send + 'static, F: FnOnce() -> T + Send + 'static>(f: F) 
 #[inline]
 fn on_window_thread<T: Send + 'static, F: FnOnce() -> T + Send + 'static>(f: F) -> T {
     graph::on_main_thread(f)
+}
+
+#[cfg(target_os = "windows")]
+fn apply_preview_cutouts(
+    landscape: Option<&Preview>,
+    portrait: Option<&Preview>,
+    rects: Vec<PreviewRect>,
+) {
+    let mut views: Vec<usize> = landscape
+        .into_iter()
+        .chain(portrait)
+        .map(|p| p.view as usize)
+        .collect();
+    // Keep the region for a display that attaches while a modal is open.
+    if views.is_empty() {
+        views.push(0);
+    }
+    let flat: Vec<f64> = rects.iter().flat_map(|r| [r.x, r.y, r.w, r.h]).collect();
+    on_window_thread(move || unsafe {
+        for view in views {
+            ffi::producer_preview_set_cutouts(
+                view as *mut c_void,
+                flat.as_ptr(),
+                flat.len() as i32 / 4,
+            );
+        }
+    });
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod preview_occlusion_tests {
+    use super::*;
+    #[link(name = "user32")]
+    extern "system" {
+        fn CreateWindowExW(
+            ex: u32,
+            class: *const u16,
+            title: *const u16,
+            style: u32,
+            x: i32,
+            y: i32,
+            w: i32,
+            h: i32,
+            parent: *mut c_void,
+            menu: *mut c_void,
+            instance: *mut c_void,
+            param: *mut c_void,
+        ) -> *mut c_void;
+        fn DestroyWindow(window: *mut c_void) -> i32;
+        fn GetWindowRgn(window: *mut c_void, region: *mut c_void) -> i32;
+    }
+    #[link(name = "gdi32")]
+    extern "system" {
+        fn CreateRectRgn(left: i32, top: i32, right: i32, bottom: i32) -> *mut c_void;
+        fn DeleteObject(object: *mut c_void) -> i32;
+    }
+    struct Parent(*mut c_void);
+    impl Drop for Parent {
+        fn drop(&mut self) {
+            unsafe {
+                DestroyWindow(self.0);
+            }
+        }
+    }
+    unsafe fn attach(parent: &Parent, x: f64) -> Preview {
+        let rect = PreviewRect {
+            x,
+            y: 40.,
+            w: 200.,
+            h: 300.,
+        };
+        let (mut w, mut h) = (0., 0.);
+        let view = ffi::producer_preview_attach(
+            parent.0, rect.x, rect.y, rect.w, rect.h, 0, &mut w, &mut h,
+        );
+        assert!(!view.is_null());
+        Preview {
+            view,
+            display: ptr::null_mut(),
+            canvas: ptr::null_mut(),
+            rect,
+        }
+    }
+    unsafe fn region_kind(preview: &Preview) -> i32 {
+        let region = CreateRectRgn(0, 0, 0, 0);
+        assert!(!region.is_null());
+        let kind = GetWindowRgn(preview.view, region);
+        DeleteObject(region);
+        kind
+    }
+    #[test]
+    fn windows_modal_clips_both_previews_and_late_attach_then_restores() {
+        // Hidden Win32 children, no GPU, capture device, account or output.
+        for _ in 0..8 {
+            let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+            let parent = Parent(unsafe {
+                CreateWindowExW(
+                    0,
+                    class.as_ptr(),
+                    class.as_ptr(),
+                    0,
+                    0,
+                    0,
+                    1200,
+                    900,
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                )
+            });
+            assert!(!parent.0.is_null());
+            apply_preview_cutouts(None, None, vec![]);
+            let landscape = unsafe { attach(&parent, 30.) };
+            let portrait = unsafe { attach(&parent, 300.) };
+            let modal = vec![PreviewRect {
+                x: 0.,
+                y: 0.,
+                w: 20000.,
+                h: 20000.,
+            }];
+            apply_preview_cutouts(Some(&landscape), Some(&portrait), modal.clone());
+            assert_eq!(
+                unsafe { region_kind(&landscape) },
+                1,
+                "landscape must have an empty region"
+            );
+            assert_eq!(
+                unsafe { region_kind(&portrait) },
+                1,
+                "portrait must have an empty region"
+            );
+            apply_preview_cutouts(None, None, modal);
+            let late = unsafe { attach(&parent, 600.) };
+            assert_eq!(
+                unsafe { region_kind(&late) },
+                1,
+                "a new display inherits modal clipping"
+            );
+            unsafe {
+                ffi::producer_preview_set_frame(
+                    late.view,
+                    650.,
+                    80.,
+                    180.,
+                    300.,
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                );
+            }
+            assert_eq!(
+                unsafe { region_kind(&late) },
+                1,
+                "moving a display must retain clipping"
+            );
+            apply_preview_cutouts(Some(&landscape), Some(&portrait), vec![]);
+            assert_eq!(
+                unsafe { region_kind(&landscape) },
+                0,
+                "closing restores the full display"
+            );
+            assert_eq!(
+                unsafe { region_kind(&portrait) },
+                0,
+                "closing restores portrait too"
+            );
+            // Production moves periodically reapply the current shared region.
+            unsafe {
+                ffi::producer_preview_set_frame(
+                    late.view,
+                    650.,
+                    80.,
+                    180.,
+                    300.,
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                );
+            }
+            assert_eq!(unsafe { region_kind(&late) }, 0);
+        }
+    }
 }
 
 impl Preview {
@@ -2068,7 +2268,7 @@ impl Preview {
         }
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     unsafe fn attach_canvas(
         window: *mut std::os::raw::c_void,
         rect: PreviewRect,
@@ -2114,7 +2314,7 @@ impl Preview {
 
     fn detach(self) {
         unsafe {
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "macos", target_os = "windows"))]
             if !self.canvas.is_null() {
                 ffi::obs_display_remove_draw_callback(self.display, portrait_draw, self.canvas);
             } else {
@@ -2124,13 +2324,13 @@ impl Preview {
                     std::ptr::null_mut(),
                 );
             }
-            #[cfg(not(target_os = "macos"))]
+            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
             ffi::obs_display_remove_draw_callback(self.display, preview_draw, std::ptr::null_mut());
             let display_addr = self.display as usize;
             graph::on_main_thread(move || {
                 ffi::obs_display_destroy(display_addr as *mut ffi::obs_display_t);
             });
-            #[cfg(target_os = "macos")]
+            #[cfg(any(target_os = "macos", target_os = "windows"))]
             if !self.canvas.is_null() {
                 super::portrait::release_display_canvas(self.canvas);
             }
@@ -2493,8 +2693,14 @@ pub fn start(
                         }
                         #[cfg(not(target_os = "macos"))]
                         {
-                            "the virtual camera refused to start — install the camera first"
-                                .to_string()
+                            #[cfg(target_os = "windows")]
+                            if ffi::producer_vcam_in_use() != 0 {
+                                "The virtual camera is busy. Close other camera sessions in Producer or OBS, then try again.".to_string()
+                            } else {
+                                "The virtual camera could not start. Check its installation and try again.".to_string()
+                            }
+                            #[cfg(not(target_os = "windows"))]
+                            "the virtual camera refused to start — install the camera first".to_string()
                         }
                     } else {
                         user_facing(&CStr::from_ptr(e).to_string_lossy())
@@ -2523,6 +2729,7 @@ pub fn start(
                 if let Err(e)=unsafe {super::presentation_probe::start(g,handle,std::path::PathBuf::from(path.clone()))} {let _=std::fs::write(std::path::Path::new(&path).join("result.json"),serde_json::json!({"ok":false,"error":e}).to_string());}
             }
             let mut dj = super::dj::Dj::default();
+            let mut soundboard = super::soundboard::Soundboard::default();
             let mut preview: Option<Preview> = None;
             let mut portrait_preview: Option<Preview> = None;
             let mut selected_portrait=false;
@@ -2683,13 +2890,16 @@ pub fn start(
                 }
                 iter_prev = Some((iter_t0, iter_label));
                 match received {
+                    Ok(Command::Soundboard { action, reply }) => {
+                        let changing=matches!(&action,crate::soundboard::Native::Activate(room) if !soundboard.room().is_empty() && soundboard.room()!=room);
+                        let _=reply.send(if changing&&(session.is_some()||recorder.is_some()){Err("Stop the current output before switching soundboard rooms".into())}else if report.ok {soundboard.apply(action)} else {Err("Room audio engine unavailable".into())});
+                    }
                     Ok(Command::Dj { action, reply }) => {
                         let result = if report.ok { dj.apply(action) } else { Err("The room audio engine did not start".into()) };
                         let _ = reply.send(result);
                     }
                     Ok(Command::VirtualCamMirror { on, reply }) => {
                         let result = (|| -> Result<bool, String> {
-                            if !cfg!(target_os = "macos") { return Err("Virtual camera mirroring is available on macOS".into()); }
                             if let Some(next) = on {
                                 let pending = mirror_path.with_extension("json.tmp");
                                 std::fs::write(&pending, if next { b"true".as_slice() } else { b"false".as_slice() }).map_err(|e| e.to_string())?;
@@ -2703,6 +2913,8 @@ pub fn start(
                                     }
                                 }
                                 vcam_mirrored = next;
+                                #[cfg(target_os = "windows")]
+                                if let Some(m) = room_mix.as_ref() { unsafe { m.set_mirrored(next); } }
                             }
                             Ok(vcam_mirrored)
                         })();
@@ -2714,10 +2926,10 @@ pub fn start(
                             if vcam.is_some(){return Err("Stop the virtual camera before changing the output canvas".into());}
                             if session.is_some()||recorder.is_some()||portrait_recorder.is_some(){return Err("Stop streaming and recording before changing the output canvas".into());}
                             let video=if portrait{
-                                #[cfg(target_os="macos")]{scene.as_mut().ok_or("Room is not ready")?.portrait_video()?}
-                                #[cfg(not(target_os="macos"))]{return Err("Portrait output is unavailable in this build".into());}
+                                #[cfg(any(target_os = "macos", target_os = "windows"))]{scene.as_mut().ok_or("Room is not ready")?.portrait_video()?}
+                                #[cfg(not(any(target_os = "macos", target_os = "windows")))]{return Err("Portrait output is unavailable in this build".into());}
                             }else{unsafe{ffi::obs_get_video()}};
-                            #[cfg(target_os="macos")]super::portrait::select_program(portrait);
+                            #[cfg(any(target_os = "macos", target_os = "windows"))]super::portrait::select_program(portrait);
                             if selected_portrait!=portrait {selected_video=video;selected_portrait=portrait;hub_engine.program_portrait.store(portrait,std::sync::atomic::Ordering::Relaxed);if let Some(g)=scene.as_ref(){hub_engine.publish_targets(g);}}
                             Ok(())
                         })();let _=reply.send(result);
@@ -2766,57 +2978,55 @@ pub fn start(
                         }
                     }
                     Ok(Command::PortraitRoom{reply})=>{
-                        #[cfg(target_os="macos")]let result=scene.as_mut().ok_or("Room is not ready".into()).and_then(|g|g.portrait_room());
-                        #[cfg(not(target_os="macos"))]let result=Err("Portrait output is unavailable on this platform".into());let _=reply.send(result);
+                        #[cfg(any(target_os = "macos", target_os = "windows"))]let result=scene.as_mut().ok_or("Room is not ready".into()).and_then(|g|g.portrait_room());
+                        #[cfg(not(any(target_os = "macos", target_os = "windows")))]let result=Err("Portrait output is unavailable on this platform".into());let _=reply.send(result);
                     }
                     Ok(Command::PortraitState{reply})=>{
-                        #[cfg(target_os="macos")]let result=scene.as_mut().ok_or("Room is not ready".into()).and_then(|g|{if g.portrait_canvas().is_err(){return Err("Portrait room is unavailable".into());}g.sync_portrait_room();Ok(g.portrait_state())});
-                        #[cfg(not(target_os="macos"))]let result=Err("Portrait output is unavailable on this platform".into());let _=reply.send(result);
+                        #[cfg(any(target_os = "macos", target_os = "windows"))]let result=scene.as_mut().ok_or("Room is not ready".into()).and_then(|g|{if g.portrait_canvas().is_err(){return Err("Portrait room is unavailable".into());}g.sync_portrait_room();Ok(g.portrait_state())});
+                        #[cfg(not(any(target_os = "macos", target_os = "windows")))]let result=Err("Portrait output is unavailable on this platform".into());let _=reply.send(result);
                     }
                     Ok(Command::PortraitTransform{id,patch,reply})=>{
-                        #[cfg(target_os="macos")]let result=scene.as_mut().ok_or("Room is not ready".into()).and_then(|g|g.portrait_transform(&id,patch));
-                        #[cfg(not(target_os="macos"))]let result={let _=(id,patch);Err("Portrait output is unavailable on this platform".into())};let _=reply.send(result);
+                        #[cfg(any(target_os = "macos", target_os = "windows"))]let result=scene.as_mut().ok_or("Room is not ready".into()).and_then(|g|g.portrait_transform(&id,patch));
+                        #[cfg(not(any(target_os = "macos", target_os = "windows")))]let result={let _=(id,patch);Err("Portrait output is unavailable on this platform".into())};let _=reply.send(result);
                     }
                     Ok(Command::PortraitPreview{window,rect,reply})=>{
-                        #[cfg(target_os="macos")]let result=(||->Result<(),String>{if let Some(rect)=rect{if let Some(p)=portrait_preview.as_mut(){p.set_rect(rect);}else{let canvas=scene.as_mut().ok_or("Room is not ready")?.portrait_canvas()?;portrait_preview=Some(unsafe{Preview::attach_canvas(window as *mut _,rect,canvas)?});}}else if let Some(p)=portrait_preview.take(){p.detach();}Ok(())})();
-                        #[cfg(not(target_os="macos"))]let result={let _=(window,rect);Err("Portrait output is unavailable on this platform".into())};let _=reply.send(result);
+                        #[cfg(any(target_os = "macos", target_os = "windows"))]let result=(||->Result<(),String>{if let Some(rect)=rect{if let Some(p)=portrait_preview.as_mut(){p.set_rect(rect);}else{let canvas=scene.as_mut().ok_or("Room is not ready")?.portrait_canvas()?;portrait_preview=Some(unsafe{Preview::attach_canvas(window as *mut _,rect,canvas)?});}}else if let Some(p)=portrait_preview.take(){p.detach();}Ok(())})();
+                        #[cfg(not(any(target_os = "macos", target_os = "windows")))]let result={let _=(window,rect);Err("Portrait output is unavailable on this platform".into())};let _=reply.send(result);
                     }
                     Ok(Command::PortraitWarm{request,reply})=>{
-                        #[cfg(target_os="macos")]
+                        #[cfg(any(target_os = "macos", target_os = "windows"))]
                         let result=scene.as_mut().ok_or("Room scene unavailable".to_string()).and_then(|g|g.portrait_warm(request));
-                        #[cfg(not(target_os="macos"))]
+                        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
                         let result={let _=request;Err("Portrait warmup is currently a Mac dev capability".into())};
                         let _=reply.send(result);
                     }
                     Ok(Command::PortraitPrepare{request,reply})=>{
-                        #[cfg(target_os="macos")]
+                        #[cfg(any(target_os = "macos", target_os = "windows"))]
                         let result=scene.as_mut().ok_or("Room scene unavailable".to_string()).and_then(|g|g.portrait_prepare(request));
-                        #[cfg(not(target_os="macos"))]
+                        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
                         let result={let _=request;Err("Portrait preview is currently a Mac dev capability".into())};
                         let _=reply.send(result);
                     }
                     Ok(Command::PortraitAbort{token,revision})=>{
-                        #[cfg(target_os="macos")]
+                        #[cfg(any(target_os = "macos", target_os = "windows"))]
                         if let Some(g)=scene.as_mut(){g.portrait_abort(&token,revision);}
-                        #[cfg(not(target_os="macos"))]
+                        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
                         let _=(token,revision);
                     }
                     Ok(Command::PortraitCommit{token,placements,reply})=>{
-                        #[cfg(target_os="macos")]
+                        #[cfg(any(target_os = "macos", target_os = "windows"))]
                         let result=scene.as_mut().ok_or("Room scene unavailable".to_string()).and_then(|g|g.portrait_commit(&token,placements));
-                        #[cfg(not(target_os="macos"))]
+                        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
                         let result={let _=(token,placements);Err("Portrait preview is currently a Mac dev capability".into())};
                         let _=reply.send(result);
                     }
-                    Ok(Command::PortraitStop{reply})=>{if portrait_recorder.is_some()||selected_portrait{let _=reply.send(());continue;}if let Some(p)=portrait_preview.take(){p.detach();}#[cfg(target_os="macos")]if let Some(g)=scene.as_mut(){g.portrait_stop();}let _=reply.send(());}
-                    Ok(Command::PortraitFrame{reply})=>{#[cfg(target_os="macos")]let frame=scene.as_ref().map(|g|g.portrait_frame()).unwrap_or_default();#[cfg(not(target_os="macos"))]let frame=String::new();let _=reply.send(frame);}
-                    #[cfg(all(target_os="macos"))]
+                    Ok(Command::PortraitStop{reply})=>{if portrait_recorder.is_some()||selected_portrait{let _=reply.send(());continue;}if let Some(p)=portrait_preview.take(){p.detach();}#[cfg(any(target_os = "macos", target_os = "windows"))]if let Some(g)=scene.as_mut(){g.portrait_stop();}let _=reply.send(());}
+                    Ok(Command::PortraitFrame{reply})=>{#[cfg(any(target_os = "macos", target_os = "windows"))]let frame=scene.as_ref().map(|g|g.portrait_frame()).unwrap_or_default();#[cfg(not(any(target_os = "macos", target_os = "windows")))]let frame=String::new();let _=reply.send(frame);}
                     Ok(Command::SetSourceCreate{id,label,spec,reply})=>{
                         let result=scene.as_mut().ok_or("Room unavailable".to_string()).and_then(|g|g.create_set_source(&id,&label,&spec));
                         if let Ok(sources)=&result{snap.lock().unwrap().sources=sources.clone();sink(&LiveEvent::SourcesChanged{sources:sources.clone()});}
                         let _=reply.send(result);
                     }
-                    #[cfg(all(target_os = "macos"))]
                     Ok(Command::SetsV2 {action,reply}) => {
                         let result=scene.as_mut().ok_or_else(||"The dev room is not running".to_string()).and_then(|g|g.sets_v2(action));
                         let _=reply.send(result);
@@ -2867,8 +3077,8 @@ pub fn start(
                             };
                             let result=(||->Result<String,String>{
                                 if dual {
-                                    #[cfg(target_os="macos")]{let video=scene.as_mut().ok_or("Room is not ready")?.portrait_video()?;portrait_recorder=Some(unsafe{record::Recorder::start_video(&format!("{stamp} Portrait"),br,video)?});}
-                                    #[cfg(not(target_os="macos"))]return Err("Dual recording is unavailable on this platform".into());
+                                    #[cfg(any(target_os = "macos", target_os = "windows"))]{let video=scene.as_mut().ok_or("Room is not ready")?.portrait_video()?;portrait_recorder=Some(unsafe{record::Recorder::start_video(&format!("{stamp} Portrait"),br,video)?});}
+                                    #[cfg(not(any(target_os = "macos", target_os = "windows")))]return Err("Dual recording is unavailable on this platform".into());
                                 }
                                 match unsafe{record::Recorder::start_video(&stamp,br,if selected_portrait{selected_video}else{ffi::obs_get_video()})}{Ok(r)=>{let path=r.path();recorder=Some(r);Ok(path)},Err(e)=>{if let Some(r)=portrait_recorder.take(){r.stop();}Err(e)}}
                             })();
@@ -2960,9 +3170,21 @@ pub fn start(
                                 // The portrait canvas owns a separate native video output.
                                 // Keep it alive for the lifetime of the camera, just as
                                 // room_mix owns the landscape video output.
+                                #[cfg(target_os = "windows")]
+                                let mix = if selected_portrait {
+                                    let canvas=scene.as_mut().ok_or("Room is not ready")?.portrait_canvas()?;
+                                    room_mix=Some(studio::RoomMix::build_windows(ptr::null_mut(),canvas)?);
+                                    room_mix.as_ref().unwrap().video()
+                                } else {room_mix_video(&mut room_mix)?};
+                                #[cfg(not(target_os = "windows"))]
                                 let mix = if selected_portrait { selected_video }
                                     else { room_mix_video(&mut room_mix)? };
-                                vcam = Some(start_vcam(mix, selected_portrait, vcam_mirrored)?);
+                                #[cfg(target_os = "windows")]
+                                if let Some(m) = room_mix.as_ref() { m.set_mirrored(vcam_mirrored); }
+                                match start_vcam(mix, selected_portrait, vcam_mirrored) {
+                                    Ok(output) => vcam = Some(output),
+                                    Err(error) => { if let Some(mut m)=room_mix.take(){m.teardown();} return Err(error); }
+                                }
                                 Ok(true)
                             }
                         })();
@@ -3006,6 +3228,7 @@ pub fn start(
                                 // Windows (studio.rs module docs) — that
                                 // invariant is intact.
                                 if let Some(m) = room_mix.as_mut() {
+                                    if !selected_portrait {
                                     match studio_out.as_ref() {
                                         // The studio scene is borrowed from
                                         // Studio; set_source takes its own ref.
@@ -3022,6 +3245,7 @@ pub fn start(
                                                 ffi::obs_source_release(room);
                                             }
                                         }
+                                    }
                                     }
                                 }
                                 Ok(studio_out.is_some())
@@ -3156,7 +3380,7 @@ pub fn start(
                             });
                         } else {
                             if let Some(p)=portrait_preview.take(){p.detach();}
-                            #[cfg(target_os="macos")]if let Some(g)=scene.as_mut(){g.portrait_stop();}
+                            #[cfg(any(target_os = "macos", target_os = "windows"))]if let Some(g)=scene.as_mut(){g.portrait_stop();}
                             let module = graphics_module(report.graphics_backend.as_deref());
                             // A video reset destroys every mix and every
                             // canvas-sized item, so the studio scene AND the
@@ -3180,7 +3404,7 @@ pub fn start(
                                 Ok(()) => {
                                     if let Some(g) = scene.as_mut() {
                                         g.relayout();
-                                        #[cfg(target_os="macos")]if selected_portrait{if let Err(e)=g.portrait_room(){sink(&LiveEvent::EngineError{message:format!("portrait resize: {e}")});}}
+                                        #[cfg(any(target_os = "macos", target_os = "windows"))]if selected_portrait{if let Err(e)=g.portrait_room(){sink(&LiveEvent::EngineError{message:format!("portrait resize: {e}")});}}
                                     }
                                     if let Some(sp) = studio_spec {
                                         unsafe {
@@ -3194,8 +3418,20 @@ pub fn start(
                                     }
                                     if vcam_was_on {
                                         unsafe {
-                                            match room_mix_video(&mut room_mix)
-                                                .and_then(|mix| start_vcam(mix, false, vcam_mirrored))
+                                            let rebuilt=(|| -> Result<*mut ffi::obs_output_t,String> {
+                                                #[cfg(target_os="windows")]
+                                                let mix=if selected_portrait {
+                                                    let canvas=scene.as_mut().ok_or("Room is not ready")?.portrait_canvas()?;
+                                                    room_mix=Some(studio::RoomMix::build_windows(ptr::null_mut(),canvas)?);
+                                                    room_mix.as_ref().unwrap().video()
+                                                }else{room_mix_video(&mut room_mix)?};
+                                                #[cfg(not(target_os="windows"))]
+                                                let mix=room_mix_video(&mut room_mix)?;
+                                                #[cfg(target_os="windows")]
+                                                if let Some(m)=room_mix.as_ref(){m.set_mirrored(vcam_mirrored);}
+                                                start_vcam(mix,selected_portrait,vcam_mirrored)
+                                            })();
+                                            match rebuilt
                                             {
                                                 Ok(o) => vcam = Some(o),
                                                 Err(e) => sink(&LiveEvent::EngineError {
@@ -3270,18 +3506,7 @@ pub fn start(
                         // Windows float mode only: elsewhere the preview sits
                         // below the webview and nothing needs punching out.
                         #[cfg(target_os = "windows")]
-                        if let Some(p) = preview.as_ref() {
-                            let v = p.view as usize;
-                            let flat: Vec<f64> =
-                                rects.iter().flat_map(|r| [r.x, r.y, r.w, r.h]).collect();
-                            on_window_thread(move || unsafe {
-                                ffi::producer_preview_set_cutouts(
-                                    v as *mut std::os::raw::c_void,
-                                    flat.as_ptr(),
-                                    flat.len() as std::os::raw::c_int / 4,
-                                )
-                            });
-                        }
+                        apply_preview_cutouts(preview.as_ref(), portrait_preview.as_ref(), rects);
                         #[cfg(not(target_os = "windows"))]
                         let _ = rects;
                     }
@@ -3291,9 +3516,10 @@ pub fn start(
                         if session.is_some() || recorder.is_some() {
                             let _ = reply.send(Ok(false));
                         } else {
-                            #[cfg(target_os="macos")]super::portrait::select_program(false);
+                            #[cfg(any(target_os = "macos", target_os = "windows"))]super::portrait::select_program(false);
                             selected_portrait=false;selected_video=unsafe{ffi::obs_get_video()};hub_engine.program_portrait.store(false,std::sync::atomic::Ordering::Relaxed);
                             dj.clear();
+                            soundboard.clear();
                             if let Some(output) = vcam.take() { unsafe { stop_vcam(output); } }
                             if let Some(mut m) = room_mix.take() { unsafe { m.teardown(); } }
                             if let Some(mut st) = studio_out.take() { unsafe { st.teardown(); } }
@@ -3353,7 +3579,7 @@ pub fn start(
                     }
                 }
 
-                #[cfg(target_os="macos")]
+                #[cfg(any(target_os = "macos", target_os = "windows"))]
                 if let Some(g)=scene.as_mut(){g.sync_portrait_room();}
                 dj.tick(scene.as_ref().is_some_and(|g| g.dj_speaking()));
 

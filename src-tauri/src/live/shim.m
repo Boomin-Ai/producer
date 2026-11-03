@@ -29,12 +29,13 @@ static NSRect frame_from_css(NSView *content, double x, double y, double w, doub
     NSView *web = find_webview(content);
     if (web) {
         NSRect bounds = web.bounds;
-        // convertRect already accounts for the webview's position beneath
-        // window chrome. Adding safeAreaInsets here shifts native video away
-        // from the measured DOM frame (and can draw below its bottom edge).
-        NSRect local = NSMakeRect(NSMinX(bounds) + x,
-            web.isFlipped ? NSMinY(bounds) + y
-                          : NSMaxY(bounds) - y - h, w, h);
+        // In full-size-content windows, WebKit excludes its safe area from
+        // the DOM viewport while keeping it in native bounds. Convert the
+        // viewport origin first; convertRect then handles container offsets.
+        NSEdgeInsets inset = web.safeAreaInsets;
+        NSRect local = NSMakeRect(NSMinX(bounds) + inset.left + x,
+            web.isFlipped ? NSMinY(bounds) + inset.top + y
+                          : NSMaxY(bounds) - inset.top - y - h, w, h);
         return [content convertRect:local fromView:web];
     }
     NSRect bounds = content.bounds;

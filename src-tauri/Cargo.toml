@@ -1,6 +1,6 @@
 [package]
 name = "producer"
-version = "0.4.78"
+version = "0.4.79"
 description = "Producer by Boomin — the open-source studio for creators: post everywhere, stream everywhere."
 authors = ["Boomin"]
 license = "AGPL-3.0-only"
@@ -8,7 +8,7 @@ repository = "https://github.com/Boomin-Ai/producer"
 edition = "2021"
 
 [features]
-# Isolated development-only Sets v2 room adapter. Native backend currently Mac.
+# Isolated development-only Sets v2 room adapter (macOS and Windows engines).
 sets-v2-dev = []
 # Isolated local room/storage for the signed portrait-camera candidate.
 portrait-camera-dev = []
@@ -68,6 +68,7 @@ lofty = "0.22"
 symphonia = { version = "0.5", features = ["mp3", "aac", "isomp4", "alac", "wav", "pcm", "flac"] }
 soundtouch = { version = "0.5.4", features = ["bundled"] }
 hound = "3.5"
+tauri-plugin-global-shortcut = "=2.3.1"
 
 [patch.crates-io]
 webrtc-sys = { path = "../labs/guest-rtc/vendor/webrtc-sys" }

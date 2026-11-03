@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "producer-sets": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["tools/producer-mcp/server.mjs"]
+    }
+  }
+}

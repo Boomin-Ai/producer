@@ -79,6 +79,14 @@ impl Recorder {
         video: *mut ffi::video_t,
     ) -> Result<Recorder, String> {
         let path = recordings_dir().join(filename(stamp));
+        Self::start_video_to_path(path, bitrate, video)
+    }
+
+    unsafe fn start_video_to_path(
+        path: PathBuf,
+        bitrate: i64,
+        video: *mut ffi::video_t,
+    ) -> Result<Recorder, String> {
         unsafe {
             // Quality-first: high CBR, 2s keyframes for scrubbing, on the
             // encoder the boot probe chose (hardware where the box has it,
@@ -227,6 +235,108 @@ impl Recorder {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    #[ignore = "requires a Windows native engine, D3D11 and ffprobe; run alone"]
+    fn windows_dual_recordings_finalize_with_video_and_audio() {
+        let temp =
+            std::env::temp_dir().join(format!("producer-dual-record-proof-{}", std::process::id()));
+        std::fs::create_dir_all(&temp).unwrap();
+        super::super::engine::persist_video(&temp, 720, 30);
+        let report = super::super::engine::bootstrap_with_config(&temp);
+        assert!(report.ok, "native bootstrap: {report:?}");
+        let mut graph = super::super::graph::SceneGraph::create().unwrap();
+        graph
+            .add_extra(
+                "record-proof",
+                "Recording proof",
+                &super::super::graph::ExtraSpec::Color {
+                    color: "#ff0000".into(),
+                },
+            )
+            .unwrap();
+        let paths = [temp.join("landscape.mp4"), temp.join("portrait.mp4")];
+        let landscape =
+            unsafe { Recorder::start_video_to_path(paths[0].clone(), 2000, ffi::obs_get_video()) }
+                .unwrap();
+        let portrait = unsafe {
+            Recorder::start_video_to_path(paths[1].clone(), 2000, graph.portrait_video().unwrap())
+        }
+        .unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        let indexed = loop {
+            let indexed = paths.iter().all(|path| {
+                std::fs::read(path).is_ok_and(|bytes| {
+                    bytes.windows(4).any(|w| w == b"moov") && bytes.len() > 16384
+                })
+            });
+            if indexed || std::time::Instant::now() >= deadline {
+                break indexed;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        };
+        assert!(landscape.take_failure().is_none());
+        assert!(portrait.take_failure().is_none());
+        portrait.stop();
+        landscape.stop();
+        assert!(
+            indexed,
+            "both files must receive a movie index and media before Stop"
+        );
+        for (path, (width, height)) in paths.iter().zip([(1280, 720), (720, 1280)]) {
+            crate::recordings::validate_mp4(path).unwrap();
+            let probe = std::process::Command::new("ffprobe")
+                .args([
+                    "-v",
+                    "error",
+                    "-show_streams",
+                    "-show_format",
+                    "-of",
+                    "json",
+                ])
+                .arg(path)
+                .output()
+                .unwrap();
+            assert!(
+                probe.status.success(),
+                "ffprobe: {}",
+                String::from_utf8_lossy(&probe.stderr)
+            );
+            let probe: serde_json::Value = serde_json::from_slice(&probe.stdout).unwrap();
+            let streams = probe["streams"].as_array().unwrap();
+            let video = streams.iter().find(|s| s["codec_type"] == "video").unwrap();
+            assert_eq!(video["codec_name"], "h264");
+            assert_eq!(video["width"], width);
+            assert_eq!(video["height"], height);
+            assert!(streams
+                .iter()
+                .any(|s| s["codec_type"] == "audio" && s["codec_name"] == "aac"));
+            assert!(
+                probe["format"]["duration"]
+                    .as_str()
+                    .unwrap()
+                    .parse::<f64>()
+                    .unwrap()
+                    > 1.
+            );
+            println!(
+                "PASS: finalized {}x{} H264/AAC recording: {}",
+                width,
+                height,
+                path.display()
+            );
+        }
+        graph.portrait_stop();
+        graph.clear_room().unwrap();
+        unsafe {
+            ffi::obs_set_output_source(0, std::ptr::null_mut());
+        }
+        drop(graph);
+        unsafe {
+            ffi::obs_shutdown();
+        }
+    }
 
     #[test]
     #[cfg(target_os = "macos")]

@@ -16,6 +16,29 @@ export function SetsDevelopmentRoom() {
     [error, setError] = useState("");
   const bootstrap=useRef<Promise<LiveRoom>|undefined>(undefined);
   const smokeStarted = useRef(false);
+  const authoringProof=import.meta.env.DEV&&import.meta.env.VITE_AUTHORING_DESKTOP_PROOF==='1';
+  const authoringReview=import.meta.env.DEV&&['1','review'].includes(import.meta.env.VITE_AUTHORING_DESKTOP_PROOF);
+  const authoringStarted=useRef(false);
+  useEffect(()=>{if(room&&authoringProof&&!authoringStarted.current){authoringStarted.current=true;void import('../features/sets-v2/authoringDesktopProof').then(m=>m.authoringDesktopProof(room.id));}},[room,authoringProof]);
+  const editorReviewStarted=useRef(false);
+  useEffect(()=>{
+    if(import.meta.env.DEV&&import.meta.env.VITE_SOUNDBOARD_IMPORT)return;
+    const timing=import.meta.env.DEV&&import.meta.env.VITE_CONTROL_TIMING_ONLY;
+    if(room&&['1','review'].includes(String(timing))&&!editorReviewStarted.current){editorReviewStarted.current=true;void import('../features/sets-v2/roomSmoke').then(m=>m.measureExistingWalkthrough(timing==='review'));return;}
+    const name=import.meta.env.DEV&&import.meta.env.VITE_SET_EDITOR_REVIEW_NAME;
+    if(room&&name&&!editorReviewStarted.current){editorReviewStarted.current=true;void import('../features/sets-v2/roomSmoke').then(m=>m.openSetEditorReview(name,room.id));}
+  },[room]);
+  useEffect(()=>{
+    if(!room||!import.meta.env.DEV||!import.meta.env.VITE_SOUNDBOARD_IMPORT)return;
+    const timer=window.setInterval(()=>{
+      const handle=document.querySelector<HTMLElement>('[aria-label="Show the bottom row"]');
+      if(handle){handle.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));window.clearInterval(timer);}
+    },250);
+    const timeout=window.setTimeout(()=>window.clearInterval(timer),10000);
+    return()=>{window.clearInterval(timer);window.clearTimeout(timeout);};
+  },[room]);
+  const soundsStarted=useRef(false);
+  useEffect(()=>{const folder=import.meta.env.DEV&&import.meta.env.VITE_SOUNDBOARD_IMPORT;if(room&&folder&&import.meta.env.VITE_SOUNDBOARD_MANUAL!=="1"&&!soundsStarted.current){soundsStarted.current=true;void import('../features/sets-v2/soundboardProof').then(m=>m.soundboardProof(room.id,folder));}},[room]);
   const studioStarted=useRef(false);
   const atmosphere=import.meta.env.DEV&&import.meta.env.VITE_ATMOSPHERE_STUDIO==='1';
   const studio=!atmosphere&&import.meta.env.DEV&&import.meta.env.VITE_SCENE3D_STUDIO;
@@ -48,11 +71,19 @@ export function SetsDevelopmentRoom() {
     let cancelled = false;
     bootstrap.current??=(async () => {
       const smoke = await invoke<boolean>("live_set_v2_smoke_enabled");
-      const name = atmosphere ? "Atmosphere Studio" : studio ? "Producer 3D Studio" : scene3d ? "Producer 3D GPU lab" : new URLSearchParams(location.search).has("roomColor") ? "Producer color check" : smoke ? "Producer dev smoke" : "Producer dev";
+      const timingRoom=import.meta.env.DEV&&import.meta.env.VITE_CONTROL_TIMING_ROOM==='1';
+      const name = timingRoom ? "Producer control timing acceptance" : authoringReview ? "Producer authoring acceptance" : atmosphere ? "Atmosphere Studio" : studio ? "Producer 3D Studio" : scene3d ? "Producer 3D GPU lab" : new URLSearchParams(location.search).has("roomColor") ? "Producer color check" : smoke ? "Producer dev smoke" : "Producer dev";
       const workspace=await invoke<{endpointId:string;serverRoomId:string;runProof?:boolean;moduleBindings:import('../../shared/set-runtime/contract').ModuleBindings}|null>('live_set_v2_dev_workspace');
       if(workspace)setActiveEndpointId(workspace.endpointId);
       const rooms = await ipc.liveListRooms();
       let room = rooms.filter(r=>r.name===name).sort((a,b)=>(b.config?.length??0)-(a.config?.length??0))[0] ?? (await ipc.liveCreateRoom(name));
+      if(timingRoom&&!room.config?.includes('"presentation"'))throw Error('Create the isolated control timing fixture before enabling VITE_CONTROL_TIMING_ROOM.');
+      if(authoringProof){
+        const {authoringAcceptanceConfig}=await import('../features/sets-v2/authoringDesktopProof');
+        const config=await authoringAcceptanceConfig();
+        await ipc.liveUpdateRoom(room.id,{config:JSON.stringify(config)});
+        room={...room,config:JSON.stringify(config)};
+      }
       if(atmosphere&&workspace){
         const config=JSON.parse(room.config||'{}');
         if(config.presentation?.package?.id===atmosphereSet.id&&JSON.stringify(config.presentation.package)!==JSON.stringify(atmosphereSet)){config.presentation.package=atmosphereSet;await ipc.liveUpdateRoom(room.id,{config:JSON.stringify(config)});room={...room,config:JSON.stringify(config)};}
@@ -106,6 +137,7 @@ export function SetsDevelopmentRoom() {
         await ipc.liveUpdateRoom(room.id,{config:JSON.stringify(config)});
         room={...room,config:JSON.stringify(config)};
       }
+      if(import.meta.env.DEV&&import.meta.env.VITE_SOUNDBOARD_IMPORT){const config=JSON.parse(room.config||'{}');const keep=(p:string)=>p!=='sounds'&&p!=='setControls';config.layout={...config.layout,top:(config.layout?.top??[]).filter(keep),left:(config.layout?.left??[]).filter(keep),right:(config.layout?.right??[]).filter(keep),bottom:['sounds','setControls'],hidden:(config.layout?.hidden??[]).filter(keep)};config.sizes={...config.sizes,bottom:420};await ipc.liveUpdateRoom(room.id,{config:JSON.stringify(config)});room={...room,config:JSON.stringify(config)};}
       if(workspace?.runProof)window.setTimeout(()=>void import('../features/sets-v2/weatherRoomProof').then(m=>m.weatherRoomProof()),1000);
       return room;
     })();

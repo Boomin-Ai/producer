@@ -15,6 +15,16 @@ const env=()=>({DB:fakeD1(),TOKEN_ENCRYPTION_KEY:'synthetic-encryption-key'} as 
 const request=(a:ReturnType<typeof app>,e:Env,path:string,body:unknown)=>a.request('/connections'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)},e);
 afterEach(()=>{vi.unstubAllGlobals();vi.restoreAllMocks();});
 describe('one-shot Set authoring',()=>{
+ it('extracts only final text from thinking-enabled replies and rejects incomplete or tool content',async()=>{
+  const thinking=[{type:'thinking',thinking:'private reasoning',signature:'signed'},{type:'redacted_thinking',data:'opaque'}];
+  const fetcher=vi.fn<typeof fetch>(async()=>Response.json({stop_reason:'end_turn',content:[...thinking,{type:'text',text:JSON.stringify(draft)}]}));
+  const result=await authorSet(connection,'key',{prompt:'Cover'},{fetcher});
+  expect(result.package.id).toBe('generated');expect(JSON.stringify(result)).not.toContain('private reasoning');expect(fetcher).toHaveBeenCalledTimes(1);
+  for(const content of [thinking,[{type:'thinking',thinking:7,signature:'signed'}],[...thinking,{type:'tool_use',id:'tool'},{type:'text',text:JSON.stringify(draft)}]]){
+   const invalid=vi.fn<typeof fetch>(async()=>Response.json({stop_reason:'end_turn',content}));
+   await expect(authorSet(connection,'key',{prompt:'Cover'},{fetcher:invalid})).rejects.toThrow();expect(invalid).toHaveBeenCalledTimes(1);
+  }
+ });
  it('uses saved Claude limits, sends a valid small example without research tools, and returns only a validated draft',async()=>{
   const fetcher=vi.fn<typeof fetch>(async()=>response());
   const result=await authorSet(connection,'synthetic-secret',{prompt:'A striking solo camera cover'},{fetcher});
@@ -48,7 +58,7 @@ describe('one-shot Set authoring',()=>{
   const fetcher=vi.fn<typeof fetch>();
   for(const input of [{prompt:''},{prompt:'x'.repeat(4001)},{prompt:'Make it',extra:true},{prompt:'Make it',package:{...draft,name:'x'.repeat(70000)}},{prompt:'Make it',package:{...draft,set:{...draft.set,assets:{image:{name:'Local',mime:'image/png',data:'producer-media:00000000-0000-0000-0000-000000000000'}}}}}])await expect(authorSet(connection,'key',input,{fetcher})).rejects.toMatchObject({code:'invalid_request'});
   await expect(authorSet({...connection,provider:'openai'},'key',{prompt:'Generate'},{fetcher})).rejects.toThrow('Claude');
-  await expect(authorSet({...connection,maxOutputTokens:4097},'key',{prompt:'Generate'},{fetcher})).rejects.toThrow('budget');expect(fetcher).not.toHaveBeenCalled();
+  await expect(authorSet({...connection,maxOutputTokens:32769},'key',{prompt:'Generate'},{fetcher})).rejects.toThrow('budget');expect(fetcher).not.toHaveBeenCalled();
   expect(parseSetAuthoringInput({prompt:'  Cover  ',package:draft}).prompt).toBe('Cover');
  });
  it('bounds streamed responses and respects cancellation without retry',async()=>{

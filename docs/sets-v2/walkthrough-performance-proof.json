@@ -1,0 +1,112 @@
+{
+  "schema": "producer.control-latency-proof/1",
+  "scope": "Cloudflare walkthrough, native macOS dev, 1080p30, both orientations, local workspace",
+  "method": "Time from actual button click to adapter paired render-complete receipt; native revisions and transition completion then independently verified. Initial preparation excluded.",
+  "observations": [
+    {
+      "label": "Workers",
+      "pass": "first",
+      "clickToSettledMs": 864
+    },
+    {
+      "label": "D1",
+      "pass": "first",
+      "clickToSettledMs": 579
+    },
+    {
+      "label": "R2",
+      "pass": "first",
+      "clickToSettledMs": 572
+    },
+    {
+      "label": "Workers AI",
+      "pass": "first",
+      "clickToSettledMs": 853
+    },
+    {
+      "label": "Access / WAF",
+      "pass": "first",
+      "clickToSettledMs": 546
+    },
+    {
+      "label": "Hide descriptions",
+      "pass": "first",
+      "clickToSettledMs": 543
+    },
+    {
+      "label": "Workers Static Assets",
+      "pass": "repeat",
+      "clickToSettledMs": 630
+    },
+    {
+      "label": "Workers",
+      "pass": "repeat",
+      "clickToSettledMs": 627
+    },
+    {
+      "label": "D1",
+      "pass": "repeat",
+      "clickToSettledMs": 548
+    },
+    {
+      "label": "R2",
+      "pass": "repeat",
+      "clickToSettledMs": 604
+    },
+    {
+      "label": "Workers AI",
+      "pass": "repeat",
+      "clickToSettledMs": 553
+    },
+    {
+      "label": "Access / WAF",
+      "pass": "repeat",
+      "clickToSettledMs": 827
+    },
+    {
+      "label": "Hide descriptions",
+      "pass": "repeat",
+      "clickToSettledMs": 586
+    }
+  ],
+  "summaryMs": {
+    "min": 543,
+    "median": 586,
+    "max": 864
+  },
+  "sceneCompilationsDuringClicks": 0,
+  "nativePreloadsDuringClicks": 0,
+  "graphicsCreationsDuringClicks": 0,
+  "errors": [],
+  "nativeCacheProof": {
+    "outputFrames": 197,
+    "cameraPreserved": true,
+    "sharedSnapshotBytes": 436868096,
+    "peakSpareGraphicsBytes": 66939648,
+    "missingGraphicsFrames": 0,
+    "switches": 60,
+    "standaloneSnapshotBytes": 22003712,
+    "ok": true,
+    "sharedSnapshotCount": 45,
+    "graphicsLayerCounts": [
+      2,
+      3,
+      3
+    ],
+    "lruEvictionVerified": true,
+    "remainingGroups": 0,
+    "rehydrateMs": [
+      13.881921768188477,
+      33.04898738861084
+    ]
+  },
+  "pairedHandoffProof": {
+    "nonblockingStatusMs": 0.055069923400878906,
+    "staleGate": true,
+    "readyGate": true,
+    "cleanup": true,
+    "repeatedTransitions": true,
+    "bothRendered": true,
+    "transitionShaderCompiles": 1
+  }
+}

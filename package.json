@@ -1,7 +1,7 @@
 {
   "name": "producer",
   "private": true,
-  "version": "0.4.78",
+  "version": "0.4.79",
   "description": "Producer by Boomin \u2014 the open-source studio for creators: post everywhere, stream everywhere.",
   "license": "AGPL-3.0-only",
   "repository": {
@@ -42,6 +42,8 @@
     "test:module-recovery-browser": "node scripts/test-module-recovery-browser.mjs",
     "test:weather-output-stability-browser": "node scripts/test-weather-output-stability-browser.mjs",
     "dev:sets-v2-workspace": "node scripts/sets-v2/local-workspace.mjs --background",
+    "generate:set": "node scripts/generate-set.mjs",
+    "test:authoring-full": "node scripts/test-full-design-authoring.mjs",
     "validate:set": "node scripts/validate-set.mjs",
     "test:package-validation": "node scripts/test-package-validation.mjs",
     "test:module-push": "node scripts/test-module-push.mjs",
@@ -54,7 +56,14 @@
     "test:set-authoring-browser": "node scripts/test-set-authoring-browser.mjs",
     "test:voice-bars": "node scripts/test-voice-bars.mjs --schema-only",
     "test:voice-bars-gpu": "node scripts/test-voice-bars.mjs",
-    "dev:sets-v2-open": "node scripts/sets-v2/open-dev.mjs"
+    "dev:sets-v2-open": "node scripts/sets-v2/open-dev.mjs",
+    "test:design-plan": "node scripts/test-design-plan.mjs",
+    "test:design-plan-browser": "node scripts/test-design-plan-browser.mjs",
+    "test:design-generation-browser": "node scripts/test-design-generation-browser.mjs",
+    "mcp:sets": "node tools/producer-mcp/server.mjs",
+    "test:mcp": "node tools/producer-mcp/test.mjs",
+    "test:authoring-visual": "node scripts/test-authoring-visual.mjs",
+    "test:visual-review-browser": "node scripts/test-visual-review-browser.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.0",

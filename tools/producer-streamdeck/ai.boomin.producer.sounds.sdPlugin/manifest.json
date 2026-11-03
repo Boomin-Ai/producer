@@ -1,0 +1,104 @@
+{
+  "Name": "Producer Sounds",
+  "Description": "Control the soundboard in your active Producer room.",
+  "Author": "Producer",
+  "Version": "1.0.0.0",
+  "UUID": "ai.boomin.producer.sounds",
+  "Icon": "icon",
+  "Category": "Producer Sounds",
+  "CategoryIcon": "icon",
+  "CodePath": "plugin.mjs",
+  "Nodejs": {
+    "Version": "20"
+  },
+  "SDKVersion": 2,
+  "Software": {
+    "MinimumVersion": "6.6"
+  },
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "12"
+    },
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "PropertyInspectorPath": "property-inspector.html",
+  "Actions": [
+    {
+      "UUID": "ai.boomin.producer.sounds.play",
+      "Name": "Play sound",
+      "Tooltip": "Play sound",
+      "Icon": "icon",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "icon",
+          "TitleAlignment": "middle",
+          "FontSize": 12
+        },
+        {
+          "Image": "active",
+          "TitleAlignment": "middle",
+          "FontSize": 12
+        }
+      ],
+      "DisableAutomaticStates": true
+    },
+    {
+      "UUID": "ai.boomin.producer.sounds.stop",
+      "Name": "Stop all sounds",
+      "Tooltip": "Stop all sounds",
+      "Icon": "icon",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "icon",
+          "TitleAlignment": "middle",
+          "FontSize": 12
+        },
+        {
+          "Image": "active",
+          "TitleAlignment": "middle",
+          "FontSize": 12
+        }
+      ],
+      "DisableAutomaticStates": true
+    },
+    {
+      "UUID": "ai.boomin.producer.sounds.volume",
+      "Name": "Effects volume",
+      "Tooltip": "Effects volume",
+      "Icon": "icon",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "icon",
+          "TitleAlignment": "middle",
+          "FontSize": 12
+        },
+        {
+          "Image": "active",
+          "TitleAlignment": "middle",
+          "FontSize": 12
+        }
+      ],
+      "DisableAutomaticStates": true,
+      "Encoder": {
+        "layout": "$A1",
+        "TriggerDescription": {
+          "Rotate": "Effects volume",
+          "Push": "Mute effects"
+        }
+      }
+    }
+  ]
+}

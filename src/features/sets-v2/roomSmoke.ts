@@ -2,10 +2,167 @@ import { invoke } from "@tauri-apps/api/core";
 import {listenLiveEvents} from "../../lib/ipc";
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 async function until<T>(read: () => T | Promise<T>, label: string,attempts=600): Promise<NonNullable<T>> {
-  for (let i=0;i<attempts;i++) { const result=await read(); if(result) return result as NonNullable<T>; await sleep(50); }
+  const deadline=Date.now()+attempts*50;
+  for (let i=0;i<attempts&&Date.now()<deadline;i++) { const result=await read(); if(result) return result as NonNullable<T>; await sleep(50); }
   throw Error(`Timed out: ${label}`);
 }
 const button = (label: string, root: ParentNode = document) => Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(b => (b.getAttribute('aria-label')===label || b.textContent?.trim()===label) && !b.disabled);
+/** Private editor review by default; output verification is a separate opt-in. */
+export async function openSetEditorReview(name:string,roomId?:string){
+ if(!import.meta.env.DEV)return;
+ try{
+  const repairImage=import.meta.env.VITE_SET_EDITOR_REPAIR_HOST_IMAGE;
+  const repairRun=import.meta.env.VITE_SET_EDITOR_VERIFY_OUTPUT;
+  if(repairImage&&repairRun&&localStorage.getItem('producer-review-repair:'+repairRun)!=='complete'){
+   await until(()=>button('Set settings'),'room host repair');
+   const {ipc}=await import('../../lib/ipc');
+   const room=(await ipc.liveListRooms()).find(r=>roomId?r.id===roomId:r.name==='Producer authoring acceptance');
+   if(!room)throw Error('Acceptance room is unavailable');
+   const config=JSON.parse(room.config||'{}');
+   if(!config.presentation?.package?.set?.slots.some((s:{id:string})=>s.id==='host'))throw Error('Acceptance Set has no Host slot');
+   const id='authoring-host-headshot';
+   config.sources={...config.sources,extras:[...(config.sources?.extras??[]).filter((s:{id:string})=>s.id!==id),{id,label:'Kleveland headshot',spec:{kind:'image',path:repairImage}}]};
+   config.presentation.bindings={...config.presentation.bindings,host:id};
+   await ipc.liveUpdateRoom(room.id,{config:JSON.stringify(config)});
+   localStorage.setItem('producer-review-repair:'+repairRun,'complete');
+   await invoke('live_set_v2_report',{result:{kind:'native-handoff-host-repaired',roomId:room.id,sourceId:id}});
+   location.reload();return;
+  }
+  if(import.meta.env.VITE_SET_EDITOR_INSPECT_ONLY==='1'){
+   await until(()=>button('Set settings'),'room handoff inspection');
+   const {ipc,devices}=await import('../../lib/ipc');
+   const permissions=await ipc.livePermissions();
+   const engine=await ipc.liveEngineStatus();
+   await invoke('live_set_v2_report',{result:{kind:'native-handoff-inspection',permissions,engine:{engine_ready:engine.engine_ready,sources:engine.sources},devices:permissions.camera==='granted'?await devices.list('camera'):[],rooms:(await ipc.liveListRooms()).filter(r=>r.name==='Producer authoring acceptance').map(r=>({id:r.id,name:r.name,sources:JSON.parse(r.config||'{}').sources,bindings:JSON.parse(r.config||'{}').presentation?.bindings}))}});
+   return;
+  }
+  const dock=await until(()=>document.querySelector<HTMLElement>('[aria-label="Show the bottom row"]')||button('Set settings'),'Set controls');
+  if(dock.getAttribute('aria-label')==='Show the bottom row')dock.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+  if(!document.querySelector('dialog[open]'))(await until(()=>button('Set settings'),'Set settings')).click();
+  const picker=await until(()=>document.querySelector<HTMLButtonElement>('dialog[open] [role="combobox"][aria-label="Choose set"]'),'Set picker');
+  // The saved package may have changed while the room retained its older copy.
+  // Select away first so a matching title cannot satisfy the load wait early.
+  if(picker.textContent?.includes(name)){
+   picker.click();
+   (await until(()=>Array.from(document.querySelectorAll<HTMLButtonElement>('[role="option"]')).find(o=>!o.textContent?.includes(name)),'alternate private Set')).click();
+   await until(()=>!picker.textContent?.includes(name),'alternate private Set loaded');
+  }
+  picker.click();
+  (await until(()=>Array.from(document.querySelectorAll<HTMLButtonElement>('[role="option"]')).find(o=>o.textContent?.includes(name)),'saved Set '+name)).click();
+  await until(()=>document.querySelector('dialog[open] [role="combobox"][aria-label="Choose set"]')?.textContent?.includes(name),'selected Set');
+  const hostSource=import.meta.env.VITE_SET_EDITOR_REVIEW_HOST_SOURCE;
+  if(hostSource){
+   const inactiveHost=button('Use Host source',document.querySelector('dialog[open]')??document);
+   inactiveHost?.click();
+   const source=await until(()=>Array.from(document.querySelectorAll<HTMLSelectElement>('dialog[open] .set-source-card select[aria-label$=" source"]')).find(s=>s.getAttribute('aria-label')?.startsWith('Host')&&Array.from(s.options).some(o=>o.value===hostSource)),'existing review host source');
+   if(!source.value)select(source,hostSource);
+   if(inactiveHost)button('Use headshot',document.querySelector('dialog[open]')??document)?.click();
+  }
+  const layout=import.meta.env.VITE_SET_EDITOR_REVIEW_LAYOUT;
+  if(layout){
+   const picker=await until(()=>{const s=document.querySelector<HTMLSelectElement>('dialog[open] select[aria-label="Edit layout"]');return s&&Array.from(s.options).some(o=>o.value===layout)?s:null;},'review layout');
+   select(picker,layout);
+   await until(()=>picker.value===layout,'review layout selected');
+  }
+  await invoke('live_set_v2_report',{result:{kind:'set-editor-review',ok:true,name,layout:document.querySelector<HTMLSelectElement>('dialog[open] select[aria-label="Edit layout"]')?.value,outputActionInvoked:false}});
+  const verify=import.meta.env.VITE_SET_EDITOR_VERIFY_OUTPUT;
+  if(verify&&localStorage.getItem('producer-review-take:'+verify)!=='complete'){
+   localStorage.setItem('producer-review-take:'+verify,'started');
+   const status=async()=>{const {generation}=await invoke<{generation:number}>('live_set_status');const read=(outputId:string)=>invoke<{renderedRevision:number;transitioning:boolean}>('live_set_v2',{request:{op:'status',generation,outputId}});return {program:await read('program'),portrait:import.meta.env.VITE_SET_EDITOR_VERIFY_BOTH==='1'?await read('portrait'):{renderedRevision:0,transitioning:false}};};
+   const deadline=Date.now()+120000;
+   (await until(()=>button('Show on output')??document.querySelector('.set-editor-apply-status.applied'),'review take')).dispatchEvent(new MouseEvent('click',{bubbles:true}));
+   await invoke('live_set_v2_report',{result:{kind:'set-output-verifying',name,stage:'take requested'}});
+   await until(()=>{if(Date.now()>deadline)throw Error('Review take deadline exceeded');const error=document.querySelector('dialog[open] [role=alert]')?.textContent;if(error)throw Error(error);return document.querySelector('.set-editor-apply-status.applied');},'review taken',1800);
+   button('Close editor')?.click();
+   if(import.meta.env.VITE_SET_EDITOR_VERIFY_BOTH==='1'){
+    (await until(()=>button('Output settings'),'handoff output settings')).click();
+    const views=await until(()=>document.querySelector('[aria-label="Room output view"]'),'handoff output view');
+    (await until(()=>button('Both',views),'handoff paired outputs')).click();
+    await until(async()=>{const s=await status().catch(()=>null);return s&&s.program.renderedRevision>0&&s.portrait.renderedRevision>0&&!s.program.transitioning&&!s.portrait.transitioning?s:null;},'both handoff outputs',1800);
+    button('Close output settings')?.click();
+   }
+   await invoke('live_set_v2_report',{result:{kind:'set-output-verifying',name,stage:'taken; waiting for all layouts'}});
+   await until(()=>{if(Date.now()>deadline)throw Error('Layout readiness deadline exceeded');const panel=document.querySelector<HTMLElement>('.set-controls[data-layouts-total]');return panel&&Number(panel.dataset.layoutsTotal)>0&&panel.dataset.layoutsReady===panel.dataset.layoutsTotal;},'all room layouts ready',1800);
+   const checks=[];
+   const view=(label:string)=>label.replace(/ · (Landscape|Portrait)$/,'');
+   const labels=Array.from(new Map(Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).map(b=>{const label=b.querySelector('span')?.textContent??'';return [view(label),label] as const;})).values());
+   for(const label of [...labels,...labels.slice(0,1)]){
+    const target=Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).find(b=>b.querySelector('span')?.textContent===label)!;
+    const selected=document.querySelector('.set-layouts button[aria-pressed="true"] span')?.textContent??'';
+    if(view(selected)===view(label)){checks.push({label,alreadySelected:true,...await status()});continue;}
+    const before=await status();target.click();
+    const receipt=await until(async()=>{if(Date.now()>deadline)throw Error('Layout switching deadline exceeded');const s=await status();return s.program.renderedRevision>before.program.renderedRevision&&!s.program.transitioning&&(import.meta.env.VITE_SET_EDITOR_VERIFY_BOTH!=='1'||s.portrait.renderedRevision>before.portrait.renderedRevision&&!s.portrait.transitioning)?s:null;},'room layout '+label,1800);
+    checks.push({label,...receipt});
+   }
+   const interactiveChecks:Array<{label:string;clickToSettledMs?:number;timingEvents?:Array<Record<string,unknown>>}&Awaited<ReturnType<typeof status>>>=[];
+   if(import.meta.env.VITE_SET_EDITOR_VERIFY_INTERACTIVE==='atlas'){
+    const interactionDeadline=Date.now()+120000;
+    const settle=async(before:Awaited<ReturnType<typeof status>>,label:string)=>{
+     const receipt=await until(async()=>{if(Date.now()>interactionDeadline)throw Error('Interactive handoff deadline exceeded: '+label);const error=document.querySelector('.set-controls .set-error')?.textContent;if(error)throw Error('Interactive update failed: '+error);const s=await status();return s.program.renderedRevision>before.program.renderedRevision&&!s.program.transitioning&&s.portrait.renderedRevision>before.portrait.renderedRevision&&!s.portrait.transitioning?s:null;},'paired control '+label,2400);
+     interactiveChecks.push({label,...receipt});
+     await until(()=>document.querySelector('.set-controls[data-output-busy="false"]'),'paired transaction settled '+label,2400);
+    };
+    const pick=async(prefix:string)=>{
+     const target=Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).find(b=>b.querySelector('span')?.textContent?.startsWith(prefix));
+     if(!target)throw Error('Missing handoff chapter '+prefix);
+     if(target.getAttribute('aria-pressed')==='true')return;
+     const before=await status();target.click();await settle(before,'chapter '+prefix);
+    };
+    const press=async(label:string)=>{
+     const target=button(label,document.querySelector('.set-controls')??document);
+     if(!target)throw Error('Missing handoff control '+label);
+     const before=await status();target.click();
+     await invoke('live_set_v2_report',{result:{kind:'set-output-verifying',name,stage:'interactive: '+label}});
+     await settle(before,label);
+    };
+    await pick('02');await press('Available inventory');await press('Northern Virginia');await press('Existing inventory');await press('Atlanta');
+    await pick('05');await press('QTS');await press('DataBank');await press('Edged');
+    await pick('03');await press('Rack close-up');await press('Power surge');await press('Cool studio');await press('Wide studio');await press('Use Host source');await press('Use headshot');
+    await pick('01');
+    await until(()=>{const p=document.querySelector<HTMLElement>('.set-controls[data-layouts-total]');return p&&Number(p.dataset.layoutsTotal)>0&&p.dataset.layoutsReady===p.dataset.layoutsTotal;},'interactive layouts restored',2400);
+   }
+   if(import.meta.env.VITE_SET_EDITOR_VERIFY_INTERACTIVE==='stack'){
+    let clickAt=performance.now();
+    const timingEvents:Array<Record<string,unknown>>=[];
+    const receiveTiming=(event:Event)=>timingEvents.push((event as CustomEvent).detail);
+    window.addEventListener('producer:set-render-timing',receiveTiming);
+    const settle=async(before:Awaited<ReturnType<typeof status>>,label:string)=>{
+     const receipt=await until(async()=>{const error=document.querySelector('.set-controls .set-error')?.textContent;if(error)throw Error('Product walkthrough failed: '+error);const s=await status();return s.program.renderedRevision>before.program.renderedRevision&&s.portrait.renderedRevision>before.portrait.renderedRevision&&!s.program.transitioning&&!s.portrait.transitioning?s:null;},'paired product '+label,2400);
+     interactiveChecks.push({label,clickToSettledMs:performance.now()-clickAt,timingEvents:[...timingEvents],...receipt});await until(()=>document.querySelector('.set-controls[data-output-busy="false"]'),'product settled '+label,2400);
+    };
+    const layout=Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).find(b=>b.querySelector('span')?.textContent?.startsWith('02'));
+    if(!layout)throw Error('Missing full-stack layout');const previous=await status();clickAt=performance.now();timingEvents.length=0;layout.click();await settle(previous,'Full stack');
+    for(const label of ['Workers Static Assets','Workers','D1','R2','Workers AI','Access / WAF','Hide descriptions']){
+     const target=await until(()=>button(label,document.querySelector('.set-controls')??document),'product control '+label);const before=await status();clickAt=performance.now();timingEvents.length=0;target.click();await invoke('live_set_v2_report',{result:{kind:'set-output-verifying',name,stage:'product: '+label}});await settle(before,label);
+    }
+    window.removeEventListener('producer:set-render-timing',receiveTiming);
+   }
+   const {ipc}=await import('../../lib/ipc');
+   const savedRoom=(await ipc.liveListRooms()).find(r=>roomId?r.id===roomId:r.name==='Producer authoring acceptance');
+   const saved=JSON.parse(savedRoom?.config||'{}');
+   const sourceChecks=await until(async()=>{
+    const items=(await ipc.liveEngineStatus()).sources?.items??[];
+    const checks=(saved.presentation?.package?.set?.slots??[]).filter((slot:{id:string})=>saved.presentation?.bindings?.[slot.id]).map((slot:{id:string})=>{const id=saved.presentation?.bindings?.[slot.id];const source=items.find(s=>s.id===id);return {slot:slot.id,id,kind:source?.kind,width:source?.src_w??0,height:source?.src_h??0,hasFrame:source?.has_frame===true,persisted:saved.sources?.extras?.some((e:{id:string})=>e.id===id)===true};});
+    return checks.every((c:{hasFrame:boolean;width:number;height:number;persisted:boolean})=>c.hasFrame&&c.width>0&&c.height>0&&c.persisted)?checks:null;
+   },'persisted Host frames');
+   const visibleErrors=Array.from(document.querySelectorAll('.set-error')).map(e=>e.textContent?.trim()).filter(Boolean);
+   if(visibleErrors.length)throw Error('Handoff still shows an error: '+visibleErrors.join(' · '));
+   const panel=document.querySelector<HTMLElement>('.set-controls[data-layouts-total]');
+   const result={kind:'set-output-verified',ok:true,name,checks,interactiveChecks,sourceChecks,layoutsReady:Number(panel?.dataset.layoutsReady),layoutsTotal:Number(panel?.dataset.layoutsTotal),visibleErrors,completedAt:new Date().toISOString(),debug:(await import('./preparedScenes')).preparationDebug()};
+   localStorage.setItem('producer-review-proof:'+verify,JSON.stringify(result));
+   await invoke('live_set_v2_report',{result});
+   localStorage.setItem('producer-review-take:'+verify,'complete');
+   (await until(()=>button('Set settings'),'reopen checked Set')).click();
+   return;
+  }
+  if(verify){const saved=localStorage.getItem('producer-review-proof:'+verify);if(saved)await invoke('live_set_v2_report',{result:JSON.parse(saved)});}
+  if(import.meta.env.VITE_SET_EDITOR_DIAGNOSE==='1'){
+   await sleep(15000);
+   const engine=await invoke<{sources?:{items?:Array<{id:string;label:string;kind:string;has_frame?:boolean;src_w:number;src_h:number}>}}>('live_engine_status');
+   await invoke('live_set_v2_report',{result:{kind:'set-editor-diagnostics',name,sources:engine.sources?.items?.map(({id,label,kind,has_frame,src_w,src_h})=>({id,label,kind,has_frame,src_w,src_h})),bindings:Array.from(document.querySelectorAll<HTMLSelectElement>('dialog[open] .set-source-card select[aria-label$=" source"]')).map(s=>({label:s.getAttribute('aria-label'),source:s.value})),debug:(await import('./preparedScenes')).preparationDebug()}});
+  }
+ }catch(error){await invoke('live_set_v2_report',{result:{kind:'set-editor-review',ok:false,name,error:String(error),debug:(await import('./preparedScenes')).preparationDebug(),alerts:Array.from(document.querySelectorAll('[role=alert], .set-error')).map(e=>e.textContent)}});}
+}
 function select(el: HTMLSelectElement, value: string) {
   Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value')!.set!.call(el,value);
   el.dispatchEvent(new Event('change',{bubbles:true}));
@@ -196,4 +353,72 @@ export async function roomApplyCheck() {
  } catch(error) {
   await invoke('live_set_v2_report',{result:{ok:false,kind:'grand-arena-apply',error:String(error),errors:errors(),debug:(await import('./preparedScenes')).preparationDebug(),body:document.body.innerText.slice(-5000),completedAt:new Date().toISOString()}});
  }
+}
+
+/** Measure existing room controls directly; editor publication is a separate test. */
+export async function measureExistingWalkthrough(reviewOnly=false){
+ if(!import.meta.env.DEV)return;
+ const measurements:Array<Record<string,unknown>>=[];
+ let events:Array<Record<string,any>>=[];
+ const receive=(event:Event)=>{const d=(event as CustomEvent).detail;events.push({stage:d.stage,elapsedMs:d.elapsedMs,...(d.transitionMs===undefined?{}:{transitionMs:d.transitionMs})});};
+ const read=async(outputId:string,generation:number)=>{
+  const s=await invoke<{renderedRevision:number;transitioning:boolean;graphicsCreations:number;graphicsLayers:number;cachedBytes:number;spareGraphicsBytes:number;cachedKeys:string[]}>('live_set_v2',{request:{op:'status',generation,outputId}});
+  return {revision:s.renderedRevision,transitioning:s.transitioning,graphicsCreations:s.graphicsCreations,graphicsLayers:s.graphicsLayers,cachedBytes:s.cachedBytes,spareGraphicsBytes:s.spareGraphicsBytes,cachedScenes:s.cachedKeys.length};
+ };
+ const status=async()=>{const {generation}=await invoke<{generation:number}>('live_set_status');return {program:await read('program',generation),portrait:await read('portrait',generation)};};
+ const report=(stage:string,extra:Record<string,unknown>={})=>invoke('live_set_v2_report',{result:{kind:'walkthrough-timing',stage,measurements,...extra}});
+ try{
+  await report('starting');
+  let lastProbe=0;
+  await until(async()=>{
+   const dock=document.querySelector<HTMLElement>('[aria-label="Show the bottom row"]');if(dock)dock.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+   const panel=document.querySelector('.set-controls[data-layouts-total]');
+   if(Date.now()-lastProbe>3000){lastProbe=Date.now();await report('loading room controls',{engine:await invoke<Record<string,unknown>>('live_engine_status').then(s=>({ready:s.engine_ready,bootstrap:s.bootstrap_ok,state:s.session_state})).catch(String),panels:Array.from(document.querySelectorAll('.set-controls')).map(e=>e.textContent?.slice(0,150)),buttons:Array.from(document.querySelectorAll('button')).slice(-35).map(b=>b.getAttribute('aria-label')??b.textContent?.trim().slice(0,45))});}
+   return panel;
+  },'existing room controls',2400);
+  button('Close editor')?.click();
+  (await until(()=>button('Output settings'),'timing output settings')).click();
+  const views=await until(()=>document.querySelector('[aria-label="Room output view"]'),'timing output view');(await until(()=>button('Both',views),'timing both outputs')).click();button('Close output settings')?.click();
+  await until(()=>document.querySelector('.set-controls[data-output-busy="false"]'),'timing output idle',2400);
+  const layout=await until(()=>Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).find(b=>b.querySelector('span')?.textContent?.startsWith('02')),'timing full-stack layout');
+  if(layout.getAttribute('aria-pressed')!=='true')layout.click();
+  const labels=['Workers Static Assets','Workers','D1','R2','Workers AI','Access / WAF','Hide descriptions'];
+  await until(async()=>{
+   const selected=Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).find(b=>b.querySelector('span')?.textContent?.startsWith('02'));
+   if(selected?.getAttribute('aria-pressed')!=='true'&&!selected?.disabled){selected?.click();return false;}
+   const panel=document.querySelector<HTMLElement>('.set-controls[data-layouts-total]');
+   const preparation=(await import('./preparedScenes')).preparationDebug();
+   const failures=preparation.flatMap(s=>s.entries.filter(e=>e.state.state==='error').map(e=>e.state.error));if(failures.length)throw Error(failures.join('; '));
+   const fullyPrepared=preparation.every(s=>s.inventory?.length&&!s.working&&!s.queue.length&&s.inventory.every(i=>s.entries.some(e=>e.key===i.key&&e.state.state==='ready')));
+   if(Date.now()-lastProbe>3000){lastProbe=Date.now();await report('preparing control choices',{ready:panel?.dataset.controlsReady,total:panel?.dataset.controlsTotal});}
+   if(!panel||panel.dataset.outputBusy!=='false')return false;const controls=Number(panel.dataset.controlsTotal??0);if(!fullyPrepared)return false;return controls>0?panel.dataset.controlsReady===panel.dataset.controlsTotal:panel.dataset.layoutsReady===panel.dataset.layoutsTotal;
+  },'room layouts ready',2400);
+  const showReady=button('Show set');if(showReady)showReady.click();
+  await until(()=>button('Show room scene')&&document.querySelector('.set-controls[data-output-busy="false"]'),'timing set on output',2400);
+  await report('layouts ready');
+  if(reviewOnly){await report('ready for manual review',{ok:true});return;}
+  const assertLayout=()=>{const selected=document.querySelector('.set-layouts button[aria-pressed="true"] span')?.textContent?.trim();if(!selected?.startsWith('02'))throw Error('Layout changed during walkthrough timing; stopped without further control clicks.');};
+  window.addEventListener('producer:set-render-timing',receive);
+  for(const [index,label] of [...labels,...labels].entries()){
+   assertLayout();
+   await report('waiting for enabled control '+label);
+   const target=await until(()=>{const b=button(label);return b&&!b.disabled?b:null;},'enabled timing product '+label,600);
+   if(target.getAttribute('aria-pressed')==='true')continue;
+   await report('reading status '+label);
+   const before=await status(),preparationBefore=(await import('./preparedScenes')).preparationDebug().map(s=>s.counters);events=[];assertLayout();const start=performance.now();target.click();
+   await report('clicked '+label,{events:[...events],button:target.outerHTML,outputStatus:document.querySelector('.set-output-status')?.textContent,errors:Array.from(document.querySelectorAll('.set-controls .set-error')).map(e=>e.textContent)});
+   // Observe the adapter's own paired presentation receipt. A second status
+   // poller adds graphics-context contention and distorts the measured click.
+   await until(()=>{assertLayout();const errors=Array.from(document.querySelectorAll('.set-controls .set-error')).map(e=>e.textContent);if(errors.length)throw Error(errors.join('; '));return events.some(e=>e.stage==='render-complete');},'timing receipt '+label,2400);
+   const clickToSettledMs=performance.now()-start,after=await status();
+   if(after.program.revision<=before.program.revision||after.portrait.revision<=before.portrait.revision||after.program.transitioning||after.portrait.transitioning)throw Error('Paired presentation receipt did not match native output');
+   const preparationAfter=(await import('./preparedScenes')).preparationDebug().map(s=>s.counters);
+   measurements.push({label,preparationBefore,preparationAfter,pass:index<labels.length?'first':'repeat',clickToSettledMs,events:[...events],before,after,preparationTrace:(await import('./preparedScenes')).preparationDebug().map(s=>s.trace.slice(-20))});await report('measured '+label);
+   await until(()=>document.querySelector('.set-controls[data-output-busy="false"]'),'timing transaction idle',2400);
+   if(preparationAfter.some((s,i)=>s.plans!==preparationBefore[i]?.plans||s.preloads!==preparationBefore[i]?.preloads))throw Error('Prepared control rebuilt a scene: '+label);
+   if((after.program.graphicsCreations!==before.program.graphicsCreations||after.portrait.graphicsCreations!==before.portrait.graphicsCreations))throw Error('Prepared selection created new paint: '+label);
+  }
+  await report('complete',{ok:true,errors:Array.from(document.querySelectorAll('.set-controls .set-error')).map(e=>e.textContent)});
+ }catch(error){await report('failed',{ok:false,error:String(error),debug:(await import('./preparedScenes')).preparationDebug().map(s=>({trace:s.trace,entries:s.entries.filter(e=>e.state.state==='error')}))});}
+ finally{window.removeEventListener('producer:set-render-timing',receive);}
 }

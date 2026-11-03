@@ -4,6 +4,59 @@ Updated 2026-10-24. The isolated `Producer Sets v2 Dev.app` opens the normal Pro
 
 Run `npm run dev:sets-v2` for the local frontend, then `npm run dev:sets-v2-room` to build and open the app. `python3 scripts/sets-v2/dev-room.py --prepare` builds without opening; `--smoke` exercises the normal room controls automatically.
 
+The native build requires at least 3 GiB free before starting (a conservative
+headroom check, not an exact size estimate). After staging, `npm run
+dev:sets-v2-open` starts the local services and reopens that same bundle. Dev
+signing uses `scripts/sets-v2/dev-entitlements.plist`; production signing remains
+separate.
+
+For the generated-Set desktop acceptance fixture, `VITE_AUTHORING_DESKTOP_PROOF=1`
+is an explicit opt-in that configures a dedicated room using
+`target/visual-acceptance/repaired.set.json`, activates the built-in camera and
+microphone, and records ten seconds of both outputs. It requires the isolated
+native app and verifies its version. Use `VITE_AUTHORING_DESKTOP_PROOF=review`
+afterwards to open that saved room without resetting it or recording again.
+The recording inspector is `scripts/sets-v2/inspect-authoring-recording.swift`.
+
+For private review of a saved package, set `VITE_SET_EDITOR_REVIEW_NAME` to its
+name. The dev room opens that package in Set edit without taking output. Set edit now
+shows layout-relevant `value.set` buttons under **Visual controls**, using the
+editor's private session. Browser isolation coverage verifies these buttons
+change the preview without changing room state or taking output.
+For a fixture with a Host slot, optional `VITE_SET_EDITOR_REVIEW_HOST_SOURCE`
+can select an existing room-source ID in an empty private slot; it preserves an
+already assigned source and does not take output or create a device.
+Optional `VITE_SET_EDITOR_REVIEW_LAYOUT` selects a layout ID inside that private
+editor without changing the package's initial layout or the room output.
+`VITE_SET_EDITOR_DIAGNOSE=1` additionally reports source frame dimensions and
+preparation states after fifteen seconds. For an explicitly authorized local
+playback check, `VITE_SET_EDITOR_VERIFY_OUTPUT=<unique nonce>` takes the Set,
+waits for every layout to prepare, then switches through its distinct views
+and checks native rendered-revision receipts. This changes local output; it
+does not record or stream. Completed checks and receipts are stored by nonce
+in local storage so a frontend reload does not repeat a completed take test.
+Remove the verification flag after checking. Landscape/portrait variants of
+one view share the view check; both variants must still report ready.
+
+On 2026-11-01, the AI offer package passed the isolated renderer but its
+long-running desktop room reported first-frame preparation timeouts. A fresh
+room preparation recovered; source diagnostics confirmed camera and video
+frames. Unused embedded assets were removed from the standalone AI package,
+and real-room acceptance took all five offer views with both orientations ready.
+The separate Atlanta capacity package also passed all seven view takes and
+fourteen-layout readiness, including its sole Atlanta API CTA. Receipts are in
+`target/set-failure-fix/*-room-output-proof.json`. Disk exhaustion occurred during
+the investigation; the initial timeout's precise cause is not conclusively
+isolated. This is successful recovery and stronger desktop acceptance, not a
+claim that the native decoder or all resource-pressure failures were repaired.
+
+The 2026-11-01 Atlantium Georgia capacity package has six scenes in two
+orientations, a supplied static headshot and research controls. All 12 layouts
+passed the isolated native renderer harness, including headshot visibility.
+The generic authoring harness now distinguishes static-image packages from
+synthetic-camera fixtures. This package's run does not test physical microphone
+response or recording. Evidence: `target/atlantium-georgia-six/native/run.json`.
+
 The app uses identifier `ai.boomin.producer.sets-v2-dev`, isolated storage, a copied set library and copied local media-picker grants. It does not copy account credentials or modify original set packages. The staged bundle is `src-tauri/target/sets-v2-dev/Producer Sets v2 Dev.app`.
 
 ## Available for review
@@ -141,3 +194,45 @@ Moved Rehearse/Exit rehearsal and Show on output into the editor configuration t
 Import/export/media moved into a Files popover to keep the header on one line. Export returns focus to its visible Files trigger. Compact editor widths retain both actions and reduce status text to a colored indicator with its full title/accessible text. Show transport remains below the toolbar during private practice.
 
 Validation: TypeScript and browser configuration, private rehearsal/apply isolation, and editor navigation/canvas fitting checks pass. The isolation test verifies both actions are inside the top toolbar, initial unapplied feedback, and confirmed on-output feedback/disabled unchanged action. Visually inspected the toolbar screenshot. No native changes or production deployment.
+
+
+### Fitted output margins (November 1)
+
+A portrait Set fitted into landscape program output could expose an unrelated
+room video in its transparent side margins. The native scene viewport now paints
+only contain-fit margins opaque black. Authored alpha inside the fitted canvas is
+preserved; matching-aspect, cover and stretch compositions keep their behavior.
+This does not alter the saved Set JSON or move authored elements.
+
+Run `PRODUCER_PROBE_VIEWPORT_ONLY=1 bash scripts/sets-v2/run-native-probe.sh`
+for the focused native Metal check. It covers pillarbox and letterbox opacity,
+centered content, authored transparency, contain/cover/stretch, budget rejection,
+retention after failed preparation and graph cleanup. This focused probe needs no
+browser fixtures, physical devices, recording or streaming.
+
+
+### One host selection, paired output variants (November 1)
+
+Host layout buttons and minimized/segment pickers now list logical views rather
+than separate orientation canvases. `layoutViews.ts` resolves explicit `set.views`
+first, suffix pairs only for legacy packages, and preserves unpaired layouts.
+Orientation-specific editing remains in the Set editor. Shared copy, source
+bindings, framing and runtime state are preserved.
+
+Landscape program always resolves the selected view's landscape variant. Portrait
+Follow set resolves the explicit portrait variant; a missing variant fits the
+selected composition. In Both/portrait mode, the room preparation bank pins and
+prepares both required scenes before activation. A native `takePair` request
+validates both revisions/readiness and allocates both transitions before queueing
+either, under one graphics lock. Failed preparation or rejected/stale paired takes
+retain previous outputs. Render completion requires both native receipts. This
+coordinates the native queue; no encoder frame-alignment claim is made.
+
+Checks: `node scripts/test-paired-layout-views.mjs` (with
+`PRODUCER_PLAYWRIGHT_MODULE` pointing to an installed Playwright Core), existing
+standalone-panel and prepared-scene regressions, TypeScript, and
+`PRODUCER_PROBE_PAIR_ONLY=1 bash scripts/sets-v2/run-native-probe.sh`. The focused
+Metal probe covers unready/stale rejection without either output changing,
+independent orientation designs, initial cuts, repeated paired transitions,
+overlap rejection and cleanup. New package generation can retain the current
+`set.views` JSON; this change does not rename authored IDs or rewrite saved Sets.

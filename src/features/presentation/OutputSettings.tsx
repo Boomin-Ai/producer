@@ -1,4 +1,5 @@
-import {IS_MAC} from '../../lib/platform';
+import {outputLayout} from './layoutViews';
+import {IS_MAC,IS_WINDOWS} from '../../lib/platform';
 import {AssetTransport} from './assetTransport';
 import {useEffect,useRef,useState,useSyncExternalStore,type ReactNode} from 'react';
 import {ipc} from '../../lib/ipc';
@@ -19,7 +20,7 @@ export function OutputSettings({icon,session,output,sourceNames,view='landscape'
  const state=useSyncExternalStore(session.subscribe,session.snapshot);
  const [active,setActive]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [mirrored,setMirrored]=useState<boolean|null>(null),[mirrorBusy,setMirrorBusy]=useState(false),[mirrorError,setMirrorError]=useState('');
- useEffect(()=>{if(!IS_MAC)return;let alive=true;void ipc.liveVirtualCamMirror().then(value=>{if(alive)setMirrored(value);}).catch(e=>{if(alive)setMirrorError(String(e));});return()=>{alive=false;};},[]);
+ useEffect(()=>{if(!IS_MAC&&!IS_WINDOWS)return;let alive=true;void ipc.liveVirtualCamMirror().then(value=>{if(alive)setMirrored(value);}).catch(e=>{if(alive)setMirrorError(String(e));});return()=>{alive=false;};},[]);
  const changeMirror=async(on:boolean)=>{setMirrorBusy(true);setMirrorError('');try{setMirrored(await ipc.liveVirtualCamMirror(on));}catch(e){setMirrorError(String(e));}finally{setMirrorBusy(false);}};
  const [switching,setSwitching]=useState(false),[stoppingCamera,setStoppingCamera]=useState(false);const chooseFlight=useRef(false);
  const [layout,setLayout]=useState('auto');const [sources,setSources]=useState<import('../../lib/ipc').LiveSources>();
@@ -28,8 +29,8 @@ export function OutputSettings({icon,session,output,sourceNames,view='landscape'
  const checkGeneration=(generation:number)=>{if(cacheGeneration.current!==generation){media.current.clear();warmed.current='';cacheGeneration.current=generation;}};
  const lease=useRef(crypto.randomUUID()),revision=useRef(0),flight=useRef(false),fingerprint=useRef('');
  const portraits=session.package.set.layouts.filter(l=>l.height>l.width);
- const pairedId=state.layoutId.endsWith('-landscape')?state.layoutId.replace(/-landscape$/,'-portrait'):`${state.layoutId}-portrait`;
- const matched=portraits.find(l=>l.id===state.layoutId||l.id===pairedId)?.id??(portraits.length===1?portraits[0].id:undefined);
+ const pairedId=outputLayout(session.package.set,state.layoutId,'portrait');
+ const matched=portraits.find(l=>l.id===pairedId)?.id??(!session.package.set.views&&portraits.length===1?portraits[0].id:undefined);
  // Never silently substitute the room camera for a set that's on output.
  // The compositor fits an unmatched landscape composition into the portrait canvas.
  const effectiveLayout=layout==='room'?'room':portraits.some(l=>l.id===layout)?layout:matched??state.layoutId;
@@ -37,6 +38,7 @@ export function OutputSettings({icon,session,output,sourceNames,view='landscape'
  const authored=usingSet&&(active||view!=='landscape');
  const fitted=usingSet&&!portraits.some(l=>l.id===effectiveLayout);
  useEffect(()=>{setLayout('auto');fingerprint.current='';media.current.clear();},[session.package.id]);
+ useEffect(()=>{output.configurePortrait?.((active||view!=='landscape')&&layout!=='room'?layout:null);},[output.configurePortrait,active,view,layout]);
  const warmed=useRef('');
  const wake=useRef<()=>void>(()=>{}),pending=useRef(false);
  const latest=useRef({session,output,layout:effectiveLayout,state,authored});latest.current={session,output,layout:effectiveLayout,state,authored};
@@ -50,10 +52,11 @@ export function OutputSettings({icon,session,output,sourceNames,view='landscape'
    if(flight.current){pending.current=true;return;}flight.current=true;
    try{
     const current=latest.current;
+    if(current.authored&&current.output.configurePortrait){setBusy(false);setError('');return;}
     if(!current.authored){
      if(fingerprint.current!=='room'){setBusy(true);const sources=await ipc.livePortraitRoom();if(alive){setSources(sources);fingerprint.current='room';media.current.clear();}}
      else{const sources=await ipc.livePortraitState();if(alive)setSources(sources);}
-     if(current.output.renderer==='native'){await current.output.stopPortrait?.();}
+     if(current.output.renderer==='native'&&(!current.output.configurePortrait||current.layout==='room')){await current.output.stopPortrait?.();}
      if(current.output.renderer!=='native'&&!current.output.active&&current.layout&&current.session.package.set.layouts.some(l=>l.id===current.layout)&&alive){
       const projection=setOutputProjection(current.session,0,current.layout),visible=new Set<string>();if(projection.timeline)projection.timeline={...projection.timeline,clock:{...projection.timeline.clock,running:false}};const visit=(n:typeof projection.root)=>{if(n.slotId)visible.add(n.slotId);n.children.forEach(visit);};visit(projection.root);
       const bindings=Object.fromEntries(Object.entries(resolveRoomBindings(current.output.bindings,current.output.sources)).filter(([slot,id])=>visible.has(slot)&&current.output.sources.items?.some(s=>s.id===id&&s.has_frame&&s.visible)));
@@ -90,7 +93,7 @@ export function OutputSettings({icon,session,output,sourceNames,view='landscape'
     <p className="rm-output-settings-note">{usingSet?(fitted?`${session.package.name} has no matching portrait layout. The complete set is fitted into portrait; add a portrait layout for a full-height design.`:layout==='auto'?'Portrait follows the matching set / segment layout.':'Portrait uses the selected set layout.'):'Portrait uses room sources. Drag, resize, crop and arrange them directly on its canvas.'}</p>
     {active&&!authored&&sources?.items?.length?<details className="rm-portrait-sources"><summary>Portrait sources</summary>{sources.items.map(source=><button key={source.id} aria-pressed={source.visible} aria-label={`${source.visible?'Hide':'Show'} ${sourceNames[source.id]??source.label} on portrait`} onClick={()=>void ipc.livePortraitTransform(source.id,{visible:!source.visible}).then(setSources).catch(e=>setError(String(e)))}><span>{sourceNames[source.id]??source.label}</span><span>{source.visible?'Shown':'Hidden'}</span></button>)}</details>:null}
     {busy&&<p role="status">Preparing portrait…</p>}{error&&<p role="alert">{error}</p>}
-    {IS_MAC&&<div><label><input type="checkbox" aria-label="Mirror virtual camera" checked={mirrored===true} disabled={mirrored===null||mirrorBusy} onChange={e=>void changeMirror(e.currentTarget.checked)}/> Mirror virtual camera</label><p className="rm-output-settings-note">Flips the entire outgoing camera picture horizontally, including set text.</p>{mirrorError&&<p role="alert">{mirrorError} <button onClick={()=>{setMirrorError('');void ipc.liveVirtualCamMirror().then(setMirrored).catch(e=>setMirrorError(String(e)));}}>Retry</button></p>}</div>}
+    {(IS_MAC||IS_WINDOWS)&&<div><label><input type="checkbox" aria-label="Mirror virtual camera" checked={mirrored===true} disabled={mirrored===null||mirrorBusy} onChange={e=>void changeMirror(e.currentTarget.checked)}/> Mirror virtual camera</label><p className="rm-output-settings-note">Flips the entire outgoing camera picture horizontally, including set text.</p>{mirrorError&&<p role="alert">{mirrorError} <button onClick={()=>{setMirrorError('');void ipc.liveVirtualCamMirror().then(setMirrored).catch(e=>setMirrorError(String(e)));}}>Retry</button></p>}</div>}
     <p className="rm-output-settings-note">Virtual camera follows the selected canvas. For vertical apps, choose Portrait, start Virtual cam, then select “Producer Virtual Camera” in the other app. Stop Virtual cam before switching canvases; reconnect it in the other app if its format stays locked. Camera video does not include show audio.</p>
     <p className="rm-output-settings-note">Both records separate landscape and portrait files. Portrait sends the vertical canvas to streams and guests. Both sends landscape and records both canvases.</p>
    </>}

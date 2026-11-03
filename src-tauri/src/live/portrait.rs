@@ -50,6 +50,7 @@ struct Scale {
     range: i32,
     colorspace: i32,
 }
+#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
 extern "C" {
     fn obs_sceneitem_set_alignment(item: *mut ffi::obs_sceneitem_t, alignment: u32);
     fn obs_sceneitem_set_bounds_alignment(item: *mut ffi::obs_sceneitem_t, alignment: u32);

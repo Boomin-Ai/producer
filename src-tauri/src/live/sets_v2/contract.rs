@@ -223,6 +223,13 @@ pub enum Action {
         duration_ms: f64,
         mode: String,
     },
+    TakePair {
+        generation: u64,
+        program_revision: u64,
+        portrait_revision: u64,
+        duration_ms: f64,
+        mode: String,
+    },
     Cancel {
         generation: u64,
         output_id: Option<String>,
@@ -245,6 +252,7 @@ pub enum Action {
 impl Action {
     pub fn output(&self) -> &str {
         match self {
+            Self::TakePair { .. } => "program",
             Self::Prepare { output_id, .. }
             | Self::Preload { output_id, .. }
             | Self::Activate { output_id, .. }
@@ -263,6 +271,7 @@ impl Action {
             | Self::Activate { generation, .. }
             | Self::Retain { generation, .. }
             | Self::Take { generation, .. }
+            | Self::TakePair { generation, .. }
             | Self::Cancel { generation, .. }
             | Self::Status { generation, .. }
             | Self::Pause { generation, .. }
@@ -275,8 +284,10 @@ impl Action {
 pub struct Status {
     pub scene3d_contexts: usize,
     pub graphics_layers: usize,
+    pub graphics_creations: usize,
     pub cached_keys: Vec<String>,
     pub cached_bytes: usize,
+    pub spare_graphics_bytes: usize,
     pub generation: u64,
     pub prepared_revision: u64,
     pub rendered_revision: u64,

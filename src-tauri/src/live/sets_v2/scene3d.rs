@@ -1,5 +1,6 @@
 //! Trusted, room-owned WebGL resource. Packages cannot choose URLs or scripts.
 use super::{contract::Clock, ffi, Source};
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -407,8 +408,8 @@ impl Bridge {
         let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
         let mut entropy = [0u8; 32];
-        std::fs::File::open("/dev/urandom")
-            .and_then(|mut f| f.read_exact(&mut entropy))
+        rand::rngs::OsRng
+            .try_fill_bytes(&mut entropy)
             .map_err(|e| e.to_string())?;
         let token = entropy
             .iter()
@@ -466,6 +467,12 @@ impl Bridge {
         serde_json::to_string(&self.state.lock().unwrap().control).unwrap()
     }
     fn serve(&self, mut stream: TcpStream) {
+        // macOS can inherit O_NONBLOCK from the accepting listener. Each
+        // connection has its own bounded worker: use blocking writes so a full
+        // socket buffer cannot truncate renderer.js at an advertised length.
+        if stream.set_nonblocking(false).is_err() {
+            return;
+        }
         let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
         let _ = stream.set_write_timeout(Some(Duration::from_secs(2)));
         let mut buffer = Vec::new();
@@ -820,4 +827,90 @@ pub fn key(instance: &str, spec: &Spec, w: u32, h: u32) -> String {
         spec.pass,
         Sha256::digest(spec.world.to_string().as_bytes())
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn renderer_response_survives_a_nonblocking_accepted_socket() {
+        let bridge = Bridge::start(
+            &Spec {
+                cue_sequence: None,
+                id: "test".into(),
+                pass: "background".into(),
+                world: Value::Null,
+                cue: "initial".into(),
+                view: None,
+            },
+            1920,
+            1080,
+        )
+        .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let (accepted, _) = listener.accept().unwrap();
+        // Force the macOS inheritance condition on every test platform.
+        accepted.set_nonblocking(true).unwrap();
+        let serving = bridge.clone();
+        let worker = std::thread::spawn(move || serving.serve(accepted));
+        write!(
+            client,
+            "GET /{}/renderer.js HTTP/1.1\r\nHost: localhost\r\n\r\n",
+            bridge.token
+        )
+        .unwrap();
+        // Leave the receiving buffer full before consuming the large script.
+        std::thread::sleep(Duration::from_millis(100));
+        let mut response = Vec::new();
+        client.read_to_end(&mut response).unwrap();
+        worker.join().unwrap();
+        bridge.stop();
+        let body = response.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
+        assert!(String::from_utf8_lossy(&response[..body])
+            .contains(&format!("Content-Length: {}\r\n", SCRIPT.len())));
+        assert_eq!(
+            &response[body..],
+            SCRIPT,
+            "the renderer must arrive without truncation"
+        );
+    }
+
+    #[test]
+    fn bridge_uses_os_entropy_and_releases_loopback_listener() {
+        let spec = Spec {
+            cue_sequence: None,
+            id: "test".into(),
+            pass: "background".into(),
+            world: json!({}),
+            cue: "idle".into(),
+            view: None,
+        };
+        let first = Bridge::start(&spec, 320, 180).unwrap();
+        let second = Bridge::start(&spec, 320, 180).unwrap();
+        assert_eq!(first.token.len(), 64);
+        assert!(first.token.bytes().all(|b| b.is_ascii_hexdigit()));
+        assert_ne!(first.token, second.token);
+        let address = first.origin.trim_start_matches("http://").to_owned();
+        let weak = Arc::downgrade(&first);
+        first.stop();
+        second.stop();
+        drop(first);
+        drop(second);
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            if weak.upgrade().is_none() {
+                if let Ok(listener) = TcpListener::bind(&address) {
+                    drop(listener);
+                    break;
+                }
+            }
+            assert!(Instant::now() < deadline, "3D bridge did not shut down");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
 }

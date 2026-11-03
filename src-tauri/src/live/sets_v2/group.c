@@ -29,6 +29,7 @@ struct group {
   uint32_t width, height;
   float density;
   float radius, opacity;
+  struct vec2 viewport_inset;
   gs_texrender_t *texture;
   gs_texrender_t *accum[2], *blur_texture;
   int mask_kind,mask_direction;float mask_progress,mask_x,mask_y,mask_feather,backdrop_blur;bool mask_invert;
@@ -41,7 +42,7 @@ static atomic_size_t live_groups = 0;
 static _Thread_local unsigned render_depth = 0;
 static const char EFFECT[] =
     "uniform float4x4 ViewProj;uniform texture2d image;uniform float2 extent;"
-    "uniform float radius;uniform float opacity;uniform float mask_kind;uniform float mask_progress;"
+    "uniform float2 viewport_inset;uniform float radius;uniform float opacity;uniform float mask_kind;uniform float mask_progress;"
     "uniform float2 mask_center;uniform float mask_feather;uniform float mask_invert;uniform float mask_direction;"
     "uniform float2 origin;uniform float2 uv_scale;uniform float2 blur_step;"
     "uniform texture2d backdrop_image;uniform float2 backdrop_origin;uniform float2 backdrop_scale;"
@@ -58,7 +59,7 @@ static const char EFFECT[] =
     "else if(mask_direction>1.5){t=uv.y;len=extent.y;}else if(mask_direction>0.5)t=1.0-uv.x;"
     "d=(t-mask_progress)*len;}m=saturate(0.5-d/feather);}}"
     "if(mask_invert>0.5)m=1.0-m;return base*m;}"
-    "float4 PS(V v):TARGET{return image.Sample(smp,v.uv)*(maskValue(v.uv)*opacity);}"
+    "float4 PS(V v):TARGET{float inside=step(viewport_inset.x,v.uv.x)*step(viewport_inset.y,v.uv.y)*step(v.uv.x,1.0-viewport_inset.x)*step(v.uv.y,1.0-viewport_inset.y);return lerp(float4(0.0,0.0,0.0,opacity),image.Sample(smp,v.uv)*(maskValue(v.uv)*opacity),inside);}"
     "float4 Blur(V v):TARGET{float2 uv=origin+v.uv*uv_scale;"
     "float4 c=image.Sample(smp,uv)*0.227027;"
     "c+=(image.Sample(smp,uv+blur_step*1.384615)+image.Sample(smp,uv-blur_step*1.384615))*0.316216;"
@@ -67,6 +68,26 @@ static const char EFFECT[] =
     "technique Draw{pass{vertex_shader=VS(v);pixel_shader=PS(v);}}"
     "technique BlurHorizontal{pass{vertex_shader=VS(v);pixel_shader=Blur(v);}}"
     "technique BlurVertical{pass{vertex_shader=VS(v);pixel_shader=BlurMask(v);}}";
+/* One libobs graphics device per engine. Rendering and these lease changes
+ * hold its graphics context lock. All child rendering finishes before a group
+ * sets uniforms/begins its own pass, so the program can be shared while each
+ * group's textures, placement and mask parameters remain independent. */
+static gs_effect_t *shared_effect;
+static size_t effect_leases;
+static atomic_size_t effect_compilations;
+static gs_effect_t *acquire_effect(char **error) {
+  if (!shared_effect) {
+    shared_effect=gs_effect_create(EFFECT,"producer-set-v2-group.effect",error);
+    if(shared_effect)atomic_fetch_add(&effect_compilations,1);
+  }
+  if(shared_effect)effect_leases++;
+  return shared_effect;
+}
+static void release_effect(gs_effect_t *effect) {
+  if(!effect)return;
+  if(effect==shared_effect&&effect_leases&&!--effect_leases){gs_effect_destroy(shared_effect);shared_effect=NULL;}
+}
+size_t producer_set_v2_group_effect_compilations(void){return atomic_load(&effect_compilations);}
 static struct group *get(obs_source_t *s);
 static void effect_draw(struct group *g,gs_texture_t *texture,const char *tech,uint32_t w,uint32_t h){
  gs_effect_set_texture(gs_effect_get_param_by_name(g->effect,"image"),texture);
@@ -74,6 +95,7 @@ static void effect_draw(struct group *g,gs_texture_t *texture,const char *tech,u
  for(size_t i=0;i<passes;i++)if(gs_technique_begin_pass(t,i)){gs_draw_sprite(texture,0,w,h);gs_technique_end_pass(t);}gs_technique_end(t);
 }
 static void mask_params(struct group *g,const struct group *mask,float density,float opacity){
+ gs_effect_set_vec2(gs_effect_get_param_by_name(g->effect,"viewport_inset"),&g->viewport_inset);
  struct vec2 extent={mask->width*density,mask->height*density},center={mask->mask_x,mask->mask_y};
  gs_effect_set_vec2(gs_effect_get_param_by_name(g->effect,"extent"),&extent);
  gs_effect_set_vec2(gs_effect_get_param_by_name(g->effect,"mask_center"),&center);
@@ -113,7 +135,7 @@ static void *create(obs_data_t *settings, obs_source_t *source) {
   g->opacity = (float)opacity;
   char *error = NULL;
   obs_enter_graphics();
-  g->effect = gs_effect_create(EFFECT, "producer-set-v2-group.effect", &error);
+  g->effect = acquire_effect(&error);
   g->texture = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
   obs_leave_graphics();
   if (error) {
@@ -123,7 +145,7 @@ static void *create(obs_data_t *settings, obs_source_t *source) {
   if (!g->effect || !g->texture) {
     obs_enter_graphics();
     if (g->effect)
-      gs_effect_destroy(g->effect);
+      release_effect(g->effect);
     if (g->texture)
       gs_texrender_destroy(g->texture);
   for(int i=0;i<2;i++)gs_texrender_destroy(g->accum[i]);gs_texrender_destroy(g->blur_texture);
@@ -147,7 +169,7 @@ static void destroy(void *data) {
   for (size_t i = 0; i < 2; i++)
     gs_texrender_destroy(g->accum[i]);
   gs_texrender_destroy(g->blur_texture);
-  gs_effect_destroy(g->effect);
+  release_effect(g->effect);
   obs_leave_graphics();
   atomic_fetch_sub(&live_groups, 1);
   free(g);
@@ -161,7 +183,7 @@ static void children(void *data, void *callback, void *param) {
 /* Bypass offscreen sampling only when no group isolation or clipping is
  * needed. Check each frame: animation may move a child outside its bounds. */
 static bool direct(const struct group *g) {
-  if (g->radius != 0 || g->opacity != 1 || g->mask_kind || g->mask_invert) return false;
+  if (g->radius != 0 || g->opacity != 1 || g->mask_kind || g->mask_invert || g->viewport_inset.x > 0 || g->viewport_inset.y > 0) return false;
   for (size_t i=0;i<g->count;i++) {
     const struct layer *l=&g->layers[i];
     if (!l->visible) continue;
@@ -420,3 +442,10 @@ bool producer_set_v2_group_effects(obs_source_t *source,int kind,float progress,
  g->mask_kind=kind;g->mask_progress=progress;g->mask_x=x;g->mask_y=y;g->mask_feather=feather;g->mask_invert=invert;g->mask_direction=direction;g->backdrop_blur=blur;return true;
 }
 bool producer_set_v2_group_mask_progress(obs_source_t *source,float progress){struct group *g=get(source);if(!g||!isfinite(progress)||progress<0||progress>1)return false;g->mask_progress=progress;return true;}
+
+/* Only the output viewport owns letterbox bars. Preserve authored alpha inside. */
+bool producer_set_v2_group_viewport_inset(obs_source_t *source,float x,float y) {
+ struct group *g=get(source);
+ if(!g||g->sealed||!isfinite(x)||!isfinite(y)||x<0||y<0||x>=.5f||y>=.5f)return false;
+ g->viewport_inset=(struct vec2){x,y};return true;
+}

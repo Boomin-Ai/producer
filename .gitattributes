@@ -22,6 +22,12 @@
 *.cmake     text eol=lf
 *.json      text eol=lf
 *.yml       text eol=lf
+*.onnx      binary
+
+# Preserve the vendored reference preprocessing implementation verbatim.
+src-tauri/src/live/vendor/pphumanseg/pphumanseg.py whitespace=-blank-at-eol
 
 # Unified diff context preserves a leading space before Go tabs/empty lines.
 labs/guest-rtc/native/sfu-subscriber-report.patch whitespace=-blank-at-eol,-space-before-tab
+
+assets/creator-library/sounds/**/catalog.csv -text whitespace=cr-at-eol

@@ -43,3 +43,6 @@ src-tauri/win-capture/
 
 # Windows engine staging for the installer (scripts/build-windows.ps1)
 src-tauri/windows-bundle/
+
+# Local generated test/build outputs
+/target/

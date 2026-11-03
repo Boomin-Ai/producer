@@ -15,6 +15,7 @@
  */
 
 #include "livekit/webrtc.h"
+#include "livekit/process_environment.h"
 #include "livekit/timed_mixer_probe.h"
 #include "livekit/rtcp_exchange_probe.h"
 
@@ -37,6 +38,10 @@
 #endif
 
 namespace livekit_ffi {
+
+bool diagnostic_process_flag_enabled(rust::Str name) {
+  return process_flag_enabled(std::string(name).c_str());
+}
 
 static webrtc::Mutex g_mutex{};
 // Can't be atomic, we're using a Mutex because we need to wait for the

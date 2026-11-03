@@ -585,6 +585,10 @@ fn parse_color(hex: &str) -> Option<i64> {
     Some((a << 24) | (b << 16) | (g << 8) | r)
 }
 
+#[cfg(all(test, target_os = "windows"))]
+#[path = "windows_verification.rs"]
+mod windows_verification;
+
 /// The scene graph: one libobs scene on output channel 0, every item an
 /// `ExtraItem` created through `add_extra` (v0.4.34: camera, screen and mic
 /// included — there are no built-in switches; "off" means the item is not in
@@ -598,11 +602,8 @@ pub struct SceneGraph {
     presentation_spare: Option<super::presentation::Composition>,
     presentation_retiring: Option<super::presentation::Composition>,
     presentation_needs_prewarm: bool,
-    #[cfg(all(target_os = "macos"))]
     sets_v2: Option<super::sets_v2::RoomProgram>,
-    #[cfg(all(target_os = "macos"))]
     sets_v2_portrait: Option<super::sets_v2::RoomProgram>,
-    #[cfg(target_os = "macos")]
     portrait: Option<super::portrait::Portrait>,
     overlay: Option<(
         *mut ffi::obs_sceneitem_t,
@@ -823,11 +824,8 @@ impl SceneGraph {
                 presentation_spare: None,
                 presentation_retiring: None,
                 presentation_needs_prewarm: false,
-                #[cfg(all(target_os = "macos"))]
                 sets_v2: None,
-                #[cfg(all(target_os = "macos"))]
                 sets_v2_portrait: None,
-                #[cfg(target_os = "macos")]
                 portrait: None,
                 overlay: None,
                 extras: Vec::new(),
@@ -1349,7 +1347,6 @@ impl SceneGraph {
         self.add_extra_visible(id, label, spec, true)
     }
 
-    #[cfg(all(target_os = "macos"))]
     pub fn create_set_source(
         &mut self,
         id: &str,
@@ -2424,7 +2421,6 @@ impl ThumbHub {
             .program_wanted
             .load(std::sync::atomic::Ordering::Relaxed)
         {
-            #[cfg(target_os = "macos")]
             if self
                 .program_portrait
                 .load(std::sync::atomic::Ordering::Relaxed)
@@ -2436,10 +2432,6 @@ impl ThumbHub {
                     .unwrap_or(std::ptr::null_mut())
             } else {
                 unsafe { ffi::obs_get_output_source(0) }
-            }
-            #[cfg(not(target_os = "macos"))]
-            unsafe {
-                ffi::obs_get_output_source(0)
             }
         } else {
             std::ptr::null_mut()
@@ -3176,7 +3168,6 @@ mod scene_restoration_tests {
 }
 
 impl SceneGraph {
-    #[cfg(target_os = "macos")]
     pub fn portrait_room(&mut self) -> Result<SourcesState, String> {
         if self.portrait.is_none() {
             self.portrait = Some(unsafe { super::portrait::Portrait::create()? });
@@ -3187,7 +3178,6 @@ impl SceneGraph {
         self.sync_portrait_room();
         Ok(self.portrait_state())
     }
-    #[cfg(target_os = "macos")]
     pub fn sync_portrait_room(&mut self) {
         if self.portrait.is_none() {
             return;
@@ -3208,14 +3198,12 @@ impl SceneGraph {
                     info.base_width as f32,
                     info.base_height as f32,
                 );
-                #[cfg(target_os = "macos")]
                 if let Some(program) = &self.sets_v2_portrait {
                     program.raise();
                 }
             }
         }
     }
-    #[cfg(target_os = "macos")]
     pub fn portrait_state(&self) -> SourcesState {
         SourcesState {
             overlay_window: None,
@@ -3227,7 +3215,6 @@ impl SceneGraph {
                 .unwrap_or_default(),
         }
     }
-    #[cfg(target_os = "macos")]
     pub fn portrait_transform(
         &mut self,
         id: &str,
@@ -3240,14 +3227,12 @@ impl SceneGraph {
         self.sync_portrait_room();
         Ok(self.portrait_state())
     }
-    #[cfg(target_os = "macos")]
     pub fn portrait_canvas(&mut self) -> Result<*mut super::portrait::Canvas, String> {
         if self.portrait.is_none() {
             self.portrait_room()?;
         }
         Ok(self.portrait.as_ref().unwrap().canvas)
     }
-    #[cfg(target_os = "macos")]
     pub fn portrait_warm(
         &mut self,
         request: super::presentation::Request,
@@ -3257,7 +3242,6 @@ impl SceneGraph {
         }
         self.portrait_prepare(request)
     }
-    #[cfg(target_os = "macos")]
     pub fn portrait_prepare(
         &mut self,
         request: super::presentation::Request,
@@ -3285,7 +3269,6 @@ impl SceneGraph {
         }
         unsafe { self.portrait.as_mut().unwrap().prepare(request, captures) }
     }
-    #[cfg(target_os = "macos")]
     pub fn portrait_abort(&mut self, token: &str, revision: u64) {
         if let Some(p) = self.portrait.as_mut() {
             if let Some(a) = p.active.as_mut() {
@@ -3298,7 +3281,6 @@ impl SceneGraph {
             }
         }
     }
-    #[cfg(target_os = "macos")]
     pub fn portrait_commit(
         &mut self,
         token: &str,
@@ -3335,20 +3317,16 @@ impl SceneGraph {
                 .commit(token, placements, self.presentation_generation)
         }
     }
-    #[cfg(target_os = "macos")]
     pub fn portrait_video(&mut self) -> Result<*mut ffi::video_t, String> {
         self.portrait_canvas()?;
         Ok(unsafe { self.portrait.as_ref().unwrap().video() })
     }
-    #[cfg(target_os = "macos")]
     pub fn portrait_stop(&mut self) {
-        #[cfg(target_os = "macos")]
         {
             self.sets_v2_portrait = None;
         }
         self.portrait = None;
     }
-    #[cfg(target_os = "macos")]
     pub fn portrait_frame(&self) -> String {
         self.portrait.as_ref().map(|p| p.jpeg()).unwrap_or_default()
     }
@@ -3362,7 +3340,6 @@ impl SceneGraph {
                 .map_or(0, |p| p.request.projection.revision),
         }
     }
-    #[cfg(all(target_os = "macos"))]
     pub fn sets_v2(
         &mut self,
         action: super::sets_v2::contract::Action,
@@ -3373,6 +3350,32 @@ impl SceneGraph {
         };
         if action.generation() != self.presentation_generation {
             return Err("Room changed; prepare this v2 set again".into());
+        }
+        if let Action::TakePair {
+            program_revision,
+            portrait_revision,
+            duration_ms,
+            ref mode,
+            ..
+        } = action
+        {
+            let program = self
+                .sets_v2
+                .as_mut()
+                .ok_or("Prepare the landscape set first")?;
+            let portrait = self
+                .sets_v2_portrait
+                .as_mut()
+                .ok_or("Prepare the portrait set first")?;
+            return unsafe {
+                program.take_pair(
+                    portrait,
+                    program_revision,
+                    portrait_revision,
+                    duration_ms,
+                    mode,
+                )
+            };
         }
         if !["program", "portrait"].contains(&action.output()) {
             return Err("Unknown set output".into());
@@ -3466,7 +3469,6 @@ impl SceneGraph {
         &mut self,
         mut request: super::presentation::Request,
     ) -> Result<std::sync::Arc<super::presentation::Bridge>, String> {
-        #[cfg(all(target_os = "macos"))]
         if self.sets_v2.is_some() {
             return Err("Return v2 output to the room before opening a v1 set".into());
         }
@@ -3729,7 +3731,6 @@ impl SceneGraph {
                 }
             }
         }
-        #[cfg(target_os = "macos")]
         if let Some(portrait) = self.portrait.as_mut() {
             unsafe {
                 portrait.prewarm();
@@ -3803,15 +3804,12 @@ impl SceneGraph {
             return Ok(self.presentation_status());
         }
         let occupied = active.is_some() || pending.is_some();
-        #[cfg(all(target_os = "macos"))]
         let occupied = occupied || self.sets_v2.is_some();
-        #[cfg(all(target_os = "macos"))]
         {
             self.sets_v2 = None;
             self.sets_v2_portrait = None;
         }
 
-        #[cfg(target_os = "macos")]
         if let Some(p) = self.portrait.as_mut() {
             unsafe {
                 p.room();

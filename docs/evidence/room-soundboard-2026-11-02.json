@@ -1,0 +1,59 @@
+{
+  "native": {
+    "decode_errors": [],
+    "decoded_files": 250,
+    "ok": true,
+    "private_preview_leak_rms": [
+      0.0,
+      0.0
+    ],
+    "program_rms": [
+      0.14143239979528086,
+      0.14143239979528086
+    ],
+    "room_exit_rms": [
+      0.0,
+      0.0
+    ],
+    "stopped_rms": [
+      0.0,
+      0.0
+    ]
+  },
+  "room": {
+    "count": 245,
+    "firstAudioObservedMs": 122,
+    "hotkeyRegistration": true,
+    "kind": "soundboard",
+    "ok": true,
+    "peaks": [
+      0.483735054731369,
+      0.483735054731369
+    ],
+    "playingAfterStop": 0,
+    "replyMs": 4,
+    "room": "68d1d4b3-f592-44ad-a789-584761ef4ff0",
+    "stage": "ready for manual review"
+  },
+  "controller": {
+    "ok": true,
+    "pads": 245,
+    "unauthorizedRejected": true,
+    "wrongRoomRejected": true,
+    "unknownSoundRejected": true,
+    "invalidVolumeRejected": true,
+    "stopAllVerified": true,
+    "cachedControlReplyMs": [
+      1,
+      1,
+      2,
+      1,
+      1,
+      1,
+      1,
+      3
+    ]
+  },
+  "streamDeckHardwareTested": false,
+  "windowsRuntimeTested": false
+}

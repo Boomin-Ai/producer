@@ -6,7 +6,7 @@
  * canvas. Everything else is a card.
  * Beginners pick a preset; everyone else moves panels one by one. */
 
-export type PanelId = "scenes" | "sources" | "mixer" | "chat" | "channels" | "guests" | "vote" | "mods" | "stats" | "updates" | "dj" | "setControls";
+export type PanelId = "scenes" | "sources" | "mixer" | "chat" | "channels" | "guests" | "vote" | "mods" | "stats" | "updates" | "dj" | "sounds" | "setControls";
 
 export type Dock = "top" | "left" | "right" | "bottom" | "hidden";
 
@@ -20,6 +20,7 @@ export interface Layout {
 
 export const PANEL_META: Record<PanelId, { title: string; hint: string }> = {
   setControls: { title: "Set controls", hint: "Set fields, layouts, show segments and rehearsal" },
+  sounds: { title: "Sounds", hint: "Room soundboard and Stream Deck controls" },
   dj: { title: "DJ", hint: "Your tracks, tracklists and live music mix" },
   scenes: { title: "Scenes", hint: "Cut between looks — hits the broadcast instantly" },
   sources: { title: "Sources", hint: "What's in the scene right now" },
@@ -36,7 +37,7 @@ export const PANEL_META: Record<PanelId, { title: string; hint: string }> = {
 
 // Stream health is deliberately NOT here: it lives in the header, always
 // visible. Health you have to dock is health you find out about too late.
-export const PANEL_ORDER: PanelId[] = ["scenes", "sources", "mixer", "chat", "channels", "guests", "vote", "mods", "stats", "updates", "dj", "setControls"];
+export const PANEL_ORDER: PanelId[] = ["scenes", "sources", "mixer", "chat", "channels", "guests", "vote", "mods", "stats", "updates", "dj", "sounds", "setControls"];
 
 /** Per-room sizing: bottom panels carry a flex weight (they share one row),
  * side docks carry a pixel width. Absent = the built-in default. */
@@ -79,7 +80,7 @@ export const PRESETS: { key: string; label: string; note: string; layout: Layout
       top: [],
       left: ["scenes", "guests", "vote", "sources", "mods"],
       right: ["chat", "channels", "updates"],
-      bottom: ["mixer", "stats", "dj"],
+      bottom: ["mixer", "stats", "dj", "sounds"],
       hidden: ["setControls"],
     },
   },
@@ -87,13 +88,13 @@ export const PRESETS: { key: string; label: string; note: string; layout: Layout
     key: "simple",
     label: "Simple",
     note: "Stage plus the two things you touch live",
-    layout: { top: [], left: [], right: [], bottom: ["sources", "mixer"], hidden: ["scenes", "chat", "channels", "guests", "vote", "mods", "stats", "updates", "dj", "setControls"] },
+    layout: { top: [], left: [], right: [], bottom: ["sources", "mixer"], hidden: ["scenes", "chat", "channels", "guests", "vote", "mods", "stats", "updates", "dj", "sounds", "setControls"] },
   },
   {
     key: "chat",
     label: "Chat first",
     note: "The conversation gets the column; controls stay below",
-    layout: { top: [], left: [], right: ["chat"], bottom: ["sources", "mixer", "guests"], hidden: ["scenes", "channels", "vote", "mods", "stats", "updates", "dj", "setControls"] },
+    layout: { top: [], left: [], right: ["chat"], bottom: ["sources", "mixer", "guests"], hidden: ["scenes", "channels", "vote", "mods", "stats", "updates", "dj", "sounds", "setControls"] },
   },
 ]
 
@@ -140,7 +141,7 @@ export function normalize(p: Partial<Layout>): Layout {
   // wins forever. Hidden stays the default for future panels.
   // `vote` (v0.4.33) left the Guests panel: a layout saved before it existed
   // never lists it, so it lands on the left ONCE; hide it and it stays hidden.
-  const INTRO_DOCK: Partial<Record<PanelId, Dock>> = { dj: "bottom", stats: "bottom", updates: "right", mods: "left", vote: "left" };
+  const INTRO_DOCK: Partial<Record<PanelId, Dock>> = { sounds: "bottom", dj: "bottom", stats: "bottom", updates: "right", mods: "left", vote: "left" };
   for (const id of PANEL_ORDER) if (!seen.has(id)) l[INTRO_DOCK[id] ?? "hidden"].push(id);
   return l;
 }

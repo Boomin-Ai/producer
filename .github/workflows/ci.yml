@@ -29,6 +29,10 @@ jobs:
       - run: node scripts/test-atmosphere.mjs
       - run: node scripts/scene3d/test.mjs
       - run: node scripts/test-windows-native-imports.mjs
+      - run: node scripts/validate-set.mjs assets/creator-library/sets/*.set.json
+      - run: npm ci --prefix tools/producer-streamdeck/ai.boomin.producer.sounds.sdPlugin
+      - run: node tools/producer-streamdeck/test.mjs
+      - run: cc -std=c11 -Wall -Wextra -fsanitize=address,undefined scripts/test-soundboard-native.c -o /tmp/soundboard-test -lpthread -lm && /tmp/soundboard-test
       - run: bun run test:scene-restoration
       - run: bun run test:manager-cache
       - run: node scripts/test-preview-session.mjs
@@ -95,4 +99,7 @@ jobs:
         env:
           CXXFLAGS: ${{ runner.os == 'Linux' && '-fPIC' || '' }}
       - run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+      - name: Check Windows native guest runtime and static CRT linkage
+        if: runner.os == 'Windows'
+        run: cargo test --manifest-path src-tauri/Cargo.toml --features guest-rtc-production --lib
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check

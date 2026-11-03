@@ -61,7 +61,20 @@ export async function compileRoomScene(
   container.appendChild(build(projection.root));
   document.body.appendChild(container);
   try {
-    await document.fonts.ready;
+    // The host UI can have unrelated fonts in flight. Only wait for fonts
+    // used by this scene; system fonts such as Arial are immediately ready.
+    const pendingFonts=new Map<string,Promise<FontFace[]>>();
+    for(const {node,element} of entries.values()){
+      if(node.type!=='text'||!node.text)continue;
+      const style=getComputedStyle(element),font=`${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`,sample=node.text.slice(0,256);
+      if(document.fonts.check(font,sample)||pendingFonts.has(font))continue;
+      pendingFonts.set(font,document.fonts.load(font,sample).catch(()=>[]));
+    }
+    if(pendingFonts.size){
+      let timer:ReturnType<typeof setTimeout>|undefined;
+      try{await Promise.race([Promise.all(pendingFonts.values()),new Promise(resolve=>{timer=setTimeout(resolve,500);})]);}
+      finally{clearTimeout(timer);}
+    }
     // Measure authored layout before transforms so native placements can apply
     // the transform once, around their own center, without inflated AABBs.
     for (const { element } of entries.values())

@@ -209,6 +209,12 @@ struct producer_set_v2_scene *producer_set_v2_scene_prepare(
     return NULL;
   }
   obs_source_release(design);
+  if (fit == SET_V2_CONTAIN) {
+    const float scale = fminf(sx, sy);
+    producer_set_v2_group_viewport_inset(scene->root,
+        fmaxf(0, (width - root->width * scale) / (2 * width)),
+        fmaxf(0, (height - root->height * scale) / (2 * height)));
+  }
   producer_set_v2_group_seal(scene->root);
   memcpy(scene->initial, scene->nodes, sizeof(scene->nodes));
   return scene;

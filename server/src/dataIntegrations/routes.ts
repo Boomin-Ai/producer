@@ -1,3 +1,5 @@
+import {authorDesign,parseDesignInput} from './designAuthoring';
+import {AUTHORING_CATALOG} from '../../../src/features/presentation/authoring/catalog';
 import {authorSet,parseSetAuthoringInput,AUTHORING_BASE_BYTES} from './setAuthoring';
 import {dataAdapterRegistry} from './registry';
 import {readObjects,cachedObject,writeObjects,type CachePolicy} from './objectCache';
@@ -100,5 +102,20 @@ dataIntegrationRoutes.post('/:id/author-set',async c=>{
  await reserve(c.env,row,2000);
  const result=await authorSet(connection,apiKey,request,{signal:c.req.raw.signal});
  if((await load(c.env,row.id)).revision!==row.revision)throw new ApiError(409,'revision_conflict','Connection changed while the Set draft was being generated.');
+ return c.json({connectionId:row.id,connectionRevision:row.revision,...result});
+});
+
+dataIntegrationRoutes.get('/authoring-capabilities',c=>c.json(AUTHORING_CATALOG));
+dataIntegrationRoutes.post('/:id/author-design',async c=>{
+ const body=await input(c.req,1040*1024);
+ const {expectedRevision,...fields}=body;
+ if(!Number.isSafeInteger(expectedRevision)||(expectedRevision as number)<1)throw new ApiError(400,'invalid_request','Expected connection revision required');
+ const request=parseDesignInput(fields),row=await load(c.env,c.req.param('id'));
+ if(row.revision!==expectedRevision)throw new ApiError(409,'revision_conflict','Connection settings changed.');
+ const connection=parseConnection(JSON.parse(row.config)),key=await secret(c.env,row);
+ if(connection.kind!=='agent'||connection.provider!=='anthropic'||!key)throw new ApiError(400,'invalid_request','Select a saved Claude connection with a key.');
+ await reserve(c.env,row,2000);
+ const result=await authorDesign(connection,key,request,{signal:c.req.raw.signal});
+ if((await load(c.env,row.id)).revision!==row.revision)throw new ApiError(409,'revision_conflict','Connection changed during generation.');
  return c.json({connectionId:row.id,connectionRevision:row.revision,...result});
 });

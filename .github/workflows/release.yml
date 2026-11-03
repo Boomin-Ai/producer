@@ -303,6 +303,15 @@ jobs:
 
       # No APPLE_* env here on purpose: tauri must NOT sign/notarize the
       # engine-less intermediate app; signing happens after engine assembly.
+      - name: Check native preview coordinate mapping
+        run: |
+          clang -fobjc-arc -fblocks scripts/test-preview-geometry.m src-tauri/src/live/shim.m \
+            -framework AppKit -framework WebKit -framework AVFoundation \
+            -framework CoreMediaIO -framework SystemExtensions -framework CoreGraphics \
+            -o /tmp/producer-preview-geometry-test
+          /tmp/producer-preview-geometry-test
+          node scripts/test-preview-session.mjs
+
       - name: Build app (engine linked, unsigned)
         env:
           INCLUDE_NATIVE_GUEST: ${{ (github.event_name == 'push' || inputs.native_guest) && '1' || '0' }}
@@ -549,6 +558,11 @@ jobs:
       - name: Build NSIS installer (engine linked + staged beside producer.exe)
         run: .\scripts\build-windows.ps1
 
+      # Hosted Windows runners do not guarantee a D3D11 adapter. Still compile
+      # and link the same native pixel probe used on a Windows GPU workstation.
+      - name: Check Windows native compositor linkage
+        run: .\scripts\test-windows-native.ps1 -EngineDir .\src-tauri\windows-bundle -CompileOnly
+
       # The MSI is a courtesy asset (the updater leg is the NSIS exe); the
       # Windows session has only ever verified the NSIS path, so a WiX failure
       # must not sink the release. Same build-only config the script wrote, so
@@ -559,7 +573,7 @@ jobs:
         run: |
           $cfg = Join-Path $env:TEMP "producer-local-build.json"
           if (-not (Test-Path $cfg)) { throw "build-only config from build-windows.ps1 not found at $cfg" }
-          bun run tauri build --bundles msi --config $cfg
+          bun run tauri build --features guest-rtc-production --bundles msi --config $cfg
           if ($LASTEXITCODE -ne 0) { throw "msi bundle failed" }
 
       - name: Collect release assets
