@@ -8,6 +8,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <time.h>
+#include <stdatomic.h>
 #ifdef PRODUCER_AUDIO_REACTIVE
 extern float producer_audio_reactive_level(void);
 #else
@@ -113,9 +114,10 @@ struct shader_source {
  gs_eparam_t *time_param,*intensity_param,*frequency_param,*alpha_param;
  uint32_t width,height,rw,rh;float time,intensity,frequency,alpha;
  float last[5];bool painted;bool voice;float audio;double audio_at;
+ float mode,speed,radius,glow,variant;struct vec4 palette[3];
 };
-/* A shader owns its presentation program. Mutating OBS's shared default
- * program here corrupts a following graphics batch's active render pass. */
+/* Shader presentation uses an explicitly owned program pool. Mutating OBS's
+ * shared default program corrupts a following graphics batch's active pass. */
 static const char *SHADER_DISPLAY=
  "uniform float4x4 ViewProj;uniform texture2d image;"
  "sampler_state px{Filter=Linear;AddressU=Clamp;AddressV=Clamp;};"
@@ -127,12 +129,28 @@ static const char *shader_name(void *unused){(void)unused;return "Producer shade
 static uint32_t shader_width(void *data){return ((struct shader_source*)data)->width;}
 static uint32_t shader_height(void *data){return ((struct shader_source*)data)->height;}
 static void shader_scalar(gs_effect_t *e,const char *name,float v){gs_effect_set_float(gs_effect_get_param_by_name(e,name),v);}
-static void shader_palette(gs_effect_t *e,const char *name,const char *hex){
- unsigned rgb=0;sscanf(hex+1,"%6x",&rgb);
- struct vec4 color={((rgb>>16)&255)/255.f,((rgb>>8)&255)/255.f,(rgb&255)/255.f,1.f};
- gs_effect_set_vec4(gs_effect_get_param_by_name(e,name),&color);
+/* Share immutable compiled programs, never source clocks, textures or uniform
+ * values. Every render sets the complete instance parameters before its pass.
+ * All leases and draws execute under libobs's graphics lock. */
+struct shader_program {struct shader_program *next;gs_effect_t *effect;size_t leases;char code[];};
+static struct shader_program *shader_programs;
+static atomic_size_t shader_compilations;
+size_t producer_shader_effect_compilations(void){return atomic_load(&shader_compilations);}
+static gs_effect_t *shader_program_acquire(const char *code,const char *name,char **error){
+ for(struct shader_program *p=shader_programs;p;p=p->next)if(!strcmp(p->code,code)){p->leases++;return p->effect;}
+ gs_effect_t *effect=gs_effect_create(code,name,error);if(!effect)return NULL;
+ struct shader_program *p=malloc(sizeof(*p)+strlen(code)+1);if(!p){gs_effect_destroy(effect);return NULL;}
+ p->effect=effect;p->leases=1;strcpy(p->code,code);p->next=shader_programs;shader_programs=p;atomic_fetch_add(&shader_compilations,1);return effect;
 }
-static void shader_destroy(void *data){struct shader_source *s=data;if(!s)return;obs_enter_graphics();if(s->texture)gs_texrender_destroy(s->texture);if(s->effect)gs_effect_destroy(s->effect);if(s->display)gs_effect_destroy(s->display);obs_leave_graphics();free(s);}
+static void shader_program_release(gs_effect_t *effect){
+ if(!effect)return;
+ for(struct shader_program **slot=&shader_programs;*slot;slot=&(*slot)->next){struct shader_program *p=*slot;if(p->effect==effect){if(!--p->leases){*slot=p->next;gs_effect_destroy(effect);free(p);}return;}}
+}
+static struct vec4 shader_color(const char *hex){
+ unsigned rgb=0;sscanf(hex+1,"%6x",&rgb);
+ return (struct vec4){((rgb>>16)&255)/255.f,((rgb>>8)&255)/255.f,(rgb&255)/255.f,1.f};
+}
+static void shader_destroy(void *data){struct shader_source *s=data;if(!s)return;obs_enter_graphics();if(s->texture)gs_texrender_destroy(s->texture);shader_program_release(s->effect);shader_program_release(s->display);obs_leave_graphics();free(s);}
 static void *shader_create(obs_data_t *settings,obs_source_t *source){
  struct shader_source *s=calloc(1,sizeof(*s));if(!s)return NULL;s->source=source;
  const char *code=obs_data_get_string(settings,"_kernel");if(!code||!*code){free(s);return NULL;}
@@ -145,12 +163,11 @@ static void *shader_create(obs_data_t *settings,obs_source_t *source){
  float reduction=mode==0||mode==18||(mode>=3&&mode<11)?(low?.25f:.5f):(low?.5f:1.f);
  s->rw=(uint32_t)fmaxf(1,ceilf(s->width*reduction));s->rh=(uint32_t)fmaxf(1,ceilf(s->height*reduction));
  s->intensity=bounded(obs_data_get_double(settings,"intensity"),2);s->frequency=bounded(obs_data_get_double(settings,"scale"),4);s->alpha=bounded(obs_data_get_double(settings,"opacity"),1);
- char *error=NULL;obs_enter_graphics();s->effect=gs_effect_create(code,"producer-presets.effect",&error);
+ char *error=NULL;obs_enter_graphics();s->effect=shader_program_acquire(code,"producer-presets.effect",&error);
  if(!s->effect){blog(100,"[shader] compile failed: %s",error?error:"unknown");if(error)bfree(error);obs_leave_graphics();free(s);return NULL;}
- if(error)bfree(error);error=NULL;s->display=gs_effect_create(SHADER_DISPLAY,"producer-shader-display.effect",&error);if(error)bfree(error);if(!s->display){gs_effect_destroy(s->effect);obs_leave_graphics();free(s);return NULL;}s->texture=gs_texrender_create(GS_RGBA,GS_ZS_NONE);
- shader_scalar(s->effect,"effectType",mode);shader_scalar(s->effect,"speed",bounded(obs_data_get_double(settings,"speed"),4));shader_scalar(s->effect,"radius",bounded(obs_data_get_double(settings,"radius"),960));shader_scalar(s->effect,"glow",bounded(obs_data_get_double(settings,"glow"),1));shader_scalar(s->effect,"voiceStyle",bounded(obs_data_get_double(settings,"variant"),15));
- struct vec2 extent={(float)s->width,(float)s->height};gs_effect_set_vec2(gs_effect_get_param_by_name(s->effect,"extent"),&extent);
- shader_palette(s->effect,"paletteA",obs_data_get_string(settings,"colorA"));shader_palette(s->effect,"paletteB",obs_data_get_string(settings,"colorB"));shader_palette(s->effect,"paletteC",obs_data_get_string(settings,"colorC"));
+ if(error)bfree(error);error=NULL;s->display=shader_program_acquire(SHADER_DISPLAY,"producer-shader-display.effect",&error);if(error)bfree(error);if(!s->display){shader_program_release(s->effect);obs_leave_graphics();free(s);return NULL;}s->texture=gs_texrender_create(GS_RGBA,GS_ZS_NONE);
+ s->mode=mode;s->speed=bounded(obs_data_get_double(settings,"speed"),4);s->radius=bounded(obs_data_get_double(settings,"radius"),960);s->glow=bounded(obs_data_get_double(settings,"glow"),1);s->variant=bounded(obs_data_get_double(settings,"variant"),15);
+ s->palette[0]=shader_color(obs_data_get_string(settings,"colorA"));s->palette[1]=shader_color(obs_data_get_string(settings,"colorB"));s->palette[2]=shader_color(obs_data_get_string(settings,"colorC"));
  s->time_param=gs_effect_get_param_by_name(s->effect,"clockTime");s->intensity_param=gs_effect_get_param_by_name(s->effect,"intensity");s->frequency_param=gs_effect_get_param_by_name(s->effect,"frequency");s->alpha_param=gs_effect_get_param_by_name(s->effect,"alpha");
  obs_leave_graphics();if(!s->texture){shader_destroy(s);return NULL;}return s;
 }
@@ -166,6 +183,8 @@ static void shader_render(void *data,gs_effect_t *unused){
   gs_texrender_reset(s->texture);
   if(!gs_texrender_begin(s->texture,s->rw,s->rh))return;
   struct vec4 clear={0,0,0,0};gs_clear(GS_CLEAR_COLOR,&clear,0,0);gs_ortho(0,(float)s->rw,0,(float)s->rh,-100,100);
+  shader_scalar(s->effect,"effectType",s->mode);shader_scalar(s->effect,"speed",s->speed);shader_scalar(s->effect,"radius",s->radius);shader_scalar(s->effect,"glow",s->glow);shader_scalar(s->effect,"voiceStyle",s->variant);
+  gs_effect_set_vec4(gs_effect_get_param_by_name(s->effect,"paletteA"),&s->palette[0]);gs_effect_set_vec4(gs_effect_get_param_by_name(s->effect,"paletteB"),&s->palette[1]);gs_effect_set_vec4(gs_effect_get_param_by_name(s->effect,"paletteC"),&s->palette[2]);
   struct vec2 extent={(float)s->width,(float)s->height};gs_effect_set_vec2(gs_effect_get_param_by_name(s->effect,"extent"),&extent);
   gs_effect_set_float(s->time_param,values[0]);gs_effect_set_float(s->intensity_param,values[1]);gs_effect_set_float(s->frequency_param,values[2]);gs_effect_set_float(s->alpha_param,values[3]);shader_scalar(s->effect,"audioLevel",values[4]);
   gs_blend_state_push();gs_blend_function(GS_BLEND_ONE,GS_BLEND_INVSRCALPHA);

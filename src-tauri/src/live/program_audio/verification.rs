@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-fn measure() -> [f64; 2] {
+pub(crate) fn measure() -> [f64; 2] {
     std::thread::sleep(Duration::from_millis(200));
     drain();
     let mut sums = [0f64; 2];

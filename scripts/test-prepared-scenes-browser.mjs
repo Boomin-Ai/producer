@@ -4,7 +4,7 @@ const browser=await chromium.launch({executablePath:'/Applications/Google Chrome
 try{
  const page=await browser.newPage();await page.goto('http://127.0.0.1:1436/');
  const result=await page.evaluate(async()=>{
-  const {PreparedScenes,layoutProjections,moduleViewProjections,warmInventory,preparationInventory,morphTargets,runtimePlan}=await import('/src/features/sets-v2/preparedScenes.ts');
+  const {PreparedScenes,layoutProjections,moduleViewProjections,valueControlProjections,sceneIdentity,warmInventory,preparationInventory,morphTargets,runtimePlan}=await import('/src/features/sets-v2/preparedScenes.ts');
   const {HEAD_TO_HEAD}=await import('/src/features/presentation/fixtures.ts');
   const {RehearsalSession}=await import('/src/features/presentation/rehearsal.ts');
   const {compileRoomScene}=await import('/src/features/sets-v2/roomCompiler.ts');
@@ -103,6 +103,46 @@ try{
   await viewBank.take(makeSpec(actual),async()=>{});
   if(viewBuilds!==preparedBuilds)throw Error('Prepared module view rebuilt on selection');
   viewBank.dispose();
+  // Literal controls prepare the finite visible family without dispatching
+  // commands, crossing fields or retaining unrelated slide compositions.
+  const finiteDoc=structuredClone(HEAD_TO_HEAD),defaultTopic=finiteDoc.set.values.topic.default;
+  finiteDoc.set.controls=finiteDoc.set.controls.filter(c=>c.type!=='button'||c.action.type!=='value.set');
+  const finiteButtons=[defaultTopic,'Workers','D1'].map((value,i)=>({id:'finite-'+i,type:'button',label:value,action:{type:'value.set',key:'topic',value}}));
+  finiteDoc.set.controls.push(...finiteButtons,{id:'invisible-finite',type:'button',label:'Hidden choice',when:false,action:{type:'value.set',key:'topic',value:'Hidden'}});
+  const finiteSession=new RehearsalSession(finiteDoc,undefined,'prepare'),finiteBefore=JSON.stringify([finiteSession.snapshot(),finiteSession.moduleSnapshot()]);
+  const finiteVariants=valueControlProjections(finiteSession);
+  if(finiteVariants.length!==3||finiteVariants.some(v=>v.controlId==='invisible-finite'))throw Error('Finite controls include hidden or missing choices');
+  if(JSON.stringify([finiteSession.snapshot(),finiteSession.moduleSnapshot()])!==finiteBefore)throw Error('Literal prewarming mutated authority');
+  const finiteSpecs=()=>[...layoutProjections(finiteSession),...valueControlProjections(finiteSession)].map(item=>({...specs[0],definition:'finite',layout:item.layout,projection:item.projection,phase:item.phase,speculative:item.variant,controlId:item.controlId,targets:[]}));
+  const familyBefore=warmInventory(finiteSpecs(),new Set([finiteSession.snapshot().layoutId]));
+  if(familyBefore.filter(s=>s.layout===finiteSession.snapshot().layoutId).length!==3||familyBefore.length>8)throw Error('Control residency did not prioritize a bounded finite family');
+  finiteSession.send({type:'control',action:finiteButtons[1].action});
+  const familyAfter=warmInventory(finiteSpecs(),new Set([finiteSession.snapshot().layoutId]));
+  if(JSON.stringify(familyBefore.filter(s=>s.layout===finiteSession.snapshot().layoutId).map(sceneIdentity).sort())!==JSON.stringify(familyAfter.filter(s=>s.layout===finiteSession.snapshot().layoutId).map(sceneIdentity).sort()))throw Error('Changing a finite selection invalidated its prepared family');
+  const multiDoc=structuredClone(finiteDoc);multiDoc.set.controls.push(...['Host A','Host B'].map((value,i)=>({id:'independent-'+i,type:'button',label:value,action:{type:'value.set',key:'hostName',value}})));
+  const multi=new RehearsalSession(multiDoc,undefined,'prepare'),multiBefore=multi.snapshot();
+  if(valueControlProjections(multi).some(v=>v.entry.values.hostName!==multiBefore.values.hostName))throw Error('Independent setup toggle polluted the dominant finite family');
+  for(const variant of valueControlProjections(multi))if(Object.keys(multiBefore.values).filter(k=>multiBefore.values[k]!==variant.entry.values[k]).length>1)throw Error('Independent control fields were multiplied');
+  // Exhaustion of the aggregate cache is eviction pressure, not a failed
+  // layout. Background warming stops; an actual take frees cold snapshots.
+  const boundedKeys=new Set();let boundedRevision=0,boundedLoads=0,boundedRetains=0;
+  const bounded=new PreparedScenes(async request=>{
+   if(request.op==='retain'){boundedRetains++;for(const key of boundedKeys)if(!request.keys.includes(key))boundedKeys.delete(key);}
+   if(request.op==='preload'){boundedLoads++;if(!boundedKeys.has(request.key)&&boundedKeys.size>=2)throw Error('Loaded set texture budget reached');boundedKeys.add(request.key);boundedRevision=request.revision;}
+   return {preparedRevision:boundedRevision,renderedRevision:boundedRevision,cachedKeys:[...boundedKeys],ready:true,warmed:true};
+  },()=>{},async()=>({root:{id:'root',kind:'group',bounds:{x:0,y:0,width:100,height:100},children:[]},assets:{}}));
+  await bounded.retain(specs);const firstRetains=boundedRetains;await bounded.retain(specs);
+  if(boundedRetains!==firstRetains)throw Error('Identical retained inventory sent repeated native work');
+  await bounded.preload(specs,()=>false);if(bounded.readiness(specs[2]).state!=='queued')throw Error('Cache exhaustion surfaced as a broken layout');
+  const fullLoads=boundedLoads;await bounded.preload(specs,()=>false);if(boundedLoads!==fullLoads)throw Error('Full-cache speculative preparation churned');
+  let boundedTakes=0;await bounded.take(specs[2],async entry=>{if(!boundedKeys.has(entry.key))throw Error('Took an unprepared view');boundedTakes++;});
+  if(boundedTakes!==1||boundedKeys.size>2||bounded.debug().entries.some(e=>e.state.state==='error'))throw Error('Requested view did not recover within the cache bound');
+  bounded.dispose();
+  const readyKeys=new Set();let readyRevision=0;
+  const readyTrim=new PreparedScenes(async request=>{if(request.op==='preload'){readyKeys.add(request.key);readyRevision=request.revision;}if(request.op==='retain')for(const key of readyKeys)if(!request.keys.includes(key))readyKeys.delete(key);return {preparedRevision:readyRevision,renderedRevision:readyRevision,cachedKeys:[...readyKeys],ready:true,warmed:true};},()=>{},async()=>({root:{id:'root',kind:'group',bounds:{x:0,y:0,width:100,height:100},children:[]},assets:{}}));
+  await readyTrim.retain(specs);await readyTrim.preload(specs,()=>false);readyTrim.setInventory([specs[0]]);
+  await readyTrim.take(specs[0],async()=>{if(readyKeys.size!==3)throw Error('Cold eviction blocked a ready presentation');});
+  if(readyKeys.size!==1)throw Error('Post-presentation eviction did not reconcile ownership');readyTrim.dispose();
   bank.dispose();
   return {layouts:specs.length,loaded,repeatCompiles,edited,updates,preloads:calls.filter(c=>c==='preload').length,hasPlan:!!plan.root,churnPeak:peak,churnFinal:churnCache.size};
  });

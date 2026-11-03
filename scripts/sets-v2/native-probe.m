@@ -925,7 +925,13 @@ static void wait_program(obs_source_t *p, uint64_t revision) {
   require(program_status(p).rendered_revision == revision,
           "candidate endpoint rendered receipt");
 }
+OBS_IMPORT void obs_queue_task(int,void (*)(void *),void *,bool);
+struct graphics_hold {atomic_bool entered,finished;};
+static void hold_graphics_for_status_proof(void *data){
+ struct graphics_hold *hold=data;obs_enter_graphics();atomic_store(&hold->entered,true);usleep(200000);obs_leave_graphics();atomic_store(&hold->finished,true);
+}
 static NSDictionary *paired_program_proof(void) {
+  size_t shaderCompiles=producer_set_v2_transition_effect_compilations();
   obs_scene_t *room=obs_scene_create_private("Paired output proof");
   obs_source_t *a=producer_set_v2_program_create(640,360),*b=producer_set_v2_program_create(360,640);
   obs_source_t *red=solid(640,360,1,0,0,false),*green=solid(360,640,0,1,0,false),*nextA=solid(640,360,0,1,0,false),*nextB=solid(360,640,1,0,0,false);
@@ -944,6 +950,13 @@ static NSDictionary *paired_program_proof(void) {
   color(capture(a,640,360,640,360),640,320,180,255,0,0,255,"landscape receives its own design");
   color(capture(b,360,640,360,640),360,180,320,0,255,0,255,"portrait receives its own design");
   require(producer_set_v2_program_collect(a)&&producer_set_v2_program_collect(b),"collect pair");
+  struct graphics_hold hold={0};obs_queue_task(1,hold_graphics_for_status_proof,&hold,false);
+  for(int i=0;i<2000&&!atomic_load(&hold.entered);i++)usleep(1000);require(atomic_load(&hold.entered),"graphics contention fixture started");
+  double snapshotStart=CFAbsoluteTimeGetCurrent()*1000.;
+  for(int i=0;i<1000;i++){require(program_status(a).rendered_revision==1,"published snapshot remains coherent");require(producer_set_v2_program_collect(a),"idle collect needs no graphics context");}
+  double snapshotMs=CFAbsoluteTimeGetCurrent()*1000.-snapshotStart;
+  require(snapshotMs<100,"status snapshots do not wait behind a blocked graphics thread");
+  while(!atomic_load(&hold.finished))usleep(1000);
   for(uint64_t r=2;r<=5;r++){
     require(producer_set_v2_program_prepare(a,r%2?red:nextA,r)&&producer_set_v2_program_prepare(b,r%2?green:nextB,r),"prepare repeated paired view");
     capture(obs_scene_get_source(room),640,360,640,360);
@@ -955,10 +968,11 @@ static NSDictionary *paired_program_proof(void) {
     wait_program(a,r);wait_program(b,r);
     require(producer_set_v2_program_collect(a)&&producer_set_v2_program_collect(b),"collect completed pair");
   }
+  require(producer_set_v2_transition_effect_compilations()==shaderCompiles+1,"paired transitions reuse the warm compositor program");
   obs_set_output_source(0,NULL);obs_scene_release(room);obs_source_release(a);obs_source_release(b);obs_source_release(red);obs_source_release(green);obs_source_release(nextA);obs_source_release(nextB);
   for(int i=0;i<200&&producer_set_v2_live_programs();i++)usleep(10000);
   require(!producer_set_v2_live_programs(),"paired programs release all ownership");
-  return @{@"readyGate":@YES,@"staleGate":@YES,@"bothRendered":@YES,@"repeatedTransitions":@YES,@"cleanup":@YES};
+  return @{@"readyGate":@YES,@"staleGate":@YES,@"bothRendered":@YES,@"repeatedTransitions":@YES,@"cleanup":@YES,@"nonblockingStatusMs":@(snapshotMs),@"transitionShaderCompiles":@1};
 }
 static NSArray *program_proof(NSString *out) {
 

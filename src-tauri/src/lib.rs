@@ -3,6 +3,8 @@ mod cache;
 mod chat;
 mod client;
 mod dj;
+mod soundboard;
+mod soundboard_remote;
 mod error;
 mod firewall;
 mod ipc;
@@ -108,6 +110,8 @@ pub fn run() {
     if std::env::var_os("PRODUCER_DJ_SELFTEST").is_some() {
         live::dj::selftest_main();
     }
+    #[cfg(all(have_engine, debug_assertions))]
+    if std::env::var_os("PRODUCER_SOUNDBOARD_SELFTEST").is_some() { live::soundboard::selftest(); }
     // Headless engine self-test (M-L1 acceptance harness): bootstrap libobs,
     // print the discovery report, exit — no window, no webview.
     if std::env::var("PRODUCER_LIVE_SELFTEST").is_ok() {
@@ -115,6 +119,7 @@ pub fn run() {
     }
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
@@ -223,6 +228,8 @@ pub fn run() {
             if let Some(report) = std::env::var_os("PRODUCER_PORTRAIT_CAMERA_PROBE") {
                 live::portrait_camera_probe::start(app.handle().clone(), report.into());
             }
+
+            soundboard_remote::start(app.handle().clone());
 
             // Resume any submissions a crash left unacknowledged.
             let handle = app.handle().clone();
@@ -396,6 +403,13 @@ pub fn run() {
             dj::dj_analyze,
             dj::dj_match_tempo,
             dj::dj_control,
+            soundboard::soundboard_activate,
+            soundboard::soundboard_control,
+            soundboard::soundboard_library,
+            soundboard::soundboard_import,
+            soundboard::soundboard_save,
+            soundboard::soundboard_pairing,
+            soundboard::soundboard_hotkeys,
             live::commands::live_set_sync_offset,
             live::commands::live_start_recording,
             live::commands::live_stop_recording,

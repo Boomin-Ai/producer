@@ -7,15 +7,17 @@ function enqueue<T>(work: () => Promise<T>): Promise<T> {
   return result;
 }
 export function roomSession() {
-  let alive = true;
+  let alive = true, started = false;
   return {
     run(work: () => Promise<void>): Promise<void> {
-      return enqueue(async () => { if (alive) await work(); });
+      return enqueue(async () => { if (alive) {started=true;await work();} });
     },
     close(release: () => Promise<void>): Promise<void> {
       if (!alive) return Promise.resolve();
       alive = false;
-      return enqueue(release);
+      // A StrictMode probe can close before its queued work starts. It never
+      // acquired the engine; releasing here could stop the real mount's RTC.
+      return enqueue(async()=>{if(started)await release();});
     },
   };
 }

@@ -20,6 +20,7 @@ export function resolveRoomBindings(bindings:Record<string,string>,sources:LiveS
   return next;
 }
 export interface SetOutputControls {
+  controlReadiness?:Record<string,import('../sets-v2/preparedScenes').SceneReadiness>;
   layoutReadiness?:Record<string,import('../sets-v2/preparedScenes').SceneReadiness>;
   retryPreparation?:()=>void;
   prepareDraft?:(doc:import('./schema').PresentationPackage,bindings:Record<string,string>,framing:Record<string,import('./schema').SlotFraming>)=>void;

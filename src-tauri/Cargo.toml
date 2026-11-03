@@ -68,6 +68,7 @@ lofty = "0.22"
 symphonia = { version = "0.5", features = ["mp3", "aac", "isomp4", "alac", "wav", "pcm", "flac"] }
 soundtouch = { version = "0.5.4", features = ["bundled"] }
 hound = "3.5"
+tauri-plugin-global-shortcut = "=2.3.1"
 
 [patch.crates-io]
 webrtc-sys = { path = "../labs/guest-rtc/vendor/webrtc-sys" }

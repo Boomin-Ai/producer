@@ -41,6 +41,7 @@ struct program {
   obs_source_t *source, *current, *pending, *transition, *retiring;
   obs_source_t *children[4];
   atomic_flag children_lock;
+  struct producer_set_v2_program_status published;
   gs_texrender_t *warm;
   uint32_t width, height;
   uint64_t latest_revision, prepared_revision, current_revision,
@@ -64,12 +65,19 @@ static void lock(struct program *p) {
 static void unlock(struct program *p) {
   atomic_flag_clear_explicit(&p->children_lock, memory_order_release);
 }
+/* Render/control writers already hold the graphics context. Readers need
+ * only this small metadata snapshot, never a GPU/context synchronization. */
+static void publish_locked(struct program *p){
+ p->published=(struct producer_set_v2_program_status){p->prepared_revision,p->rendered_revision,p->serial,p->clock_ms,p->progress,p->warmed,p->ready,p->queued,p->transitioning,p->paused};
+}
+static void publish_status(struct program *p){lock(p);publish_locked(p);unlock(p);}
 static void snapshot_children(struct program *p) {
   lock(p);
   p->children[0] = p->current;
   p->children[1] = p->pending;
   p->children[2] = p->transition;
   p->children[3] = p->retiring;
+  publish_locked(p);
   unlock(p);
 }
 static const char *name(void *p) {
@@ -93,11 +101,13 @@ static void *create(obs_data_t *settings, obs_source_t *source) {
   p->height = h;
   obs_enter_graphics();
   p->warm = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
-  obs_leave_graphics();
-  if (!p->warm) {
-    free(p);
-    return NULL;
+  const bool transition_ready=producer_set_v2_transition_program_acquire();
+  if (!p->warm || !transition_ready) {
+    if(p->warm)gs_texrender_destroy(p->warm);
+    if(transition_ready)producer_set_v2_transition_program_release();
+    obs_leave_graphics();free(p);return NULL;
   }
+  obs_leave_graphics();
   atomic_fetch_add(&live, 1);
   return p;
 }
@@ -117,6 +127,7 @@ static void destroy(void *data) {
   detach(p, p->retiring);
   obs_enter_graphics();
   gs_texrender_destroy(p->warm);
+  producer_set_v2_transition_program_release();
   obs_leave_graphics();
   atomic_fetch_sub(&live, 1);
   free(p);
@@ -143,6 +154,7 @@ static void tick(void *data, float seconds) {
   obs_enter_graphics();
   if (!p->paused && isfinite(seconds) && seconds >= 0)
     p->clock_ms += (double)seconds * 1000.;
+  publish_status(p);
   obs_leave_graphics();
 }
 static bool warm(struct program *p) {
@@ -272,8 +284,7 @@ static void render(void *data, gs_effect_t *unused) {
   animate(p, p->retired_tracks, p->retired_track_count, p->clock_ms, false);
   effects(p->effects, p->effect_count, p->clock_ms);
   effects(p->retired_effects, p->retired_effect_count, p->clock_ms);
-  if (!p->current)
-    return;
+  if (!p->current){publish_status(p);return;}
   p->serial++;
   if (p->transitioning) {
     p->progress =
@@ -289,6 +300,7 @@ static void render(void *data, gs_effect_t *unused) {
     p->progress = 1.;
     p->rendered_revision = p->current_revision;
   }
+  publish_status(p);
 }
 void producer_set_v2_program_register(void) {
   struct obs_source_info i = {0};
@@ -380,6 +392,7 @@ bool producer_set_v2_program_ready(obs_source_t *s, uint64_t revision) {
   bool ok = p->pending && p->prepared_revision == revision;
   if (ok)
     p->ready = true;
+  publish_status(p);
   obs_leave_graphics();
   return ok;
 }
@@ -469,6 +482,7 @@ bool producer_set_v2_program_pause(obs_source_t *s, bool paused) {
   for (size_t i = 0; i < p->media_count; i++)
     obs_source_media_play_pause(p->media[i].source,
                                 paused || !p->media[i].playing);
+  publish_status(p);
   obs_leave_graphics();
   return true;
 }
@@ -477,24 +491,19 @@ bool producer_set_v2_program_status(
   struct program *p = get(s);
   if (!p || !out)
     return false;
-  obs_enter_graphics();
-  *out = (struct producer_set_v2_program_status){p->prepared_revision,
-                                                 p->rendered_revision,
-                                                 p->serial,
-                                                 p->clock_ms,
-                                                 p->progress,
-                                                 p->warmed,
-                                                 p->ready,
-                                                 p->queued,
-                                                 p->transitioning,
-                                                 p->paused};
-  obs_leave_graphics();
+  lock(p);*out=p->published;unlock(p);
   return true;
 }
 bool producer_set_v2_program_collect(obs_source_t *s) {
   struct program *p = get(s);
   if (!p)
     return false;
+  lock(p);
+  const bool busy=p->published.transitioning||p->published.queued;
+  const bool pending_cleanup=p->children[2]||p->children[3];
+  unlock(p);
+  if(busy)return false;
+  if(!pending_cleanup)return true;
   obs_enter_graphics();
   collect(p);
   bool ok = !p->transitioning && !p->queued;
@@ -603,7 +612,7 @@ void producer_set_v2_program_stop_motion(obs_source_t *source) {
 bool producer_set_v2_program_cached_ready(obs_source_t *s,uint64_t revision){
   struct program *p=get(s);if(!p)return false;
   obs_enter_graphics();bool ok=p->pending&&p->prepared_revision==revision;
-  if(ok){p->ready=true;p->warmed=true;}obs_leave_graphics();return ok;
+  if(ok){p->ready=true;p->warmed=true;}publish_status(p);obs_leave_graphics();return ok;
 }
 
 bool producer_set_v2_program_chart(obs_source_t*s,uint64_t revision,obs_source_t*chart){struct program*p=get(s);if(!p||!chart||!producer_chart_key(chart)[0])return false;obs_enter_graphics();bool ok=p->pending&&p->prepared_revision==revision&&p->pending_chart_count<4;if(ok)p->pending_charts[p->pending_chart_count++]=chart;obs_leave_graphics();return ok;}

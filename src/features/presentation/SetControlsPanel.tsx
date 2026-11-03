@@ -167,7 +167,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
         !!doc.show.phases.find(p => p.id === state.show.phase)?.collectMs && !state.show.revealed;
       if (c.action.type === 'show.reveal') disabled ||= !state.running || state.paused || state.show.collecting || state.show.revealed || !state.show.total;
       return <button key={c.id} className={c.action.type.startsWith('show.') ? 'set-show-action' : undefined}
-        aria-label={c.label} aria-pressed={c.action.type === 'layout.select' ? state.layoutId === c.action.layoutId : undefined} disabled={disabled} onClick={() => session.send({ type: 'control', action: c.action })}>
+        aria-label={c.label} aria-pressed={c.action.type === 'layout.select' ? state.layoutId === c.action.layoutId : c.action.type==='value.set'?state.values[c.action.key]===c.action.value:undefined} disabled={disabled} onClick={() => session.send({ type: 'control', action: c.action })}>
         {c.label}</button>;
     }
     const def = doc.set.values[c.key];
@@ -280,7 +280,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
     {visibleSlots.size>0&&<section className="set-controls set-editor-source-tray" aria-label="Edit source assignments">{sourceEditor}</section>}
   </>;
   if (blocked) return <div className="set-controls"><p>{blockedReason ?? 'Waiting for the room to finish loading.'}</p></div>;
-  return <div className="set-controls" data-output-busy={output?.busy?'true':'false'} data-layouts-ready={Object.values(output?.layoutReadiness??{}).filter(s=>s.state==='ready').length} data-layouts-total={Object.keys(output?.layoutReadiness??{}).length}>
+  return <div className="set-controls" data-output-busy={output?.busy?'true':'false'} data-layouts-ready={Object.values(output?.layoutReadiness??{}).filter(s=>s.state==='ready').length} data-layouts-total={Object.keys(output?.layoutReadiness??{}).length} data-controls-total={Object.keys(output?.controlReadiness??{}).length} data-controls-ready={Object.values(output?.controlReadiness??{}).filter(s=>s.state==='ready').length}>
     <header className="set-controls-toolbar">
       <div className="set-header-main">
       <span className={`set-mode-badge ${rehearsing ? 'rehearsal' : 'prepared'}`}>{rehearsing ? 'Rehearsal' : state.workspaceMode==='live'&&state.running?'Show':'Prepared'}</span>
@@ -314,7 +314,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
       {!doc.show && <>
         <section className="set-layouts" aria-label="Layouts">
           <h3>Layouts <span>{views.length} layouts</span></h3>
-          <div className="set-layout-list">{views.map(view=>{const status=viewReadiness(view);return <button type="button" key={view.id} aria-pressed={selectedView?.id===view.id} data-readiness={status?.state} title={status?.state==='error'?`Layout unavailable: ${status.error}`:status?.state==='ready'?'Ready':'Loading layout'} disabled={blocked}
+          <div className="set-layout-list">{views.map(view=>{const status=viewReadiness(view);return <button type="button" key={view.id} aria-pressed={selectedView?.id===view.id} data-readiness={status?.state} title={status?.state==='error'?`Layout unavailable: ${status.error}`:status?.state==='ready'?'Ready':status?.state==='loading'?'Preparing layout…':'Prepares when selected'} disabled={blocked}
             onClick={()=>session.send({type:'control',action:{type:'layout.select',layoutId:preferredViewLayout(view)}})}><span>{view.label}</span><small>{Object.keys(view.variants).length>1?'Both':Object.keys(view.variants)[0]}</small></button>;})}</div>
         </section>
         <section className="set-manual-controls" aria-label="Set controls">

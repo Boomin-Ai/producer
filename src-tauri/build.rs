@@ -36,6 +36,7 @@ fn link_live_engine() {
     println!("cargo:rerun-if-changed=src/live/guest_ingest.c");
     println!("cargo:rerun-if-changed=src/live/guest_ingest.h");
     println!("cargo:rerun-if-changed=src/live/source_appearance.c");
+    println!("cargo:rerun-if-changed=src/live/soundboard.c");
     println!("cargo:rerun-if-changed=src/live/source_appearance.effect.h");
     // The one seam that decides whether this is a live build. Each supported OS
     // resolves its own artifact and emits its own link flags; anything else
@@ -103,6 +104,8 @@ fn link_live_engine_macos() {
         .file("src/live/capture_guard.m")
         .file("src/live/person_mask.m")
         .file("src/live/source_appearance.c")
+        .file("src/live/soundboard.c")
+        .std("c11")
         .define("PRODUCER_AUDIO_REACTIVE", None)
         .flag("-fobjc-arc")
         .flag("-fmodules")
@@ -232,6 +235,8 @@ fn link_live_engine_windows() {
     cc::Build::new()
         .file("src/live/shim_win.c")
         .file("src/live/source_appearance.c")
+        .file("src/live/soundboard.c")
+        .std("c11")
         .define("PRODUCER_AUDIO_REACTIVE", None)
         .compile("producer_live_shim");
     // User32/Gdi32: the preview child HWND. Ole32: COM init for the DirectShow

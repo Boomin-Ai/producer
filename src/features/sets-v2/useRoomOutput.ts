@@ -9,7 +9,7 @@ import {
 import type { SlotFraming } from "../presentation/schema";
 import { AssetTransport } from "../presentation/assetTransport";
 import {authoredCrossfadeMs} from '../presentation/animation';
-import {PreparedScenes,layoutProjections,moduleViewProjections,warmInventory,preparationInventory,morphTargets,runtimePlan,type SceneSpec,type NativeSceneStatus} from './preparedScenes';
+import {PreparedScenes,layoutProjections,moduleViewProjections,valueControlProjections,warmInventory,preparationInventory,morphTargets,runtimePlan,type SceneSpec,type NativeSceneStatus} from './preparedScenes';
 import {RehearsalSession} from '../presentation/rehearsal';
 type NativeStatus = NativeSceneStatus & {
   generation: number;
@@ -110,15 +110,16 @@ export function useRoomOutput(
     return invoke<NativeStatus>('live_set_v2',{request:{generation:room.generation,...value}}).catch(e=>{if(value.op==='status'&&/Prepare (a v2|the portrait) set first/.test(String(e)))return {preparedRevision:0,renderedRevision:0,renderSerial:0,ready:false,warmed:false,queued:false,transitioning:false,cachedKeys:[],generation:room.generation};throw e;});
   },()=>notifyPreparation(v=>v+1));
   const specsFor=(selected:RehearsalSession,selectedBindings:Record<string,string>,selectedFraming:Record<string,SlotFraming>):SceneSpec[]=>{
-    const inventory=[...layoutProjections(selected),...(selected.snapshot().workspaceMode==='prepare'?[]:moduleViewProjections(selected))];
+    const layouts=layoutProjections(selected);
+    const inventory=[...layouts,...valueControlProjections(selected,layouts),...(selected.snapshot().workspaceMode==='prepare'?[]:moduleViewProjections(selected))];
     const projections=inventory.map(i=>i.projection);
     const version=JSON.stringify(media.current.signature({...inventory[0].projection,assets:selected.package.set.assets}).assets);
     return inventory.map(item=>{
       const frame=(n:typeof item.projection.root)=>{if(n.slotId&&selectedFraming[n.slotId])n.framing=selectedFraming[n.slotId];n.children.forEach(frame);};frame(item.projection.root);
-      return {speculative:item.variant,projection:item.projection,phase:item.phase,layout:item.layout,definition:selected.package.id,instance:'room-'+(roomId??'local').slice(0,50),bindings:selectedBindings,target:item.projection.height>item.projection.width?{id:'portrait',orientation:'portrait',width:canvas.height,height:Math.round(canvas.height*16/9),scaling:'contain'}:{id:'program',orientation:'landscape',...canvas,scaling:'contain'},targets:morphTargets(projections,item.projection),assetVersion:version+JSON.stringify(Object.values(selectedBindings).map(id=>{const source=sources.items?.find(s=>s.id===id);return [id,source?.src_w,source?.src_h];}))};
+      return {controlId:'controlId' in item?String(item.controlId):undefined,speculative:item.variant,projection:item.projection,phase:item.phase,layout:item.layout,definition:selected.package.id,instance:'room-'+(roomId??'local').slice(0,50),bindings:selectedBindings,target:item.projection.height>item.projection.width?{id:'portrait',orientation:'portrait',width:canvas.height,height:Math.round(canvas.height*16/9),scaling:'contain'}:{id:'program',orientation:'landscape',...canvas,scaling:'contain'},targets:morphTargets(projections,item.projection),assetVersion:version+JSON.stringify(Object.values(selectedBindings).map(id=>{const source=sources.items?.find(s=>s.id===id);return [id,source?.src_w,source?.src_h];}))};
     });
   };
-  const inventory=useMemo(()=>specsFor(session,bindings,framing),[session.package,JSON.stringify(state.values),JSON.stringify(state.feeds),JSON.stringify(state.modules),JSON.stringify(bindings),JSON.stringify(framing),JSON.stringify(sources.items?.map(s=>[s.id,s.src_w,s.src_h,s.has_frame])),canvas,roomId]);
+  const inventory=useMemo(()=>specsFor(session,bindings,framing),[session.package,state.layoutId,state.workspaceMode,JSON.stringify(state.values),JSON.stringify(state.feeds),JSON.stringify(state.modules),JSON.stringify(bindings),JSON.stringify(framing),JSON.stringify(sources.items?.map(s=>[s.id,s.src_w,s.src_h,s.has_frame])),canvas,roomId]);
   const candidates=useMemo(()=>draftCandidate?specsFor(new RehearsalSession(draftCandidate.doc,undefined,'prepare'),draftCandidate.bindings,draftCandidate.framing):[],[draftCandidate,canvas,roomId]);
   const specsRef=useRef(inventory);specsRef.current=inventory;
   useEffect(()=>{
@@ -133,8 +134,11 @@ export function useRoomOutput(
     const specs=warmInventory([...authoredSpecs,...(fallback?[fallback]:[])],currentLayouts);
     // A prior take can still pin its outgoing snapshot after the first new
     // frame appears. Defer speculative work until that transaction releases it.
-    void bank.current!.retain(specs).then(()=>{if(!busy)return bank.current!.preload(specs,()=>cancelled);});
-    return()=>{cancelled=true;};
+    bank.current!.setInventory(specs);
+    // Give a current-content take the first turn. CPU ownership changes now;
+    // optional native eviction/preloading runs after that take or at idle.
+    const timer=busy?undefined:setTimeout(()=>void bank.current!.retain(specs).then(()=>bank.current!.preload(specs,()=>cancelled)),40);
+    return()=>{cancelled=true;clearTimeout(timer);};
   },[enabled,canvasReady,inventory,candidates,retryVersion,state.layoutId,busy]);
   const bankDisposal=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
   useEffect(()=>{clearTimeout(bankDisposal.current);return()=>{bankDisposal.current=setTimeout(()=>bank.current?.dispose(),0);};},[]);
@@ -168,6 +172,10 @@ export function useRoomOutput(
     return()=>{cancelled=true;canvasReadyRoom.current=undefined;clearInterval(timer);stop?.();};
   },[enabled,roomId]);
   const layoutReadiness=Object.fromEntries(inventory.filter((spec,index)=>inventory.findIndex(other=>other.layout===spec.layout)===index).map(spec=>[spec.layout,bank.current!.readiness(spec)]));
+  const controlReadiness=Object.fromEntries(inventory.filter(s=>s.controlId).map(s=>{
+    const variants=inventory.filter(other=>other.controlId===s.controlId),states=variants.map(v=>bank.current!.readiness(v));
+    return [s.controlId!,states.find(v=>v.state==='error')??states.find(v=>v.state!=='ready')??{state:'ready' as const}];
+  }));
   void preparationVersion;
   const project = () => {
     const current = latest.current,
@@ -430,7 +438,7 @@ export function useRoomOutput(
     renderer: "native",
     configurePortrait,
     requiredOrientations:portraitLayout===null?['landscape']:['landscape','portrait'],
-    layoutReadiness,
+    layoutReadiness,controlReadiness,
     retryPreparation:()=>{bank.current?.retry();setRetryVersion(v=>v+1);},
     prepareDraft:(doc,bindings,framing)=>setDraftCandidate({doc,bindings,framing}),
     clearDraftPreparation:()=>setDraftCandidate(undefined),

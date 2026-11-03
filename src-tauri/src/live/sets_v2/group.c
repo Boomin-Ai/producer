@@ -68,6 +68,26 @@ static const char EFFECT[] =
     "technique Draw{pass{vertex_shader=VS(v);pixel_shader=PS(v);}}"
     "technique BlurHorizontal{pass{vertex_shader=VS(v);pixel_shader=Blur(v);}}"
     "technique BlurVertical{pass{vertex_shader=VS(v);pixel_shader=BlurMask(v);}}";
+/* One libobs graphics device per engine. Rendering and these lease changes
+ * hold its graphics context lock. All child rendering finishes before a group
+ * sets uniforms/begins its own pass, so the program can be shared while each
+ * group's textures, placement and mask parameters remain independent. */
+static gs_effect_t *shared_effect;
+static size_t effect_leases;
+static atomic_size_t effect_compilations;
+static gs_effect_t *acquire_effect(char **error) {
+  if (!shared_effect) {
+    shared_effect=gs_effect_create(EFFECT,"producer-set-v2-group.effect",error);
+    if(shared_effect)atomic_fetch_add(&effect_compilations,1);
+  }
+  if(shared_effect)effect_leases++;
+  return shared_effect;
+}
+static void release_effect(gs_effect_t *effect) {
+  if(!effect)return;
+  if(effect==shared_effect&&effect_leases&&!--effect_leases){gs_effect_destroy(shared_effect);shared_effect=NULL;}
+}
+size_t producer_set_v2_group_effect_compilations(void){return atomic_load(&effect_compilations);}
 static struct group *get(obs_source_t *s);
 static void effect_draw(struct group *g,gs_texture_t *texture,const char *tech,uint32_t w,uint32_t h){
  gs_effect_set_texture(gs_effect_get_param_by_name(g->effect,"image"),texture);
@@ -115,7 +135,7 @@ static void *create(obs_data_t *settings, obs_source_t *source) {
   g->opacity = (float)opacity;
   char *error = NULL;
   obs_enter_graphics();
-  g->effect = gs_effect_create(EFFECT, "producer-set-v2-group.effect", &error);
+  g->effect = acquire_effect(&error);
   g->texture = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
   obs_leave_graphics();
   if (error) {
@@ -125,7 +145,7 @@ static void *create(obs_data_t *settings, obs_source_t *source) {
   if (!g->effect || !g->texture) {
     obs_enter_graphics();
     if (g->effect)
-      gs_effect_destroy(g->effect);
+      release_effect(g->effect);
     if (g->texture)
       gs_texrender_destroy(g->texture);
   for(int i=0;i<2;i++)gs_texrender_destroy(g->accum[i]);gs_texrender_destroy(g->blur_texture);
@@ -149,7 +169,7 @@ static void destroy(void *data) {
   for (size_t i = 0; i < 2; i++)
     gs_texrender_destroy(g->accum[i]);
   gs_texrender_destroy(g->blur_texture);
-  gs_effect_destroy(g->effect);
+  release_effect(g->effect);
   obs_leave_graphics();
   atomic_fetch_sub(&live_groups, 1);
   free(g);

@@ -146,13 +146,10 @@ extern "C" {
         y: u32,
         expected: *const u8,
     ) -> bool;
-    fn producer_set_v2_surface_marker(
-        s: *mut ffi::obs_source_t,
-        x: u32,
-        y: u32,
-        r: u8,
-        g: u8,
-        b: u8,
+    fn producer_set_v2_surface_markers(
+        sources: *const *mut ffi::obs_source_t,
+        rows: *const u32,
+        count: usize,
     ) -> bool;
 }
 pub unsafe fn register() {
@@ -162,12 +159,21 @@ pub unsafe fn register() {
     producer_set_v2_program_register();
 }
 struct Source(*mut ffi::obs_source_t);
+struct GraphicsContext;
+impl GraphicsContext {
+    unsafe fn enter() -> Self {ffi::obs_enter_graphics();Self}
+}
+impl Drop for GraphicsContext {
+    fn drop(&mut self){unsafe{ffi::obs_leave_graphics();}}
+}
 impl Drop for Source {
     fn drop(&mut self) {
         unsafe { ffi::obs_source_release(self.0) }
     }
 }
 struct GraphicsLayer {
+    painted: std::cell::Cell<bool>,
+    bytes: usize,
     browser: Source,
     clip: Source,
 }
@@ -298,9 +304,9 @@ impl<'a> Arena<'a> {
             format!("{:x}", Sha256::digest(html.as_bytes()))
         );
         let mut cache = self.store.graphics.borrow_mut();
-        cache.retain(|_, lease| lease.strong_count() > 0);
-        let layer = if let Some(layer) = cache.get(&identity).and_then(std::rc::Weak::upgrade) {
-            layer
+        let used=self.store.graphics_clock.get()+1;self.store.graphics_clock.set(used);
+        let layer = if let Some((last_used,layer)) = cache.get_mut(&identity) {
+            *last_used=used;layer.clone()
         } else {
             let url = format!(
                 "data:text/html;charset=utf-8,{}",
@@ -348,8 +354,9 @@ impl<'a> Arena<'a> {
             }
             ffi::obs_source_inc_active(browser.0);
             ffi::obs_source_inc_showing(browser.0);
-            let layer = Rc::new(GraphicsLayer { browser, clip });
-            cache.insert(identity, Rc::downgrade(&layer));
+            self.store.graphics_created.set(self.store.graphics_created.get()+1);
+            let layer = Rc::new(GraphicsLayer { painted: std::cell::Cell::new(false), browser, clip, bytes:(pixels+(pw as usize)*(ph as usize))*4+1024*1024 });
+            cache.insert(identity, (used,layer.clone()));
             layer
         };
         // Account conservatively per scene even when the raster is shared.
@@ -634,6 +641,23 @@ impl RoomProgram {
         // The normal poll path confirms each output's rendered revision.
         self.poll()
     }
+    /// Charge each scene's private placements, but each immutable painter once
+    /// per output owner. Rc identity is the actual native resource lease, not
+    /// an authored asset ID or a claim supplied by an imported Set.
+    fn cache_bytes(&self, added: Option<&Rc<Draft>>) -> usize {
+        let mut scenes=std::collections::HashSet::new();
+        let mut graphics=std::collections::HashSet::new();
+        let mut bytes=0;
+        for draft in self.bank.values().map(|(_,draft)|draft).chain(added) {
+            if !scenes.insert(Rc::as_ptr(draft) as usize) {continue;}
+            let shared=draft._graphics.iter().map(|layer|layer.bytes).sum::<usize>();
+            bytes+=draft.bytes.saturating_sub(shared);
+            for layer in &draft._graphics {
+                if graphics.insert(Rc::as_ptr(layer) as usize) {bytes+=layer.bytes;}
+            }
+        }
+        bytes
+    }
     pub unsafe fn dispatch(
         &mut self,
         action: Action,
@@ -708,6 +732,7 @@ impl RoomProgram {
                         }
                     }
                 }
+                let _graphics=GraphicsContext::enter();
                 if !producer_set_v2_program_prepare(
                     self.program.0,
                     producer_set_v2_scene_source(draft.scene),
@@ -741,6 +766,8 @@ impl RoomProgram {
                 }
                 self.bank.retain(|key, _| keys.contains(key));
                 self.resources.retain_manifest(&asset_ids);
+                let bytes=self.cache_bytes(None);
+                self.resources.trim_graphics((768usize*1024*1024).saturating_sub(bytes));
             }
             Action::TakePair { .. } => return Err("Paired takes require the room output coordinator".into()),
             Action::Take {
@@ -949,6 +976,10 @@ impl RoomProgram {
         Ok(Rc::new(draft))
     }
     unsafe fn register(&mut self, draft: &Draft, plan: &Plan, revision: u64) -> Result<(), String> {
+        // Register the complete pending timeline as one graphics transaction.
+        // Inner native calls can nest this context without waiting a frame
+        // between individual tracks; no queued graphics probe occurs here.
+        let _graphics=GraphicsContext::enter();
         self.pending_3d = Some((revision, plan.scenes3d.clone(), plan.clock.clone()));
         let (show, segment, running) = contract::clock_positions(plan.clock.as_ref());
         for chart in &draft._resources.charts {
@@ -1117,23 +1148,29 @@ impl RoomProgram {
                 producer_set_v2_surface_warm(self.program.0);
                 producer_set_v2_program_status(self.program.0, &mut native);
             }
+            // Paint producers are immutable and keep their active/showing
+            // lease for their entire cached lifetime. Validate their first
+            // actual pixels once; a new scene placement is not a new paint.
+            let pending_markers: Vec<_> = draft.markers.iter().zip(&draft._graphics)
+                .filter(|(_, layer)| !layer.painted.get()).collect();
+            let marker_sources: Vec<_> = pending_markers.iter().map(|((s, _), _)| s.0).collect();
+            let marker_rows: Vec<_> = pending_markers.iter().map(|((_, y), _)| *y).collect();
             if native.prepared_revision == self.draft_revision
                 && !native.ready
-                && draft
-                    .markers
-                    .iter()
-                    .all(|(s, y)| producer_set_v2_surface_marker(s.0, 0, *y, 1, 254, 3))
+                && producer_set_v2_surface_markers(marker_sources.as_ptr(), marker_rows.as_ptr(), marker_sources.len())
             {
+                for (_, layer) in pending_markers { layer.painted.set(true); }
                 producer_set_v2_program_ready(self.program.0, self.draft_revision);
                 producer_set_v2_program_status(self.program.0, &mut native);
             }
             if native.ready && native.warmed {
                 if let Some((key, signature)) = self.preparing_key.take() {
-                    let bytes = self.bank.values().map(|(_, d)| d.bytes).sum::<usize>();
-                    if bytes + draft.bytes > 768 * 1024 * 1024 {
+                    let bytes = self.cache_bytes(Some(draft));
+                    if bytes > 768 * 1024 * 1024 {
                         return Err("Loaded set texture budget reached".into());
                     }
                     self.bank.insert(key, (signature, draft.clone()));
+                    self.resources.trim_graphics((768usize*1024*1024).saturating_sub(bytes));
                 }
             }
             if native.rendered_revision == self.draft_revision
@@ -1158,8 +1195,10 @@ impl RoomProgram {
         Ok(Status {
             scene3d_contexts: scene3d::live_count(),
             graphics_layers: self.resources.graphics_count(),
+            graphics_creations:self.resources.graphics_created.get(),
             cached_keys: self.bank.keys().cloned().collect(),
-            cached_bytes: self.bank.values().map(|(_, d)| d.bytes).sum(),
+            cached_bytes: self.cache_bytes(None),
+            spare_graphics_bytes:self.resources.spare_graphics_bytes(),
             generation: self.generation,
             prepared_revision: self
                 .building

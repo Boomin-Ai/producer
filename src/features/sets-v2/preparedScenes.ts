@@ -2,14 +2,15 @@ import {outputProjection,type OutputProjection,type RenderNode} from '../present
 import type {AnimationTrack} from '../presentation/animation';
 import {mediaPosition} from '../presentation/playback';
 import {layoutTransition} from '../presentation/layoutTransition';
-import {RehearsalSession} from '../presentation/rehearsal';
+import {layoutFieldKeys} from '../presentation/layoutFields';
+import {evaluate,RehearsalSession} from '../presentation/rehearsal';
 import {compileRoomScene,nativeNodeId} from './roomCompiler';
 import type {RenderPlan,OutputTarget} from './scene';
 
 export type SceneReadiness={state:'queued'|'loading'|'ready'|'error';error?:string};
 export type NativeSceneStatus={preparedRevision:number;renderedRevision:number;ready:boolean;warmed:boolean;transitioning:boolean;queued:boolean;cachedKeys?:string[];cachedBytes?:number;renderSerial:number};
 type Plan=RenderPlan&{motion?:AnimationTrack[];clock?:import('../presentation/animation').AnimationClock;retainedTargets?:string[];assets?:OutputProjection['assets']};
-export type SceneSpec={projection:OutputProjection;phase:string;layout:string;bindings:Record<string,string>;target:OutputTarget;definition:string;instance:string;targets:string[];assetVersion:string;speculative?:boolean};
+export type SceneSpec={projection:OutputProjection;phase:string;layout:string;bindings:Record<string,string>;target:OutputTarget;definition:string;instance:string;targets:string[];assetVersion:string;speculative?:boolean;controlId?:string};
 /** Keep the current paired view available while a different Set is prepared. */
 export function preparationInventory(inventory:SceneSpec[],candidates:SceneSpec[],currentLayouts:ReadonlySet<string>){
  const replacing=candidates.length>0&&inventory.length>0&&candidates[0].definition!==inventory[0].definition;
@@ -32,13 +33,19 @@ const debugSessions=new Set<PreparedScenes>();
 export function preparationDebug(){return [...debugSessions].map(s=>s.debug());}
 export class PreparedScenes {
  private sentAssets=new Map<string,Map<string,string>>();
+ private retained=new Map<string,string>();private retentionEpoch=0;
+ private warmingBlocked=new Set<string>();private family='';
  private inventory?:SceneSpec[];private active=new Map<string,SceneSpec>();
  private outputs=new Set<string>();
+ private counters={plans:0,preloads:0,retains:0};
  private trace:string[]=[];
- debug(){return {working:this.working,abort:this.abort,queue:this.jobs.map(j=>j.priority),trace:this.trace,active:[...this.active.values()].map(s=>({layout:s.layout,target:s.target.id,key:digest(sceneIdentity(s))})),inventory:this.inventory?.map(s=>({layout:s.layout,target:s.target.id,key:digest(sceneIdentity(s))})),entries:[...this.entries.values()].map(e=>({layout:e.spec.layout,target:e.spec.target,key:e.key,pins:e.pins,state:e.state}))};}
- private log(message:string){this.trace=[...this.trace.slice(-15),message];}
+ debug(){return {counters:{...this.counters},working:this.working,abort:this.abort,queue:this.jobs.map(j=>j.priority),trace:this.trace,active:[...this.active.values()].map(s=>({layout:s.layout,target:s.target.id,key:digest(sceneIdentity(s))})),inventory:this.inventory?.map(s=>({layout:s.layout,target:s.target.id,key:digest(sceneIdentity(s))})),entries:[...this.entries.values()].map(e=>({layout:e.spec.layout,target:e.spec.target,key:e.key,pins:e.pins,state:e.state}))};}
+ private log(message:string){this.trace=[...this.trace.slice(-79),message];}
  private entries=new Map<string,Entry>();private jobs:Job[]=[];private working=false;private abort=false;private background=false;private disposed=false;private revision=0;
- constructor(private send:(request:Record<string,unknown>)=>Promise<NativeSceneStatus>,private changed:()=>void,private compile=compileRoomScene){debugSessions.add(this);}
+ constructor(private send:(request:Record<string,unknown>)=>Promise<NativeSceneStatus>,private changed:()=>void,private compile=compileRoomScene){
+  const originalSend=this.send;this.send=async request=>{if(request.op==='preload')this.counters.preloads++;if(request.op==='retain')this.counters.retains++;const started=performance.now();try{return await originalSend(request);}finally{this.log(`${request.op}:${request.outputId??'program'} ${(performance.now()-started).toFixed(1)}ms`);}};
+  debugSessions.add(this);
+ }
  get(spec:SceneSpec){const identity=sceneIdentity(spec),key=digest(identity);let entry=this.entries.get(key);if(entry&&entry.identity!==identity)throw Error('Prepared scene identity collision');if(!entry){entry={pins:0,key,identity,spec,state:{state:'queued'}};this.entries.set(key,entry);}return entry;}
  readiness(spec:SceneSpec):SceneReadiness{return {...this.get(spec).state};}
  private enqueue<T>(priority:number,preemptible:boolean,run:(abort:()=>boolean)=>Promise<T>):Promise<T>{
@@ -49,12 +56,15 @@ export class PreparedScenes {
  private async pump(){if(this.working||this.disposed)return;this.working=true;try{while(this.jobs.length&&!this.disposed){this.jobs.sort((a,b)=>b.priority-a.priority);const job=this.jobs.shift()!;this.abort=false;this.background=job.preemptible;try{job.resolve(await job.run(()=>this.abort||this.disposed));}catch(e){job.reject(e);}}}finally{this.background=false;this.working=false;}}
  async ensure(spec:SceneSpec,priority=0):Promise<Entry>{
   this.outputs.add(spec.target.id);
-  const entry=this.get(spec);if(entry.state.state==='ready')return entry;if(entry.promise){if(priority>=100&&this.background)this.abort=true;return entry.promise;}
+  const entry=this.get(spec);if(entry.state.state==='ready')return entry;if(priority<100&&this.warmingBlocked.has(spec.target.id))return entry;if(entry.promise){if(priority>=100&&this.background)this.abort=true;return entry.promise;}
   entry.promise=this.enqueue(priority,priority<100,async abort=>{
    this.log('loading '+entry.key+' priority '+priority);entry.state={state:'loading'};this.changed();let revision=0;
    try{
-    if(!entry.plan)entry.plan=await this.compile(spec.projection,{definitionId:spec.definition,instanceId:spec.instance,canvasId:spec.layout,target:spec.target,bindings:spec.bindings,retainedTargets:spec.targets}) as Plan;
+    if(priority<100&&this.warmingBlocked.has(spec.target.id)){entry.state={state:'queued'};return entry;}
+    if(!entry.plan){this.counters.plans++;const started=performance.now();entry.plan=await this.compile(spec.projection,{definitionId:spec.definition,instanceId:spec.instance,canvasId:spec.layout,target:spec.target,bindings:spec.bindings,retainedTargets:spec.targets}) as Plan;this.log(`compiled ${entry.key} ${(performance.now()-started).toFixed(1)}ms`);}
     if(abort()){this.log('aborted compile '+entry.key);entry.state={state:'queued'};return entry;}
+    for(let attempt=0;;attempt++){
+     try{
     const status=await this.send({op:'status',outputId:spec.target.id});this.revision=Math.max(this.revision,status.preparedRevision,status.renderedRevision);revision=++this.revision;
     const paused=runtimePlan(entry.plan,{...spec.projection,timeline:spec.projection.timeline?{...spec.projection.timeline,clock:{...spec.projection.timeline.clock,running:false}}:undefined});
     paused.assets=entry.plan.assets;
@@ -72,6 +82,24 @@ export class PreparedScenes {
      const state=await this.send({op:'status',outputId:spec.target.id});if(state.cachedKeys?.includes(entry.key)){this.log('ready '+entry.key);entry.state={state:'ready'};return entry;}await sleep(20);
     }
     throw Error('Layout did not finish preparing');
+     }catch(error){
+      if(!String(error).includes('Loaded set texture budget reached'))throw error;
+      if(revision)await this.send({op:'cancel',outputId:spec.target.id,revision}).catch(()=>{});
+      this.warmingBlocked.add(spec.target.id);
+      if(priority<100){this.log('deferred full cache '+entry.key);entry.state={state:'queued'};return entry;}
+      if(attempt)throw error;
+      // Cache pressure is not a broken Set. Keep every in-flight paired take
+      // pinned, release cold snapshots and retry the requested view once.
+      // Native program ownership preserves the on-air frame independently.
+      const pinned=[...this.entries.values()].filter(e=>e.pins>0&&e.spec.target.id===spec.target.id),keys=pinned.map(e=>e.key);
+      const retained=[...(this.inventory??[]),...this.active.values(),...pinned.map(e=>e.spec)];
+      const assetIds=[...new Set(retained.filter(s=>s.target.id===spec.target.id).flatMap(s=>Object.keys(s.projection.assets??{})))];
+      await this.send({op:'retain',outputId:spec.target.id,keys,assetIds});this.retained.delete(spec.target.id);
+      for(const other of this.entries.values())if(other.spec.target.id===spec.target.id&&!keys.includes(other.key)&&other.state.state==='ready')other.state={state:'queued'};
+      this.log('released cold snapshots for '+entry.key);
+     }
+    }
+
    }catch(e){if(revision)await this.send({op:'cancel',outputId:spec.target.id,revision}).catch(()=>{});entry.plan=undefined;entry.state={state:'error',error:String(e)};throw e;}
    finally{entry.promise=undefined;this.changed();}
   });return entry.promise;
@@ -83,9 +111,10 @@ export class PreparedScenes {
  async takeGroup(specs:SceneSpec[],run:(entries:{entry:Entry;revision:number}[])=>Promise<void>){
   const pinned=specs.map(s=>this.get(s));pinned.forEach(e=>e.pins++);
   try{
-   // A live update outranks background work. Reconcile its new inventory first,
-   // or stale layouts can still occupy the texture budget when this take loads.
-   await this.trim(100,specs);
+   // Cold preparation needs room first. A ready take allocates no scene: do
+   // not put unrelated eviction/destruction in front of its presentation.
+   // The finally trim reconciles inventory after the new frame is confirmed.
+   if(!pinned.every(entry=>entry.state.state==='ready'))await this.trim(100,specs);
    const entries:Entry[]=[];
    for(const spec of specs){let entry=await this.ensure(spec,100);while(entry.state.state==='queued')entry=await this.ensure(spec,100);entries.push(entry);}
    return await this.enqueue(100,false,async()=>{
@@ -101,7 +130,8 @@ export class PreparedScenes {
  }
 
  async preload(specs:SceneSpec[],cancel:()=>boolean){for(const spec of specs){if(cancel()||this.disposed)return;try{const entry=await this.ensure(spec);if(entry.state.state==='queued'&&!cancel()){await sleep(50);await this.ensure(spec);}}catch{/* Per-layout error is exposed; later layouts keep loading. */}}}
- async retain(specs:SceneSpec[]){this.inventory=[...specs];await this.trim();}
+ setInventory(specs:SceneSpec[]){const family=[...new Set(specs.map(s=>this.get(s).key))].sort().join('|');if(family!==this.family){this.family=family;this.warmingBlocked.clear();}this.inventory=[...specs];}
+ async retain(specs:SceneSpec[]){this.setInventory(specs);await this.trim();}
  /** Keep authored designs plus the latest presented snapshot per output. Text,
   * scores and segment changes can otherwise accumulate unbounded native scenes.
   * In-flight takes remain pinned; native program ownership protects live frames. */
@@ -121,14 +151,15 @@ export class PreparedScenes {
     const keys=[...new Set([...current.filter(s=>s.target.id===outputId).map(s=>this.get(s).key),...[...this.entries.values()].filter(e=>e.pins>0&&e.spec.target.id===outputId).map(e=>e.key)])];
     const retained=[...current,...this.active.values(),...[...this.entries.values()].filter(e=>e.pins>0).map(e=>e.spec)];
     const assetIds=[...new Set(retained.filter(s=>s.target.id===outputId).flatMap(s=>Object.keys(s.projection.assets??{})))];
-    await this.send({op:'retain',outputId,keys,assetIds});
+    const signature=JSON.stringify([keys.slice().sort(),assetIds.slice().sort()]),epoch=this.retentionEpoch;
+    if(this.retained.get(outputId)!==signature){await this.send({op:'retain',outputId,keys,assetIds});if(epoch===this.retentionEpoch)this.retained.set(outputId,signature);}
     const sent=this.sentAssets.get(outputId);if(sent)for(const id of sent.keys())if(!assetIds.includes(id))sent.delete(id);
    }).catch(()=>{});
   }
  }
- reset(){this.active.clear();this.sentAssets.clear();this.abort=true;for(const e of this.entries.values())e.state={state:'queued'};this.changed();}
+ reset(){this.warmingBlocked.clear();this.active.clear();this.sentAssets.clear();this.retained.clear();this.retentionEpoch++;this.abort=true;for(const e of this.entries.values())e.state={state:'queued'};this.changed();}
  invalidate(spec:SceneSpec){const entry=this.get(spec);entry.state={state:'queued'};entry.plan=undefined;this.changed();}
- invalidateOutput(outputId:string){this.sentAssets.delete(outputId);for(const e of this.entries.values())if(e.spec.target.id===outputId)e.state={state:'queued'};this.changed();}
+ invalidateOutput(outputId:string){this.warmingBlocked.delete(outputId);this.sentAssets.delete(outputId);this.retained.delete(outputId);this.retentionEpoch++;for(const e of this.entries.values())if(e.spec.target.id===outputId)e.state={state:'queued'};this.changed();}
  retry(){for(const e of this.entries.values())if(e.state.state==='error')e.state={state:'queued'};this.changed();}
  dispose(){debugSessions.delete(this);this.disposed=true;this.abort=true;for(const job of this.jobs)job.reject(Error('Room preparation closed'));this.jobs=[];this.entries.clear();this.active.clear();this.inventory=undefined;}
 }
@@ -178,12 +209,48 @@ export function moduleViewProjections(session:RehearsalSession){
  return variants;
 }
 
+/** Enumerate a bounded family of literal value controls without dispatching
+ * actions or multiplying independent fields. Only the current paired view is
+ * considered; managed 3D and unbounded choices retain normal preparation. */
+export function valueControlProjections(session:RehearsalSession,base=layoutProjections(session)){
+ const doc=session.package,state=session.snapshot();
+ const view=doc.set.views&&Object.values(doc.set.views).find(v=>Object.values(v).includes(state.layoutId));
+ const layouts=new Set(view?Object.values(view):[state.layoutId]);
+ const variants:Array<ReturnType<typeof layoutProjections>[number]&{controlId:string}>=[];
+ const controls=doc.set.controls.filter(c=>c.type==='button'&&c.action.type==='value.set'&&(c.when===undefined||!!evaluate(c.when,state,{},64,doc.set.tokens))&&(c.enabled===undefined||!!evaluate(c.enabled,state,{},64,doc.set.tokens)));
+ const distinct=new Map(base.filter(i=>layouts.has(i.layout)).map(i=>[i.layout,new Set([JSON.stringify(visual(i.projection.root))])]));
+ // Bound enumeration, not the renderer's existing memory or texture budget.
+ const fields=new Map<string,Set<string>>();
+ for(const control of controls){if(control.type!=='button'||control.action.type!=='value.set')continue;const a=control.action;let values=fields.get(a.key);if(!values)fields.set(a.key,values=new Set());values.add(JSON.stringify(a.value));}
+ const activeKeys=new Set([...layouts].flatMap(id=>[...layoutFieldKeys(doc,id)]));
+ // Warm one stable family. Mixing independent setup toggles into a larger
+ // walkthrough family invalidates those toggles on every walkthrough click.
+ const family=[...fields].filter(([key,values])=>activeKeys.has(key)&&values.size>1&&values.size<=8).sort((a,b)=>b[1].size-a[1].size)[0]?.[0];
+ for(const control of controls){
+  if(control.type!=='button'||control.action.type!=='value.set')continue;
+  const action=control.action;if(action.key!==family)continue;
+  for(const item of base.filter(i=>layouts.has(i.layout))){
+   const entry=structuredClone(item.entry);entry.values={...entry.values,[action.key]:action.value};
+   const projection=outputProjection(doc,entry);projection.assets=item.projection.assets;
+   if(hasScene3d(projection.root))continue;
+   const key=JSON.stringify(visual(projection.root)),seen=distinct.get(item.layout)!;
+   if(!seen.has(key)&&seen.size>=9)continue;seen.add(key);
+   variants.push({...item,entry,projection,variant:true,controlId:control.id});
+  }
+ }
+ return variants;
+}
+
+function hasScene3d(node:RenderNode):boolean{return !!node.scene3d||node.children.some(hasScene3d);}
+
 /** Reserve a scene slot for the presented snapshot while warming at most five
  * candidates per native output. Prefer current composition/view alternatives;
  * do not grow a cartesian product or raise the native texture budget. */
 export function warmInventory(specs:SceneSpec[],layouts:ReadonlySet<string>){
+ const controlFamily=specs.some(spec=>spec.controlId&&layouts.has(spec.layout));
  if(!specs.some(spec=>spec.speculative))return specs;
  const score=(spec:SceneSpec)=>layouts.has(spec.layout)?(spec.speculative?2:3):spec.speculative?0:1;
- const ordered=[...specs].sort((a,b)=>score(b)-score(a)),seen=new Set<string>(),counts=new Map<string,number>();
- return ordered.filter(spec=>{const key=sceneIdentity(spec);if(seen.has(key)||(counts.get(spec.target.id)??0)>=5)return false;seen.add(key);counts.set(spec.target.id,(counts.get(spec.target.id)??0)+1);return true;});
+ const next=(spec:SceneSpec)=>{const first=specs.findIndex(s=>s.target.id===spec.target.id&&layouts.has(s.layout));return (specs.indexOf(spec)-first+specs.length)%specs.length;};
+ const ordered=[...specs].sort((a,b)=>score(b)-score(a)||(controlFamily&&!layouts.has(a.layout)&&!layouts.has(b.layout)?next(a)-next(b):0)),seen=new Set<string>(),counts=new Map<string,number>();
+ return ordered.filter(spec=>{const key=sceneIdentity(spec);if(seen.has(key)||(counts.get(spec.target.id)??0)>=(controlFamily?8:5))return false;seen.add(key);counts.set(spec.target.id,(counts.get(spec.target.id)??0)+1);return true;});
 }

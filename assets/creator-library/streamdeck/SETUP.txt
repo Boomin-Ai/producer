@@ -1,0 +1,41 @@
+Producer Sounds — Stream Deck setup
+
+1. Install the Stream Deck desktop app on the computer running Producer.
+2. Open ai.boomin.producer.sounds.streamDeckPlugin to install Producer Sounds.
+3. In Producer, enter your room and open the Sounds panel.
+4. Choose Stream Deck → Show pairing connection → Copy connection.
+5. Drag Producer Sounds → Play sound onto a hardware key.
+6. Paste the connection into the action settings, click Connect, then choose a room sound.
+7. Add Stop all sounds to another key. Stream Deck+ users can add Effects volume to a dial.
+
+Pairing is remembered on that computer and limited to localhost. Dev and production
+use separate connections. Reconnect once when moving from dev to production or to
+another computer. Do not share the pairing connection or export it publicly.
+
+The plugin follows the active room. Sound assignments use content IDs, so moving
+or renaming pads keeps the hardware assignment. Assign the sound to each room
+where you want to use it. Missing assignments produce an alert instead of playing
+a different sound.
+
+You can also enable global shortcuts in Producer's Sounds panel:
+Ctrl+Alt+Shift+1 through 9: first nine pads; Ctrl+Alt+Shift+0: stop all.
+On macOS, Alt is Option. These work while Producer is in the background.
+
+Sounds play into recording, streaming, and the guest-return mix. Preview is
+headphones-only. 'Hear effects' controls monitoring of live effects. Use DJ for
+long music tracks; the effects player accepts clips up to 60 seconds.
+
+Playback modes: restart, play/stop, overlap, loop/stop. Effects have individual
+volume, fade and color. Stop all is immediate. Imported files outside the permanent
+sound folder are copied into Music/Producer/Sounds. Removing a pad removes the room
+assignment, not its library file. Your original collection is in:
+Music/Producer/Sounds/Myinstants-US-Top-250
+
+Build / verification:
+npm ci --prefix tools/producer-streamdeck/ai.boomin.producer.sounds.sdPlugin
+node tools/producer-streamdeck/test.mjs
+npx @elgato/cli@1.10.4 validate tools/producer-streamdeck/ai.boomin.producer.sounds.sdPlugin
+npx @elgato/cli@1.10.4 pack tools/producer-streamdeck/ai.boomin.producer.sounds.sdPlugin
+
+Hardware and Windows playback still require acceptance on those devices.
+No user sound files or pairing credentials are included in this plugin.

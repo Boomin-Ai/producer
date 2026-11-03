@@ -2,7 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import {listenLiveEvents} from "../../lib/ipc";
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 async function until<T>(read: () => T | Promise<T>, label: string,attempts=600): Promise<NonNullable<T>> {
-  for (let i=0;i<attempts;i++) { const result=await read(); if(result) return result as NonNullable<T>; await sleep(50); }
+  const deadline=Date.now()+attempts*50;
+  for (let i=0;i<attempts&&Date.now()<deadline;i++) { const result=await read(); if(result) return result as NonNullable<T>; await sleep(50); }
   throw Error(`Timed out: ${label}`);
 }
 const button = (label: string, root: ParentNode = document) => Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(b => (b.getAttribute('aria-label')===label || b.textContent?.trim()===label) && !b.disabled);
@@ -352,4 +353,72 @@ export async function roomApplyCheck() {
  } catch(error) {
   await invoke('live_set_v2_report',{result:{ok:false,kind:'grand-arena-apply',error:String(error),errors:errors(),debug:(await import('./preparedScenes')).preparationDebug(),body:document.body.innerText.slice(-5000),completedAt:new Date().toISOString()}});
  }
+}
+
+/** Measure existing room controls directly; editor publication is a separate test. */
+export async function measureExistingWalkthrough(reviewOnly=false){
+ if(!import.meta.env.DEV)return;
+ const measurements:Array<Record<string,unknown>>=[];
+ let events:Array<Record<string,any>>=[];
+ const receive=(event:Event)=>{const d=(event as CustomEvent).detail;events.push({stage:d.stage,elapsedMs:d.elapsedMs,...(d.transitionMs===undefined?{}:{transitionMs:d.transitionMs})});};
+ const read=async(outputId:string,generation:number)=>{
+  const s=await invoke<{renderedRevision:number;transitioning:boolean;graphicsCreations:number;graphicsLayers:number;cachedBytes:number;spareGraphicsBytes:number;cachedKeys:string[]}>('live_set_v2',{request:{op:'status',generation,outputId}});
+  return {revision:s.renderedRevision,transitioning:s.transitioning,graphicsCreations:s.graphicsCreations,graphicsLayers:s.graphicsLayers,cachedBytes:s.cachedBytes,spareGraphicsBytes:s.spareGraphicsBytes,cachedScenes:s.cachedKeys.length};
+ };
+ const status=async()=>{const {generation}=await invoke<{generation:number}>('live_set_status');return {program:await read('program',generation),portrait:await read('portrait',generation)};};
+ const report=(stage:string,extra:Record<string,unknown>={})=>invoke('live_set_v2_report',{result:{kind:'walkthrough-timing',stage,measurements,...extra}});
+ try{
+  await report('starting');
+  let lastProbe=0;
+  await until(async()=>{
+   const dock=document.querySelector<HTMLElement>('[aria-label="Show the bottom row"]');if(dock)dock.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+   const panel=document.querySelector('.set-controls[data-layouts-total]');
+   if(Date.now()-lastProbe>3000){lastProbe=Date.now();await report('loading room controls',{engine:await invoke<Record<string,unknown>>('live_engine_status').then(s=>({ready:s.engine_ready,bootstrap:s.bootstrap_ok,state:s.session_state})).catch(String),panels:Array.from(document.querySelectorAll('.set-controls')).map(e=>e.textContent?.slice(0,150)),buttons:Array.from(document.querySelectorAll('button')).slice(-35).map(b=>b.getAttribute('aria-label')??b.textContent?.trim().slice(0,45))});}
+   return panel;
+  },'existing room controls',2400);
+  button('Close editor')?.click();
+  (await until(()=>button('Output settings'),'timing output settings')).click();
+  const views=await until(()=>document.querySelector('[aria-label="Room output view"]'),'timing output view');(await until(()=>button('Both',views),'timing both outputs')).click();button('Close output settings')?.click();
+  await until(()=>document.querySelector('.set-controls[data-output-busy="false"]'),'timing output idle',2400);
+  const layout=await until(()=>Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).find(b=>b.querySelector('span')?.textContent?.startsWith('02')),'timing full-stack layout');
+  if(layout.getAttribute('aria-pressed')!=='true')layout.click();
+  const labels=['Workers Static Assets','Workers','D1','R2','Workers AI','Access / WAF','Hide descriptions'];
+  await until(async()=>{
+   const selected=Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).find(b=>b.querySelector('span')?.textContent?.startsWith('02'));
+   if(selected?.getAttribute('aria-pressed')!=='true'&&!selected?.disabled){selected?.click();return false;}
+   const panel=document.querySelector<HTMLElement>('.set-controls[data-layouts-total]');
+   const preparation=(await import('./preparedScenes')).preparationDebug();
+   const failures=preparation.flatMap(s=>s.entries.filter(e=>e.state.state==='error').map(e=>e.state.error));if(failures.length)throw Error(failures.join('; '));
+   const fullyPrepared=preparation.every(s=>s.inventory?.length&&!s.working&&!s.queue.length&&s.inventory.every(i=>s.entries.some(e=>e.key===i.key&&e.state.state==='ready')));
+   if(Date.now()-lastProbe>3000){lastProbe=Date.now();await report('preparing control choices',{ready:panel?.dataset.controlsReady,total:panel?.dataset.controlsTotal});}
+   if(!panel||panel.dataset.outputBusy!=='false')return false;const controls=Number(panel.dataset.controlsTotal??0);if(!fullyPrepared)return false;return controls>0?panel.dataset.controlsReady===panel.dataset.controlsTotal:panel.dataset.layoutsReady===panel.dataset.layoutsTotal;
+  },'room layouts ready',2400);
+  const showReady=button('Show set');if(showReady)showReady.click();
+  await until(()=>button('Show room scene')&&document.querySelector('.set-controls[data-output-busy="false"]'),'timing set on output',2400);
+  await report('layouts ready');
+  if(reviewOnly){await report('ready for manual review',{ok:true});return;}
+  const assertLayout=()=>{const selected=document.querySelector('.set-layouts button[aria-pressed="true"] span')?.textContent?.trim();if(!selected?.startsWith('02'))throw Error('Layout changed during walkthrough timing; stopped without further control clicks.');};
+  window.addEventListener('producer:set-render-timing',receive);
+  for(const [index,label] of [...labels,...labels].entries()){
+   assertLayout();
+   await report('waiting for enabled control '+label);
+   const target=await until(()=>{const b=button(label);return b&&!b.disabled?b:null;},'enabled timing product '+label,600);
+   if(target.getAttribute('aria-pressed')==='true')continue;
+   await report('reading status '+label);
+   const before=await status(),preparationBefore=(await import('./preparedScenes')).preparationDebug().map(s=>s.counters);events=[];assertLayout();const start=performance.now();target.click();
+   await report('clicked '+label,{events:[...events],button:target.outerHTML,outputStatus:document.querySelector('.set-output-status')?.textContent,errors:Array.from(document.querySelectorAll('.set-controls .set-error')).map(e=>e.textContent)});
+   // Observe the adapter's own paired presentation receipt. A second status
+   // poller adds graphics-context contention and distorts the measured click.
+   await until(()=>{assertLayout();const errors=Array.from(document.querySelectorAll('.set-controls .set-error')).map(e=>e.textContent);if(errors.length)throw Error(errors.join('; '));return events.some(e=>e.stage==='render-complete');},'timing receipt '+label,2400);
+   const clickToSettledMs=performance.now()-start,after=await status();
+   if(after.program.revision<=before.program.revision||after.portrait.revision<=before.portrait.revision||after.program.transitioning||after.portrait.transitioning)throw Error('Paired presentation receipt did not match native output');
+   const preparationAfter=(await import('./preparedScenes')).preparationDebug().map(s=>s.counters);
+   measurements.push({label,preparationBefore,preparationAfter,pass:index<labels.length?'first':'repeat',clickToSettledMs,events:[...events],before,after,preparationTrace:(await import('./preparedScenes')).preparationDebug().map(s=>s.trace.slice(-20))});await report('measured '+label);
+   await until(()=>document.querySelector('.set-controls[data-output-busy="false"]'),'timing transaction idle',2400);
+   if(preparationAfter.some((s,i)=>s.plans!==preparationBefore[i]?.plans||s.preloads!==preparationBefore[i]?.preloads))throw Error('Prepared control rebuilt a scene: '+label);
+   if((after.program.graphicsCreations!==before.program.graphicsCreations||after.portrait.graphicsCreations!==before.portrait.graphicsCreations))throw Error('Prepared selection created new paint: '+label);
+  }
+  await report('complete',{ok:true,errors:Array.from(document.querySelectorAll('.set-controls .set-error')).map(e=>e.textContent)});
+ }catch(error){await report('failed',{ok:false,error:String(error),debug:(await import('./preparedScenes')).preparationDebug().map(s=>({trace:s.trace,entries:s.entries.filter(e=>e.state.state==='error')}))});}
+ finally{window.removeEventListener('producer:set-render-timing',receive);}
 }

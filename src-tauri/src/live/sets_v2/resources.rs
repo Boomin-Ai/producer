@@ -34,7 +34,9 @@ struct Cached {
     bytes: usize,
 }
 pub struct Store {
-    pub(super) graphics: std::cell::RefCell<HashMap<String, std::rc::Weak<super::GraphicsLayer>>>,
+    pub(super) graphics: std::cell::RefCell<HashMap<String, (u64, std::rc::Rc<super::GraphicsLayer>)>>,
+    pub(super) graphics_created: std::cell::Cell<usize>,
+    pub(super) graphics_clock: std::cell::Cell<u64>,
     images: std::cell::RefCell<HashMap<String, std::rc::Weak<Source>>>,
     scenes3d: std::cell::RefCell<HashMap<String, std::rc::Weak<super::scene3d::Lease>>>,
     directory: PathBuf,
@@ -52,6 +54,8 @@ impl Store {
         std::fs::create_dir(&directory).map_err(|e| e.to_string())?;
         Ok(Self {
             graphics: Default::default(),
+            graphics_clock: Default::default(),
+            graphics_created: Default::default(),
             images: Default::default(),
             scenes3d: Default::default(),
             directory,
@@ -145,12 +149,20 @@ impl Store {
         self.assets.retain(|id, _| ids.contains(id));
         self.files.retain(|_, file| file.strong_count() > 0);
     }
-    pub fn graphics_count(&self) -> usize {
-        self.graphics
-            .borrow()
-            .values()
-            .filter(|lease| lease.strong_count() > 0)
-            .count()
+    pub fn graphics_count(&self) -> usize { self.graphics.borrow().len() }
+    pub fn spare_graphics_bytes(&self) -> usize {
+        self.graphics.borrow().values().filter(|(_,layer)| std::rc::Rc::strong_count(layer)==1).map(|(_,layer)| layer.bytes).sum()
+    }
+    /// Immutable paint survives scene eviction, within a separate bounded LRU.
+    /// Live/draft leases are never evicted. Spare bytes also count against the
+    /// existing aggregate texture limit, not an additional unbounded allowance.
+    pub fn trim_graphics(&self, available:usize) {
+        let limit=available.min(64*1024*1024);
+        let mut cache=self.graphics.borrow_mut();
+        let mut unused:Vec<_>=cache.iter().filter(|(_,(_,layer))|std::rc::Rc::strong_count(layer)==1).map(|(id,(used,layer))|(id.clone(),*used,layer.bytes)).collect();
+        unused.sort_by_key(|(_,used,_)|*used);
+        let mut bytes:usize=unused.iter().map(|(_,_,bytes)|bytes).sum();
+        for (id,_,size) in unused {if bytes<=limit{break;}cache.remove(&id);bytes-=size;}
     }
     pub fn versions(&self, resources: &[String]) -> String {
         let mut versions = resources
@@ -352,7 +364,7 @@ pub struct MediaBinding {
     pub position_ms: f64,
 }
 extern "C" {
-    fn producer_set_v2_surface_warm(source: *mut ffi::obs_source_t) -> bool;
+    fn producer_set_v2_surfaces_warm(sources: *const *mut ffi::obs_source_t, count:usize) -> bool;
 }
 pub struct Prepared {
     pub sources: HashMap<String, std::rc::Rc<Source>>,
@@ -364,11 +376,9 @@ pub struct Prepared {
 }
 impl Prepared {
     pub unsafe fn ready(&self) -> bool {
-        self.scenes3d.values().all(|s| s.ready())
-            && self
-                .sources
-                .values()
-                .all(|s| producer_set_v2_surface_warm(s.0))
+        if !self.scenes3d.values().all(|s| s.ready()) {return false;}
+        let sources:Vec<_>=self.sources.values().map(|s|s.0).collect();
+        producer_set_v2_surfaces_warm(sources.as_ptr(),sources.len())
     }
 }
 impl Prepared {

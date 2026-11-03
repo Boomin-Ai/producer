@@ -38,6 +38,19 @@ static const char CODE[] =
     "return "
     "lerp(a,b,p)*d+lerp(a,b,m)*w+lerp(slideA,slideB,step(1.0,oldUV.x))*s;}"
     "technique Draw{pass{vertex_shader=VS(v);pixel_shader=PS(v);}}";
+/* Programs hold a warm lease, so a fade never recompiles its shader. Each
+ * transition still owns both textures, mode, extent and progress. Children
+ * finish rendering before this shared program's uniforms/pass are touched. */
+static gs_effect_t *transition_effect;
+static size_t effect_leases;
+static atomic_size_t effect_compilations;
+static gs_effect_t *effect_acquire(void){
+ if(!transition_effect){char *error=NULL;transition_effect=gs_effect_create(CODE,"producer-set-v2-transition.effect",&error);if(error){blog(LOG_ERROR,"[sets-v2] transition: %s",error);bfree(error);}if(transition_effect)atomic_fetch_add(&effect_compilations,1);}
+ if(transition_effect)effect_leases++;return transition_effect;
+}
+bool producer_set_v2_transition_program_acquire(void){return effect_acquire()!=NULL;}
+void producer_set_v2_transition_program_release(void){if(effect_leases&&!--effect_leases){gs_effect_destroy(transition_effect);transition_effect=NULL;}}
+size_t producer_set_v2_transition_effect_compilations(void){return atomic_load(&effect_compilations);}
 static const char *name(void *p) {
   (void)p;
   return "Producer set v2 live transition";
@@ -59,17 +72,11 @@ static void *create(obs_data_t *d, obs_source_t *s) {
   t->width = w;
   t->height = h;
   t->mode = (int)mode;
-  char *error = NULL;
   obs_enter_graphics();
   t->a = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
   t->b = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
-  t->effect =
-      gs_effect_create(CODE, "producer-set-v2-transition.effect", &error);
+  t->effect = effect_acquire();
   obs_leave_graphics();
-  if (error) {
-    blog(LOG_ERROR, "[sets-v2] transition: %s", error);
-    bfree(error);
-  }
   if (!t->a || !t->b || !t->effect) {
     obs_enter_graphics();
     if (t->a)
@@ -77,7 +84,7 @@ static void *create(obs_data_t *d, obs_source_t *s) {
     if (t->b)
       gs_texrender_destroy(t->b);
     if (t->effect)
-      gs_effect_destroy(t->effect);
+      producer_set_v2_transition_program_release();
     obs_leave_graphics();
     free(t);
     return NULL;
@@ -100,7 +107,7 @@ static void destroy(void *p) {
   obs_enter_graphics();
   gs_texrender_destroy(t->a);
   gs_texrender_destroy(t->b);
-  gs_effect_destroy(t->effect);
+  producer_set_v2_transition_program_release();
   obs_leave_graphics();
   atomic_fetch_sub(&live, 1);
   free(t);

@@ -284,8 +284,10 @@ impl Action {
 pub struct Status {
     pub scene3d_contexts: usize,
     pub graphics_layers: usize,
+    pub graphics_creations: usize,
     pub cached_keys: Vec<String>,
     pub cached_bytes: usize,
+    pub spare_graphics_bytes: usize,
     pub generation: u64,
     pub prepared_revision: u64,
     pub rendered_revision: u64,

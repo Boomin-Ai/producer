@@ -760,6 +760,7 @@ pub enum Command {
         lease: Option<String>,
         reply: mpsc::Sender<Result<super::presentation::Status, String>>,
     },
+    Soundboard { action: crate::soundboard::Native, reply: std::sync::mpsc::Sender<Result<crate::soundboard::Reply,String>> },
     Dj {
         action: crate::dj::Action,
         reply: std::sync::mpsc::Sender<Result<crate::dj::Status, String>>,
@@ -915,6 +916,7 @@ pub enum Command {
 /// Variant name for the engine-loop stall log (no reflection in Rust).
 fn cmd_name(c: &Command) -> &'static str {
     match c {
+        Command::Soundboard { .. } => "Soundboard",
         Command::Dj { .. } => "Dj",
         Command::SetPreviewSources { .. } => "SetPreviewSources",
         Command::SetThumbRate { .. } => "SetThumbRate",
@@ -1483,6 +1485,9 @@ impl LiveHandle {
             .map_err(|e| e.to_string())
     }
 
+    pub fn soundboard_dispatch(&self)->Result<Box<dyn FnOnce(crate::soundboard::Native)->Result<crate::soundboard::Reply,String>+Send>,String>{
+        let sender=self.cmd.clone();Ok(Box::new(move|action|{let(tx,rx)=std::sync::mpsc::channel();sender.send(Command::Soundboard{action,reply:tx}).map_err(|e|e.to_string())?;rx.recv_timeout(Duration::from_secs(5)).map_err(|_|"Soundboard did not answer".to_string())?}))
+    }
     pub fn dj_dispatch(
         &self,
     ) -> Result<
@@ -2523,6 +2528,7 @@ pub fn start(
                 if let Err(e)=unsafe {super::presentation_probe::start(g,handle,std::path::PathBuf::from(path.clone()))} {let _=std::fs::write(std::path::Path::new(&path).join("result.json"),serde_json::json!({"ok":false,"error":e}).to_string());}
             }
             let mut dj = super::dj::Dj::default();
+            let mut soundboard = super::soundboard::Soundboard::default();
             let mut preview: Option<Preview> = None;
             let mut portrait_preview: Option<Preview> = None;
             let mut selected_portrait=false;
@@ -2683,6 +2689,10 @@ pub fn start(
                 }
                 iter_prev = Some((iter_t0, iter_label));
                 match received {
+                    Ok(Command::Soundboard { action, reply }) => {
+                        let changing=matches!(&action,crate::soundboard::Native::Activate(room) if !soundboard.room().is_empty() && soundboard.room()!=room);
+                        let _=reply.send(if changing&&(session.is_some()||recorder.is_some()){Err("Stop the current output before switching soundboard rooms".into())}else if report.ok {soundboard.apply(action)} else {Err("Room audio engine unavailable".into())});
+                    }
                     Ok(Command::Dj { action, reply }) => {
                         let result = if report.ok { dj.apply(action) } else { Err("The room audio engine did not start".into()) };
                         let _ = reply.send(result);
@@ -3294,6 +3304,7 @@ pub fn start(
                             #[cfg(target_os="macos")]super::portrait::select_program(false);
                             selected_portrait=false;selected_video=unsafe{ffi::obs_get_video()};hub_engine.program_portrait.store(false,std::sync::atomic::Ordering::Relaxed);
                             dj.clear();
+                            soundboard.clear();
                             if let Some(output) = vcam.take() { unsafe { stop_vcam(output); } }
                             if let Some(mut m) = room_mix.take() { unsafe { m.teardown(); } }
                             if let Some(mut st) = studio_out.take() { unsafe { st.teardown(); } }
