@@ -835,19 +835,35 @@ mod tests {
 
     #[test]
     fn renderer_response_survives_a_nonblocking_accepted_socket() {
-        let bridge = Bridge::start(&Spec {
-            cue_sequence: None, id: "test".into(), pass: "background".into(),
-            world: Value::Null, cue: "initial".into(), view: None,
-        }, 1920, 1080).unwrap();
+        let bridge = Bridge::start(
+            &Spec {
+                cue_sequence: None,
+                id: "test".into(),
+                pass: "background".into(),
+                world: Value::Null,
+                cue: "initial".into(),
+                view: None,
+            },
+            1920,
+            1080,
+        )
+        .unwrap();
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let mut client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
-        client.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
         let (accepted, _) = listener.accept().unwrap();
         // Force the macOS inheritance condition on every test platform.
         accepted.set_nonblocking(true).unwrap();
         let serving = bridge.clone();
         let worker = std::thread::spawn(move || serving.serve(accepted));
-        write!(client, "GET /{}/renderer.js HTTP/1.1\r\nHost: localhost\r\n\r\n", bridge.token).unwrap();
+        write!(
+            client,
+            "GET /{}/renderer.js HTTP/1.1\r\nHost: localhost\r\n\r\n",
+            bridge.token
+        )
+        .unwrap();
         // Leave the receiving buffer full before consuming the large script.
         std::thread::sleep(Duration::from_millis(100));
         let mut response = Vec::new();
@@ -855,8 +871,13 @@ mod tests {
         worker.join().unwrap();
         bridge.stop();
         let body = response.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
-        assert!(String::from_utf8_lossy(&response[..body]).contains(&format!("Content-Length: {}\r\n", SCRIPT.len())));
-        assert_eq!(&response[body..], SCRIPT, "the renderer must arrive without truncation");
+        assert!(String::from_utf8_lossy(&response[..body])
+            .contains(&format!("Content-Length: {}\r\n", SCRIPT.len())));
+        assert_eq!(
+            &response[body..],
+            SCRIPT,
+            "the renderer must arrive without truncation"
+        );
     }
 
     #[test]

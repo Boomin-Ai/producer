@@ -759,7 +759,10 @@ pub enum Command {
         lease: Option<String>,
         reply: mpsc::Sender<Result<super::presentation::Status, String>>,
     },
-    Soundboard { action: crate::soundboard::Native, reply: std::sync::mpsc::Sender<Result<crate::soundboard::Reply,String>> },
+    Soundboard {
+        action: crate::soundboard::Native,
+        reply: std::sync::mpsc::Sender<Result<crate::soundboard::Reply, String>>,
+    },
     Dj {
         action: crate::dj::Action,
         reply: std::sync::mpsc::Sender<Result<crate::dj::Status, String>>,
@@ -1480,8 +1483,24 @@ impl LiveHandle {
             .map_err(|e| e.to_string())
     }
 
-    pub fn soundboard_dispatch(&self)->Result<Box<dyn FnOnce(crate::soundboard::Native)->Result<crate::soundboard::Reply,String>+Send>,String>{
-        let sender=self.cmd.clone();Ok(Box::new(move|action|{let(tx,rx)=std::sync::mpsc::channel();sender.send(Command::Soundboard{action,reply:tx}).map_err(|e|e.to_string())?;rx.recv_timeout(Duration::from_secs(5)).map_err(|_|"Soundboard did not answer".to_string())?}))
+    pub fn soundboard_dispatch(
+        &self,
+    ) -> Result<
+        Box<
+            dyn FnOnce(crate::soundboard::Native) -> Result<crate::soundboard::Reply, String>
+                + Send,
+        >,
+        String,
+    > {
+        let sender = self.cmd.clone();
+        Ok(Box::new(move |action| {
+            let (tx, rx) = std::sync::mpsc::channel();
+            sender
+                .send(Command::Soundboard { action, reply: tx })
+                .map_err(|e| e.to_string())?;
+            rx.recv_timeout(Duration::from_secs(5))
+                .map_err(|_| "Soundboard did not answer".to_string())?
+        }))
     }
     pub fn dj_dispatch(
         &self,

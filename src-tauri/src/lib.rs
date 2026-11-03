@@ -3,8 +3,6 @@ mod cache;
 mod chat;
 mod client;
 mod dj;
-mod soundboard;
-mod soundboard_remote;
 mod error;
 mod firewall;
 mod ipc;
@@ -18,6 +16,8 @@ mod rtc_ipc;
 mod rtc_owner;
 mod set_library;
 mod set_media;
+mod soundboard;
+mod soundboard_remote;
 mod storage;
 mod store;
 mod submit;
@@ -111,7 +111,9 @@ pub fn run() {
         live::dj::selftest_main();
     }
     #[cfg(all(have_engine, debug_assertions))]
-    if std::env::var_os("PRODUCER_SOUNDBOARD_SELFTEST").is_some() { live::soundboard::selftest(); }
+    if std::env::var_os("PRODUCER_SOUNDBOARD_SELFTEST").is_some() {
+        live::soundboard::selftest();
+    }
     // Headless engine self-test (M-L1 acceptance harness): bootstrap libobs,
     // print the discovery report, exit — no window, no webview.
     if std::env::var("PRODUCER_LIVE_SELFTEST").is_ok() {

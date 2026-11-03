@@ -159,7 +159,9 @@ impl Soundboard {
                 Native::Load(_, id, pcm) => {
                     for s in self.sources {
                         if producer_soundboard_load(s, id, pcm.as_ptr(), pcm.len() / 2) == 0 {
-                            return Err("Sound cache is full; stop an active sound and retry".into());
+                            return Err(
+                                "Sound cache is full; stop an active sound and retry".into()
+                            );
                         }
                     }
                 }

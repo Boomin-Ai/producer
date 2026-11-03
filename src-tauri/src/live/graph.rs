@@ -3351,10 +3351,31 @@ impl SceneGraph {
         if action.generation() != self.presentation_generation {
             return Err("Room changed; prepare this v2 set again".into());
         }
-        if let Action::TakePair {program_revision,portrait_revision,duration_ms,ref mode,..}=action {
-            let program=self.sets_v2.as_mut().ok_or("Prepare the landscape set first")?;
-            let portrait=self.sets_v2_portrait.as_mut().ok_or("Prepare the portrait set first")?;
-            return unsafe {program.take_pair(portrait,program_revision,portrait_revision,duration_ms,mode)};
+        if let Action::TakePair {
+            program_revision,
+            portrait_revision,
+            duration_ms,
+            ref mode,
+            ..
+        } = action
+        {
+            let program = self
+                .sets_v2
+                .as_mut()
+                .ok_or("Prepare the landscape set first")?;
+            let portrait = self
+                .sets_v2_portrait
+                .as_mut()
+                .ok_or("Prepare the portrait set first")?;
+            return unsafe {
+                program.take_pair(
+                    portrait,
+                    program_revision,
+                    portrait_revision,
+                    duration_ms,
+                    mode,
+                )
+            };
         }
         if !["program", "portrait"].contains(&action.output()) {
             return Err("Unknown set output".into());

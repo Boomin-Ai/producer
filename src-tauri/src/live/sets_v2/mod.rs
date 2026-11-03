@@ -134,7 +134,14 @@ extern "C" {
     ) -> bool;
     fn producer_set_v2_program_ready(p: *mut ffi::obs_source_t, r: u64) -> bool;
     fn producer_set_v2_program_take(p: *mut ffi::obs_source_t, r: u64, d: f64, mode: i32) -> bool;
-    fn producer_set_v2_program_take_pair(a:*mut ffi::obs_source_t,ar:u64,b:*mut ffi::obs_source_t,br:u64,duration:f64,mode:i32)->bool;
+    fn producer_set_v2_program_take_pair(
+        a: *mut ffi::obs_source_t,
+        ar: u64,
+        b: *mut ffi::obs_source_t,
+        br: u64,
+        duration: f64,
+        mode: i32,
+    ) -> bool;
     fn producer_set_v2_program_cancel(p: *mut ffi::obs_source_t, r: u64) -> bool;
     fn producer_set_v2_program_pause(p: *mut ffi::obs_source_t, paused: bool) -> bool;
     fn producer_set_v2_program_status(p: *mut ffi::obs_source_t, out: *mut NativeStatus) -> bool;
@@ -161,10 +168,17 @@ pub unsafe fn register() {
 struct Source(*mut ffi::obs_source_t);
 struct GraphicsContext;
 impl GraphicsContext {
-    unsafe fn enter() -> Self {ffi::obs_enter_graphics();Self}
+    unsafe fn enter() -> Self {
+        ffi::obs_enter_graphics();
+        Self
+    }
 }
 impl Drop for GraphicsContext {
-    fn drop(&mut self){unsafe{ffi::obs_leave_graphics();}}
+    fn drop(&mut self) {
+        unsafe {
+            ffi::obs_leave_graphics();
+        }
+    }
 }
 impl Drop for Source {
     fn drop(&mut self) {
@@ -343,9 +357,11 @@ impl<'a> Arena<'a> {
             format!("{:x}", Sha256::digest(html.as_bytes()))
         );
         let mut cache = self.store.graphics.borrow_mut();
-        let used=self.store.graphics_clock.get()+1;self.store.graphics_clock.set(used);
-        let layer = if let Some((last_used,layer)) = cache.get_mut(&identity) {
-            *last_used=used;layer.clone()
+        let used = self.store.graphics_clock.get() + 1;
+        self.store.graphics_clock.set(used);
+        let layer = if let Some((last_used, layer)) = cache.get_mut(&identity) {
+            *last_used = used;
+            layer.clone()
         } else {
             let url = format!(
                 "data:text/html;charset=utf-8,{}",
@@ -393,9 +409,16 @@ impl<'a> Arena<'a> {
             }
             ffi::obs_source_inc_active(browser.0);
             ffi::obs_source_inc_showing(browser.0);
-            self.store.graphics_created.set(self.store.graphics_created.get()+1);
-            let layer = Rc::new(GraphicsLayer { painted: std::cell::Cell::new(false), browser, clip, bytes:(pixels+(pw as usize)*(ph as usize))*4+1024*1024 });
-            cache.insert(identity, (used,layer.clone()));
+            self.store
+                .graphics_created
+                .set(self.store.graphics_created.get() + 1);
+            let layer = Rc::new(GraphicsLayer {
+                painted: std::cell::Cell::new(false),
+                browser,
+                clip,
+                bytes: (pixels + (pw as usize) * (ph as usize)) * 4 + 1024 * 1024,
+            });
+            cache.insert(identity, (used, layer.clone()));
             layer
         };
         // Keep the per-scene preflight conservative. The resident cache counts
@@ -671,12 +694,44 @@ impl RoomProgram {
             presented_revision: 0,
         })
     }
-    pub unsafe fn take_pair(&mut self,portrait:&mut Self,program_revision:u64,portrait_revision:u64,duration:f64,mode:&str)->Result<Status,String>{
-        self.poll()?;portrait.poll()?;
-        let mode=match mode {"dissolve"=>0,"wipe"=>1,"slide"=>2,_=>return Err("Invalid v2 transition mode".into())};
-        if !producer_set_v2_program_take_pair(self.program.0,program_revision,portrait.program.0,portrait_revision,duration,mode){return Err("Both output candidates must be ready and current; previous outputs retained".into());}
-        for (program,revision) in [(&mut *self,program_revision),(portrait,portrait_revision)] {
-            if let (Some(draft),Some((r,specs,clock)))=(&program.draft,&program.pending_3d){if *r==revision{draft._resources.publish3d(specs,clock.as_ref());}}
+    pub unsafe fn take_pair(
+        &mut self,
+        portrait: &mut Self,
+        program_revision: u64,
+        portrait_revision: u64,
+        duration: f64,
+        mode: &str,
+    ) -> Result<Status, String> {
+        self.poll()?;
+        portrait.poll()?;
+        let mode = match mode {
+            "dissolve" => 0,
+            "wipe" => 1,
+            "slide" => 2,
+            _ => return Err("Invalid v2 transition mode".into()),
+        };
+        if !producer_set_v2_program_take_pair(
+            self.program.0,
+            program_revision,
+            portrait.program.0,
+            portrait_revision,
+            duration,
+            mode,
+        ) {
+            return Err(
+                "Both output candidates must be ready and current; previous outputs retained"
+                    .into(),
+            );
+        }
+        for (program, revision) in [
+            (&mut *self, program_revision),
+            (portrait, portrait_revision),
+        ] {
+            if let (Some(draft), Some((r, specs, clock))) = (&program.draft, &program.pending_3d) {
+                if *r == revision {
+                    draft._resources.publish3d(specs, clock.as_ref());
+                }
+            }
         }
         // The normal poll path confirms each output's rendered revision.
         self.poll()
@@ -685,15 +740,23 @@ impl RoomProgram {
     /// per output owner. Rc identity is the actual native resource lease, not
     /// an authored asset ID or a claim supplied by an imported Set.
     fn cache_bytes(&self, added: Option<&Rc<Draft>>) -> usize {
-        let mut scenes=std::collections::HashSet::new();
-        let mut graphics=std::collections::HashSet::new();
-        let mut bytes=0;
-        for draft in self.bank.values().map(|(_,draft)|draft).chain(added) {
-            if !scenes.insert(Rc::as_ptr(draft) as usize) {continue;}
-            let shared=draft._graphics.iter().map(|layer|layer.bytes).sum::<usize>();
-            bytes+=draft.bytes.saturating_sub(shared);
+        let mut scenes = std::collections::HashSet::new();
+        let mut graphics = std::collections::HashSet::new();
+        let mut bytes = 0;
+        for draft in self.bank.values().map(|(_, draft)| draft).chain(added) {
+            if !scenes.insert(Rc::as_ptr(draft) as usize) {
+                continue;
+            }
+            let shared = draft
+                ._graphics
+                .iter()
+                .map(|layer| layer.bytes)
+                .sum::<usize>();
+            bytes += draft.bytes.saturating_sub(shared);
             for layer in &draft._graphics {
-                if graphics.insert(Rc::as_ptr(layer) as usize) {bytes+=layer.bytes;}
+                if graphics.insert(Rc::as_ptr(layer) as usize) {
+                    bytes += layer.bytes;
+                }
             }
         }
         bytes
@@ -772,7 +835,7 @@ impl RoomProgram {
                         }
                     }
                 }
-                let _graphics=GraphicsContext::enter();
+                let _graphics = GraphicsContext::enter();
                 if !producer_set_v2_program_prepare(
                     self.program.0,
                     producer_set_v2_scene_source(draft.scene),
@@ -806,10 +869,13 @@ impl RoomProgram {
                 }
                 self.bank.retain(|key, _| keys.contains(key));
                 self.resources.retain_manifest(&asset_ids);
-                let bytes=self.cache_bytes(None);
-                self.resources.trim_graphics((768usize*1024*1024).saturating_sub(bytes));
+                let bytes = self.cache_bytes(None);
+                self.resources
+                    .trim_graphics((768usize * 1024 * 1024).saturating_sub(bytes));
             }
-            Action::TakePair { .. } => return Err("Paired takes require the room output coordinator".into()),
+            Action::TakePair { .. } => {
+                return Err("Paired takes require the room output coordinator".into())
+            }
             Action::Take {
                 revision,
                 duration_ms,
@@ -1020,7 +1086,7 @@ impl RoomProgram {
         // Register the complete pending timeline as one graphics transaction.
         // Inner native calls can nest this context without waiting a frame
         // between individual tracks; no queued graphics probe occurs here.
-        let _graphics=GraphicsContext::enter();
+        let _graphics = GraphicsContext::enter();
         self.pending_3d = Some((revision, plan.scenes3d.clone(), plan.clock.clone()));
         let (show, segment, running) = contract::clock_positions(plan.clock.as_ref());
         for chart in &draft._resources.charts {
@@ -1192,15 +1258,25 @@ impl RoomProgram {
             // Paint producers are immutable and keep their active/showing
             // lease for their entire cached lifetime. Validate their first
             // actual pixels once; a new scene placement is not a new paint.
-            let pending_markers: Vec<_> = draft.markers.iter().zip(&draft._graphics)
-                .filter(|(_, layer)| !layer.painted.get()).collect();
+            let pending_markers: Vec<_> = draft
+                .markers
+                .iter()
+                .zip(&draft._graphics)
+                .filter(|(_, layer)| !layer.painted.get())
+                .collect();
             let marker_sources: Vec<_> = pending_markers.iter().map(|((s, _), _)| s.0).collect();
             let marker_rows: Vec<_> = pending_markers.iter().map(|((_, y), _)| *y).collect();
             if native.prepared_revision == self.draft_revision
                 && !native.ready
-                && producer_set_v2_surface_markers(marker_sources.as_ptr(), marker_rows.as_ptr(), marker_sources.len())
+                && producer_set_v2_surface_markers(
+                    marker_sources.as_ptr(),
+                    marker_rows.as_ptr(),
+                    marker_sources.len(),
+                )
             {
-                for (_, layer) in pending_markers { layer.painted.set(true); }
+                for (_, layer) in pending_markers {
+                    layer.painted.set(true);
+                }
                 producer_set_v2_program_ready(self.program.0, self.draft_revision);
                 producer_set_v2_program_status(self.program.0, &mut native);
             }
@@ -1211,7 +1287,8 @@ impl RoomProgram {
                         return Err("Loaded set texture budget reached".into());
                     }
                     self.bank.insert(key, (signature, draft.clone()));
-                    self.resources.trim_graphics((768usize*1024*1024).saturating_sub(bytes));
+                    self.resources
+                        .trim_graphics((768usize * 1024 * 1024).saturating_sub(bytes));
                 }
             }
             if native.rendered_revision == self.draft_revision
@@ -1236,10 +1313,10 @@ impl RoomProgram {
         Ok(Status {
             scene3d_contexts: scene3d::live_count(),
             graphics_layers: self.resources.graphics_count(),
-            graphics_creations:self.resources.graphics_created.get(),
+            graphics_creations: self.resources.graphics_created.get(),
             cached_keys: self.bank.keys().cloned().collect(),
             cached_bytes: self.cache_bytes(None),
-            spare_graphics_bytes:self.resources.spare_graphics_bytes(),
+            spare_graphics_bytes: self.resources.spare_graphics_bytes(),
             generation: self.generation,
             prepared_revision: self
                 .building
