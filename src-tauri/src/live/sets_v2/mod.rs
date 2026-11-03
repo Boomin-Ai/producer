@@ -190,7 +190,6 @@ struct GraphicsLayer {
     bytes: usize,
     browser: Source,
     clip: Source,
-    bytes: usize,
 }
 // Prepared HTML is immutable, but CEF visibility is asynchronous. Keep its
 // paint producer showing for the full cached-layer lease, not only while one
@@ -740,26 +739,13 @@ impl RoomProgram {
     /// per output owner. Rc identity is the actual native resource lease, not
     /// an authored asset ID or a claim supplied by an imported Set.
     fn cache_bytes(&self, added: Option<&Rc<Draft>>) -> usize {
-        let mut scenes = std::collections::HashSet::new();
-        let mut graphics = std::collections::HashSet::new();
-        let mut bytes = 0;
-        for draft in self.bank.values().map(|(_, draft)| draft).chain(added) {
-            if !scenes.insert(Rc::as_ptr(draft) as usize) {
-                continue;
-            }
-            let shared = draft
-                ._graphics
-                .iter()
-                .map(|layer| layer.bytes)
-                .sum::<usize>();
-            bytes += draft.bytes.saturating_sub(shared);
-            for layer in &draft._graphics {
-                if graphics.insert(Rc::as_ptr(layer) as usize) {
-                    bytes += layer.bytes;
-                }
-            }
-        }
-        bytes
+        texture_usage(
+            self.bank
+                .values()
+                .map(|(_, draft)| draft)
+                .chain(self.current.iter())
+                .chain(added),
+        )
     }
     pub unsafe fn dispatch(
         &mut self,
