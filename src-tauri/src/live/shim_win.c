@@ -194,6 +194,7 @@ void *producer_preview_attach(void *ns_window, double x, double y, double w, dou
      * behaves identically on both platforms even though only one mode is wired. */
     HWND after = below_webview ? HWND_BOTTOM : HWND_TOP;
     SetWindowPos(child, after, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    apply_cutouts(child); /* a modal may already be open before this attach */
 
     if (out_px_w)
         *out_px_w = w * s;

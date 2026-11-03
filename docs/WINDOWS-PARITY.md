@@ -23,6 +23,7 @@ a Mac runtime was not available on this Windows host.
 | Cutout | Replace Windows pass-through with bounded local ONNX PPHumanSeg inference, shared blur/cut/refinement shader | Person face remains opaque; wall becomes transparent; blur, bypass and eight removal/startup cycles |
 | Virtual-camera mirror | Flip a private output placement, preserving shared captures and other outputs; support landscape and portrait without restarting the camera on each toggle | Real Chrome / DirectShow receiver at 1280×720 and 720×1280; asymmetric Set text reverses and frames advance |
 | Virtual-camera errors | Distinguish a busy shared Windows camera queue from an installation failure | Busy queue reproduced while installed Producer was running; camera succeeds after it closes |
+| Set editor stacking | Recognize native HTML modal dialogs and their backdrops; clip both Windows preview HWNDs and retain clipping across late attachment | Browser open/close/resize regression with animation frames suspended; eight real Win32 region lifecycle cycles |
 | Hosted source controls | Keep latest catalog through reconnects; stop source/presentation/audience writes after publisher rejection; preserve deployments without direct scene acknowledgements | Registration ordering, reconnect, renewal, rejected ownership and legacy-hosted regression checks |
 
 Cutout embeds the Apache 2.0 OpenCV Zoo model. Windows build/dev/test staging
@@ -40,7 +41,7 @@ does not replace a selected portrait canvas with the landscape scene.
 ## Checks
 
 - Production frontend build and full Windows executable link pass.
-- **88 Rust tests pass; 9 opt-in tests are ignored by the default suite.**
+- **89 Rust tests pass; 9 opt-in tests are ignored by the default suite.**
 - Six opt-in native checks pass individually: Cutout/mirror pixels and lifecycle;
   all GPU presets; Set/portrait lifecycle; native guest ingress retirement;
   timestamped program video/audio tap; simultaneous dual recordings.
@@ -49,6 +50,12 @@ does not replace a selected portrait canvas with the landscape scene.
   changes and removal in the same process.
 - Sets v2: 16 integration checks. Module runtime: 18 checks.
 - Room-control regression suite, Windows C import coverage and shim parity pass.
+- `scripts/test-stage-cutouts.mjs` covers native HTML/ARIA dialogs, modal
+  backdrops, overlay-limit priority, fractional geometry, resize/removal and
+  eight open/close cycles while animation-frame callbacks are suspended.
+  `windows_modal_clips_both_previews_and_late_attach_then_restores` checks real
+  Win32 regions for landscape, portrait and late-attached displays, including
+  move and restoration. These checks do not start devices or outputs.
 
 Run GPU checks on a Windows GPU host, separately from a running Producer:
 
@@ -68,6 +75,9 @@ Tests use private QA rooms, generated camera/microphone tracks, a synthetic
 host color source and a generated audio tone. No external streaming destination
 was enabled and no public broadcast was started. The account credential stays
 in the OS vault; tokens are not exported to the webview or test artifacts.
+The user subsequently confirmed guest video and output on their real setup.
+The Set editor follow-up changes only native preview window clipping; it does
+not hide or alter the program sources sent to guests, recordings or outputs.
 
 Two browser guest cycles on the rebuilt app confirm nonzero native video,
 actual on-screen placement, advancing host return video, audible
@@ -122,7 +132,7 @@ affordances and are not advertised as identical to AppKit.
 
 ## Portable preview
 
-`D:/CodexBuilds/Producer-Windows-Native-Guests-Preview.zip` contains the rebuilt
+`D:/CodexBuilds/Producer-Windows-Editor-Fix-Preview.zip` contains the rebuilt
 executable, complete engine, Cutout runtime/licenses, current audit and qualified
 QA evidence. Extract the whole directory and run `producer.exe`; keep the DLLs,
 `data` and `obs-plugins` beside it. This uses a separate preview profile and is

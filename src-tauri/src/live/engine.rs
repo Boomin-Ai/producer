@@ -1968,6 +1968,187 @@ fn on_window_thread<T: Send + 'static, F: FnOnce() -> T + Send + 'static>(f: F) 
     graph::on_main_thread(f)
 }
 
+#[cfg(target_os = "windows")]
+fn apply_preview_cutouts(
+    landscape: Option<&Preview>,
+    portrait: Option<&Preview>,
+    rects: Vec<PreviewRect>,
+) {
+    let mut views: Vec<usize> = landscape
+        .into_iter()
+        .chain(portrait)
+        .map(|p| p.view as usize)
+        .collect();
+    // Keep the region for a display that attaches while a modal is open.
+    if views.is_empty() {
+        views.push(0);
+    }
+    let flat: Vec<f64> = rects.iter().flat_map(|r| [r.x, r.y, r.w, r.h]).collect();
+    on_window_thread(move || unsafe {
+        for view in views {
+            ffi::producer_preview_set_cutouts(
+                view as *mut c_void,
+                flat.as_ptr(),
+                flat.len() as i32 / 4,
+            );
+        }
+    });
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod preview_occlusion_tests {
+    use super::*;
+    #[link(name = "user32")]
+    extern "system" {
+        fn CreateWindowExW(
+            ex: u32,
+            class: *const u16,
+            title: *const u16,
+            style: u32,
+            x: i32,
+            y: i32,
+            w: i32,
+            h: i32,
+            parent: *mut c_void,
+            menu: *mut c_void,
+            instance: *mut c_void,
+            param: *mut c_void,
+        ) -> *mut c_void;
+        fn DestroyWindow(window: *mut c_void) -> i32;
+        fn GetWindowRgn(window: *mut c_void, region: *mut c_void) -> i32;
+    }
+    #[link(name = "gdi32")]
+    extern "system" {
+        fn CreateRectRgn(left: i32, top: i32, right: i32, bottom: i32) -> *mut c_void;
+        fn DeleteObject(object: *mut c_void) -> i32;
+    }
+    struct Parent(*mut c_void);
+    impl Drop for Parent {
+        fn drop(&mut self) {
+            unsafe {
+                DestroyWindow(self.0);
+            }
+        }
+    }
+    unsafe fn attach(parent: &Parent, x: f64) -> Preview {
+        let rect = PreviewRect {
+            x,
+            y: 40.,
+            w: 200.,
+            h: 300.,
+        };
+        let (mut w, mut h) = (0., 0.);
+        let view = ffi::producer_preview_attach(
+            parent.0, rect.x, rect.y, rect.w, rect.h, 0, &mut w, &mut h,
+        );
+        assert!(!view.is_null());
+        Preview {
+            view,
+            display: ptr::null_mut(),
+            canvas: ptr::null_mut(),
+            rect,
+        }
+    }
+    unsafe fn region_kind(preview: &Preview) -> i32 {
+        let region = CreateRectRgn(0, 0, 0, 0);
+        assert!(!region.is_null());
+        let kind = GetWindowRgn(preview.view, region);
+        DeleteObject(region);
+        kind
+    }
+    #[test]
+    fn windows_modal_clips_both_previews_and_late_attach_then_restores() {
+        // Hidden Win32 children, no GPU, capture device, account or output.
+        for _ in 0..8 {
+            let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+            let parent = Parent(unsafe {
+                CreateWindowExW(
+                    0,
+                    class.as_ptr(),
+                    class.as_ptr(),
+                    0,
+                    0,
+                    0,
+                    1200,
+                    900,
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                )
+            });
+            assert!(!parent.0.is_null());
+            apply_preview_cutouts(None, None, vec![]);
+            let landscape = unsafe { attach(&parent, 30.) };
+            let portrait = unsafe { attach(&parent, 300.) };
+            let modal = vec![PreviewRect {
+                x: 0.,
+                y: 0.,
+                w: 20000.,
+                h: 20000.,
+            }];
+            apply_preview_cutouts(Some(&landscape), Some(&portrait), modal.clone());
+            assert_eq!(
+                unsafe { region_kind(&landscape) },
+                1,
+                "landscape must have an empty region"
+            );
+            assert_eq!(
+                unsafe { region_kind(&portrait) },
+                1,
+                "portrait must have an empty region"
+            );
+            apply_preview_cutouts(None, None, modal);
+            let late = unsafe { attach(&parent, 600.) };
+            assert_eq!(
+                unsafe { region_kind(&late) },
+                1,
+                "a new display inherits modal clipping"
+            );
+            unsafe {
+                ffi::producer_preview_set_frame(
+                    late.view,
+                    650.,
+                    80.,
+                    180.,
+                    300.,
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                );
+            }
+            assert_eq!(
+                unsafe { region_kind(&late) },
+                1,
+                "moving a display must retain clipping"
+            );
+            apply_preview_cutouts(Some(&landscape), Some(&portrait), vec![]);
+            assert_eq!(
+                unsafe { region_kind(&landscape) },
+                0,
+                "closing restores the full display"
+            );
+            assert_eq!(
+                unsafe { region_kind(&portrait) },
+                0,
+                "closing restores portrait too"
+            );
+            // Production moves periodically reapply the current shared region.
+            unsafe {
+                ffi::producer_preview_set_frame(
+                    late.view,
+                    650.,
+                    80.,
+                    180.,
+                    300.,
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                );
+            }
+            assert_eq!(unsafe { region_kind(&late) }, 0);
+        }
+    }
+}
+
 impl Preview {
     // A10 finding (crash 2026-08-28): libobs-metal's swapchain create/resize/
     // destroy are Swift and dispatch_assert the MAIN queue — OBS Studio's Qt
@@ -3296,18 +3477,7 @@ pub fn start(
                         // Windows float mode only: elsewhere the preview sits
                         // below the webview and nothing needs punching out.
                         #[cfg(target_os = "windows")]
-                        if let Some(p) = preview.as_ref() {
-                            let v = p.view as usize;
-                            let flat: Vec<f64> =
-                                rects.iter().flat_map(|r| [r.x, r.y, r.w, r.h]).collect();
-                            on_window_thread(move || unsafe {
-                                ffi::producer_preview_set_cutouts(
-                                    v as *mut std::os::raw::c_void,
-                                    flat.as_ptr(),
-                                    flat.len() as std::os::raw::c_int / 4,
-                                )
-                            });
-                        }
+                        apply_preview_cutouts(preview.as_ref(), portrait_preview.as_ref(), rects);
                         #[cfg(not(target_os = "windows"))]
                         let _ = rects;
                     }
