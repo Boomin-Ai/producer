@@ -1,6 +1,15 @@
 //! Compile and exercise the exact app adapter without pulling in the Tauri app.
 #[path = "../../../../src-tauri/src/live/ffi.rs"]
 mod ffi;
+// Windows raw-dylib declarations name the room's opaque OBS canvas. The
+// standalone adapter owns no room canvas; retain its exact C pointer layout.
+#[cfg(target_os = "windows")]
+mod portrait {
+    #[repr(C)]
+    pub struct Canvas {
+        _opaque: [u8; 0],
+    }
+}
 #[path = "../../../../src-tauri/src/live/sets_v2/mod.rs"]
 pub mod sets_v2;
 use std::ffi::{c_char, c_void, CStr};
