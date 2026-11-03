@@ -30,6 +30,7 @@
 #include "livekit/jsep.h"
 #include "livekit/media_stream.h"
 #include "livekit/rtc_error.h"
+#include "livekit/process_environment.h"
 #include "livekit/rtp_transceiver.h"
 #include "rtc_base/logging.h"
 
@@ -37,8 +38,7 @@ namespace livekit_ffi {
 namespace {
 webrtc::RTCError lab_enable_capture_time_headers(
     const webrtc::scoped_refptr<webrtc::PeerConnectionInterface>& peer) {
-  const char* enabled = std::getenv("LIVEKIT_LAB_CAPTURE_EXTENSION");
-  if (!enabled || std::string(enabled) != "1") return webrtc::RTCError::OK();
+  if (!process_flag_enabled("LIVEKIT_LAB_CAPTURE_EXTENSION")) return webrtc::RTCError::OK();
   for (const auto& transceiver : peer->GetTransceivers()) {
     if (transceiver->stopped()) continue;
     auto headers = transceiver->GetHeaderExtensionsToNegotiate();
@@ -176,8 +176,7 @@ void PeerConnection::set_local_description(
       webrtc::make_ref_counted<NativeSetLocalSdpObserver>(std::move(ctx),
                                                        on_complete);
 
-  const char* rrtr = std::getenv("LIVEKIT_LAB_RRTR");
-  if (rrtr && std::string(rrtr) == "1") {
+  if (process_flag_enabled("LIVEKIT_LAB_RRTR")) {
     desc = create_session_description(desc->sdp_type(),
         lab_add_audio_rrtr(std::string(desc->stringify())));
   }
@@ -192,8 +191,7 @@ void PeerConnection::set_remote_description(
       webrtc::make_ref_counted<NativeSetRemoteSdpObserver>(std::move(ctx),
                                                         on_complete);
 
-  const char* rrtr = std::getenv("LIVEKIT_LAB_RRTR");
-  if (rrtr && std::string(rrtr) == "1") {
+  if (process_flag_enabled("LIVEKIT_LAB_RRTR")) {
     desc = create_session_description(desc->sdp_type(),
         lab_add_audio_rrtr(std::string(desc->stringify())));
   }

@@ -6,6 +6,7 @@ export interface FilterState {
   kind: string;
   enabled: boolean;
   settings: Record<string, number | string | boolean>;
+  error?: string;
 }
 
 export type FilterOp =
@@ -61,9 +62,7 @@ export const FILTER_CATALOG: FilterSpec[] = [
     ],
   },
   {
-    // Producer's own filter (person_mask.m): Apple Vision person
-    // segmentation on macOS; a pass-through on Windows until it has a mask
-    // provider. Opt-in — nothing attaches it to a new source.
+    // Vision on macOS; local PPHumanSeg inference on Windows. Opt-in.
     kind: "producer_person_mask",
     label: "Cutout",
     hint: "Removes your background. Soft blurs it; Cut removes it so you can sit on a set.",

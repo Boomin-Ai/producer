@@ -8,7 +8,11 @@
 #include <math.h>
 #include <stdio.h>
 #include <time.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <stdatomic.h>
+#endif
 #ifdef PRODUCER_AUDIO_REACTIVE
 extern float producer_audio_reactive_level(void);
 #else
@@ -134,13 +138,20 @@ static void shader_scalar(gs_effect_t *e,const char *name,float v){gs_effect_set
  * All leases and draws execute under libobs's graphics lock. */
 struct shader_program {struct shader_program *next;gs_effect_t *effect;size_t leases;char code[];};
 static struct shader_program *shader_programs;
+#ifdef _WIN32
+static volatile LONG64 shader_compilations;
+size_t producer_shader_effect_compilations(void){return (size_t)InterlockedCompareExchange64(&shader_compilations,0,0);}
+#define SHADER_COUNT_COMPILE() InterlockedIncrement64(&shader_compilations)
+#else
 static atomic_size_t shader_compilations;
 size_t producer_shader_effect_compilations(void){return atomic_load(&shader_compilations);}
+#define SHADER_COUNT_COMPILE() atomic_fetch_add(&shader_compilations,1)
+#endif
 static gs_effect_t *shader_program_acquire(const char *code,const char *name,char **error){
  for(struct shader_program *p=shader_programs;p;p=p->next)if(!strcmp(p->code,code)){p->leases++;return p->effect;}
  gs_effect_t *effect=gs_effect_create(code,name,error);if(!effect)return NULL;
  struct shader_program *p=malloc(sizeof(*p)+strlen(code)+1);if(!p){gs_effect_destroy(effect);return NULL;}
- p->effect=effect;p->leases=1;strcpy(p->code,code);p->next=shader_programs;shader_programs=p;atomic_fetch_add(&shader_compilations,1);return effect;
+ p->effect=effect;p->leases=1;strcpy(p->code,code);p->next=shader_programs;shader_programs=p;SHADER_COUNT_COMPILE();return effect;
 }
 static void shader_program_release(gs_effect_t *effect){
  if(!effect)return;

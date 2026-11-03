@@ -15,6 +15,7 @@
  */
 
 #include "livekit/peer_connection_factory.h"
+#include "livekit/process_environment.h"
 
 #include <memory>
 #include <cstdlib>
@@ -166,8 +167,7 @@ PeerConnectionFactory::PeerConnectionFactory(
   dependencies.signaling_thread = rtc_runtime_->signaling_thread();
   dependencies.socket_factory = rtc_runtime_->network_thread()->socketserver();
   dependencies.event_log_factory = std::make_unique<webrtc::RtcEventLogFactory>();
-  const char* rtcp_probe = std::getenv("LIVEKIT_LAB_RTCP_PROBE");
-  if (rtcp_probe && std::string(rtcp_probe) == "1") {
+  if (process_flag_enabled("LIVEKIT_LAB_RTCP_PROBE")) {
     dependencies.event_log_factory = std::make_unique<RtcpExchangeFactory>();
   }
   dependencies.env = env_;
@@ -192,8 +192,7 @@ PeerConnectionFactory::PeerConnectionFactory(
       std::make_shared<AudioDeviceController>(rtc_runtime_, adm_proxy_);
 
   dependencies.adm = adm_proxy_;
-  const char* timed_probe = std::getenv("LIVEKIT_LAB_TIMED_MIXER");
-  if (timed_probe && std::string(timed_probe) == "1") {
+  if (process_flag_enabled("LIVEKIT_LAB_TIMED_MIXER")) {
     dependencies.audio_mixer = create_timed_mixer_probe();
   }
 

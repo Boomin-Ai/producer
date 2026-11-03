@@ -36,7 +36,7 @@ float launchLetters(vec2 p,float aspect){
  return min(min(vLeft,vRight),min(oneStem,oneCap));
 }
 float launchHash(vec2 p){vec3 q=fract(vec3(p.x,p.y,p.x)*0.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
-float launchNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(launchHash(i),launchHash(i+vec2(1.0,0.0)),f.x),mix(launchHash(i+vec2(0.0,1.0)),launchHash(i+vec2(1.0)),f.x),f.y);}
+float launchNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(launchHash(i),launchHash(i+vec2(1.0,0.0)),f.x),mix(launchHash(i+vec2(0.0,1.0)),launchHash(i+vec2(1.0,1.0)),f.x),f.y);}
 vec4 shade(vec2 uv) {
  float t=clockTime*speed;
  vec3 a=paletteA.xyz,b=paletteB.xyz,c=paletteC.xyz;
@@ -65,10 +65,10 @@ vec4 shade(vec2 uv) {
   vec3 light=mix(a,b,0.5+0.5*sin(q.x*0.9+dy*0.6));light=mix(light,c,smoothstep(0.2,1.4,q.x));
   float glint=pow(0.5+0.5*sin(fineA),18.0)*pow(0.5+0.5*sin(fineB),3.0);
   water+=vec3(0.35,0.55,0.65)*glint*depth*(0.08+strength*0.22);
-  water*=0.65+0.35*n.z;water+=vec3(silver)*(0.10+depth*0.55);
+  water*=0.65+0.35*n.z;water+=vec3(silver,silver,silver)*(0.10+depth*0.55);
   water+=light*(reflected*(0.06+depth*0.32)+crest*depth*(0.10+strength*0.35));
   water+=vec3(0.7,0.85,0.9)*smoothstep(0.72,0.95,swell+ripple*0.45)*depth*strength*0.16;
-  return vec4(clamp(water,vec3(0.0),vec3(1.0))*alpha,alpha);
+  return vec4(clamp(water,vec3(0.0,0.0,0.0),vec3(1.0,1.0,1.0))*alpha,alpha);
  }
  // Solid forged V1. Audio adds short exterior fins; the readable face never deforms.
  if(effectType>16.5){
@@ -87,13 +87,13 @@ vec4 shade(vec2 uv) {
   float light=max(fin,halo),coverage=clamp(solid+(1.0-solid)*light,0.0,1.0);
   vec3 edge=mix(a,b,smoothstep(0.10,0.65,uv.x));
   edge=mix(edge,c,smoothstep(0.48,0.96,uv.x)*0.76+smoothstep(0.66,0.92,uv.y)*0.20);
-  vec2 normal=normalize(vec2(launchLetters(p+vec2(aa,0.0),aspect)-front,launchLetters(p+vec2(0.0,aa),aspect)-front)+vec2(0.000001));
+  vec2 normal=normalize(vec2(launchLetters(p+vec2(aa,0.0),aspect)-front,launchLetters(p+vec2(0.0,aa),aspect)-front)+vec2(0.000001,0.000001));
   float bevel=(1.0-smoothstep(0.0,0.018,-front))*face;
   float rim=exp(-abs(front+0.002)/0.0025)*face;
   float grain=launchNoise(p*180.0),stone=launchNoise(p*31.0);
-  float crack=1.0-smoothstep(0.008,0.035,abs(launchNoise(p*66.0)-launchNoise(p*109.0+vec2(4.2))));
+  float crack=1.0-smoothstep(0.008,0.035,abs(launchNoise(p*66.0)-launchNoise(p*109.0+vec2(4.2,4.2))));
   float gloss=pow(0.5+0.5*sin(p.x*3.5-p.y*5.0+0.5),14.0);
-  vec3 metal=vec3(0.012,0.015,0.021)+vec3(0.025,0.030,0.038)*stone+vec3(0.010)*grain+vec3(0.075,0.080,0.090)*gloss;
+  vec3 metal=vec3(0.012,0.015,0.021)+vec3(0.025,0.030,0.038)*stone+vec3(0.010,0.010,0.010)*grain+vec3(0.075,0.080,0.090)*gloss;
   metal*=1.0-crack*0.52;
   metal+=edge*crack*0.022;
   float reflection=0.18+0.64*max(dot(normal,normalize(vec2(-0.7,-0.9))),0.0);
@@ -101,7 +101,7 @@ vec4 shade(vec2 uv) {
   metal+=edge*rim*0.72;
   vec3 extrusion=vec3(0.009,0.011,0.017)+edge*(0.055+0.10*smoothstep(0.4,0.9,uv.y));
   vec3 color=mix(extrusion,metal,face)*solid+edge*light*(1.0-solid);
-  return vec4(clamp(color,vec3(0.0),vec3(coverage))*alpha,coverage*alpha);
+  return vec4(clamp(color,vec3(0.0,0.0,0.0),vec3(coverage,coverage,coverage))*alpha,coverage*alpha);
  }
  // One closed contour; integer angular harmonics keep the seam connected.
  if(effectType>15.5) {
@@ -154,7 +154,7 @@ vec4 shade(vec2 uv) {
   float halfHeight=min(extent.y*0.48,1.0+level*extent.y*(0.18+0.28*clamp(shape,0.0,1.0)));
   float barRadius=min(min(halfWidth,halfHeight),radius);
   vec2 q=vec2(abs(fract(uv.x*count)-0.5)*cellWidth,abs(uv.y-0.5)*extent.y)-vec2(halfWidth-barRadius,halfHeight-barRadius);
-  float distance=length(max(q,vec2(0.0)))+min(max(q.x,q.y),0.0)-barRadius;
+  float distance=length(max(q,vec2(0.0,0.0)))+min(max(q.x,q.y),0.0)-barRadius;
   float core=1.0-smoothstep(-0.75,0.75,distance);
   float bloom=exp(-max(distance,0.0)/max(1.0,cellWidth*0.22))*clamp(glow,0.0,1.0)*level*0.7;
   float coverage=clamp(core+(1.0-core)*bloom,0.0,1.0)*alpha;
@@ -189,16 +189,16 @@ vec4 shade(vec2 uv) {
  if(effectType>10.5) {
   vec2 halfSize=extent*0.5,p=(uv-0.5)*extent;
   float r=min(radius,min(halfSize.x,halfSize.y));
-  vec2 q=abs(p)-(halfSize-r-vec2(2.0));
-  float d=length(max(q,vec2(0.0)))+min(max(q.x,q.y),0.0)-r;
+  vec2 q=abs(p)-(halfSize-r-vec2(2.0,2.0));
+  float d=length(max(q,vec2(0.0,0.0)))+min(max(q.x,q.y),0.0)-r;
   float angle=atan(p.y,p.x)/6.2831853+0.5;
   float distance=fract(angle-t*0.12);
   float ahead=min(distance,1.0-distance);
   float head=exp(-pow(ahead*70.0,2.0));
   float trail=exp(-distance*30.0);
-  float line=exp(-pow((d+0.35)/0.65,2.0));
+  float stroke=exp(-pow((d+0.35)/0.65,2.0));
   float halo=exp(-abs(d+0.35)/2.5);
-  float light=clamp((line*(0.055+trail*0.75+head)+halo*head*0.24)*intensity,0.0,1.0)*alpha;
+  float light=clamp((stroke*(0.055+trail*0.75+head)+halo*head*0.24)*intensity,0.0,1.0)*alpha;
   vec3 col=mix(b,c,clamp(head+trail*0.2,0.0,1.0));
   return vec4(col*light,light);
  }
@@ -256,8 +256,8 @@ vec4 shade(vec2 uv) {
  }
  vec2 halfSize=extent*0.5,p=(uv-0.5)*extent;
  float r=min(radius,min(halfSize.x,halfSize.y));
- vec2 q=abs(p)-(halfSize-r-vec2(2.0));
- float d=length(max(q,vec2(0.0)))+min(max(q.x,q.y),0.0)-r;
+ vec2 q=abs(p)-(halfSize-r-vec2(2.0,2.0));
+ float d=length(max(q,vec2(0.0,0.0)))+min(max(q.x,q.y),0.0)-r;
  float coverage=clamp(0.5-d,0.0,1.0);
  if(effectType<1.5) {
   float edge=exp(-abs(d+3.0)/max(1.0,frequency*5.0));

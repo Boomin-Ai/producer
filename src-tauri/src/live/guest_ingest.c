@@ -1,7 +1,24 @@
 /* OBS ABI pinned to engine/obs.lock, 32.1.2 libobs/obs.h. Recheck on bump.
  * Shared by the isolated RTC lab and the opt-in native adapter build. */
 #include "guest_ingest.h"
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+typedef SRWLOCK guest_mutex_t;
+static int guest_mutex_init(guest_mutex_t *lock) { InitializeSRWLock(lock); return 0; }
+static void guest_mutex_destroy(guest_mutex_t *lock) { (void)lock; }
+static void guest_mutex_lock(guest_mutex_t *lock) { AcquireSRWLockExclusive(lock); }
+static int guest_mutex_trylock(guest_mutex_t *lock) { return TryAcquireSRWLockExclusive(lock) ? 0 : 1; }
+static void guest_mutex_unlock(guest_mutex_t *lock) { ReleaseSRWLockExclusive(lock); }
+#else
 #include <pthread.h>
+typedef pthread_mutex_t guest_mutex_t;
+static int guest_mutex_init(guest_mutex_t *lock) { return pthread_mutex_init(lock, NULL); }
+static void guest_mutex_destroy(guest_mutex_t *lock) { pthread_mutex_destroy(lock); }
+static void guest_mutex_lock(guest_mutex_t *lock) { pthread_mutex_lock(lock); }
+static int guest_mutex_trylock(guest_mutex_t *lock) { return pthread_mutex_trylock(lock); }
+static void guest_mutex_unlock(guest_mutex_t *lock) { pthread_mutex_unlock(lock); }
+#endif
 #include <stdlib.h>
 #include <string.h>
 #define MAX_AV_PLANES 8
@@ -27,7 +44,7 @@ OBS_IMPORT bool video_format_get_parameters(int, int, float[16], float[3], float
 #define GUEST_RENDER_DELAY_NS 60000000ULL
 struct guest_audio_block { uint64_t timestamp; size_t frames; uint32_t channels; int16_t pcm[GUEST_AUDIO_FRAMES * 2]; };
 struct guest_state {
-    pthread_mutex_t lock;
+    guest_mutex_t lock;
     struct guest_audio_block blocks[GUEST_AUDIO_QUEUE];
     size_t head, count;
     uint64_t anchor, rendered;
@@ -41,12 +58,12 @@ static void *create(obs_data_t *settings, obs_source_t *source) {
     (void)settings; (void)source;
     struct guest_state *state = calloc(1, sizeof(*state));
     if (!state) return NULL;
-    if (pthread_mutex_init(&state->lock, NULL)) { free(state); return NULL; }
+    if (guest_mutex_init(&state->lock)) { free(state); return NULL; }
     return state;
 }
 static void destroy(void *data) {
     struct guest_state *state = data;
-    if (state) { pthread_mutex_destroy(&state->lock); free(state); }
+    if (state) { guest_mutex_destroy(&state->lock); free(state); }
 }
 static uint64_t frames_ns(uint64_t frames) { return frames / 48000 * 1000000000ULL + frames % 48000 * 1000000000ULL / 48000; }
 static bool render_audio(void *data, uint64_t *ts, void *output, uint32_t mixers, size_t channels, size_t rate) {
@@ -64,7 +81,7 @@ static bool render_audio(void *data, uint64_t *ts, void *output, uint32_t mixers
     for (size_t m = 0; m < 6; m++) if (mixers & (1U << m))
         for (size_t c = 0; c < channels; c++) if (mix->output[m].data[c])
             memset(mix->output[m].data[c], 0, GUEST_RENDER_FRAMES * sizeof(float));
-    if (pthread_mutex_trylock(&state->lock)) return true;
+    if (guest_mutex_trylock(&state->lock)) return true;
     for (size_t i = 0; i < GUEST_RENDER_FRAMES; i++) {
         uint64_t at = *ts + frames_ns(i);
         while (state->count) {
@@ -84,13 +101,13 @@ static bool render_audio(void *data, uint64_t *ts, void *output, uint32_t mixers
                 mix->output[m].data[c][i] = c < 2 ? value : 0.0f;
             }
     }
-    pthread_mutex_unlock(&state->lock);
+    guest_mutex_unlock(&state->lock);
     return true;
 }
 void producer_guest_ingest_clear_audio(obs_source_t *source) {
     struct guest_state *state = source ? obs_obj_get_data(source) : NULL;
     if (!state) return;
-    pthread_mutex_lock(&state->lock); state->head = state->count = 0; pthread_mutex_unlock(&state->lock);
+    guest_mutex_lock(&state->lock); state->head = state->count = 0; guest_mutex_unlock(&state->lock);
 }
 void producer_guest_ingest_register(void) {
     struct obs_source_info info = {0};
@@ -132,11 +149,11 @@ bool producer_guest_ingest_audio(obs_source_t *source, const int16_t *pcm,
         !sample_count || sample_count % channels || sample_count / channels > 4800)
         return false; /* 48 kHz, at most 100 ms per submission. */
     struct guest_state *state = obs_obj_get_data(source);
-    if (!state || pthread_mutex_trylock(&state->lock)) return false;
-    if (state->count == GUEST_AUDIO_QUEUE) { pthread_mutex_unlock(&state->lock); return false; }
+    if (!state || guest_mutex_trylock(&state->lock)) return false;
+    if (state->count == GUEST_AUDIO_QUEUE) { guest_mutex_unlock(&state->lock); return false; }
     struct guest_audio_block *block = &state->blocks[(state->head + state->count) % GUEST_AUDIO_QUEUE];
     block->timestamp = timestamp; block->frames = sample_count / channels; block->channels = channels;
     memcpy(block->pcm, pcm, sample_count * sizeof(int16_t)); state->count++;
-    pthread_mutex_unlock(&state->lock);
+    guest_mutex_unlock(&state->lock);
     return true;
 }

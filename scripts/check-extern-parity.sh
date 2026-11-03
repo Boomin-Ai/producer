@@ -104,6 +104,8 @@ def c_definitions(path):
 
 common = c_definitions("src-tauri/src/live/source_appearance.c")
 defs = {p: c_definitions(f) | common for p, f in SHIMS.items()}
+defs["windows"] |= c_definitions("src-tauri/src/live/person_mask_win.c")
+defs["windows"] |= c_definitions("src-tauri/src/live/virtual_camera_win.c")
 # The macOS capture guard is a separate translation unit in build.rs.
 defs["macos"] |= c_definitions("src-tauri/src/live/capture_guard.m")
 

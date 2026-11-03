@@ -1400,6 +1400,12 @@ function FilterEditor({
   }, [run]);
 
   const available = FILTER_CATALOG.filter((f) => f.media === media);
+  const hasCutout = !!chain?.some(f => f.kind === "producer_person_mask");
+  useEffect(() => {
+    if (!hasCutout) return;
+    const timer = setInterval(() => void run({ op: "list" }), 1500);
+    return () => clearInterval(timer);
+  }, [hasCutout, run]);
   const current = chain?.find((f) => f.name === open) ?? null;
   const spec = current ? specOf(current.kind) : null;
 
@@ -1422,6 +1428,7 @@ function FilterEditor({
           <span className="rm-filters-title">{current.name}</span>
         </div>
         <div className="rm-props">
+          {current.error && <div role="alert">{current.error}</div>}
           {spec.props.map((pr) => {
             const raw = current.settings[pr.key];
             if (pr.showWhen && String(current.settings[pr.showWhen.key]) !== pr.showWhen.value) {
@@ -1523,6 +1530,7 @@ function FilterEditor({
 
       {!adding && (
         <div className="rm-rows">
+          {chain?.filter(f => f.error).map(f => <div key={f.name} role="alert">{f.name}: {f.error}</div>)}
           {chain === null && <div className="rm-rows-empty">Reading the chain…</div>}
           {chain?.length === 0 && (
             <div className="rm-rows-empty">

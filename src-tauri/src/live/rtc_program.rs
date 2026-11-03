@@ -42,6 +42,7 @@ static CAPTURE_FAULT: AtomicU64 = AtomicU64::new(0);
 static STARTUP_DROPPED: AtomicU64 = AtomicU64::new(0);
 static MAX_WORK: AtomicU64 = AtomicU64::new(0);
 static REALTIME: AtomicBool = AtomicBool::new(false);
+static WINDOWS_MULTIMEDIA: AtomicBool = AtomicBool::new(false);
 static MAX_LOOP_GAP: AtomicU64 = AtomicU64::new(0);
 static MAX_CAPTURE_AGE: AtomicU64 = AtomicU64::new(0);
 static MAX_CALLBACK_AGE: AtomicU64 = AtomicU64::new(0);
@@ -72,6 +73,7 @@ pub fn reset_diagnostics() {
     STARTUP_DROPPED.store(0, Ordering::Release);
     CAPTURE_FAULT.store(0, Ordering::Release);
     REALTIME.store(false, Ordering::Release);
+    WINDOWS_MULTIMEDIA.store(false, Ordering::Release);
     MAX_CAPTURE_AGE.store(0, Ordering::Release);
     MAX_CALLBACK_AGE.store(0, Ordering::Release);
     CAPTURE_PRIORITY.store(false, Ordering::Release);
@@ -93,7 +95,73 @@ pub fn timing() -> serde_json::Value {
     let capture_gap_injected = CAPTURE_GAP_UNTIL.load(Ordering::Acquire) != 0;
     #[cfg(not(debug_assertions))]
     let capture_gap_injected = false;
-    serde_json::json!({"capture_priority_enabled":CAPTURE_PRIORITY.load(Ordering::Acquire),"capture_gap_injected":capture_gap_injected,"capture_blocks_discarded":CAPTURE_DROPPED.load(Ordering::Acquire),"silence_blocks_submitted":SILENCE_SUBMITTED.load(Ordering::Acquire),"video_worker_stall_injected":video_stall_injected,"capture_fault_code":CAPTURE_FAULT.load(Ordering::Acquire),"program_buffer_ms":LEAD_NS/1_000_000,"publisher_recoveries":RECOVERIES.load(Ordering::Acquire),"maximum_audio_late_us":MAX_AUDIO_LATE.load(Ordering::Acquire)/1000,"minimum_audio_spacing_us":(spacing!=u64::MAX).then_some(spacing/1000),"maximum_audio_call_us":MAX_AUDIO_CALL.load(Ordering::Acquire),"startup_audio_blocks_discarded":STARTUP_DROPPED.load(Ordering::Acquire),"time_constrained_scheduling":REALTIME.load(Ordering::Acquire),"maximum_work_us":MAX_WORK.load(Ordering::Acquire)/1000,"maximum_loop_gap_us":MAX_LOOP_GAP.load(Ordering::Acquire)/1000,"maximum_callback_age_us":MAX_CALLBACK_AGE.load(Ordering::Acquire)/1000,"maximum_capture_queue_wait_us":MAX_CAPTURE_QUEUE_WAIT.load(Ordering::Acquire)/1000,"maximum_capture_age_us":MAX_CAPTURE_AGE.load(Ordering::Acquire)/1000,"maximum_video_call_us":MAX_VIDEO_CALL.load(Ordering::Acquire)})
+    serde_json::json!({"capture_priority_enabled":CAPTURE_PRIORITY.load(Ordering::Acquire),"capture_gap_injected":capture_gap_injected,"capture_blocks_discarded":CAPTURE_DROPPED.load(Ordering::Acquire),"silence_blocks_submitted":SILENCE_SUBMITTED.load(Ordering::Acquire),"video_worker_stall_injected":video_stall_injected,"capture_fault_code":CAPTURE_FAULT.load(Ordering::Acquire),"program_buffer_ms":LEAD_NS/1_000_000,"publisher_recoveries":RECOVERIES.load(Ordering::Acquire),"maximum_audio_late_us":MAX_AUDIO_LATE.load(Ordering::Acquire)/1000,"minimum_audio_spacing_us":(spacing!=u64::MAX).then_some(spacing/1000),"maximum_audio_call_us":MAX_AUDIO_CALL.load(Ordering::Acquire),"startup_audio_blocks_discarded":STARTUP_DROPPED.load(Ordering::Acquire),"time_constrained_scheduling":REALTIME.load(Ordering::Acquire),"windows_multimedia_scheduling":WINDOWS_MULTIMEDIA.load(Ordering::Acquire),"maximum_work_us":MAX_WORK.load(Ordering::Acquire)/1000,"maximum_loop_gap_us":MAX_LOOP_GAP.load(Ordering::Acquire)/1000,"maximum_callback_age_us":MAX_CALLBACK_AGE.load(Ordering::Acquire)/1000,"maximum_capture_queue_wait_us":MAX_CAPTURE_QUEUE_WAIT.load(Ordering::Acquire)/1000,"maximum_capture_age_us":MAX_CAPTURE_AGE.load(Ordering::Acquire)/1000,"maximum_video_call_us":MAX_VIDEO_CALL.load(Ordering::Acquire)})
+}
+
+#[cfg(target_os = "windows")]
+#[link(name = "avrt")]
+extern "system" {
+    fn AvSetMmThreadCharacteristicsW(task: *const u16, index: *mut u32) -> *mut c_void;
+    fn AvSetMmThreadPriority(handle: *mut c_void, priority: i32) -> i32;
+    fn AvRevertMmThreadCharacteristics(handle: *mut c_void) -> i32;
+}
+
+// The lease is created and retired on the publisher thread. No process-wide
+// timer resolution or permanent priority change survives a room disconnect.
+#[cfg(target_os = "windows")]
+struct WindowsPublisherSchedule {
+    handle: *mut c_void,
+    _thread: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+#[cfg(target_os = "windows")]
+impl WindowsPublisherSchedule {
+    fn start() -> Result<Self, &'static str> {
+        let task: Vec<u16> = "Pro Audio\0".encode_utf16().collect();
+        let mut index = 0;
+        let handle = unsafe { AvSetMmThreadCharacteristicsW(task.as_ptr(), &mut index) };
+        if handle.is_null() {
+            return Err("Native program multimedia scheduling unavailable");
+        }
+        let guard = Self {
+            handle,
+            _thread: std::marker::PhantomData,
+        };
+        if unsafe { AvSetMmThreadPriority(handle, 1) } == 0 {
+            return Err("Native program multimedia priority unavailable");
+        }
+        WINDOWS_MULTIMEDIA.store(true, Ordering::Release);
+        Ok(guard)
+    }
+    fn close(&mut self) -> bool {
+        if self.handle.is_null() {
+            return true;
+        }
+        let handle = std::mem::replace(&mut self.handle, std::ptr::null_mut());
+        WINDOWS_MULTIMEDIA.store(false, Ordering::Release);
+        unsafe { AvRevertMmThreadCharacteristics(handle) != 0 }
+    }
+}
+#[cfg(target_os = "windows")]
+impl Drop for WindowsPublisherSchedule {
+    fn drop(&mut self) {
+        self.close();
+    }
+}
+
+#[cfg(all(test, target_os = "windows"))]
+#[test]
+fn windows_publisher_schedule_releases_each_thread_lease() {
+    std::thread::spawn(|| {
+        for _ in 0..8 {
+            let mut schedule = WindowsPublisherSchedule::start().unwrap();
+            wait_publisher_tick().unwrap();
+            assert!(schedule.close());
+            assert!(schedule.handle.is_null());
+            assert!(schedule.close());
+        }
+    })
+    .join()
+    .unwrap();
 }
 #[repr(C)]
 struct VideoScale {
@@ -110,6 +178,7 @@ struct AudioConvert {
     speakers: i32,
     allow_clipping: bool,
 }
+#[cfg_attr(target_os = "windows", link(name = "obs", kind = "raw-dylib"))]
 extern "C" {
     fn os_gettime_ns() -> u64;
     fn audio_output_connect(
@@ -787,6 +856,11 @@ impl Publisher {
         let worker = thread::Builder::new()
             .name("native-rtc-program".into())
             .spawn(move || {
+                #[cfg(target_os = "windows")]
+                let _schedule = WindowsPublisherSchedule::start().map_err(|error| {
+                    fault.store(true, Ordering::Release);
+                    error
+                })?;
                 #[cfg(target_os = "macos")]
                 if unsafe { pthread_set_qos_class_self_np(0x21, 0) } != 0 {
                     fault.store(true, Ordering::Release);

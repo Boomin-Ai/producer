@@ -33,18 +33,21 @@ try {
   }
   $cfg = Join-Path $env:TEMP "producer-local-build.json"
   Set-Content -Path $cfg -Value ($cfgObj | ConvertTo-Json -Depth 5 -Compress) -Encoding Ascii
-  $args = @("run", "tauri", "build", "--bundles", "nsis", "--config", $cfg)
+  # Match the ARM64 Mac release: native guest ingress and program publication
+  # must be compiled in, not silently replaced by the legacy browser transport.
+  $args = @("run", "tauri", "build", "--features", "guest-rtc-production", "--bundles", "nsis", "--config", $cfg)
   & bun @args
   if ($LASTEXITCODE -ne 0) { throw "tauri build failed" }
 
-  $exe = Join-Path $RepoRoot "src-tauri\target\release\producer.exe"
+  $targetDir = Get-CargoTargetDir
+  $exe = Join-Path $targetDir "release\producer.exe"
   # Proof the exe is the engine build: it imports obs.dll by name.
   $bytes = [System.IO.File]::ReadAllBytes($exe)
   $txt = [System.Text.Encoding]::ASCII.GetString($bytes)
   if ($txt -notmatch "obs\.dll") { throw "producer.exe does not import obs.dll -- this is an engine-less build (PRODUCER_ENGINE_DIR=$eng)" }
   Write-Host "producer.exe imports obs.dll: engine build confirmed"
 
-  $inst = Get-ChildItem (Join-Path $RepoRoot "src-tauri\target\release\bundle\nsis") -Filter "*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+  $inst = Get-ChildItem (Join-Path $targetDir "release\bundle\nsis") -Filter "*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
   if (-not $inst) { throw "no NSIS installer produced" }
   Write-Host ("installer: {0} ({1:N0} MB)" -f $inst.FullName, ($inst.Length / 1MB))
 

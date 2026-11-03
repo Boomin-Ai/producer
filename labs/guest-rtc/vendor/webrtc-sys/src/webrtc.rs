@@ -95,6 +95,7 @@ pub mod ffi {
         type LogSink;
 
         fn create_random_uuid() -> String;
+        fn diagnostic_process_flag_enabled(name: &str) -> bool;
         fn diagnostic_timed_mixer_report() -> String;
         fn diagnostic_take_decoded_audio() -> Vec<DecodedAudioBlock>;
         fn diagnostic_rtcp_exchange_report() -> String;
@@ -105,3 +106,21 @@ pub mod ffi {
 }
 
 impl_thread_safety!(ffi::LogSink, Send + Sync);
+
+#[cfg(all(test, target_os = "windows"))]
+mod tests {
+    #[test]
+    fn cpp_observes_flags_changed_by_rust_after_startup() {
+        let name = "PRODUCER_TEST_CPP_PROCESS_FLAG";
+        std::env::remove_var(name);
+        assert!(!super::ffi::diagnostic_process_flag_enabled(name));
+        for _ in 0..8 {
+            std::env::set_var(name, "1");
+            assert!(super::ffi::diagnostic_process_flag_enabled(name));
+            std::env::set_var(name, "10");
+            assert!(!super::ffi::diagnostic_process_flag_enabled(name));
+            std::env::remove_var(name);
+            assert!(!super::ffi::diagnostic_process_flag_enabled(name));
+        }
+    }
+}

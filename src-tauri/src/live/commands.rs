@@ -1317,14 +1317,21 @@ pub async fn live_portrait_preview(
     app: tauri::AppHandle,
     rect: Option<super::CutoutRect>,
 ) -> EngineResult<bool> {
-    #[cfg(all(have_engine, target_os = "macos"))]
+    #[cfg(have_engine)]
     {
         use tauri::Manager;
-        let window = app
+        let webview = app
             .get_webview_window("main")
-            .ok_or_else(|| EngineError::Other("Main window unavailable".into()))?
+            .ok_or_else(|| EngineError::Other("Main window unavailable".into()))?;
+        #[cfg(target_os = "macos")]
+        let window = webview
             .ns_window()
             .map_err(|e| EngineError::Other(e.to_string()))? as usize;
+        #[cfg(target_os = "windows")]
+        let window = webview
+            .hwnd()
+            .map_err(|e| EngineError::Other(e.to_string()))?
+            .0 as usize;
         let transparent = super::prepare_stage(window);
         let rect = rect.map(|r| super::engine::PreviewRect {
             x: r.x,
@@ -1340,11 +1347,11 @@ pub async fn live_portrait_preview(
         .map_err(EngineError::Other)?;
         Ok(transparent)
     }
-    #[cfg(not(all(have_engine, target_os = "macos")))]
+    #[cfg(not(have_engine))]
     {
         let _ = (app, rect);
         Err(EngineError::Other(
-            "Portrait preview is a Mac dev capability".into(),
+            "Portrait preview requires the native engine".into(),
         ))
     }
 }
@@ -1376,16 +1383,16 @@ pub async fn live_select_output(app: tauri::AppHandle, portrait: bool) -> Engine
 
 #[tauri::command]
 pub async fn live_program_video_wanted(on: bool) {
-    #[cfg(all(have_engine, target_os = "macos"))]
+    #[cfg(have_engine)]
     super::portrait::want_program(on);
-    #[cfg(not(all(have_engine, target_os = "macos")))]
+    #[cfg(not(have_engine))]
     let _ = on;
 }
 #[tauri::command]
 pub async fn live_program_video_read() -> tauri::ipc::Response {
-    #[cfg(all(have_engine, target_os = "macos"))]
+    #[cfg(have_engine)]
     return tauri::ipc::Response::new(super::portrait::program_frame());
-    #[cfg(not(all(have_engine, target_os = "macos")))]
+    #[cfg(not(have_engine))]
     tauri::ipc::Response::new(Vec::<u8>::new())
 }
 
@@ -1395,7 +1402,7 @@ pub async fn live_set_v2(
     app: tauri::AppHandle,
     request: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    #[cfg(all(have_engine, target_os = "macos"))]
+    #[cfg(have_engine)]
     {
         use tauri::Manager;
         if request.to_string().len() > 42 * 1024 * 1024 {
@@ -1416,10 +1423,10 @@ pub async fn live_set_v2(
         .await
         .map_err(|e| e.to_string())?;
     }
-    #[cfg(not(all(have_engine, target_os = "macos")))]
+    #[cfg(not(have_engine))]
     {
         let _ = (app, request);
-        Err("Sets v2 requires the macOS native engine".into())
+        Err("Sets v2 requires the native engine".into())
     }
 }
 
@@ -1453,13 +1460,13 @@ pub async fn live_set_v2_report(
 
 #[tauri::command]
 pub fn live_set_v2_enabled() -> bool {
-    cfg!(all(have_engine, target_os = "macos"))
+    cfg!(have_engine)
 }
 
 /// Versioned compositor features; packages declare requirements before loading.
 #[tauri::command]
 pub fn live_set_v2_capabilities() -> Vec<&'static str> {
-    if cfg!(all(have_engine, target_os = "macos")) {
+    if cfg!(have_engine) {
         vec!["mask@1", "backdrop@1", "chart@1"]
     } else {
         vec![]
@@ -1468,7 +1475,7 @@ pub fn live_set_v2_capabilities() -> Vec<&'static str> {
 
 #[tauri::command]
 pub fn live_set_v2_scene3d_enabled() -> bool {
-    cfg!(all(have_engine, target_os = "macos"))
+    cfg!(have_engine)
 }
 
 /// Isolated development workspace bootstrap. Provider credentials never enter this app.
@@ -1536,7 +1543,7 @@ pub async fn live_set_source_create(
     label: String,
     spec: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    #[cfg(all(have_engine, target_os = "macos"))]
+    #[cfg(have_engine)]
     {
         use tauri::Manager;
         let spec = serde_json::from_value(spec).map_err(|e| e.to_string())?;
@@ -1553,10 +1560,36 @@ pub async fn live_set_source_create(
         .await
         .map_err(|e| e.to_string())?;
     }
-    #[cfg(not(all(have_engine, target_os = "macos")))]
+    #[cfg(not(have_engine))]
     {
         let _ = (app, id, label, spec);
-        Err("Set source creation requires the native macOS engine".into())
+        Err("Set source creation requires the native engine".into())
+    }
+}
+
+#[tauri::command]
+pub async fn live_transcription_start(app: tauri::AppHandle) -> EngineResult<u64> {
+    super::transcription::start(app)
+        .await
+        .map_err(EngineError::Other)
+}
+#[tauri::command]
+pub fn live_transcription_stop(session: u64) {
+    super::transcription::stop(session);
+}
+
+#[cfg(test)]
+mod platform_capability_tests {
+    #[test]
+    fn native_set_capabilities_follow_engine_availability() {
+        assert_eq!(super::live_set_v2_enabled(), cfg!(have_engine));
+        assert_eq!(super::live_set_v2_scene3d_enabled(), cfg!(have_engine));
+        let expected = if cfg!(have_engine) {
+            vec!["mask@1", "backdrop@1", "chart@1"]
+        } else {
+            vec![]
+        };
+        assert_eq!(super::live_set_v2_capabilities(), expected);
     }
 }
 
