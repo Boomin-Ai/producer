@@ -95,6 +95,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+      - run: cargo check --manifest-path scripts/sets-v2/rust-probe/Cargo.toml
       - run: cargo check --manifest-path src-tauri/Cargo.toml
         env:
           CXXFLAGS: ${{ runner.os == 'Linux' && '-fPIC' || '' }}
