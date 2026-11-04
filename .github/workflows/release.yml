@@ -333,7 +333,13 @@ jobs:
           set -euo pipefail
           APP="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Producer.app"
           SYMBOLS="src-tauri/target/aarch64-apple-darwin/release/producer.dSYM"
-          test -s "$SYMBOLS/Contents/Resources/DWARF/producer"
+          # Cargo preserves its artifact hash in the inner DWARF filename.
+          # Validate the actual file; the binary/dSYM UUID check below remains authoritative.
+          python3 - "$SYMBOLS" <<'PY'
+          import pathlib, sys
+          files = [p for p in (pathlib.Path(sys.argv[1]) / 'Contents/Resources/DWARF').glob('*') if p.is_file()]
+          assert len(files) == 1 and files[0].stat().st_size > 0, 'Missing or ambiguous release DWARF file'
+          PY
           mkdir -p /tmp/producer-symbols
           ditto "$SYMBOLS" /tmp/producer-symbols/Producer.app.dSYM
           xcrun dwarfdump --uuid "$APP/Contents/MacOS/Producer" > /tmp/producer-symbols/binary-uuid.txt
