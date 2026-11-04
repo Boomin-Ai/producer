@@ -440,7 +440,31 @@ fn bootstrap_inner(
             .push("no engine artifact beside the executable; set PRODUCER_ENGINE_DIR".into()),
     }
 
-    if !unsafe { ffi::obs_startup(locale.as_ptr(), config_ptr, ptr::null_mut()) } {
+    #[cfg(target_os = "macos")]
+    let started = {
+        struct Startup {
+            locale: *const std::ffi::c_char,
+            config: *const std::ffi::c_char,
+            ok: bool,
+        }
+        extern "C" fn start(param: *mut c_void) {
+            let startup = unsafe { &mut *(param as *mut Startup) };
+            startup.ok =
+                unsafe { ffi::obs_startup(startup.locale, startup.config, ptr::null_mut()) };
+        }
+        let mut startup = Startup {
+            locale: locale.as_ptr(),
+            config: config_ptr,
+            ok: false,
+        };
+        // OBS initializes HIToolbox keyboard input sources here. macOS requires
+        // the main queue even when all later engine work runs on its own thread.
+        ui_task_handler(start, &mut startup as *mut Startup as *mut c_void, true);
+        startup.ok
+    };
+    #[cfg(not(target_os = "macos"))]
+    let started = unsafe { ffi::obs_startup(locale.as_ptr(), config_ptr, ptr::null_mut()) };
+    if !started {
         report.errors.push("obs_startup failed".into());
         return report;
     }
