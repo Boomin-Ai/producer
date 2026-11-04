@@ -37,6 +37,7 @@ jobs:
       - run: cc -std=c11 -Wall -Wextra -fsanitize=address,undefined scripts/test-soundboard-native.c -o /tmp/soundboard-test -lpthread -lm && /tmp/soundboard-test
       - run: bun run test:scene-restoration
       - run: bun run test:manager-cache
+      - run: bun run test:prepared-scenes
       - run: node scripts/test-preview-session.mjs
       - run: node scripts/test-room-session.mjs
       - run: node scripts/test-room-control.mjs

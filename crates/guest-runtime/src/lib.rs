@@ -35,33 +35,55 @@ impl MediaAuthorityUpdater {
         self.current_snapshot_at(std::time::Instant::now())
     }
     fn current_snapshot_at(&self, now: std::time::Instant) -> Option<Arc<authority::Snapshot>> {
-        if !self.healthy.load(Ordering::Acquire) { return None; }
+        if !self.healthy.load(Ordering::Acquire) {
+            return None;
+        }
         let value = self.authority.borrow().clone()?;
         (value.current(now) && self.healthy.load(Ordering::Acquire)).then_some(value)
     }
     pub fn publish(&self, snapshot: authority::Snapshot) -> Result<bool, &'static str> {
-        if !snapshot.current(std::time::Instant::now()) { return Err("Native guest authority response expired"); }
+        if !snapshot.current(std::time::Instant::now()) {
+            return Err("Native guest authority response expired");
+        }
         let mut closed = false;
         let changed = self.authority.send_if_modified(|current| {
             // Check inside the watch write lock: close cannot be followed by a
             // late read restoring media permissions to a stopped connection.
-            if !self.healthy.load(Ordering::Acquire) { closed = true; return false; }
-            if current.as_ref().is_some_and(|old| !snapshot.supersedes(old)) { return false; }
-            *current = Some(Arc::new(snapshot)); true
+            if !self.healthy.load(Ordering::Acquire) {
+                closed = true;
+                return false;
+            }
+            if current
+                .as_ref()
+                .is_some_and(|old| !snapshot.supersedes(old))
+            {
+                return false;
+            }
+            *current = Some(Arc::new(snapshot));
+            true
         });
-        if closed { Err("Native RTC connection unavailable") } else { Ok(changed) }
+        if closed {
+            Err("Native RTC connection unavailable")
+        } else {
+            Ok(changed)
+        }
     }
 }
 
 pub struct Connection {
     room: Option<Room>,
-    events: Option<JoinHandle<()>>,
+    events: Option<JoinHandle<Result<(), &'static str>>>,
     stop: Option<oneshot::Sender<()>>,
     healthy: Arc<AtomicBool>,
     authority: watch::Sender<Option<Arc<authority::Snapshot>>>,
     program_allowed: bool,
     program_started: bool,
     program_ids: Option<(livekit::id::TrackSid, livekit::id::TrackSid)>,
+}
+#[derive(Clone, Copy)]
+pub enum ClosePhase {
+    Receivers,
+    Sdk,
 }
 impl Connection {
     pub async fn connect(session: &Session) -> Result<Self, &'static str> {
@@ -98,6 +120,7 @@ impl Connection {
                 return Err("Native RTC publication capacity exceeded");
             }
         }
+        let cleanup_authority = authority.clone();
         let task = tokio::spawn(async move {
             let mut expiry = tokio::time::interval(Duration::from_millis(50));
             expiry.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -127,8 +150,13 @@ impl Connection {
                     }
                 }
             }
-            subscriptions.close();
             health.store(false, Ordering::Release);
+            let _ = cleanup_authority.send(None);
+            let closed = tokio::task::spawn_blocking(move || subscriptions.close())
+                .await
+                .map_err(|_| "Native RTC receiver retirement worker failed");
+            health.store(false, Ordering::Release);
+            closed
         });
         Ok(Self {
             room: Some(room),
@@ -146,14 +174,19 @@ impl Connection {
             return Err("Native program publication unauthorized or already started");
         }
         self.program_started = true;
-        let (sources, ids) = program::Sources::publish(self.room.as_ref().ok_or("Native RTC room unavailable")?).await?;
+        let (sources, ids) =
+            program::Sources::publish(self.room.as_ref().ok_or("Native RTC room unavailable")?)
+                .await?;
         self.program_ids = Some(ids);
         Ok(sources)
     }
     /// Only the pair this connection itself published may be retired here.
     pub async fn retire_program(&mut self) -> Result<(), &'static str> {
         let room = self.room.as_ref().ok_or("Native RTC room unavailable")?;
-        let (audio, video) = self.program_ids.take().ok_or("Native program publication unavailable")?;
+        let (audio, video) = self
+            .program_ids
+            .take()
+            .ok_or("Native program publication unavailable")?;
         let audio = room.local_participant().unpublish_track(&audio).await;
         let video = room.local_participant().unpublish_track(&video).await;
         audio.map_err(|_| "Native program audio retirement failed")?;
@@ -168,29 +201,52 @@ impl Connection {
         self.media_authority_updater().publish(snapshot).map(|_| ())
     }
     pub fn media_authority_updater(&self) -> MediaAuthorityUpdater {
-        MediaAuthorityUpdater { authority: self.authority.clone(), healthy: self.healthy.clone() }
+        MediaAuthorityUpdater {
+            authority: self.authority.clone(),
+            healthy: self.healthy.clone(),
+        }
     }
     /// Debug proof hook: close the actual SDK transport, not just an app flag.
     #[cfg(debug_assertions)]
     pub async fn disconnect_for_test(&self) {
-        self.healthy.store(false,Ordering::Release);
+        self.healthy.store(false, Ordering::Release);
         self.authority.send_replace(None);
-        if let Some(room)=self.room.as_ref(){let _=room.close().await;}
+        if let Some(room) = self.room.as_ref() {
+            let _ = room.close().await;
+        }
     }
     pub fn healthy(&self) -> bool {
         self.healthy.load(Ordering::Acquire)
     }
     pub async fn close(&mut self) -> Result<(), &'static str> {
+        self.close_observed(None).await
+    }
+    /// Immediately fence independent permission publication and wake receive
+    /// retirement. SDK objects and callback owners stay owned until close joins.
+    pub fn begin_close(&mut self) {
         self.healthy.store(false, Ordering::Release);
         let _ = self.authority.send(None);
         if let Some(stop) = self.stop.take() {
             let _ = stop.send(());
         }
+    }
+    pub async fn close_observed(
+        &mut self,
+        observe: Option<fn(ClosePhase, Duration, bool)>,
+    ) -> Result<(), &'static str> {
+        self.begin_close();
+        let started = std::time::Instant::now();
         let joined = if let Some(task) = self.events.take() {
-            task.await.map_err(|_| "Native RTC event task failed")
+            task.await
+                .map_err(|_| "Native RTC event task failed")
+                .and_then(|result| result)
         } else {
             Ok(())
         };
+        if let Some(observe) = observe {
+            observe(ClosePhase::Receivers, started.elapsed(), joined.is_ok());
+        }
+        let started = std::time::Instant::now();
         let closed = if let Some(room) = self.room.take() {
             match room.close().await {
                 Ok(()) | Err(livekit::RoomError::AlreadyClosed) => Ok(()),
@@ -199,6 +255,9 @@ impl Connection {
         } else {
             Ok(())
         };
+        if let Some(observe) = observe {
+            observe(ClosePhase::Sdk, started.elapsed(), closed.is_ok());
+        }
         joined?;
         closed
     }
@@ -233,51 +292,84 @@ mod authority_update_tests {
     use super::*;
     use serde_json::json;
     fn snapshot(revision: u64, on_stage: bool, age: Duration) -> authority::Snapshot {
-        let id="11111111-1111-4111-8111-111111111111";
-        let wall=1791800000000u64;let start=std::time::Instant::now()-age;
-        let receipt=json!({"brand_id":id,"room_id":id,"run_id":id,"host_process_id":id,"host_participant_id":id,"transport":"livekit","endpoint":"wss://fixture.livekit.cloud","state":"active","host_lease_epoch":1,"control_revision":revision,"host_lease_expires_at_ms":wall+45000});
-        let expected:authority::HostReceipt=serde_json::from_value(receipt.clone()).unwrap();
-        let wire=json!({"schema_version":1,"receipt":receipt,"observed_at_ms":wall,"guests":[{"participant_id":id,"rtc_identity":format!("guest-{id}-e1-g1"),"authorization_generation":1,"publish_sources":["camera","microphone"],"on_stage":on_stage,"expires_at_ms":wall+45000}]});
-        authority::Snapshot::parse(&serde_json::to_vec(&wire).unwrap(),&expected,wall,start,std::time::Instant::now()).unwrap()
+        let id = "11111111-1111-4111-8111-111111111111";
+        let wall = 1791800000000u64;
+        let start = std::time::Instant::now() - age;
+        let receipt = json!({"brand_id":id,"room_id":id,"run_id":id,"host_process_id":id,"host_participant_id":id,"transport":"livekit","endpoint":"wss://fixture.livekit.cloud","state":"active","host_lease_epoch":1,"control_revision":revision,"host_lease_expires_at_ms":wall+45000});
+        let expected: authority::HostReceipt = serde_json::from_value(receipt.clone()).unwrap();
+        let wire = json!({"schema_version":1,"receipt":receipt,"observed_at_ms":wall,"guests":[{"participant_id":id,"rtc_identity":format!("guest-{id}-e1-g1"),"authorization_generation":1,"publish_sources":["camera","microphone"],"on_stage":on_stage,"expires_at_ms":wall+45000}]});
+        authority::Snapshot::parse(
+            &serde_json::to_vec(&wire).unwrap(),
+            &expected,
+            wall,
+            start,
+            std::time::Instant::now(),
+        )
+        .unwrap()
     }
     #[test]
     fn reused_snapshot_never_extends_freshness_or_survives_close() {
-        let (sender,_receiver)=watch::channel(None);
-        let health=Arc::new(AtomicBool::new(true));
-        let updater=MediaAuthorityUpdater { authority:sender,healthy:health.clone() };
+        let (sender, _receiver) = watch::channel(None);
+        let health = Arc::new(AtomicBool::new(true));
+        let updater = MediaAuthorityUpdater {
+            authority: sender,
+            healthy: health.clone(),
+        };
         assert!(updater.current_snapshot().is_none());
-        updater.publish(snapshot(9,true,Duration::ZERO)).unwrap();
-        let current=updater.current_snapshot().unwrap();
-        assert_eq!(current.receipt().control_revision,9);
-        assert!(updater.current_snapshot_at(std::time::Instant::now()+Duration::from_millis(3500)).is_none());
-        health.store(false,Ordering::Release);
+        updater.publish(snapshot(9, true, Duration::ZERO)).unwrap();
+        let current = updater.current_snapshot().unwrap();
+        assert_eq!(current.receipt().control_revision, 9);
+        assert!(updater
+            .current_snapshot_at(std::time::Instant::now() + Duration::from_millis(3500))
+            .is_none());
+        health.store(false, Ordering::Release);
         assert!(updater.current_snapshot().is_none());
     }
     #[test]
     fn delayed_old_revision_cannot_restore_broadcast_audio() {
-        let (sender,_receiver)=watch::channel(None);
-        let updater=MediaAuthorityUpdater { authority: sender.clone(), healthy:Arc::new(AtomicBool::new(true)) };
-        assert!(updater.publish(snapshot(9,false,Duration::ZERO)).unwrap());
-        assert!(!updater.publish(snapshot(8,true,Duration::ZERO)).unwrap());
-        let value=sender.borrow();let snapshot=value.as_ref().unwrap();
-        let id="guest-11111111-1111-4111-8111-111111111111-e1-g1";
-        assert!(!snapshot.permission(id,producer_guest_session::PublishSource::Microphone,std::time::Instant::now()).unwrap().on_stage());
+        let (sender, _receiver) = watch::channel(None);
+        let updater = MediaAuthorityUpdater {
+            authority: sender.clone(),
+            healthy: Arc::new(AtomicBool::new(true)),
+        };
+        assert!(updater.publish(snapshot(9, false, Duration::ZERO)).unwrap());
+        assert!(!updater.publish(snapshot(8, true, Duration::ZERO)).unwrap());
+        let value = sender.borrow();
+        let snapshot = value.as_ref().unwrap();
+        let id = "guest-11111111-1111-4111-8111-111111111111-e1-g1";
+        assert!(!snapshot
+            .permission(
+                id,
+                producer_guest_session::PublishSource::Microphone,
+                std::time::Instant::now()
+            )
+            .unwrap()
+            .on_stage());
     }
     #[test]
     fn older_same_revision_response_cannot_reduce_freshness() {
-        let (sender,_receiver)=watch::channel(None);
-        let updater=MediaAuthorityUpdater { authority:sender.clone(), healthy:Arc::new(AtomicBool::new(true)) };
-        assert!(updater.publish(snapshot(9,true,Duration::ZERO)).unwrap());
-        assert!(!updater.publish(snapshot(9,true,Duration::from_secs(1))).unwrap());
+        let (sender, _receiver) = watch::channel(None);
+        let updater = MediaAuthorityUpdater {
+            authority: sender.clone(),
+            healthy: Arc::new(AtomicBool::new(true)),
+        };
+        assert!(updater.publish(snapshot(9, true, Duration::ZERO)).unwrap());
+        assert!(!updater
+            .publish(snapshot(9, true, Duration::from_secs(1)))
+            .unwrap());
     }
     #[test]
     fn closed_connection_cannot_be_revived_by_pending_read() {
-        let (sender,_receiver)=watch::channel(None);
-        let health=Arc::new(AtomicBool::new(true));
-        let updater=MediaAuthorityUpdater { authority:sender.clone(),healthy:health.clone() };
-        assert!(updater.publish(snapshot(9,true,Duration::ZERO)).unwrap());
-        health.store(false,Ordering::Release);sender.send_replace(None);
-        assert!(updater.publish(snapshot(10,true,Duration::ZERO)).is_err());
+        let (sender, _receiver) = watch::channel(None);
+        let health = Arc::new(AtomicBool::new(true));
+        let updater = MediaAuthorityUpdater {
+            authority: sender.clone(),
+            healthy: health.clone(),
+        };
+        assert!(updater.publish(snapshot(9, true, Duration::ZERO)).unwrap());
+        health.store(false, Ordering::Release);
+        sender.send_replace(None);
+        assert!(updater.publish(snapshot(10, true, Duration::ZERO)).is_err());
         assert!(sender.borrow().is_none());
     }
 }

@@ -1,9 +1,9 @@
 // Exercise the production cache against a mocked native IPC boundary. Query
 // deduplication, observers and persistence use the real TanStack implementation.
 import assert from "node:assert/strict";
-import { readFile, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdir, writeFile, rm } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
-import { transformWithEsbuild } from "vite";
+import { build } from "esbuild";
 import { QueryObserver } from "@tanstack/react-query";
 
 const disk = new Map();
@@ -20,9 +20,11 @@ window.__TAURI_INTERNALS__ = { invoke: async (command, args) => {
 const directory = new URL("../node_modules/.cache/producer-cache-test/", import.meta.url);
 await mkdir(directory, { recursive: true });
 const modulePath = new URL("cache.mjs", directory);
-const source = await readFile(new URL("../src/features/manager/cache.ts", import.meta.url), "utf8");
-const result = await transformWithEsbuild(source, "cache.ts", { loader: "ts", format: "esm", target: "es2022" });
-await writeFile(modulePath, result.code);
+// Bundle local imports at their real source paths. Writing an unbundled
+// transform below node_modules breaks relative application imports, and
+// packages stay external so the observer and cache share TanStack's instance.
+const result = await build({ entryPoints: [new URL("../src/features/manager/cache.ts", import.meta.url).pathname], bundle: true, packages: "external", platform: "node", format: "esm", target: "es2022", write: false });
+await writeFile(modulePath, result.outputFiles[0].text);
 const cache = await import(pathToFileURL(modulePath.pathname).href);
 const endpoint = (id) => ({ id, kind: "connected", base_url: "https://example.com", name: id, brand_slug: id, created_at: "" });
 const wait = () => new Promise((resolve) => setTimeout(resolve, 20));

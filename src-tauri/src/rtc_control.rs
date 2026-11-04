@@ -117,6 +117,9 @@ pub struct Control {
     ticket: String,
     connection_id: Option<String>,
     receipt: Option<Receipt>,
+    // Last validated ownership fence, usable only for END after an ambiguous
+    // mutation. It never restores publication permissions or renews a lease.
+    retirement_receipt: Option<Receipt>,
     ticket_renewed_ms: u64,
 }
 fn same_owned_run(next: &Receipt, previous: &Receipt) -> bool {
@@ -193,6 +196,7 @@ impl Control {
             ticket: String::new(),
             connection_id: None,
             receipt: None,
+            retirement_receipt: None,
             ticket_renewed_ms: 0,
         })
     }
@@ -251,13 +255,14 @@ impl Control {
         }
         Ok(bytes)
     }
-    pub async fn room_command(&self, command: RoomCommand) -> Result<Value, &'static str> {
+    pub async fn room_command(&mut self, command: RoomCommand) -> Result<Value, &'static str> {
         let (route, mut body) = command.route(&self.operator.room_id)?;
         let receipt = self
             .receipt
             .as_ref()
             .filter(|r| r.host_lease_expires_at_ms > now().unwrap_or(u64::MAX))
-            .ok_or("No owned RTC run")?;
+            .ok_or("No owned RTC run")?
+            .clone();
         body["rtc"] = json!({"request_id":uuid::Uuid::new_v4().to_string(),"expected":{
             "run_id":receipt.run_id,"control_revision":receipt.control_revision,"host_lease_epoch":receipt.host_lease_epoch}});
         let bytes = self.post_route(&route, body, false).await?;
@@ -265,10 +270,23 @@ impl Control {
             serde_json::from_slice(&bytes).map_err(|_| "Invalid RTC room control response")?;
         let next: Receipt = serde_json::from_value(value["rtc"]["run"].clone())
             .map_err(|_| "Missing RTC room control receipt")?;
-        if !same_owned_run(&next, receipt) {
+        self.adopt_room_receipt(next, &receipt)?;
+        Ok(value)
+    }
+    fn adopt_room_receipt(
+        &mut self,
+        next: Receipt,
+        previous: &Receipt,
+    ) -> Result<(), &'static str> {
+        if !same_owned_run(&next, previous)
+            || next.host_lease_expires_at_ms <= now().unwrap_or(u64::MAX)
+            || next.control_revision > 9_007_199_254_740_991
+        {
             return Err("RTC room control authority mismatch");
         }
-        Ok(value)
+        self.retirement_receipt = Some(next.clone());
+        self.receipt = Some(next);
+        Ok(())
     }
     pub async fn open(&mut self) -> Result<(), &'static str> {
         if !self.ticket.is_empty() {
@@ -437,14 +455,33 @@ impl Control {
         match operation {
             "start" if self.receipt.is_none() => {}
             "renew" | "end" => {
-                let r = self.receipt.as_ref().ok_or("No owned RTC run")?;
+                let r = self
+                    .receipt
+                    .as_ref()
+                    .or_else(|| {
+                        if operation == "end" {
+                            self.retirement_receipt.as_ref()
+                        } else {
+                            None
+                        }
+                    })
+                    .ok_or("No owned RTC run")?;
                 command["expectedRunId"] = json!(r.run_id);
                 command["expectedRevision"] = json!(r.control_revision);
                 command["expectedEpoch"] = json!(r.host_lease_epoch);
             }
             _ => return Err("Unsupported RTC transition"),
         }
-        let previous = self.receipt.clone();
+        let previous = self.receipt.clone().or_else(|| {
+            if operation == "end" {
+                self.retirement_receipt.clone()
+            } else {
+                None
+            }
+        });
+        if previous.is_some() {
+            self.retirement_receipt = previous.clone();
+        }
         self.receipt = None;
         let payload = json!({"connection_ticket":self.ticket,"command":command});
         let mut result = self.post("control", payload.clone()).await;
@@ -512,25 +549,43 @@ impl Control {
             return Err("RTC lease unavailable");
         }
         if operation != "end" {
+            self.retirement_receipt = Some(receipt.clone());
             self.receipt = Some(receipt.clone());
+        } else {
+            self.retirement_receipt = None;
         }
         Ok(receipt)
     }
     pub async fn renew(&mut self) -> Result<(), &'static str> {
+        self.renew_guarded(|| true).await
+    }
+    pub async fn renew_guarded(
+        &mut self,
+        may_continue: impl Fn() -> bool,
+    ) -> Result<(), &'static str> {
+        if !may_continue() {
+            return Err("Native RTC room closing");
+        }
         if now()?.saturating_sub(self.ticket_renewed_ms) >= 300_000 {
             let body = self
                 .post("connection/renew", json!({"connection_ticket":self.ticket}))
                 .await?;
             self.accept_ticket(&body)?;
         }
+        if !may_continue() {
+            return Err("Native RTC room closing");
+        }
         let previous = self.receipt.clone().ok_or("No owned RTC run")?;
         // Several admissions can advance the revision between the independent
         // read and the renewal CAS. Bound contention retries and verify the
         // same owner with a fresh read before every retry.
         for attempt in 0..3 {
+            if !may_continue() {
+                return Err("Native RTC room closing");
+            }
             match self.command("renew").await {
                 Ok(_) => return Ok(()),
-                Err(error) if renewable_after_read(error) && attempt < 2 => {
+                Err(error) if renewable_after_read(error) && attempt < 2 && may_continue() => {
                     #[cfg(debug_assertions)]
                     eprintln!("Native RTC renewal reconciliation: {error}");
                     let snapshot = self.read_media_authority(&previous).await?;
@@ -543,12 +598,17 @@ impl Control {
     }
 
     pub async fn end(&mut self) -> Result<(), &'static str> {
-        let previous = self.receipt.clone().ok_or("No owned RTC run")?;
+        let previous = self
+            .receipt
+            .clone()
+            .or(self.retirement_receipt.clone())
+            .ok_or("No owned RTC run")?;
         match self.command("end").await {
             Ok(_) => Ok(()),
             Err("RTC authority changed") => {
                 let snapshot = self.read_media_authority(&previous).await?;
-                self.receipt = Some(snapshot.receipt().clone());
+                self.receipt = None;
+                self.retirement_receipt = Some(snapshot.receipt().clone());
                 self.command("end").await.map(|_| ())
             }
             Err(error) => Err(error),
@@ -654,6 +714,77 @@ pub fn selftest(path: &std::path::Path) -> Result<(), &'static str> {
 mod room_command_tests {
     use super::*;
     const ID: &str = "11111111-1111-4111-8111-111111111111";
+    fn closing_control() -> Control {
+        let mut control = Control::new(Operator {
+            brand_id: ID.into(),
+            room_id: ID.into(),
+            token: "fixture".into(),
+        })
+        .unwrap();
+        control.retirement_receipt=Some(serde_json::from_value(json!({"brand_id":ID,"room_id":ID,"run_id":ID,"host_process_id":ID,"host_participant_id":ID,
+            "transport":"livekit","endpoint":ENDPOINT,"state":"active","host_lease_epoch":1,"control_revision":5,"host_lease_expires_at_ms":now().unwrap()+45000})).unwrap());
+        control
+    }
+    #[tokio::test]
+    async fn retirement_fence_never_authorizes_renew_session_or_room_mutation() {
+        let mut control = closing_control();
+        assert_eq!(
+            control.command("renew").await.unwrap_err(),
+            "No owned RTC run"
+        );
+        assert_eq!(
+            control.session().await.unwrap_err(),
+            "RTC publication authority expired"
+        );
+        assert_eq!(
+            control
+                .room_command(RoomCommand::Revoke {
+                    participant_id: ID.into()
+                })
+                .await
+                .unwrap_err(),
+            "No owned RTC run"
+        );
+        assert!(control.receipt.is_none());
+        assert_eq!(
+            control
+                .retirement_receipt
+                .as_ref()
+                .unwrap()
+                .control_revision,
+            5
+        );
+    }
+    #[test]
+    fn only_validated_same_owner_response_advances_active_and_retirement_receipts() {
+        let mut control = closing_control();
+        let prior = control.retirement_receipt.clone().unwrap();
+        let mut next = prior.clone();
+        next.control_revision += 1;
+        control.adopt_room_receipt(next.clone(), &prior).unwrap();
+        assert_eq!(control.receipt.as_ref().unwrap().control_revision, 6);
+        assert_eq!(
+            control
+                .retirement_receipt
+                .as_ref()
+                .unwrap()
+                .control_revision,
+            6
+        );
+        next.host_process_id = "22222222-2222-4222-8222-222222222222".into();
+        assert!(control.adopt_room_receipt(next, &prior).is_err());
+        assert_eq!(control.receipt.as_ref().unwrap().control_revision, 6);
+        control.receipt = None;
+        assert!(control.lease_expires_at_ms().is_none());
+        assert_eq!(
+            control
+                .retirement_receipt
+                .as_ref()
+                .unwrap()
+                .control_revision,
+            6
+        );
+    }
     fn authority_fixture(
         value: Value,
         age: Duration,

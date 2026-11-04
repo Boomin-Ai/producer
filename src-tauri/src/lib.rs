@@ -33,7 +33,9 @@ use tauri::Manager;
 
 pub struct AppState {
     #[cfg(feature = "guest-rtc-pilot")]
-    pub rtc_host: tokio::sync::Mutex<Option<rtc_owner::HostOwner>>,
+    pub rtc_host: std::sync::Arc<tokio::sync::Mutex<Option<rtc_owner::HostOwner>>>,
+    #[cfg(feature = "guest-rtc-pilot")]
+    pub rtc_host_epoch: std::sync::Arc<std::sync::atomic::AtomicU64>,
     pub db: Mutex<rusqlite::Connection>,
     /// Mid-sign-in hosted auth (api_root, token) held engine-side between
     /// OTP verification and workspace selection — never enters the webview.
@@ -221,7 +223,9 @@ pub fn run() {
 
             app.manage(AppState {
                 #[cfg(feature = "guest-rtc-pilot")]
-                rtc_host: tokio::sync::Mutex::new(None),
+                rtc_host: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
+                #[cfg(feature = "guest-rtc-pilot")]
+                rtc_host_epoch: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
                 db: Mutex::new(conn),
                 pending_auth: Mutex::new(None),
                 live,

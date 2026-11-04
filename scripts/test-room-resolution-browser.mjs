@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-const {chromium}=await import('/private/tmp/producer-sets-v2-browser/node_modules/playwright-core/index.mjs');
+const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'/private/tmp/producer-sets-v2-browser/node_modules/playwright-core/index.mjs');
 const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
 try{
  const page=await browser.newPage();page.on('pageerror',e=>console.log('ERROR',e.message));await page.goto('http://127.0.0.1:1436/');
- await page.evaluate(async()=>{
+ const setup=async()=>{
   const M=await import('/node_modules/.vite/deps/react.js'),R=M.default??M,D=await import('/node_modules/.vite/deps/react-dom_client.js');
   const {useRoomOutput}=await import('/src/features/sets-v2/useRoomOutput.ts'),{HEAD_TO_HEAD}=await import('/src/features/presentation/fixtures.ts');
   const source=await(await fetch('/src/features/sets-v2/useRoomOutput.ts')).text(),{RehearsalSession}=await import(source.match(/from "([^"]*rehearsal\.ts[^"]*)"/)[1]);
@@ -16,7 +16,8 @@ try{
   }};
   function Harness(){window.output=useRoomOutput(session,'test-room',{items:[]},true,{});return R.createElement('div',null,JSON.stringify(window.output.layoutReadiness));}
   const root=document.createElement('div');document.body.replaceChildren(root);(D.createRoot??D.default.createRoot)(root).render(R.createElement(Harness));
- });
+ };
+ await page.evaluate(setup);
  await page.waitForFunction(()=>!!window.output);
  // An editor publish can retain an apply callback from before canvas discovery.
  // No default-720p work may reach a saved-1080p native room during that window.
@@ -40,5 +41,15 @@ try{
   await page.waitForFunction(()=>Object.values(window.output.layoutReadiness).every(s=>s.state==='ready'),{},{timeout:10000});
   console.log('PASS: mounted room resizes to '+height+' and applies matching native plans');
  }
+
+ // Keeping an Apply through initial discovery must not resurrect it after an
+ // explicit return while that discovery is still waiting on the native room.
+ await page.reload();await page.evaluate(setup);await page.waitForFunction(()=>!!window.output);
+ await page.evaluate(()=>{window.cancelledApply=window.output.apply();});
+ await page.waitForTimeout(150);await page.evaluate(()=>window.output.returnToRoom());
+ await page.evaluate(()=>{window.engineReleased=true;});await page.evaluate(()=>window.cancelledApply);
+ assert.equal(await page.evaluate(()=>window.output.active),false);
+ assert.equal(await page.evaluate(()=>window.calls.some(c=>c==='activate'||c==='take')),false);
+ console.log('PASS: explicit Return during initial canvas wait cancels the pending Apply');
 
 }finally{await browser.close();}

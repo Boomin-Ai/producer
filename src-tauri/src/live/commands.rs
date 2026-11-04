@@ -340,8 +340,16 @@ pub async fn live_detach_preview(state: State<'_, AppState>) -> EngineResult<()>
 }
 
 #[tauri::command]
-pub async fn live_release_idle_room(state: State<'_, AppState>) -> EngineResult<bool> {
-    state.live.release_idle_room().map_err(EngineError::Other)
+pub async fn live_release_idle_room(app: tauri::AppHandle) -> EngineResult<bool> {
+    use tauri::Manager;
+    let entered=std::time::Instant::now();
+    crate::performance_trace::native_stage("native.room.release.ipc_entry",std::time::Duration::ZERO,None);
+    let result=tauri::async_runtime::spawn_blocking(move||{
+        crate::performance_trace::native_stage("native.room.release.worker_wait",entered.elapsed(),None);
+        app.state::<AppState>().live.release_idle_room().map_err(EngineError::Other)
+    }).await.map_err(|_|EngineError::Other("Room release worker failed".into()))?;
+    crate::performance_trace::native_stage("native.room.release.ipc_reply",entered.elapsed(),Some(result.is_ok()));
+    result
 }
 
 #[tauri::command]

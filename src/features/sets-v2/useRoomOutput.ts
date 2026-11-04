@@ -10,7 +10,7 @@ import {
 import type { SlotFraming } from "../presentation/schema";
 import { AssetTransport } from "../presentation/assetTransport";
 import {authoredCrossfadeMs} from '../presentation/animation';
-import {PreparedScenes,layoutProjections,moduleViewProjections,valueControlProjections,warmInventory,preparationInventory,morphTargets,runtimePlan,type SceneSpec,type NativeSceneStatus} from './preparedScenes';
+import {PreparedScenes,sceneTransport,layoutProjections,moduleViewProjections,valueControlProjections,warmInventory,preparationInventory,morphTargets,runtimePlan,type SceneSpec,type NativeSceneStatus} from './preparedScenes';
 import {RehearsalSession} from '../presentation/rehearsal';
 type NativeStatus = NativeSceneStatus & {
   generation: number;
@@ -97,6 +97,7 @@ export function useRoomOutput(
   const [draftCandidate,setDraftCandidate]=useState<{doc:import('../presentation/schema').PresentationPackage;bindings:Record<string,string>;framing:Record<string,SlotFraming>;phase?:string}>();
   const [retryVersion,setRetryVersion]=useState(0);
   const bank=useRef<PreparedScenes|null>(null);
+  const transport=useRef<ReturnType<typeof sceneTransport<NativeStatus>>|null>(null);
   const scene3dCapability=useRef<Promise<boolean>|undefined>(undefined);
   const invalidateRoom=()=>{
     ++operation.current;++portraitOperation.current;
@@ -104,14 +105,15 @@ export function useRoomOutput(
     isActive.current=false;setPresentedSession(null);setError("");
     bank.current?.reset();setRetryVersion(v=>v+1);
   };
+  if(!transport.current)transport.current=sceneTransport<NativeStatus>(value=>invoke<NativeStatus>('live_set_v2',{request:value}),async()=>(await ipc.liveSetStatus()).generation,next=>{
+    const previous=cacheGeneration.current;cacheGeneration.current=next;generation.current=next;
+    if(previous!==undefined&&previous!==next)invalidateRoom();
+  });
   if(!bank.current)bank.current=new PreparedScenes(async value=>{
     const scenes=(value.plan as {scenes3d?:Record<string,unknown>}|undefined)?.scenes3d;
     if(scenes&&Object.keys(scenes).length){scene3dCapability.current??=invoke<boolean>('live_set_v2_scene3d_enabled').catch(()=>false);if(!await scene3dCapability.current)throw Error('This 3D Set requires an updated Producer app.');}
-    const room=await ipc.liveSetStatus();
-    if(cacheGeneration.current!==undefined&&cacheGeneration.current!==room.generation)invalidateRoom();
-    cacheGeneration.current=room.generation;generation.current=room.generation;
-    return invoke<NativeStatus>('live_set_v2',{request:{generation:room.generation,...value}}).catch(e=>{if(/Set first-frame timeout|Media did not decode its first frame/.test(String(e)))uiLog(`[sets] ${value.outputId??'program'} generation=${room.generation}: ${String(e)}`);if(value.op==='status'&&/Prepare (a v2|the portrait) set first/.test(String(e)))return {preparedRevision:0,renderedRevision:0,renderSerial:0,ready:false,warmed:false,queued:false,transitioning:false,cachedKeys:[],generation:room.generation};throw e;});
-  },()=>notifyPreparation(v=>v+1));
+    return transport.current!.send(value).catch(e=>{if(/Set first-frame timeout|Media did not decode its first frame/.test(String(e)))uiLog(`[sets] ${value.outputId??'program'} generation=${generation.current}: ${String(e)}`);if(value.op==='status'&&/Prepare (a v2|the portrait) set first/.test(String(e)))return {preparedRevision:0,renderedRevision:0,renderSerial:0,ready:false,warmed:false,queued:false,transitioning:false,cachedKeys:[],generation:generation.current};throw e;});
+  },()=>notifyPreparation(v=>v+1),undefined,()=>{const context=snapshotTraceContext();return(stage,fields)=>recordTraceEvent(`set.prepare.${stage}`,fields,'set',context);});
   const bindingDimensions = (selectedBindings: Record<string, string>) =>
     JSON.stringify(Object.values(selectedBindings).map(id => {
       const source = sources.items?.find(item => item.id === id);
@@ -178,14 +180,11 @@ export function useRoomOutput(
     };
     const refresh=async()=>{
       const version=observed;
-      const [room,engine]=await Promise.all([ipc.liveSetStatus(),ipc.liveEngineStatus()]);
+      const [,engine]=await Promise.all([transport.current!.refreshGeneration(),ipc.liveEngineStatus()]);
       if(cancelled||version!==observed)return;
-      const changed=cacheGeneration.current!==undefined&&cacheGeneration.current!==room.generation;
-      cacheGeneration.current=room.generation;generation.current=room.generation;
       if(engine.engine_ready===false||!engine.video_height)return;
       const height=engine.video_height;
       if(height!==canvasRef.current.height)resize(height);
-      else if(changed)invalidateRoom();
       canvasReadyRoom.current=roomId;setCanvasReady(true);
     };
     void listenLiveEvents(event=>{
@@ -235,12 +234,15 @@ export function useRoomOutput(
     window.dispatchEvent(new CustomEvent('producer:module-presentation-failed',{detail:{roomId:current.roomId,output,generation:generation.current,nativeRevision,renderSerial:0,moduleCommit,status:'failed',stage,error:stage==='prepare'?'The requested output could not be prepared. The host can retry.':'The requested frame was not confirmed. The host can retry.'}}));
   };
   const takeOnce = async (): Promise<boolean> => {
-    const waitingOperation=operation.current,selectedContext=latest.current,selectedSession=selectedContext.session,selectedState=selectedSession.snapshot();
+    const waitingReturnIntent=returnIntent.current,selectedContext=latest.current,selectedSession=selectedContext.session,selectedState=selectedSession.snapshot();
     const stillSelected = () => alive.current && latest.current.enabled
       && latest.current.roomId === selectedContext.roomId && latest.current.session === selectedSession;
     const initialCommit=selectedState.moduleConnection==='live'&&selectedState.workspaceMode==='live'?{...selectedState.moduleCommit,domain:'live' as const}:undefined;
-    try { if(!await waitForCanvas()||operation.current!==waitingOperation||!stillSelected())return false; }
-    catch(e){if(stillSelected()&&operation.current===waitingOperation){setError(String(e));reportFailure(selectedContext,'program',initialCommit,'prepare');}throw e;}
+    // Initial saved-canvas discovery can reset generation/size before any
+    // preparation exists. Keep this Apply intent while waiting for the real
+    // canvas; an explicit return, changed room/session or unmount cancels it.
+    try { if(!await waitForCanvas()||returnIntent.current!==waitingReturnIntent||!stillSelected())return false; }
+    catch(e){if(stillSelected()&&returnIntent.current===waitingReturnIntent){setError(String(e));reportFailure(selectedContext,'program',initialCommit,'prepare');}throw e;}
     const ticket = ++operation.current;
     const stillTaking = () => ticket === operation.current && stillSelected();
     let current = selectedContext;
@@ -261,9 +263,9 @@ export function useRoomOutput(
       if(attempted)await request({op:'cancel',generation:takeGeneration,revision:attempted}).catch(()=>{});
     };
     try {
-      const room = await ipc.liveSetStatus();
+      const roomGeneration = await transport.current!.refreshGeneration();
       if (!stillTaking()) return false;
-      takeGeneration = room.generation;
+      takeGeneration = roomGeneration;
       generation.current = takeGeneration;
       // Read layout, phase and the projection from one selection after IPC.
       // An update while checking room status must not invalidate its own take.
@@ -382,7 +384,7 @@ export function useRoomOutput(
         if (acknowledged) return;
       } catch (error) {
         checkRequest();
-        if (attempt === 2 || !/Prepared scene expired|Room changed; prepare/.test(String(error))) throw error;
+        if (attempt === 2 || !/Prepared scene expired|Room (?:generation )?changed; prepare/.test(String(error))) throw error;
       }
     }
     throw Error("The Set changed before output could confirm it. Try showing it again.");
@@ -393,8 +395,7 @@ export function useRoomOutput(
     ++portraitOperation.current;
     try {
       const status = await request({ op: "return" });
-      generation.current = status.generation;
-      cacheGeneration.current = status.generation;
+      transport.current!.observeGeneration(status.generation);
       isActive.current = false;deliberatelyHidden.current=true;
       setPresentedSession(null);
       setActive(false);
@@ -491,14 +492,15 @@ export function useRoomOutput(
     try{
     if(!await waitForCanvas()||ticket!==portraitOperation.current||current.session!==latest.current.session)return;
     const portraitKey=current.session.package.id+":"+(layoutId??current.session.snapshot().layoutId);
-    const room = await ipc.liveSetStatus();
-    generation.current = room.generation;
+    const roomGeneration = await transport.current!.refreshGeneration();
+    if(ticket!==portraitOperation.current||!alive.current||current.roomId!==latest.current.roomId||current.session!==latest.current.session)return;
+    generation.current = roomGeneration;
     const engine = await ipc.liveEngineStatus();
     const width = engine.video_height ?? 720,
       height = Math.round((width * 16) / 9);
     const send = (value: Record<string, unknown>) => {
       if (ticket !== portraitOperation.current || !alive.current || current.roomId!==latest.current.roomId || current.session!==latest.current.session) throw Error("Portrait selection changed");
-      return invoke<NativeStatus>("live_set_v2", {request: {generation: room.generation, ...value, outputId: "portrait"}});
+      return invoke<NativeStatus>("live_set_v2", {request: {generation: roomGeneration, ...value, outputId: "portrait"}});
     };
     const id=layoutId??current.session.snapshot().layoutId;
     const base=specsRef.current.find(s=>s.layout===id);if(!base)throw Error('Portrait layout is not in preparation inventory');
@@ -514,7 +516,7 @@ export function useRoomOutput(
       if (
         state.renderedRevision === candidate &&
         !state.transitioning
-      ) { if(ticket!==portraitOperation.current||!alive.current||current.roomId!==latest.current.roomId||current.session!==latest.current.session)return;portraitShownCharts.current=chartSeries(projection);portraitShownLayout.current=portraitKey;if(projection.moduleCommit)window.dispatchEvent(new CustomEvent('producer:module-presented',{detail:{roomId:current.roomId,output:'portrait',generation:room.generation,nativeRevision:candidate,renderSerial:state.renderSerial,moduleCommit:projection.moduleCommit}})); return; }
+      ) { if(ticket!==portraitOperation.current||!alive.current||current.roomId!==latest.current.roomId||current.session!==latest.current.session)return;portraitShownCharts.current=chartSeries(projection);portraitShownLayout.current=portraitKey;if(projection.moduleCommit)window.dispatchEvent(new CustomEvent('producer:module-presented',{detail:{roomId:current.roomId,output:'portrait',generation:roomGeneration,nativeRevision:candidate,renderSerial:state.renderSerial,moduleCommit:projection.moduleCommit}})); return; }
       if (i === 199) throw Error("Portrait did not confirm its rendered frame");
       await sleep(20);
     }

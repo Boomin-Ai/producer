@@ -816,11 +816,15 @@ impl Tap {
         let param = (&*self.shared as *const Shared).cast_mut().cast();
         unsafe {
             if self.video_connected {
+                let started=std::time::Instant::now();
                 ffi::obs_remove_raw_video_callback(video_callback, param);
+                crate::performance_trace::native_stage("native.rtc.capture.video_detach",started.elapsed(),Some(true));
                 self.video_connected = false;
             }
             if self.audio_connected {
+                let started=std::time::Instant::now();
                 audio_output_disconnect(self.audio as *mut _, 1, audio_callback, param);
+                crate::performance_trace::native_stage("native.rtc.capture.audio_detach",started.elapsed(),Some(true));
                 self.audio_connected = false;
             }
         }
@@ -927,13 +931,16 @@ impl Publisher {
         self.lease.store(deadline, Ordering::Release);
     }
     pub fn close(&mut self) -> Result<(), &'static str> {
-        self.stop.store(true, Ordering::Release);
+        self.request_stop();
         if let Some(worker) = self.worker.take() {
             worker
                 .join()
                 .map_err(|_| "Native program worker failed")??;
         }
         Ok(())
+    }
+    pub fn request_stop(&self) {
+        self.stop.store(true,Ordering::Release);
     }
 }
 impl Drop for Publisher {

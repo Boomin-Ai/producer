@@ -11,6 +11,26 @@ export type SceneReadiness={state:'queued'|'loading'|'ready'|'error';error?:stri
 export type NativeSceneStatus={preparedRevision:number;renderedRevision:number;ready:boolean;warmed:boolean;transitioning:boolean;queued:boolean;cachedKeys?:string[];cachedBytes?:number;renderSerial:number};
 type Plan=RenderPlan&{motion?:AnimationTrack[];clock?:import('../presentation/animation').AnimationClock;retainedTargets?:string[];assets?:OutputProjection['assets']};
 export type SceneSpec={projection:OutputProjection;phase:string;layout:string;bindings:Record<string,string>;target:OutputTarget;definition:string;instance:string;targets:string[];assetVersion:string;speculative?:boolean;controlId?:string};
+/** The native protocol fences every action, including status, by generation.
+ * Discover/refresh at lifecycle checks rather than before each readiness poll.
+ * A native rejection refreshes without replaying the action; an old response
+ * must never restore readiness after room reset. */
+export function sceneTransport<T extends {generation:number}>(send:(request:Record<string,unknown>)=>Promise<T>,readGeneration:()=>Promise<number>,changed:(generation:number)=>void){
+ let generation:number|undefined,epoch=0,discovery:Promise<number>|undefined;
+ const observeGeneration=(next:number)=>{if(generation!==next){generation=next;++epoch;changed(next);}return next;};
+ const discover=()=>discovery??=(async()=>{const before=epoch,next=await readGeneration();return before===epoch?observeGeneration(next):generation!;})().finally(()=>{discovery=undefined;});
+ return {observeGeneration,refreshGeneration:discover,send:async(request:Record<string,unknown>)=>{
+  const expected=generation??await discover(),before=epoch;
+  try{
+   const status=await send({...request,generation:expected});
+   if(before!==epoch||status.generation!==expected)throw Error('Room generation changed; prepare the set again');
+   return status;
+  }catch(error){
+   if(/Room generation changed; prepare/.test(String(error)))await discover().catch(()=>{});
+   throw error;
+  }
+ }};
+}
 /** Keep the current paired view available while a different Set is prepared. */
 export function preparationInventory(inventory:SceneSpec[],candidates:SceneSpec[],currentLayouts:ReadonlySet<string>){
  const replacing=candidates.length>0&&inventory.length>0&&candidates[0].definition!==inventory[0].definition;
@@ -18,6 +38,7 @@ export function preparationInventory(inventory:SceneSpec[],candidates:SceneSpec[
 }
 type Entry={pins:number;key:string;identity:string;spec:SceneSpec;state:SceneReadiness;plan?:Plan;promise?:Promise<Entry>};
 type Job={priority:number;run:(abort:()=>boolean)=>Promise<unknown>;resolve:(v:any)=>void;reject:(e:unknown)=>void;preemptible:boolean;entry?:Entry};
+type PreparationTrace=(stage:string,fields:Record<string,number|boolean>)=>void;
 const sleep=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 function digest(text:string){let a=2166136261,b=5381;for(let i=0;i<text.length;i++){a=Math.imul(a^text.charCodeAt(i),16777619);b=Math.imul(b,33)^text.charCodeAt(i);}return 'scene-'+(a>>>0).toString(16)+'-'+(b>>>0).toString(16);}
 function visual(node:RenderNode):unknown{const {playback:_playback,motionClass:_motion,...rest}=node;if(rest.scene3d){const {cue:_cue,view:_view,cueSequence:_sequence,...definition}=rest.scene3d;rest.scene3d={...definition,cue:"neutral"};}return {...rest,children:node.children.map(visual)};}
@@ -41,9 +62,9 @@ export class PreparedScenes {
  private trace:string[]=[];
  debug(){return {counters:{...this.counters},working:this.working,abort:this.abort,queue:this.jobs.map(j=>j.priority),trace:this.trace,active:[...this.active.values()].map(s=>({layout:s.layout,target:s.target.id,key:digest(sceneIdentity(s))})),inventory:this.inventory?.map(s=>({layout:s.layout,target:s.target.id,key:digest(sceneIdentity(s))})),entries:[...this.entries.values()].map(e=>({layout:e.spec.layout,target:e.spec.target,key:e.key,pins:e.pins,state:e.state}))};}
  private log(message:string){this.trace=[...this.trace.slice(-79),message];}
- private entries=new Map<string,Entry>();private jobs:Job[]=[];private working=false;private abort=false;private running?:Job;private disposed=false;private revision=0;
+ private entries=new Map<string,Entry>();private jobs:Job[]=[];private working=false;private abort=false;private running?:Job;private disposed=false;private revision=0;private foregroundTakes=0;private roomEpoch=0;
  private trimTimer?:ReturnType<typeof setTimeout>;
- constructor(private send:(request:Record<string,unknown>)=>Promise<NativeSceneStatus>,private changed:()=>void,private compile=compileRoomScene){
+ constructor(private send:(request:Record<string,unknown>)=>Promise<NativeSceneStatus>,private changed:()=>void,private compile=compileRoomScene,private startTrace?:()=>PreparationTrace){
   const originalSend=this.send;this.send=async request=>{if(request.op==='preload')this.counters.preloads++;if(request.op==='retain')this.counters.retains++;const started=performance.now();try{return await originalSend(request);}finally{this.log(`${request.op}:${request.outputId??'program'} ${(performance.now()-started).toFixed(1)}ms`);}};
   debugSessions.add(this);
  }
@@ -57,47 +78,56 @@ export class PreparedScenes {
   if(priority>=100)this.preemptBackground();
   return new Promise((resolve,reject)=>{this.jobs.push({priority,preemptible,run,resolve,reject,entry});void this.pump();});
  }
- private async pump(){if(this.working||this.disposed)return;this.working=true;try{while(this.jobs.length&&!this.disposed){this.jobs.sort((a,b)=>b.priority-a.priority);const job=this.jobs.shift()!;this.abort=false;this.running=job;try{job.resolve(await job.run(()=>this.abort||this.disposed));}catch(e){job.reject(e);}}}finally{this.running=undefined;this.working=false;}}
+ private async pump(){if(this.working||this.disposed)return;this.working=true;try{while(this.jobs.length&&!this.disposed){this.jobs.sort((a,b)=>b.priority-a.priority);if(this.foregroundTakes&&this.jobs[0].priority<100)break;const job=this.jobs.shift()!;this.abort=false;this.running=job;try{job.resolve(await job.run(()=>this.abort||this.disposed));}catch(e){job.reject(e);}}}finally{this.running=undefined;this.working=false;}}
  async ensure(spec:SceneSpec,priority=0):Promise<Entry>{
   this.outputs.add(spec.target.id);
   const entry=this.get(spec);
+  const trace=this.startTrace?.(),queuedAt=performance.now(),epoch=this.roomEpoch;
+  const report=(stage:string,fields:Record<string,number|boolean>={})=>trace?.(stage,{foreground:priority>=100||entry.pins>0,portrait:spec.target.id==='portrait',...fields});
   const speculative=()=>priority<100&&!entry.pins;
-  if(entry.state.state==='ready'||(speculative()&&this.warmingBlocked.has(spec.target.id)))return entry;
+  if(entry.state.state==='ready'){report('reuse');return entry;}
+  if(speculative()&&this.warmingBlocked.has(spec.target.id))return entry;
   if(entry.promise){
    if(priority>=100){
     const queued=this.jobs.find(job=>job.entry===entry);
     if(queued){queued.priority=priority;queued.preemptible=false;}
     this.preemptBackground();
+    void this.pump();
    }
    return entry.promise;
   }
-  entry.promise=this.enqueue(priority,priority<100,async abort=>{
+  const pending=this.enqueue(priority,priority<100,async interrupted=>{
+   const abort=()=>interrupted()||epoch!==this.roomEpoch;
+   report('queue',{durationMs:performance.now()-queuedAt});
    this.log('loading '+entry.key+' priority '+priority);entry.state={state:'loading'};this.changed();let revision=0;
    try{
+    if(abort()){entry.state={state:'queued'};return entry;}
     if(speculative()&&this.warmingBlocked.has(spec.target.id)){entry.state={state:'queued'};return entry;}
-    if(!entry.plan){this.counters.plans++;const started=performance.now();entry.plan=await this.compile(spec.projection,{definitionId:spec.definition,instanceId:spec.instance,canvasId:spec.layout,target:spec.target,bindings:spec.bindings,retainedTargets:spec.targets}) as Plan;this.log(`compiled ${entry.key} ${(performance.now()-started).toFixed(1)}ms`);}
+    if(!entry.plan){this.counters.plans++;const started=performance.now();entry.plan=await this.compile(spec.projection,{definitionId:spec.definition,instanceId:spec.instance,canvasId:spec.layout,target:spec.target,bindings:spec.bindings,retainedTargets:spec.targets}) as Plan;const durationMs=performance.now()-started;this.log(`compiled ${entry.key} ${durationMs.toFixed(1)}ms`);report('compile',{durationMs});}
     if(abort()){this.log('aborted compile '+entry.key);entry.state={state:'queued'};return entry;}
     let frameRetries=0,budgetRetries=0;
     for(;;){
      try{
-    const status=await this.send({op:'status',outputId:spec.target.id});this.revision=Math.max(this.revision,status.preparedRevision,status.renderedRevision);revision=++this.revision;
+    const status=await this.send({op:'status',outputId:spec.target.id});if(abort()){entry.state={state:'queued'};return entry;}this.revision=Math.max(this.revision,status.preparedRevision,status.renderedRevision);revision=++this.revision;
     const paused=runtimePlan(entry.plan,{...spec.projection,timeline:spec.projection.timeline?{...spec.projection.timeline,clock:{...spec.projection.timeline.clock,running:false}}:undefined});
     paused.assets=entry.plan.assets;
     const stop=(n:RenderPlan['root'])=>{const p=(n as any).playback;if(p)p.playing=false;n.children.forEach(stop);};stop(paused.root);
     let sent=this.sentAssets.get(spec.target.id);if(!sent){sent=new Map();this.sentAssets.set(spec.target.id,sent);}
     paused.assets=Object.fromEntries(Object.entries(paused.assets??{}).filter(([id,a])=>sent!.get(id)!==a.data));
-    await this.send({op:'preload',outputId:spec.target.id,key:entry.key,revision,plan:paused});
+    const preloadStarted=performance.now();await this.send({op:'preload',outputId:spec.target.id,key:entry.key,revision,plan:paused});report('preload',{durationMs:performance.now()-preloadStarted});
     for(const [id,a]of Object.entries(paused.assets??{}))sent.set(id,a.data);
     // Native cold WebGL preparation permits 60s for shader compilation and
     // the first imported paint. Keep the client deadline beyond that fence;
     // an iteration count otherwise cancels valid cold 3D loads at ~12s.
     const deadline=Date.now()+(Object.keys(entry.plan.scenes3d??{}).length?65000:15000);
+    const readyStarted=performance.now();let polls=0;
     while(Date.now()<deadline){
-     if(abort()){await this.send({op:'cancel',outputId:spec.target.id,revision}).catch(()=>{});this.log('aborted native '+entry.key);entry.state={state:'queued'};return entry;}
-     const state=await this.send({op:'status',outputId:spec.target.id});if(state.cachedKeys?.includes(entry.key)){this.log('ready '+entry.key);entry.state={state:'ready'};return entry;}await sleep(20);
+     if(abort()){if(epoch===this.roomEpoch)await this.send({op:'cancel',outputId:spec.target.id,revision}).catch(()=>{});this.log('aborted native '+entry.key);entry.state={state:'queued'};return entry;}
+     const state=await this.send({op:'status',outputId:spec.target.id});++polls;if(abort()){if(epoch===this.roomEpoch)await this.send({op:'cancel',outputId:spec.target.id,revision}).catch(()=>{});entry.state={state:'queued'};return entry;}if(state.cachedKeys?.includes(entry.key)){this.log('ready '+entry.key);entry.state={state:'ready'};report('ready',{durationMs:performance.now()-readyStarted,polls});return entry;}await sleep(20);
     }
     throw Error('Layout did not finish preparing');
      }catch(error){
+      if(abort()){if(revision&&epoch===this.roomEpoch)await this.send({op:'cancel',outputId:spec.target.id,revision}).catch(()=>{});entry.state={state:'queued'};return entry;}
       const message=String(error);
       const firstFrameTimeout=message.includes('Set first-frame timeout')||message.includes('Media did not decode its first frame')||message.includes('Layout did not finish preparing');
       if(firstFrameTimeout&&frameRetries++===0){
@@ -111,6 +141,7 @@ export class PreparedScenes {
       }
       if(!message.includes('Loaded set texture budget reached'))throw error;
       if(revision)await this.send({op:'cancel',outputId:spec.target.id,revision}).catch(()=>{});
+      if(abort()){entry.state={state:'queued'};return entry;}
       this.warmingBlocked.add(spec.target.id);
       if(speculative()){this.log('deferred full cache '+entry.key);entry.state={state:'queued'};return entry;}
       if(budgetRetries++>0)throw error;
@@ -120,40 +151,64 @@ export class PreparedScenes {
       const pinned=[...this.entries.values()].filter(e=>e.pins>0&&e.spec.target.id===spec.target.id),keys=pinned.map(e=>e.key);
       const retained=[...(this.inventory??[]),...this.active.values(),...pinned.map(e=>e.spec)];
       const assetIds=[...new Set(retained.filter(s=>s.target.id===spec.target.id).flatMap(s=>Object.keys(s.projection.assets??{})))];
-      await this.send({op:'retain',outputId:spec.target.id,keys,assetIds});this.retained.delete(spec.target.id);
+      await this.send({op:'retain',outputId:spec.target.id,keys,assetIds});if(abort()){entry.state={state:'queued'};return entry;}this.retained.delete(spec.target.id);
       for(const other of this.entries.values())if(other.spec.target.id===spec.target.id&&!keys.includes(other.key)&&other.state.state==='ready')other.state={state:'queued'};
       this.log('released cold snapshots for '+entry.key);
      }
     }
 
-   }catch(e){if(revision)await this.send({op:'cancel',outputId:spec.target.id,revision}).catch(()=>{});entry.plan=undefined;entry.state={state:'error',error:String(e)};throw e;}
-   finally{entry.promise=undefined;this.changed();}
-  },entry);return entry.promise;
+   }catch(e){if(epoch!==this.roomEpoch){entry.state={state:'queued'};return entry;}if(revision)await this.send({op:'cancel',outputId:spec.target.id,revision}).catch(()=>{});if(epoch!==this.roomEpoch){entry.state={state:'queued'};return entry;}entry.plan=undefined;entry.state={state:'error',error:String(e)};throw e;}
+   finally{this.changed();}
+  },entry);
+  entry.promise=pending;
+  const finished=()=>{if(entry.promise===pending)entry.promise=undefined;};void pending.then(finished,finished);
+  return pending;
  }
  async take(spec:SceneSpec,run:(entry:Entry,revision:number)=>Promise<void>){
   return this.takeGroup([spec],entries=>run(entries[0].entry,entries[0].revision));
  }
  /** Pin and prepare every required output before either can be activated. */
  async takeGroup(specs:SceneSpec[],run:(entries:{entry:Entry;revision:number}[])=>Promise<void>){
+  const epoch=this.roomEpoch,check=()=>{if(epoch!==this.roomEpoch||this.disposed)throw Error('Room generation changed; prepare the set again');};
   const pinned=specs.map(s=>this.get(s));pinned.forEach(e=>e.pins++);
+  // Reserve the queue across await boundaries. Otherwise completing a retain
+  // or the first orientation lets pump start unrelated speculative decoding
+  // before this take can enqueue its next foreground step.
+  ++this.foregroundTakes;
+  for(const job of this.jobs)if(job.entry&&pinned.includes(job.entry)){job.priority=100;job.preemptible=false;}
+  this.preemptBackground();
   try{
    // Cold preparation needs room first. A ready take allocates no scene: do
    // not put unrelated eviction/destruction in front of its presentation.
    // The finally trim reconciles inventory after the new frame is confirmed.
-   if(!pinned.every(entry=>entry.state.state==='ready'||entry.promise))await this.trim(100,specs);
+   if(!pinned.every(entry=>entry.state.state==='ready'||entry.promise))await this.trim(100,specs,new Set(specs.map(s=>s.target.id)));
+   check();
+   const expired=Symbol('Prepared scene expired');
+   for(let recovery=0;recovery<2;recovery++){
    const entries:Entry[]=[];
-   for(const spec of specs){let entry=await this.ensure(spec,100);while(entry.state.state==='queued')entry=await this.ensure(spec,100);entries.push(entry);}
-   return await this.enqueue(100,false,async()=>{
+   for(const spec of specs){check();let entry=await this.ensure(spec,100);check();while(entry.state.state==='queued'){entry=await this.ensure(spec,100);check();}entries.push(entry);}
+   const result=await this.enqueue(100,false,async()=>{
+    check();
     for(const [i,entry]of entries.entries()){
      const status=await this.send({op:'status',outputId:specs[i].target.id});
-     if(!status.cachedKeys?.includes(entry.key)){entry.state={state:'queued'};this.changed();throw Error('Prepared scene expired; retry loading');}
+     check();
+     if(!status.cachedKeys?.includes(entry.key)){entry.state={state:'queued'};this.changed();return expired;}
      this.revision=Math.max(this.revision,status.preparedRevision,status.renderedRevision);
     }
     const result=await run(entries.map(entry=>({entry,revision:++this.revision})));
+    check();
     specs.forEach(spec=>this.active.set(spec.target.id,spec));return result;
    });
+   if(result!==expired)return result;
+   // A native cache can be invalidated independently of a ready UI row.
+   // Re-prepare once and validate again; never publish a missing scene or
+   // retry activation errors such as replaced captures or stale signatures.
+   this.log('revalidate expired selection');
+   }
+   throw Error('Prepared scene expired; retry loading');
   }finally{
    pinned.forEach(e=>e.pins--);
+   --this.foregroundTakes;void this.pump();
    clearTimeout(this.trimTimer);
    this.trimTimer=setTimeout(()=>void this.trim().catch(()=>{}),0);
   }
@@ -165,7 +220,7 @@ export class PreparedScenes {
  /** Keep authored designs plus the latest presented snapshot per output. Text,
   * scores and segment changes can otherwise accumulate unbounded native scenes.
   * In-flight takes remain pinned; native program ownership protects live frames. */
- private async trim(priority=10,replacing:SceneSpec[]=[]){
+ private async trim(priority=10,replacing:SceneSpec[]=[],onlyOutputs?:ReadonlySet<string>){
   if(!this.inventory||this.disposed)return;
   // Native program ownership keeps the presented frame alive independently of
   // the reusable cache. An updated version of that same layout may replace its
@@ -174,6 +229,7 @@ export class PreparedScenes {
   const specs=[...this.inventory,...cachedActive()],wanted=new Set(specs.map(spec=>this.get(spec).key));
   for(const [key,entry]of this.entries)if(!wanted.has(key)&&!entry.promise&&!entry.pins)this.entries.delete(key);
   for(const outputId of new Set([...this.outputs,...specs.map(s=>s.target.id)])){
+   if(onlyOutputs&&!onlyOutputs.has(outputId))continue;
    await this.enqueue(priority,false,async()=>{
     // Recompute inside the queued task: another output can finish a take while
     // this trim waits, and its newly active scene must remain retained.
@@ -187,7 +243,7 @@ export class PreparedScenes {
    }).catch(()=>{});
   }
  }
- reset(){this.warmingBlocked.clear();this.active.clear();this.sentAssets.clear();this.retained.clear();this.retentionEpoch++;this.abort=true;for(const e of this.entries.values())e.state={state:'queued'};this.changed();}
+ reset(){this.roomEpoch++;this.warmingBlocked.clear();this.active.clear();this.sentAssets.clear();this.retained.clear();this.retentionEpoch++;this.abort=true;for(const e of this.entries.values())e.state={state:'queued'};this.changed();}
  invalidate(spec:SceneSpec){const entry=this.get(spec);entry.state={state:'queued'};entry.plan=undefined;this.changed();}
  invalidateOutput(outputId:string){this.warmingBlocked.delete(outputId);this.sentAssets.delete(outputId);this.retained.delete(outputId);this.retentionEpoch++;for(const e of this.entries.values())if(e.spec.target.id===outputId)e.state={state:'queued'};this.changed();}
  retry(){for(const e of this.entries.values())if(e.state.state==='error')e.state={state:'queued'};this.changed();}

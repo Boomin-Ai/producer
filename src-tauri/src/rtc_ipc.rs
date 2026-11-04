@@ -84,49 +84,76 @@ pub async fn room_command(
 ) -> Option<EngineResult<serde_json::Value>> {
     #[cfg(feature = "guest-rtc-pilot")]
     if pilot_origin_matches(api) && runtime_enabled() {
-        if crate::ipc::api_root_of(api).trim_end_matches('/')
-            == crate::boomin::DEFAULT_BOOMIN_API_ROOT
-        {
-            let owner = state.rtc_host.lock().await;
-            if owner
-                .as_ref()
-                .is_none_or(|host| room_id.is_some_and(|room| room != host.room_id()))
-            {
-                // Unselected legacy rooms keep their existing controls. The API
-                // rejects unfenced writes to selected LiveKit rooms itself.
-                return None;
-            }
-        }
-        let result = async {
-            let command = serde_json::from_value(command)
-                .map_err(|_| EngineError::Other("Invalid native RTC room command".into()))?;
-            #[cfg(debug_assertions)]
-            eprintln!("Native RTC room control dispatched");
-            let owner =
-                tokio::time::timeout(std::time::Duration::from_secs(5), state.rtc_host.lock())
+        let production = crate::ipc::api_root_of(api).trim_end_matches('/')
+            == crate::boomin::DEFAULT_BOOMIN_API_ROOT;
+        let expected_epoch = state
+            .rtc_host_epoch
+            .load(std::sync::atomic::Ordering::Acquire);
+        let (owner, waited) = match state.rtc_host.try_lock() {
+            Ok(owner) => (owner, false),
+            Err(_) => {
+                match tokio::time::timeout(std::time::Duration::from_secs(5), state.rtc_host.lock())
                     .await
-                    .map_err(|_| {
-                        EngineError::Other(
+                {
+                    Ok(owner) => (owner, true),
+                    Err(_) => {
+                        return Some(Err(EngineError::Other(
                             "Native guest controls are busy; refresh room state and try again"
                                 .into(),
-                        )
-                    })?;
-            #[cfg(debug_assertions)]
-            eprintln!("Native RTC room control owner acquired");
-            let host = owner.as_ref().ok_or_else(|| {
-                EngineError::Other(
-                    "Start the native guest room before changing guest controls".into(),
-                )
-            })?;
-            if room_id.is_some_and(|room| room != host.room_id()) {
-                return Err(EngineError::Other("Native RTC room binding changed".into()));
+                        )))
+                    }
+                }
             }
-            host.room_command(command)
-                .await
-                .map_err(|e| EngineError::Other(e.into()))
+        };
+        if state
+            .rtc_host_epoch
+            .load(std::sync::atomic::Ordering::Acquire)
+            != expected_epoch
+        {
+            return Some(Err(EngineError::Other(
+                "Native RTC room binding changed".into(),
+            )));
         }
-        .await;
-        return Some(result);
+        if production
+            && owner
+                .as_ref()
+                .is_none_or(|host| room_id.is_some_and(|room| room != host.room_id()))
+        {
+            // Decide fallback and capture the immutable sender under the same
+            // bounded lock. A closing owner must never select legacy writes.
+            return if waited {
+                Some(Err(EngineError::Other(
+                    "Native RTC room binding changed".into(),
+                )))
+            } else {
+                None
+            };
+        }
+        let sender = match owner.as_ref() {
+            Some(host) if room_id.is_none_or(|room| room == host.room_id()) => {
+                host.command_sender()
+            }
+            _ => {
+                return Some(Err(EngineError::Other(
+                    "Native RTC room binding changed".into(),
+                )))
+            }
+        };
+        drop(owner);
+        let command = match serde_json::from_value(command) {
+            Ok(command) => command,
+            Err(_) => {
+                return Some(Err(EngineError::Other(
+                    "Invalid native RTC room command".into(),
+                )))
+            }
+        };
+        return Some(
+            sender
+                .room_command(command)
+                .await
+                .map_err(|e| EngineError::Other(e.into())),
+        );
     }
     let _ = (state, api, room_id, command);
     None
@@ -178,6 +205,9 @@ pub async fn live_rtc_start(
                 "A native guest room is already owned".into(),
             ));
         }
+        state
+            .rtc_host_epoch
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
         *owner = Some(
             crate::rtc_owner::HostOwner::start_scene(control)
                 .await
@@ -196,12 +226,15 @@ pub async fn live_rtc_start(
 pub async fn stop_host(state: &State<'_, AppState>) -> EngineResult<()> {
     #[cfg(feature = "guest-rtc-pilot")]
     {
-        let mut owner = state.rtc_host.lock().await;
-        if let Some(mut host) = owner.take() {
-            host.close()
-                .await
-                .map_err(|e| EngineError::Other(e.into()))?;
-        }
+        crate::rtc_owner::shutdown::retire(
+            state.rtc_host.clone(),
+            None,
+            |_| true,
+            |mut host| async move { host.close().await },
+            Some(crate::performance_trace::native_stage),
+        )
+        .await
+        .map_err(|e| EngineError::Other(e.into()))?;
     }
     #[cfg(not(feature = "guest-rtc-pilot"))]
     let _ = state;
@@ -212,19 +245,39 @@ pub async fn live_rtc_stop(
     state: State<'_, AppState>,
     room_id: Option<String>,
 ) -> EngineResult<()> {
+    let started = std::time::Instant::now();
+    crate::performance_trace::native_stage(
+        "native.rtc.stop.entry",
+        std::time::Duration::ZERO,
+        None,
+    );
     #[cfg(feature = "guest-rtc-pilot")]
     if let Some(room) = room_id {
-        let mut owner = state.rtc_host.lock().await;
-        if owner.as_ref().is_some_and(|host| host.room_id() == room) {
-            if let Some(mut host) = owner.take() {
-                return host.close().await.map_err(|e| EngineError::Other(e.into()));
-            }
-        }
-        return Ok(());
+        let result = crate::rtc_owner::shutdown::retire(
+            state.rtc_host.clone(),
+            Some(state.rtc_host_epoch.clone()),
+            move |host| host.room_id() == room,
+            |mut host| async move { host.close().await },
+            Some(crate::performance_trace::native_stage),
+        )
+        .await
+        .map_err(|e| EngineError::Other(e.into()));
+        crate::performance_trace::native_stage(
+            "native.rtc.stop.reply",
+            started.elapsed(),
+            Some(result.is_ok()),
+        );
+        return result;
     }
     #[cfg(not(feature = "guest-rtc-pilot"))]
     let _ = room_id;
-    stop_host(&state).await
+    let result = stop_host(&state).await;
+    crate::performance_trace::native_stage(
+        "native.rtc.stop.reply",
+        started.elapsed(),
+        Some(result.is_ok()),
+    );
+    result
 }
 
 /// Explicit local development bootstrap. Never compiled into release builds,
