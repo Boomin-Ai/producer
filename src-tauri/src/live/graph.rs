@@ -17,8 +17,8 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
-use crate::performance_trace::{SyncMicPacketObservation, SyncMicTrace};
 use super::ffi;
+use crate::performance_trace::{SyncMicPacketObservation, SyncMicTrace};
 
 /// Remote voices reach the host's playback device and the program mix.
 /// Bus 1 is the stage return: keeping remotes off it prevents self-return.
@@ -1643,7 +1643,15 @@ impl SceneGraph {
         id: &str,
         spec: &ExtraSpec,
         visible: bool,
-    ) -> Result<(*mut ffi::obs_source_t, &'static str, Option<String>, Option<SyncMicTrace>), String> {
+    ) -> Result<
+        (
+            *mut ffi::obs_source_t,
+            &'static str,
+            Option<String>,
+            Option<SyncMicTrace>,
+        ),
+        String,
+    > {
         let name = CString::new(id).map_err(|_| "bad id")?;
         let mut device: Option<String> = None;
         unsafe {
@@ -1855,7 +1863,11 @@ impl SceneGraph {
             let src =
                 ffi::obs_source_create(tid.as_ptr(), name.as_ptr(), settings, ptr::null_mut());
             if let Some(trace) = mic_trace {
-                trace.stage("native.mic.sync.create.complete", create_started.elapsed(), Some(!src.is_null()));
+                trace.stage(
+                    "native.mic.sync.create.complete",
+                    create_started.elapsed(),
+                    Some(!src.is_null()),
+                );
             }
             if !visible && std::env::var_os("PRODUCER_TRACE_ROOM_OPEN").is_some() {
                 eprintln!(
@@ -1890,7 +1902,11 @@ impl SceneGraph {
         }
         let result = self.attach_extra_inner(id, label, spec, visible, src, kind, device, trace);
         if let (Some(trace), Some(started)) = (trace, started) {
-            trace.stage("native.mic.sync.attach.complete", started.elapsed(), Some(result.is_ok()));
+            trace.stage(
+                "native.mic.sync.attach.complete",
+                started.elapsed(),
+                Some(result.is_ok()),
+            );
         }
         result
     }
@@ -1971,7 +1987,11 @@ impl SceneGraph {
             if metered(kind) {
                 if !peak_slot_register(src, trace) {
                     if let Some(trace) = trace {
-                        trace.stage("native.mic.sync.packet_probe_unavailable", Duration::ZERO, Some(false));
+                        trace.stage(
+                            "native.mic.sync.packet_probe_unavailable",
+                            Duration::ZERO,
+                            Some(false),
+                        );
                     }
                 }
                 if kind == "mic" {
