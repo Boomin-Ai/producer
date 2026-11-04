@@ -1035,7 +1035,9 @@ impl RoomProgram {
                 .map(|s| s.0)
                 .or_else(|| {
                     let source = b.captures.get(id)?.0 .0 as usize;
-                    self.capture_placements.get(&source).map(|placement| placement.0)
+                    self.capture_placements
+                        .get(&source)
+                        .map(|placement| placement.0)
                 })
                 .ok_or_else(|| format!("Source {id} is unavailable"))
         })?;
@@ -1231,10 +1233,11 @@ impl RoomProgram {
     ) {
         let old_key = old as usize;
         if let Some(placement) = self.capture_placements.remove(&old_key) {
-            if let Some(replacement) = replacement.filter(|source| {
-                ffi::producer_source_placement_retarget(placement.0, *source)
-            }) {
-                self.capture_placements.insert(replacement as usize, placement);
+            if let Some(replacement) = replacement
+                .filter(|source| ffi::producer_source_placement_retarget(placement.0, *source))
+            {
+                self.capture_placements
+                    .insert(replacement as usize, placement);
             } else {
                 ffi::producer_source_placement_retarget(placement.0, ptr::null_mut());
             }
@@ -1242,14 +1245,21 @@ impl RoomProgram {
     }
 
     pub(super) fn invalidate_capture(&mut self, old: *mut ffi::obs_source_t) {
-        let uses_old = |draft: &Draft| draft.captures.values().any(|source| *source == old as usize);
+        let uses_old = |draft: &Draft| {
+            draft
+                .captures
+                .values()
+                .any(|source| *source == old as usize)
+        };
         self.bank.retain(|_, (_, draft)| !uses_old(draft));
         if self.draft.as_ref().is_some_and(|draft| uses_old(draft)) {
             self.preparing_key = None;
         }
-        if self.building.as_ref().is_some_and(|build| {
-            build.captures.values().any(|capture| capture.0 .0 == old)
-        }) {
+        if self
+            .building
+            .as_ref()
+            .is_some_and(|build| build.captures.values().any(|capture| capture.0 .0 == old))
+        {
             self.building = None;
             self.preparing_key = None;
         }

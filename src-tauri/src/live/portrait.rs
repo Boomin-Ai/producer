@@ -364,7 +364,10 @@ impl Portrait {
                 .room_items
                 .entry(state.id.clone())
                 .or_insert_with(|| {
-                    (super::graph::add_scene_item(self.room_scene, src, false, set_item), src as usize)
+                    (
+                        super::graph::add_scene_item(self.room_scene, src, false, set_item),
+                        src as usize,
+                    )
                 })
                 .0;
             if item.is_null() {
@@ -447,7 +450,11 @@ impl Portrait {
         source: *mut ffi::obs_source_t,
         replacing: bool,
     ) {
-        if self.room_items.get(id).is_some_and(|(_, old)| *old == source as usize) {
+        if self
+            .room_items
+            .get(id)
+            .is_some_and(|(_, old)| *old == source as usize)
+        {
             let (item, _) = self.room_items.remove(id).unwrap();
             ffi::obs_sceneitem_remove(item);
             if !replacing {

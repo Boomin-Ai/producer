@@ -212,7 +212,10 @@ fn reset_video(module: &str, height: u32, fps: u32) -> Result<(), i32> {
     let started = Instant::now();
     let rc = unsafe { ffi::obs_reset_video(&mut ovi) };
     if std::env::var_os("PRODUCER_TRACE_ROOM_OPEN").is_some() {
-        eprintln!("[room-open] video_reset module={module} ms={} rc={rc}", started.elapsed().as_millis());
+        eprintln!(
+            "[room-open] video_reset module={module} ms={} rc={rc}",
+            started.elapsed().as_millis()
+        );
     }
     if rc == 0 {
         Ok(())
@@ -717,14 +720,20 @@ fn defer_room_microphones(restore: &mut graph::RoomRestore, started: Instant) ->
     // Leave invalid plans to the ordinary restore path, where they produce the
     // same validation errors or warnings as before.
     let mut ids = std::collections::HashSet::new();
-    if restore.extras.len() > 128 || restore.changes.len() > 128
+    if restore.extras.len() > 128
+        || restore.changes.len() > 128
         || restore.extras.iter().any(|extra| {
-            extra.id == "overlay" || extra.id.contains('\0')
-                || restore.keep_ids.contains(&extra.id) || !ids.insert(extra.id.as_str())
+            extra.id == "overlay"
+                || extra.id.contains('\0')
+                || restore.keep_ids.contains(&extra.id)
+                || !ids.insert(extra.id.as_str())
         })
         || restore.changes.iter().any(|change| {
             let p = &change.patch;
-            [p.x, p.y, p.w, p.h, p.rot].into_iter().flatten().any(|value| !value.is_finite())
+            [p.x, p.y, p.w, p.h, p.rot]
+                .into_iter()
+                .flatten()
+                .any(|value| !value.is_finite())
         })
     {
         return Vec::new();
@@ -733,15 +742,24 @@ fn defer_room_microphones(restore: &mut graph::RoomRestore, started: Instant) ->
     let mut others = Vec::new();
     for extra in std::mem::take(&mut restore.extras) {
         if matches!(extra.spec, graph::ExtraSpec::Mic { .. }) {
-            let change = restore.changes.iter().rev().find(|change| change.id == extra.id)
-                .cloned().unwrap_or_else(|| graph::SceneChange {
+            let change = restore
+                .changes
+                .iter()
+                .rev()
+                .find(|change| change.id == extra.id)
+                .cloned()
+                .unwrap_or_else(|| graph::SceneChange {
                     id: extra.id.clone(),
                     patch: graph::TransformPatch::default(),
                     muted: None,
                 });
             microphones.push(RoomMicStart {
-                extra, change, cancelled: Arc::new(AtomicBool::new(false)),
-                started, stage: RoomMicStage::Queued, volume: None,
+                extra,
+                change,
+                cancelled: Arc::new(AtomicBool::new(false)),
+                started,
+                stage: RoomMicStage::Queued,
+                volume: None,
             });
         } else {
             others.push(extra);
@@ -760,7 +778,9 @@ fn room_mic_status(snapshot: &mut Snapshot, microphones: &[RoomMicStart]) {
             snapshot.room_mic_starting_ids.push(mic.extra.id.clone());
         }
         if mic.expects_audio() {
-            if matches!(mic.stage, RoomMicStage::Failed) || mic.started.elapsed() >= Duration::from_secs(8) {
+            if matches!(mic.stage, RoomMicStage::Failed)
+                || mic.started.elapsed() >= Duration::from_secs(8)
+            {
                 snapshot.room_mic_failed = true;
             } else {
                 snapshot.room_mic_pending = true;
@@ -791,7 +811,8 @@ mod room_mic_tests {
                 {"id":"mic-a","patch":{"visible":true},"muted":false},
                 {"id":"mic-b","patch":{"visible":true},"muted":true}
             ]
-        })).unwrap();
+        }))
+        .unwrap();
         let mut microphones = defer_room_microphones(&mut restore, Instant::now());
         assert_eq!(restore.extras.len(), 1);
         let token = microphones[0].cancelled.clone();
@@ -1527,7 +1548,11 @@ impl LiveHandle {
     ) -> Result<graph::RoomRestoreResult, String> {
         let (tx, rx) = mpsc::channel();
         self.cmd
-            .send(Command::RestoreRoom { queued_at: Instant::now(), restore, reply: tx })
+            .send(Command::RestoreRoom {
+                queued_at: Instant::now(),
+                restore,
+                reply: tx,
+            })
             .map_err(|e| e.to_string())?;
         // Multiple cold browser/capture creations can take longer than a cut.
         rx.recv_timeout(Duration::from_secs(120))
@@ -2520,7 +2545,8 @@ impl LiveProxy {
         self.cmd
             .send(Command::GoLive { config, reply })
             .map_err(|e| e.to_string())?;
-        accepted.recv_timeout(Duration::from_secs(5))
+        accepted
+            .recv_timeout(Duration::from_secs(5))
             .map_err(|_| "The engine did not acknowledge Go Live".to_string())?
     }
     pub fn stop_live(&self) -> Result<(), String> {

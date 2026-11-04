@@ -600,10 +600,14 @@ pub(super) unsafe fn room_item_order(
     desired: i32,
     set_item: Option<*mut ffi::obs_sceneitem_t>,
 ) -> i32 {
-    let Some(set_item) = set_item else { return desired.max(0); };
+    let Some(set_item) = set_item else {
+        return desired.max(0);
+    };
     let set_order = ffi::obs_sceneitem_get_order_position(set_item);
     let item_order = ffi::obs_sceneitem_get_order_position(item);
-    desired.max(0).min((set_order - i32::from(item_order < set_order)).max(0))
+    desired
+        .max(0)
+        .min((set_order - i32::from(item_order < set_order)).max(0))
 }
 
 impl Default for SourcesState {
@@ -1151,17 +1155,28 @@ impl SceneGraph {
         replacement: Option<*mut ffi::obs_source_t>,
     ) {
         // No render can observe one orientation retaining the old source.
-        if self.sets_v2.iter().chain(self.sets_v2_portrait.iter())
+        if self
+            .sets_v2
+            .iter()
+            .chain(self.sets_v2_portrait.iter())
             .any(|program| program.has_capture_placement(old))
         {
             ffi::obs_enter_graphics();
-            for program in self.sets_v2.iter_mut().chain(self.sets_v2_portrait.iter_mut()) {
+            for program in self
+                .sets_v2
+                .iter_mut()
+                .chain(self.sets_v2_portrait.iter_mut())
+            {
                 program.retarget_capture(old, replacement);
             }
             ffi::obs_leave_graphics();
         }
         // Discard stale prepared scenes outside the render-critical section.
-        for program in self.sets_v2.iter_mut().chain(self.sets_v2_portrait.iter_mut()) {
+        for program in self
+            .sets_v2
+            .iter_mut()
+            .chain(self.sets_v2_portrait.iter_mut())
+        {
             program.invalidate_capture(old);
         }
     }
@@ -1174,7 +1189,10 @@ impl SceneGraph {
         if id == "overlay" {
             overlay
         } else {
-            extras.iter().find(|item| item.id == id && item.kind != "mic").map(|item| item.src)
+            extras
+                .iter()
+                .find(|item| item.id == id && item.kind != "mic")
+                .map(|item| item.src)
         }
         .ok_or_else(|| format!("Room source {id} is unavailable for Set output"))
     }
@@ -1215,7 +1233,9 @@ impl SceneGraph {
             for change in apply.changes {
                 // Validated above; native scene locking prevents a render
                 // observing intermediate geometry or stacking.
-                let _ = apply.graph.update_source_transform(&change.id, &change.patch);
+                let _ = apply
+                    .graph
+                    .update_source_transform(&change.id, &change.patch);
                 if let Some(muted) = change.muted {
                     let _ = apply.graph.set_source_audio(&change.id, None, Some(muted));
                 }
@@ -1277,7 +1297,10 @@ impl SceneGraph {
                 ffi::obs_sceneitem_set_crop(item, &c);
             }
             if let Some(z) = t.z {
-                ffi::obs_sceneitem_set_order_position(item, room_item_order(item, z, self.set_item()));
+                ffi::obs_sceneitem_set_order_position(
+                    item,
+                    room_item_order(item, z, self.set_item()),
+                );
             }
             if let Some(v) = t.visible {
                 let src = ffi::obs_sceneitem_get_source(item);
@@ -1814,7 +1837,10 @@ impl SceneGraph {
             let src =
                 ffi::obs_source_create(tid.as_ptr(), name.as_ptr(), settings, ptr::null_mut());
             if !visible && std::env::var_os("PRODUCER_TRACE_ROOM_OPEN").is_some() {
-                eprintln!("[room-open] obs_source_create kind={kind} ms={}", create_started.elapsed().as_millis());
+                eprintln!(
+                    "[room-open] obs_source_create kind={kind} ms={}",
+                    create_started.elapsed().as_millis()
+                );
             }
             ffi::obs_data_release(settings);
             if src.is_null() {
@@ -1975,7 +2001,9 @@ impl SceneGraph {
         let old = self.extras.iter().position(|item| item.id == id);
         let (source, kind, device) = Self::create_extra_source(id, spec, false)?;
         if let Err(error) = super::filters::restore(source, &saved_filters) {
-            unsafe { ffi::obs_source_release(source); }
+            unsafe {
+                ffi::obs_source_release(source);
+            }
             return Err(error);
         }
         // The old source stays attached until its replacement is created,
@@ -2034,12 +2062,18 @@ impl SceneGraph {
         let item = added.item;
         let patch = change.as_ref().map(|change| &change.patch);
         let visible = patch.and_then(|patch| patch.visible).unwrap_or(false);
-        let muted = change.as_ref().and_then(|change| change.muted).unwrap_or(true);
+        let muted = change
+            .as_ref()
+            .and_then(|change| change.muted)
+            .unwrap_or(true);
         // Change the audio item's order and visibility directly to keep a live
         // Set active while its microphone joins the room scene.
         unsafe {
             if let Some(z) = patch.and_then(|patch| patch.z) {
-                ffi::obs_sceneitem_set_order_position(item, room_item_order(item, z, self.set_item()));
+                ffi::obs_sceneitem_set_order_position(
+                    item,
+                    room_item_order(item, z, self.set_item()),
+                );
             }
             ffi::obs_sceneitem_set_visible(item, visible);
         }
@@ -2050,7 +2084,9 @@ impl SceneGraph {
     pub fn restore_room(&mut self, restore: RoomRestore) -> Result<RoomRestoreResult, String> {
         let tracing = std::env::var_os("PRODUCER_TRACE_ROOM_OPEN").is_some();
         let trace = |phase: &str, started: Instant| {
-            if tracing { eprintln!("[room-open] {phase}_ms={}", started.elapsed().as_millis()); }
+            if tracing {
+                eprintln!("[room-open] {phase}_ms={}", started.elapsed().as_millis());
+            }
         };
         let teardown = Instant::now();
         // Validate before teardown. A malformed document cannot partially go on air.
@@ -2090,14 +2126,24 @@ impl SceneGraph {
             let result = self
                 .add_extra_visible(&extra.id, &extra.label, &extra.spec, false)
                 .and_then(|()| {
-                    if tracing { eprintln!("[room-open] source_index={index} create_ms={}", create.elapsed().as_millis()); }
+                    if tracing {
+                        eprintln!(
+                            "[room-open] source_index={index} create_ms={}",
+                            create.elapsed().as_millis()
+                        );
+                    }
                     let filters = Instant::now();
                     let result = super::filters::restore(
                         self.source_by_id(&extra.id)
                             .ok_or("Restored source missing")?,
                         &extra.filters,
                     );
-                    if tracing { eprintln!("[room-open] source_index={index} filters_ms={}", filters.elapsed().as_millis()); }
+                    if tracing {
+                        eprintln!(
+                            "[room-open] source_index={index} filters_ms={}",
+                            filters.elapsed().as_millis()
+                        );
+                    }
                     result
                 });
             if let Err(error) = result {
@@ -3257,29 +3303,52 @@ mod scene_restoration_tests {
                 let color = PIXEL.load(Ordering::SeqCst);
                 if [0, 8, 16].into_iter().all(|shift| {
                     let actual = (color >> shift) & 255;
-                    if (expected >> shift) & 255 > 0 { actual > 150 } else { actual < 70 }
+                    if (expected >> shift) & 255 > 0 {
+                        actual > 150
+                    } else {
+                        actual < 70
+                    }
                 }) {
                     return;
                 }
                 std::thread::sleep(Duration::from_millis(10));
             }
-            panic!("Expected {expected:06x}, got {:06x}", PIXEL.load(Ordering::SeqCst));
+            panic!(
+                "Expected {expected:06x}, got {:06x}",
+                PIXEL.load(Ordering::SeqCst)
+            );
         }
         fn color(color: &str) -> ExtraSpec {
-            ExtraSpec::Color { color: color.into() }
+            ExtraSpec::Color {
+                color: color.into(),
+            }
         }
         let temp = std::env::temp_dir().join(format!("producer-set-edits-{}", std::process::id()));
         let report = super::super::engine::bootstrap_with_config(&temp);
         assert!(report.ok, "native bootstrap: {report:?}");
         let mut graph = SceneGraph::create().unwrap();
         let (w, h) = SceneGraph::base_size();
-        let scale = Scale { format: 7, width: w as u32, height: h as u32, range: 2, colorspace: 2 };
+        let scale = Scale {
+            format: 7,
+            width: w as u32,
+            height: h as u32,
+            range: 2,
+            colorspace: 2,
+        };
         unsafe {
-            ffi::obs_add_raw_video_callback(&scale as *const _ as *const c_void, frame, ptr::null_mut());
+            ffi::obs_add_raw_video_callback(
+                &scale as *const _ as *const c_void,
+                frame,
+                ptr::null_mut(),
+            );
         }
         graph.add_extra("room", "Room", &color("#ff0000")).unwrap();
-        graph.create_set_source("background", "Set background", &color("#0000ff")).unwrap();
-        graph.create_set_source("capture", "Set capture", &color("#00ff00")).unwrap();
+        graph
+            .create_set_source("background", "Set background", &color("#0000ff"))
+            .unwrap();
+        graph
+            .create_set_source("capture", "Set capture", &color("#00ff00"))
+            .unwrap();
         let generation = graph.presentation_generation;
         let plan: Plan = serde_json::from_value(json!({
             "definitionId":"edit-proof","definitionRevision":1,"instanceId":"edit-proof",
@@ -3292,31 +3361,74 @@ mod scene_restoration_tests {
             ]},
             "resources":["background","capture"]
         })).unwrap();
-        let mut status = graph.sets_v2(Action::Prepare { generation, output_id: None, revision: 1, plan }).unwrap();
+        let mut status = graph
+            .sets_v2(Action::Prepare {
+                generation,
+                output_id: None,
+                revision: 1,
+                plan,
+            })
+            .unwrap();
         let ready_deadline = Instant::now() + Duration::from_secs(3);
         while !status.ready && Instant::now() < ready_deadline {
             std::thread::sleep(Duration::from_millis(10));
-            status = graph.sets_v2(Action::Status { generation, output_id: None }).unwrap();
+            status = graph
+                .sets_v2(Action::Status {
+                    generation,
+                    output_id: None,
+                })
+                .unwrap();
         }
         assert!(status.ready);
-        graph.sets_v2(Action::Take { generation, output_id: None, revision: 1, duration_ms: 0., mode: "dissolve".into() }).unwrap();
+        graph
+            .sets_v2(Action::Take {
+                generation,
+                output_id: None,
+                revision: 1,
+                duration_ms: 0.,
+                mode: "dissolve".into(),
+            })
+            .unwrap();
         await_pixel(0x00ff00);
         FALLBACK_FRAMES.store(0, Ordering::SeqCst);
-        graph.add_extra("added", "Added", &color("#ff0000")).unwrap();
-        graph.set_transform("room", &TransformPatch { z: Some(i32::MAX), ..Default::default() }).unwrap();
+        graph
+            .add_extra("added", "Added", &color("#ff0000"))
+            .unwrap();
+        graph
+            .set_transform(
+                "room",
+                &TransformPatch {
+                    z: Some(i32::MAX),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
         graph.apply_scene(&[]).unwrap();
-        assert!(graph.add_extra("added", "Duplicate", &color("#ff0000")).is_err());
-        assert!(graph.replace_extra("capture", "Invalid", &color("bad"), None).is_err());
+        assert!(graph
+            .add_extra("added", "Duplicate", &color("#ff0000"))
+            .is_err());
+        assert!(graph
+            .replace_extra("capture", "Invalid", &color("bad"), None)
+            .is_err());
         await_pixel(0x00ff00);
         let old = unsafe { ffi::obs_source_get_ref(graph.source_by_id("capture").unwrap()) };
-        graph.replace_extra("capture", "Set replacement", &color("#00ffff"), None).unwrap();
+        graph
+            .replace_extra("capture", "Set replacement", &color("#00ffff"), None)
+            .unwrap();
         await_pixel(0x00ffff);
         assert!(!unsafe { ffi::obs_source_showing(old) });
-        unsafe { ffi::obs_source_release(old); }
+        unsafe {
+            ffi::obs_source_release(old);
+        }
         graph.remove_extra("capture").unwrap();
         graph.remove_extra("added").unwrap();
         await_pixel(0x0000ff);
-        let status = graph.sets_v2(Action::Status { generation, output_id: None }).unwrap();
+        let status = graph
+            .sets_v2(Action::Status {
+                generation,
+                output_id: None,
+            })
+            .unwrap();
         assert_eq!(status.rendered_revision, 1);
         assert_eq!(FALLBACK_FRAMES.load(Ordering::SeqCst), 0);
         graph.clear_room().unwrap();
@@ -3671,7 +3783,9 @@ impl SceneGraph {
                     captures,
                     info.base_width as f32,
                     info.base_height as f32,
-                    self.sets_v2_portrait.as_ref().map(|program| program.scene_item()),
+                    self.sets_v2_portrait
+                        .as_ref()
+                        .map(|program| program.scene_item()),
                 );
             }
         }
@@ -3905,7 +4019,10 @@ impl SceneGraph {
         let overlay = self.overlay.as_ref().map(|(_, source, _)| *source);
         let extras = &self.extras;
         unsafe {
-            self.sets_v2.as_mut().unwrap().dispatch(action, |id| Self::set_capture(overlay, extras, id))
+            self.sets_v2
+                .as_mut()
+                .unwrap()
+                .dispatch(action, |id| Self::set_capture(overlay, extras, id))
         }
     }
     pub fn warm_presentation(

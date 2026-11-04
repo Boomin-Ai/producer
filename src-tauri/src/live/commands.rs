@@ -621,18 +621,27 @@ pub async fn live_restore_room(
 ) -> EngineResult<serde_json::Value> {
     let started = std::time::Instant::now();
     let trace = std::env::var_os("PRODUCER_TRACE_ROOM_OPEN").is_some();
-    if trace { eprintln!("[room-open] ipc_received"); }
+    if trace {
+        eprintln!("[room-open] ipc_received");
+    }
     crate::rtc_ipc::stop_host(&state).await?;
-    if trace { eprintln!("[room-open] rtc_stop_ms={}", started.elapsed().as_millis()); }
+    if trace {
+        eprintln!("[room-open] rtc_stop_ms={}", started.elapsed().as_millis());
+    }
     use tauri::Manager;
     // The native engine reply can wait on an OS capture service. Keep that
     // synchronous wait off the async runtime used by other room requests.
     let result = tauri::async_runtime::spawn_blocking(move || {
-        app.state::<AppState>().live.restore_room(restore).map_err(EngineError::Other)
+        app.state::<AppState>()
+            .live
+            .restore_room(restore)
+            .map_err(EngineError::Other)
     })
     .await
     .map_err(|e| EngineError::Other(e.to_string()))?;
-    if trace { eprintln!("[room-open] ipc_total_ms={}", started.elapsed().as_millis()); }
+    if trace {
+        eprintln!("[room-open] ipc_total_ms={}", started.elapsed().as_millis());
+    }
     result
 }
 
