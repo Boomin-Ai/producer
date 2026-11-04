@@ -9,7 +9,11 @@ try {
   window.__TAURI_INTERNALS__={transformCallback:()=>1,invoke:async(cmd)=>cmd==='set_library_list'?[]:1};window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
   const host=document.createElement('div');host.style.cssText='height:900px;width:100%';document.body.replaceChildren(host);const fixture=structuredClone(HEAD_TO_HEAD);fixture.set.layouts.push({...structuredClone(fixture.set.layouts[0]),id:'portrait-fit',label:'Portrait fit',width:1080,height:1920});window.editorSession=new RehearsalSession(fixture,undefined,'prepare');
   window.draftPreparation=[];
-  (D.createRoot??D.default.createRoot)(host).render((R.createElement??R.default.createElement)(SetControlsPanel,{session:window.editorSession,onChange:()=>{},output:{renderer:'native',active:false,busy:false,error:'',bindings:{},framing:{},sources:{items:[]},bind:()=>{},frame:()=>{},prepareDraft:()=>window.draftPreparation.push('prepare'),clearDraftPreparation:()=>window.draftPreparation.push('clear'),createSource:async()=>{},apply:async()=>{},returnToRoom:async()=>true}}));
+  const prepareDraft=(doc,_bindings,_framing,phase)=>{
+   window.draftPreparation.push('prepare');
+   window.warmingDraft={layout:doc.set.initialLayout,phase};
+  };
+  (D.createRoot??D.default.createRoot)(host).render((R.createElement??R.default.createElement)(SetControlsPanel,{session:window.editorSession,onChange:()=>{},output:{renderer:'native',active:false,busy:false,error:'',bindings:{},framing:{},sources:{items:[]},bind:()=>{},frame:()=>{},prepareDraft,clearDraftPreparation:()=>window.draftPreparation.push('clear'),createSource:async()=>{},apply:async()=>{},returnToRoom:async()=>true}}));
  });
  await page.getByRole('button',{name:'Set settings',exact:true}).waitFor();assert.deepEqual(await page.evaluate(()=>window.draftPreparation),[]);
  await page.getByRole('button',{name:'Set settings',exact:true}).click();
@@ -18,6 +22,7 @@ try {
  const options=await selector.locator('option').evaluateAll(items=>items.map(i=>({value:i.value,text:i.textContent})));
  assert(options.length>=3);await selector.selectOption(options.at(-1).value);await page.waitForTimeout(100);
  assert.equal(await dialog.count(),1);assert.equal(await selector.inputValue(),options.at(-1).value);assert(await dialog.getByRole('button',{name:'Edit next segment',exact:true}).isDisabled());
+ await page.waitForFunction(phase=>window.warmingDraft?.phase===phase,options.at(-1).value);
  await dialog.getByRole('button',{name:'Edit previous segment',exact:true}).click();assert.equal(await selector.inputValue(),options.at(-2).value);
  await selector.selectOption(options[0].value);assert(await dialog.getByRole('button',{name:'Edit previous segment',exact:true}).isDisabled());
  assert.equal(await page.evaluate(()=>window.editorSession.snapshot().running),false);
@@ -34,6 +39,7 @@ try {
   await page.setViewportSize(size);
   for(const layout of ['conversation','portrait-fit']){
    await dialog.getByRole('combobox',{name:'Edit layout',exact:true}).selectOption(layout);await page.waitForTimeout(80);
+   await page.waitForFunction(layout=>window.warmingDraft?.layout===layout,layout);
    const details=dialog.locator('.set-source-slots');await details.evaluate(el=>el.open=true);await page.waitForTimeout(80);const expanded=await assertCanvasFits();
    await details.evaluate(el=>el.open=false);await page.waitForTimeout(80);const collapsed=await assertCanvasFits();assert(collapsed.height>=expanded.height-1);
   }

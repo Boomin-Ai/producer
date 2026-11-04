@@ -13,7 +13,7 @@ import type { RoomSource, RoomAction } from "../../server/src/roomActions";
 import { formatGuestLink, hostedAudienceLink } from "../lib/hostedShare";
 import { previewSession, setPreviewTransparency } from "../lib/previewSession";
 import { useSetOutput } from "../features/presentation/useSetOutput";
-import { SetControlsPanel } from "../features/presentation/SetControlsPanel";
+import { SetControlsPanel, type SetEditorTake } from "../features/presentation/SetControlsPanel";
 import { DEFAULT_SET } from "../features/presentation/catalog";
 import { RehearsalSession } from "../features/presentation/rehearsal";
 import { roomSession } from "../lib/roomSession";
@@ -25,6 +25,7 @@ import { DJPanel } from "../components/DJPanel";
 import { DJSlider } from "../components/DJSlider";
 import { AudienceDestination, AudienceDestinationMark } from "../components/AudienceDestination";
 import type { LocalRecording } from "../lib/ipc";
+import { RoomOpening } from "./RoomOpening";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { installStageCutouts } from "../lib/stageCutouts";
@@ -1376,6 +1377,7 @@ function FilterEditor({
   const [chain, setChain] = useState<FilterState[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [help, setHelp] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const queued = useMemo(() => filterEditQueue(op => onFilters(sourceId, op)), [sourceId, onFilters]);
@@ -1400,6 +1402,7 @@ function FilterEditor({
   }, [run]);
 
   const available = FILTER_CATALOG.filter((f) => f.media === media);
+  const description = available.find(filter => filter.kind === help);
   const hasCutout = !!chain?.some(f => f.kind === "producer_person_mask");
   useEffect(() => {
     if (!hasCutout) return;
@@ -1502,30 +1505,42 @@ function FilterEditor({
         </button>
         <span className="rm-filters-title">{sourceLabel} · Filters</span>
         {!locked && (
-          <button className="rm-panel-plus" title="Add a filter" onClick={() => setAdding((a) => !a)}>
+          <button className="rm-panel-plus" title="Add a filter" onClick={() => { setAdding(!adding); setHelp(null); }}>
             {ic.plus}
           </button>
         )}
       </div>
 
       {adding && (
-        <div className="rm-rows">
-          {available.map((f) => (
-            <div
-              key={f.kind}
-              role="button"
-              tabIndex={0}
-              className="rm-row rm-addfilter"
-              onClick={() => {
-                setAdding(false);
-                run({ op: "add", kind: f.kind, name: nameFor(f.label) });
-              }}
-            >
-              <span className="rm-row-name">{f.label}</span>
-              <span className="rm-filter-hint">{f.hint}</span>
-            </div>
-          ))}
-        </div>
+        <>
+          <div className="rm-filter-choices" aria-label="Available filters">
+            {available.map((filter) => (
+              <div key={filter.kind} className="rm-filter-choice">
+                <button type="button" className="rm-filter-add" onClick={() => {
+                  setAdding(false);
+                  setHelp(null);
+                  void run({ op: "add", kind: filter.kind, name: nameFor(filter.label) });
+                }}>
+                  {filter.label}
+                </button>
+                <button
+                  type="button"
+                  className="rm-filter-help"
+                  aria-label={"About " + filter.label}
+                  aria-expanded={help === filter.kind}
+                  onClick={() => setHelp(previous => previous === filter.kind ? null : filter.kind)}
+                >
+                  ?
+                </button>
+              </div>
+            ))}
+          </div>
+          {description && (
+            <p className="rm-filter-description" role="status">
+              <strong>{description.label}</strong> {description.hint}
+            </p>
+          )}
+        </>
       )}
 
       {!adding && (
@@ -1795,11 +1810,20 @@ function PreviewPanel({ children }: { children?: ReactNode }) {
   );
 }
 
-/** The stage as a look: every item that belongs to a scene, at its current
- * geometry. Guests (slots carry them), mod feeds (`mod_feeds` carries them)
- * and mics (room-level audio, no look) are not scene members. */
-function stageLook(items: LiveItem[], bindings: Record<string, string>, previous?: Record<string, SceneItemLook>): Record<string, SceneItemLook> {
-  return captureSlotLook(items, bindings, previous);
+/** A saved mic keeps its scene membership while the capture device opens. */
+function stageLook(
+  items: LiveItem[],
+  bindings: Record<string, string>,
+  previous?: Record<string, SceneItemLook>,
+  savedSources: RoomConfig["sources"]["extras"] = [],
+): Record<string, SceneItemLook> {
+  const look = captureSlotLook(items, bindings, previous);
+  for (const extra of savedSources) {
+    if (extra.spec.kind === "mic" && previous?.[extra.id] && !(extra.id in look)) {
+      look[extra.id] = previous[extra.id];
+    }
+  }
+  return look;
 }
 
 /** Permission state lives with the controls, not over the canvas: a slim
@@ -1807,9 +1831,11 @@ function stageLook(items: LiveItem[], bindings: Record<string, string>, previous
  * First Light machinery (Settings deep-link + native drag chip). */
 function PermBanner({
   sources,
+  micStarting,
   onGranted,
 }: {
   sources: LiveSources;
+  micStarting?: boolean;
   onGranted?: (kind: "screen" | "camera" | "mic") => void;
 }) {
   const [perms, setPerms] = useState<LivePermissions | null>(null);
@@ -1853,7 +1879,7 @@ function PermBanner({
   const rows: { kind: "screen" | "camera" | "mic"; label: string; status: string; needed: boolean }[] = [
     { kind: "screen", label: "Screen recording", status: perms.screen, needed: hasKind("screen") },
     { kind: "camera", label: "Camera", status: perms.camera, needed: hasKind("camera") },
-    { kind: "mic", label: "Microphone", status: perms.mic, needed: hasKind("mic") },
+    { kind: "mic", label: "Microphone", status: perms.mic, needed: hasKind("mic") || !!micStarting },
   ];
   const pending = rows.filter((r) => r.needed && r.status !== "granted");
   if (pending.length === 0) return null;
@@ -2617,8 +2643,17 @@ function ProgramMonitorStage({ seat, pending, boomin }: { seat: ProgramMonitor |
   );
 }
 
+export type RoomEntryAccess = {
+  endpointId: string;
+  endpointBaseUrl?: string;
+  serverRoomId: string;
+  result: Promise<Awaited<ReturnType<typeof guestsIpc.access>> | null>;
+  receivedAt?: number;
+};
+
 export function LiveView({
   room,
+  entryAccess,
   onLeave,
   onOpenIntegrations,
   onOpenAccess,
@@ -2626,6 +2661,7 @@ export function LiveView({
   seat,
 }: {
   room?: RoomInfo;
+  entryAccess?: RoomEntryAccess;
   onLeave?: () => void;
   onOpenRecording?: (captureId: string) => void;
   /** "Connect a channel first" → leave the room (the collapse path) and open
@@ -2646,6 +2682,8 @@ export function LiveView({
   }, []);
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
+  const deferredMicIds = useRef<string[]>([]);
+  const entryAccessRef = useRef(entryAccess);
   const roomEngineRef = useRef<ReturnType<typeof roomSession> | null>(null);
   useEffect(() => {
     const session = roomSession();
@@ -2781,7 +2819,7 @@ export function LiveView({
       for (const i of items) if (i.has_frame && seen[i.id] == null) seen[i.id] = Math.round(performance.now() - mountT0.current);
       const pending = items.filter((i) => !i.has_frame && i.kind !== "mic").map((i) => i.id);
       setPendingFrames((p) => (p.length === pending.length && p.every((x, k) => x === pending[k]) ? p : pending));
-      if (items.length && pending.length === 0) return finish([]);
+      if (snap && pending.length === 0) return finish([]);
       if (performance.now() - t0 > 10_000) return finish(pending);
       window.setTimeout(tick, 100);
     };
@@ -2824,7 +2862,8 @@ export function LiveView({
   const [micPopOpen, setMicPopOpen] = useState(false);
   const [destsOpen, setDestsOpen] = useState(false);
   const [qualityOpen, setQualityOpen] = useState(false);
-  const [setRehearsal, setSetRehearsal] = useState(() => new RehearsalSession(parseConfig(room?.config).presentation?.package ?? DEFAULT_SET, undefined, 'prepare'));
+  const savedRoomConfig = useMemo(() => parseConfig(room?.config), [room?.config]);
+  const [setRehearsal, setSetRehearsal] = useState(() => new RehearsalSession(savedRoomConfig.presentation?.package ?? DEFAULT_SET, undefined, 'prepare'));
   const [panelMenu, setPanelMenu] = useState<PanelId | null>(null);
   const [layoutMenu, setLayoutMenu] = useState(false);
   const [layoutEdit, setLayoutEdit] = useState(false);
@@ -2899,10 +2938,14 @@ export function LiveView({
     });
   };
   const [addMenu, setAddMenu] = useState<Dock | null>(null);
-  const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null);
+  const ghostRef = useRef<HTMLDivElement>(null);
+  const dragFrame = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (dragFrame.current !== null) cancelAnimationFrame(dragFrame.current);
+  }, []);
   const [popAnchor, setPopAnchor] = useState<HTMLElement | null>(null);
   // The room document: dock layout, scenes, channel selection, scene state.
-  const [cfg, setCfgState] = useState<RoomConfig>(() => parseConfig(room?.config));
+  const [cfg, setCfgState] = useState<RoomConfig>(savedRoomConfig);
   /** Engine truth, wearing the room's names: an extra's `label` in the room
    * doc (a renamed camera, v0.4.36) wins over the label the engine spawned
    * with, so rows, mixer strips and the stage editor all say the same thing. */
@@ -2932,7 +2975,18 @@ export function LiveView({
       ipc.liveSetThumbRate(0).catch(() => {});
     };
   }, [guestsDock]);
-  const writeCfg = (next: RoomConfig) => {
+  const layoutSaveTimer = useRef<number | undefined>(undefined);
+  const saveRoomConfig = (next: RoomConfig) => {
+    if (room) void ipc.liveUpdateRoom(room.id, { config: serializeConfig(next) }).catch(() => {});
+  };
+  useEffect(() => () => {
+    if (layoutSaveTimer.current === undefined) return;
+    window.clearTimeout(layoutSaveTimer.current);
+    layoutSaveTimer.current = undefined;
+    saveRoomConfig(cfgRef.current);
+  }, [room?.id]);
+
+  const writeCfg = (next: RoomConfig, deferSave = false) => {
     // Update the ref SYNCHRONOUSLY. Engine events arrive faster than React
     // re-renders, and they merge against cfgRef — a stale ref meant a
     // SourcesChanged landing between a write and its render would resurrect
@@ -2942,7 +2996,16 @@ export function LiveView({
     setCfgState(next);
     // Room-less sessions keep layout in memory only: the old localStorage
     // write was never read back anywhere (audited) — half-wired dead code.
-    if (room) ipc.liveUpdateRoom(room.id, { config: serializeConfig(next) }).catch(() => {});
+    window.clearTimeout(layoutSaveTimer.current);
+    layoutSaveTimer.current = undefined;
+    if (room && deferSave) {
+      layoutSaveTimer.current = window.setTimeout(() => {
+        layoutSaveTimer.current = undefined;
+        saveRoomConfig(cfgRef.current);
+      }, 120);
+    } else {
+      saveRoomConfig(next);
+    }
   };
   const editSourceFilters = useCallback(async (source: string, op: FilterOp) => {
     let chain: FilterState[] | undefined;
@@ -2960,7 +3023,7 @@ export function LiveView({
     if (!chain) throw new Error("The room is closed. Reopen it to edit filters.");
     return chain;
   }, [room?.id]);
-  const setLayout = (l: Layout) => writeCfg({ ...cfg, layout: l });
+  const setLayout = (l: Layout, deferSave = false) => writeCfg({ ...cfgRef.current, layout: l }, deferSave);
   const sizes: DockSizes = cfg.sizes ?? {};
   const setSizes = (next: DockSizes) => writeCfg({ ...cfgRef.current, sizes: next });
 
@@ -3293,7 +3356,17 @@ export function LiveView({
   const toggleVcam = async () => {
     if (vcamFlight.current) return;
     vcamAutoRef.current = false;
-    if (!vcamState?.installed && vcamState?.state !== "active") {
+    if (!vcamState?.installed) {
+      if (vcamState?.state === "move_to_applications" || vcamState?.state === "needs_approval") {
+        const openSetup = vcamState.state === "move_to_applications" ? vcamIpc.revealApp : vcamIpc.openSettings;
+        await openSetup().catch(e => notifyError(e, { key: "banner" }));
+        if (vcamState.error) notify(vcamState.error, { key: "banner", tone: "warning", ttl: 12000 });
+        return;
+      }
+      if (vcamState && ["requires_signed_app", "restart_required", "unsupported", "unavailable"].includes(vcamState.state)) {
+        notify(vcamState.error ?? "The virtual camera is unavailable in this build.", { key: "banner", tone: "warning", ttl: 12000 });
+        return;
+      }
       vcamFlight.current = true;
       setVcamPending('installing');
       try {
@@ -3305,16 +3378,16 @@ export function LiveView({
         const st = await vcamIpc.status().catch(() => null);
         if (!st) continue;
         setVcamState(st);
-        if (st.state === "failed") {
-          notify(st.error ?? "macOS refused the camera extension.", { key: "banner", tone: "error", ttl: 12000 });
+        if (st.installed) {
+          notify("Virtual camera installed. Click again to start it.", { key: "banner", tone: "success" });
+          return;
+        }
+        if (st.error || st.state === "failed") {
+          notify(st.error ?? "Could not install the virtual camera.", { key: "banner", tone: "warning", ttl: 12000 });
           return;
         }
         if (st.state === "needs_approval") {
-          notify("Approve Producer's camera extension in System Settings › General › Login Items & Extensions.", { key: "banner", tone: "warning", ttl: 12000 });
-          return;
-        }
-        if (st.state === "active" || st.installed) {
-          notify("Virtual camera installed. Click again to start it.", { key: "banner", tone: "success" });
+          notify("Click Approve to open System Settings for Producer Virtual Camera.", { key: "banner", tone: "warning", ttl: 12000 });
           return;
         }
       }
@@ -3387,7 +3460,8 @@ export function LiveView({
   // the source of truth and the local scene is reconciled against it — never
   // the other way round.
   const [roster, setRoster] = useState<RoomGuest[]>([]);
-  const [guestLink, setGuestLink] = useState<string | null>(cfg.guest_link ?? null);
+  const resolvedGuestLink = useRef<string | null>(null);
+  const guestLinkRequest = useRef<Promise<string | null> | null>(null);
   const rosterRef = useRef<RoomGuest[]>([]);
   rosterRef.current = roster;
   const endpointRef = useRef<string | null>(null);
@@ -3466,13 +3540,14 @@ export function LiveView({
   const roomRoleRef = useRef<RoomRole>("host");
   const accessAsked = useRef(false);
   const accessTries = useRef(0);
+  const accessFallbackAt = useRef(Infinity);
   /** The whole answer (role · via · can) — what the role card shows and
    * what the host-only chrome is gated on. Assumed host until the route
    * answers; `known` says whether it did. */
   const [roomAccess, setRoomAccess] = useState<RoomAccessInfo>(() => ({ role: "host", via: "server", can: capabilitiesOf("host"), known: false }));
   /** A Boomin room whose access route hasn't answered yet: the host chrome
    * stays hidden rather than flashing GO LIVE at a mod. */
-  const [accessPending, setAccessPending] = useState(false);
+  const [accessPending, setAccessPending] = useState(() => !!entryAccess);
   const isHost = setEditingAllowed({ role: roomRole }, accessPending);
   useEffect(()=>{let ended=false;let off:(()=>void)|undefined;void listenSoundboard<string>('soundboard-error',event=>notifyError(event.payload,{key:'soundboard'})).then(fn=>{if(ended)fn();else off=fn;});return()=>{ended=true;off?.();}},[]);
   const isHostRef = useRef(isHost);
@@ -4070,23 +4145,40 @@ export function LiveView({
 
   /** Mint (or reuse) the room's shareable link. */
   const ensureGuestLink = async () => {
-        try {
-      const ep = await resolveActiveEndpoint();
-      if (!ep) throw new Error("Connect a workspace first.");
-      let sid = cfg.server_room_id;
-      if (!sid) {
-        const reg = await registerRoom(ep.id, room?.name ?? "Room", room?.id ?? "");
-        sid = reg.room.id;
-        writeCfg({ ...cfgRef.current, server_room_id: sid });
+    if (resolvedGuestLink.current && resolvedGuestLink.current === cfgRef.current.guest_link) {
+      return resolvedGuestLink.current;
+    }
+    if (guestLinkRequest.current) return guestLinkRequest.current;
+
+    const pending = (async () => {
+      try {
+        const ep = await resolveActiveEndpoint();
+        if (!ep) throw new Error("Connect a workspace first.");
+        let sid = cfgRef.current.server_room_id;
+        if (!sid) {
+          const reg = await registerRoom(ep.id, room?.name ?? "Room", room?.id ?? "");
+          sid = reg.room.id;
+          writeCfg({ ...cfgRef.current, server_room_id: sid });
+        }
+        const original = cfgRef.current.guest_link ?? await mintJoinLink(ep.id, sid);
+        // Keep the minted capability even if the share-address lookup fails.
+        if (cfgRef.current.guest_link !== original) {
+          writeCfg({ ...cfgRef.current, guest_link: original });
+        }
+        const url = await formatGuestLink(ep, sid, original);
+        if (cfgRef.current.guest_link !== url) writeCfg({ ...cfgRef.current, guest_link: url });
+        resolvedGuestLink.current = url;
+        return url;
+      } catch (e) {
+        notifyError(`Couldn't get the guest link. ${errText(e)}`, { key: "guest-link-error" });
+        return null;
       }
-      const original = guestLink ?? await mintJoinLink(ep.id, sid!);
-      const url = await formatGuestLink(ep, sid!, original);
-      setGuestLink(url);
-      writeCfg({ ...cfgRef.current, guest_link: url });
-      return url;
-    } catch (e) {
-      notifyError(e, { key: "guests" });
-      return null;
+    })();
+    guestLinkRequest.current = pending;
+    try {
+      return await pending;
+    } finally {
+      guestLinkRequest.current = null;
     }
   };
 
@@ -4094,11 +4186,15 @@ export function LiveView({
    * panel's link button go through here — the panel button used to copy
    * silently (and swallow clipboard failures), which read as "doesn't work". */
   const copyRoomLink = async () => {
-    const pending = notify("Copying guest link…", { key: "link-copy", sticky: true });
+    let pending: number | undefined;
+    const timer = window.setTimeout(() => {
+      pending = notify("Copying guest link…", { key: "link-copy", sticky: true });
+    }, 250);
     try {
       const url = await ensureGuestLink();
       if (!url) return;
       if (await copyText(url)) {
+        dismissKey("guest-link-error");
         // Deals are a Boomin thing; a self-hosted room has none.
         notify(
           boominRoomRef.current
@@ -4110,7 +4206,8 @@ export function LiveView({
         notify(url, { key: "banner", tone: "info", ttl: 8000 });
       }
     } finally {
-      dismiss(pending);
+      window.clearTimeout(timer);
+      if (pending !== undefined) dismiss(pending);
     }
   };
 
@@ -4472,7 +4569,7 @@ export function LiveView({
     void roomEngineRef.current?.run(async () => { await sounds.activate(roomId ?? "local"); }).catch(error => notifyError(error, {key:"soundboard"}));
   }, [docApplied, isHost, roomId]);
 
-  const setOutput=useSetOutput(setRehearsal,roomId,sources,docApplied && isHost && !(import.meta.env.DEV && import.meta.env.VITE_SCENE3D_PROOF),cfg.presentation?.bindings ?? {},bindings=>writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.exportPreparedPackage(),bindings,framing:cfgRef.current.presentation?.framing}}),cfg.presentation?.framing ?? {},framing=>writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.exportPreparedPackage(),bindings:cfgRef.current.presentation?.bindings ?? {},framing}}));
+  const setOutput=useSetOutput(setRehearsal,roomId,sources,docApplied && !mountVeil && isHost && !(import.meta.env.DEV && import.meta.env.VITE_SCENE3D_PROOF),cfg.presentation?.bindings ?? {},bindings=>writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.preparedPackage(),bindings,framing:cfgRef.current.presentation?.framing}},true),cfg.presentation?.framing ?? {},framing=>writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.preparedPackage(),bindings:cfgRef.current.presentation?.bindings ?? {},framing}},true));
   if(setOutput.renderer==='native')setOutput.createSource=async(slot,spec,label,assign=true)=>{
     const id='set-source-'+crypto.randomUUID();
     const next=await invoke<LiveSources>('live_set_source_create',{id,label,spec});
@@ -4483,10 +4580,38 @@ export function LiveView({
     if(assign)setOutput.bind(slot,id);
     return id;
   };
-  const changeSet=async (doc:import('../features/presentation/schema').PresentationPackage,moduleBindings?:import('../features/presentation/moduleConnections').ModuleBindings)=> {
-    if(setOutput.renderer!=='native'&&!await setOutput.returnToRoom())return;
-    setSetRehearsal(new RehearsalSession(doc,undefined,'prepare'));
-    writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,...(moduleBindings?{moduleBindings}:{}),package:doc,bindings:setOutput.bindings,framing:setOutput.framing}});
+  const changeSet=async (doc:import('../features/presentation/schema').PresentationPackage,moduleBindings?:import('../features/presentation/moduleConnections').ModuleBindings,take?:SetEditorTake)=> {
+    if(setOutput.renderer!=='native'&&!await setOutput.returnToRoom()) {
+      if (take) throw new Error('Could not switch the room output. Try again.');
+      return;
+    }
+    const next = new RehearsalSession(doc, undefined, 'prepare');
+    const current = cfgRef.current;
+    const manualNameKeys = new Set(current.presentation?.manualNameKeys ?? []);
+    if (take) {
+      if (take.phase) next.send({type:'segment.select',phaseId:take.phase});
+      if (next.snapshot().layoutId !== take.layout) {
+        next.send({type:'control',action:{type:'layout.select',layoutId:take.layout}});
+      }
+      setOutput.setAssignments?.(take.bindings, take.framing);
+      const previous = setRehearsal.snapshot().values;
+      for (const [key, definition] of Object.entries(doc.set.values)) {
+        if (key.toLowerCase().endsWith('name') && definition.default !== previous[key]) manualNameKeys.add(key);
+      }
+    }
+    setSetRehearsal(next);
+    writeCfg({
+      ...current,
+      presentation: {
+        ...current.presentation,
+        ...(moduleBindings ? {moduleBindings} : {}),
+        ...(take ? {manualNameKeys: [...manualNameKeys]} : {}),
+        package: next.package,
+        bindings: take?.bindings ?? setOutput.bindings,
+        framing: take?.framing ?? setOutput.framing,
+      },
+    }, !!take);
+    return next;
   };
   const setWorkspaceState=useSyncExternalStore(setRehearsal.subscribe,setRehearsal.snapshot);
   const presentationRelay=useMemo(()=>new PresentationRelay(roomId??""),[roomId]);
@@ -4510,13 +4635,13 @@ export function LiveView({
       if(resolved && setWorkspaceState.values[key]!==resolved.slice(0,definition.maxLength))setRehearsal.send({type:'field',key,value:resolved.slice(0,definition.maxLength)});
     }
   },[setRehearsal,setWorkspaceState,setNamesSignature,setHostName,setOutput.bindings,JSON.stringify(setNameOverrides)]);
-  const editSetField=(key:string)=>{if(!key.toLowerCase().endsWith('name'))return;writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.exportPreparedPackage(),bindings:setOutput.bindings,manualNameKeys:[...new Set([...(cfgRef.current.presentation?.manualNameKeys??[]),key])]}});};
+  const editSetField=(key:string)=>{if(!key.toLowerCase().endsWith('name'))return;writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.preparedPackage(),bindings:setOutput.bindings,manualNameKeys:[...new Set([...(cfgRef.current.presentation?.manualNameKeys??[]),key])]}},true);};
 
   useEffect(()=> {
     if(!docApplied)return;
     const timer=setTimeout(()=> {
-      const prepared=setRehearsal.exportPreparedPackage();
-      if(JSON.stringify(prepared)!==JSON.stringify(cfgRef.current.presentation?.package))writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:prepared,bindings:cfgRef.current.presentation?.bindings ?? {},framing:cfgRef.current.presentation?.framing}});
+      const prepared=setRehearsal.preparedPackage(), saved=cfgRef.current.presentation?.package;
+      if(prepared!==saved&&JSON.stringify(prepared)!==JSON.stringify(saved))writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:prepared,bindings:cfgRef.current.presentation?.bindings ?? {},framing:cfgRef.current.presentation?.framing}});
     },500);
     return()=>clearTimeout(timer);
   },[setRehearsal,setWorkspaceState,docApplied, setOutput.bindings]);
@@ -4526,6 +4651,16 @@ export function LiveView({
    * before they can know whose set this is. */
   const ensureEndpoint = async (): Promise<string | null> => {
     if (endpointRef.current) return endpointRef.current;
+    // Home already resolved the workspace for this exact Boomin access
+    // request. Reuse its routing metadata while the workspace still matches.
+    if (entryAccess?.endpointBaseUrl && entryAccess.endpointId === activeEndpointId()
+      && entryAccess.serverRoomId === savedRoomConfig.server_room_id) {
+      endpointRef.current = entryAccess.endpointId;
+      endpointBaseRef.current = entryAccess.endpointBaseUrl;
+      boominRoomRef.current = true;
+      setBoominRoom(true);
+      return entryAccess.endpointId;
+    }
     const ep = await resolveActiveEndpoint().catch(() => null);
     if (!ep) return null;
     endpointRef.current = ep.id;
@@ -4536,9 +4671,14 @@ export function LiveView({
   };
 
   const refresh = useCallback(async () => {
+    if (accessAsked.current) mark("authorized_refresh_enqueued");
     await roomEngineRef.current?.run(async () => {
-    setDestinations(await ipc.liveListDestinations(activeEndpointId() ?? undefined));
-    const snap = await ipc.liveEngineStatus();
+    if (accessAsked.current) mark("authorized_refresh_started");
+    const [snap, destinations] = await Promise.all([
+      ipc.liveEngineStatus(),
+      ipc.liveListDestinations(activeEndpointId() ?? undefined).catch(() => null),
+    ]);
+    if (destinations) setDestinations(destinations);
     setSnapshot(snap);
     if (snap.sources) setSources(snap.sources);
     // Video settings re-apply when idle: the room's own `video` first (a 4K
@@ -4547,7 +4687,7 @@ export function LiveView({
       videoApplied.current = true;
       try {
         const stored =
-          (room ? parseConfig(room.config).video : undefined) ??
+          (room ? savedRoomConfig.video : undefined) ??
           (JSON.parse(localStorage.getItem("producer.video") ?? "null") as {
             h: number;
             f: number;
@@ -4568,15 +4708,19 @@ export function LiveView({
       // its own desktop where the host's program belonged). The answer is
       // the access route's; until it lands nothing local is applied, and
       // the roster tick calls refresh again the moment it does.
-      const sid = parseConfig(room.config).server_room_id;
+      const sid = savedRoomConfig.server_room_id;
       if (sid) await ensureEndpoint();
       const decision = localSetDecision({
         boomin: !!sid && boominRoomRef.current,
         answered: accessAsked.current,
-        tries: accessTries.current,
+        tries: performance.now() >= accessFallbackAt.current ? accessTries.current : 0,
         role: roomRoleRef.current,
       });
-      if (decision === "wait") return;
+      if (decision === "wait") {
+        mark("access_wait");
+        return;
+      }
+      mark("access_resolved");
       if (decision === "skip") {
         // Not our set. Nothing of this room is applied; anything the engine
         // still holds from a previous room comes DOWN so the stage cannot
@@ -4598,7 +4742,7 @@ export function LiveView({
       // v0.4.34: a room saved by an older build still carries the built-in
       // switches. Fold them into ordinary sources ONCE (lib/room.ts) and
       // write the document back, before anything spawns from it.
-      let opened = parseConfig(room.config);
+      let opened = savedRoomConfig;
       // …and rooms saved before slots were transparent get their opaque
       // placeholders corrected here, not left as black boxes on the program.
       const migrated = transparentSlots(
@@ -4636,19 +4780,28 @@ export function LiveView({
       // The engine creates every restored source hidden, then atomically commits
       // the complete opening look. The returned state is the acknowledgment;
       // a React render, arbitrary source event or timeout cannot settle the room.
+      mark("restore_started");
       const restored = await ipc.liveRestoreRoom({
         keep_ids: [...keepIds], extras,
         overlay_window: saved.overlay_window ?? null,
         overlay_url: saved.overlay_url ?? null,
         changes: scenePlan(mount?.look ?? {}, catalog, opened.slot_bindings ?? {}, true),
       });
+      deferredMicIds.current = restored.room_mic_starting_ids ?? [];
+      setSnapshot(previous => previous && {
+        ...previous,
+        room_mic_pending: restored.room_mic_pending,
+        room_mic_failed: restored.room_mic_failed,
+        room_mic_starting_ids: restored.room_mic_starting_ids,
+      });
       sourcesRef.current = restored.sources;
+      mark("restore_reply");
       setSources(restored.sources);
       activeSceneRef.current = mount?.id ?? null;
       setActiveSceneId(mount?.id ?? null);
       engineHeldRoom = room.id;
       roomApplied.current = true;
-      writeCfg({ ...opened, active_scene: mount?.id });
+      if (opened.active_scene !== mount?.id) writeCfg({ ...opened, active_scene: mount?.id });
       mark("applied");
       setSceneSettled(true);
       setDocApplied(true);
@@ -4664,12 +4817,12 @@ export function LiveView({
       studioApplied.current = true;
       // Always stated, both ways: the engine outlives rooms, and a room
       // without the wish must not inherit the last room's studio.
-      void applyStudio(!!parseConfig(room.config).studio_output);
+      void applyStudio(!!savedRoomConfig.studio_output);
     }
     // Channel selection from the room document → engine flags.
     if (!channelsApplied.current && room && roomApplied.current) {
       channelsApplied.current = true;
-      const want = parseConfig(room.config).channels;
+      const want = savedRoomConfig.channels;
       if (Object.keys(want).length) {
         for (const d of await ipc.liveListDestinations(activeEndpointId() ?? undefined)) {
           const target = want[d.id];
@@ -4701,7 +4854,7 @@ export function LiveView({
       setVeilNote("Could not restore the room. Leave and reopen to retry.");
       notifyError(error, { key: "banner" });
     });
-  }, [room]);
+  }, [room, savedRoomConfig]);
 
   useEffect(() => {
     refresh();
@@ -4847,6 +5000,7 @@ export function LiveView({
       : 0;
 
   const engineOk = snapshot?.engine_ready && snapshot?.bootstrap_ok;
+  const micUnready = snapshot?.room_mic_pending || snapshot?.room_mic_failed;
   // First-frame readiness changes without a source mutation event. Keep that
   // metadata fresh for source assignment without overwriting in-flight geometry.
   useEffect(()=>{
@@ -4855,6 +5009,16 @@ export function LiveView({
     const refresh=async()=>{
       if(busy)return;busy=true;
       try{const snapshot=await ipc.liveEngineStatus();if(!alive)return;
+        setSnapshot(previous => {
+          if (!previous) return previous;
+          const before = previous.room_mic_starting_ids ?? [];
+          const next = snapshot.room_mic_starting_ids ?? [];
+          if (previous.room_mic_pending === snapshot.room_mic_pending &&
+              previous.room_mic_failed === snapshot.room_mic_failed &&
+              before.length === next.length && before.every((id, index) => id === next[index])) return previous;
+          return { ...previous, room_mic_pending: snapshot.room_mic_pending,
+            room_mic_failed: snapshot.room_mic_failed, room_mic_starting_ids: snapshot.room_mic_starting_ids };
+        });
         const fresh=new Map((snapshot.sources?.items??[]).map(item=>[item.id,item]));
         setSources(previous=>{let changed=false;const items=previous.items?.map(item=>{
           const next=fresh.get(item.id);if(!next)return item;
@@ -4927,9 +5091,20 @@ export function LiveView({
   }, [engineOk, sceneSettled, mountVeil, framesReady, framesCapped, pendingFrames]);
   // Hard cap: a wedged step may never trap the user behind the veil.
   useEffect(() => {
-    const t = window.setTimeout(() => setMountVeil(false), 8000);
+    if (!mountVeil) return;
+    const t = window.setTimeout(() => {
+      mark("veil");
+      setMountVeil(false);
+      void roomOpenReport({
+        ...mountMarks.current,
+        veil_capped: true,
+        stall_max_ms: Math.round(stallMax.current),
+        boot_phases: snapRef.current?.boot_phases_ms ?? null,
+        at: new Date().toISOString(),
+      }).catch(() => {});
+    }, 8000);
     return () => window.clearTimeout(t);
-  }, []);
+  }, [mountVeil]);
 
   /** Channel selection is part of the room document; opening a room pushes
    * it to the engine's destination flags so go-live stays honest. */
@@ -4943,12 +5118,14 @@ export function LiveView({
     if (room && !roomApplied.current) return;
     dismissKey("banner");
     try {
-      const ep = await resolveActiveEndpoint().catch(() => null);
-      await ipc.liveGoLive(ep && isBoomin(ep) ? ep.id : undefined, cfg.server_room_id ?? undefined);
-      if (roomId) {
-        ipc.liveUpdateRoom(roomId, { touchLive: true }).catch(() => {});
-        markLiveRoom(roomId);
-      }
+      await roomEngineRef.current?.run(async () => {
+        const ep = await resolveActiveEndpoint().catch(() => null);
+        await ipc.liveGoLive(ep && isBoomin(ep) ? ep.id : undefined, cfgRef.current.server_room_id ?? undefined);
+        if (roomId) {
+          ipc.liveUpdateRoom(roomId, { touchLive: true }).catch(() => {});
+          markLiveRoom(roomId);
+        }
+      });
     } catch (e) {
       notifyError(e, { key: "banner" });
     }
@@ -5003,7 +5180,7 @@ export function LiveView({
     if (!sourcesRef.current.items) return;
     const base = cfgRef.current;
     const prev = base.scenes.find((x) => x.id === sceneId)?.look;
-    const stage = stageLook(sourcesRef.current.items ?? [], base.slot_bindings ?? {}, prev);
+    const stage = stageLook(sourcesRef.current.items, base.slot_bindings ?? {}, prev, base.sources.extras);
     // MEMBERSHIP SURVIVES THE CAPTURE. `stageLook` reads the whole graph,
     // hidden items included — every source in the room, not this scene's.
     // Writing that wholesale made every scene slowly absorb every source as
@@ -5081,14 +5258,21 @@ export function LiveView({
       // own rect. A guest is never at the top of the stack merely because it
       // was created last.
       const bindings = cfgRef.current.slot_bindings ?? {};
+      const waitingMics = (cfgRef.current.sources.extras ?? [])
+        .filter(extra => deferredMicIds.current.includes(extra.id) && !exists.has(extra.id))
+        .map(({ id }) => ({ id, patch: { visible: !!look[id]?.visible }, muted: !look[id]?.visible }));
       const entries = expandSlotBindings(
         Object.entries(look).filter(([id]) => exists.has(id)),
         bindings,
         exists,
       );
       const immediate = opts?.cut || (p.transition ?? cfgRef.current.transition ?? { kind: "cut" }).kind === "cut";
+      const showingSet = setOutput.active || setOutput.busy;
       if (immediate) {
-        const committed = await ipc.liveApplyScene(scenePlan(look, liveNow, bindings));
+        const committed = await ipc.liveApplyScene([...scenePlan(look, liveNow, bindings), ...waitingMics]);
+        if (showingSet && !await setOutput.returnToRoom()) {
+          throw new Error("Could not switch from the Set to the room scene.");
+        }
         sourcesRef.current = committed;
         setSources(committed);
         activeSceneRef.current = p.id;
@@ -5096,6 +5280,10 @@ export function LiveView({
         writeCfg({ ...cfgRef.current, active_scene: p.id });
         return true;
       }
+      if (showingSet && !await setOutput.returnToRoom()) {
+        throw new Error("Could not switch from the Set to the room scene.");
+      }
+      if (waitingMics.length) await ipc.liveApplyScene(waitingMics);
       // Seen, not heard: a guest a scene hides is muted; one it shows speaks.
       for (const [id, l] of entries) {
         if (id.startsWith("guest-") && bindings[slotOfGuest(bindings, id) ?? ""] === id) {
@@ -5343,8 +5531,9 @@ export function LiveView({
    * and the old recipe would undo you every time. */
   const updateScene = (id: string) => {
     if (refuseSetEdit()) return;
-    const look = stageLook(sources.items ?? [], cfgRef.current.slot_bindings ?? {});
     const base = cfgRef.current;
+    const currentLook = base.scenes.find(scene => scene.id === activeSceneRef.current)?.look;
+    const look = stageLook(sourcesRef.current.items ?? [], base.slot_bindings ?? {}, currentLook, base.sources.extras);
     writeCfg({
       ...base,
       scenes: base.scenes.map((x) => (x.id === id ? { ...x, look } : x)),
@@ -6345,7 +6534,7 @@ export function LiveView({
       if (m || leg) {
         m?.leave();
         const epId = endpointRef.current;
-        const sid = parseConfig(room.config).server_room_id;
+        const sid = savedRoomConfig.server_room_id;
         if (epId && sid) guestsIpc.request(epId, "DELETE", `/v1/app/live/rooms/${sid}/monitor`).catch(() => {});
       }
     };
@@ -6377,27 +6566,53 @@ export function LiveView({
       rosterTickBusy.current = true;
       try {
         const epId = await ensureEndpoint();
-        if (!epId) return;
+        if (!alive || !epId) return;
         if (!accessAsked.current) {
-          // Once per room open — once it has ANSWERED. A transport failure
-          // (offline blip, a 5xx) is not an answer: on a Boomin room the tick
-          // asks again next time rather than settling on "host" for the rest
-          // of the session, which is how a mod used to get the host's room.
-          // 404 (no route: self-hosted, or Boomin before #380) and 401/403
-          // (refused) are answers; the shell maps them (client.rs).
+          // An answered denial is authoritative. Only a failed request
+          // retries, with short startup delays before the existing fallback.
           if (boominRoomRef.current && accessTries.current === 0) setAccessPending(true);
-          const acc = await guestsIpc.access(epId, cfg.server_room_id!).catch(() => null);
-          if (!alive) return;
-          if (acc === null && boominRoomRef.current) {
-            // Three misses (~9 s) and the person who opened their own room
-            // with the API down gets their room back — as the ASSUMED host
-            // (the card says so), while the tick keeps asking.
+          const serverRoomId = cfg.server_room_id!;
+          let acc: Awaited<ReturnType<typeof guestsIpc.access>> | null;
+          for (;;) {
+            const entry = entryAccessRef.current;
+            entryAccessRef.current = undefined;
+            const attempt = accessTries.current + 1;
+            if (attempt <= 3) mark("access_attempt_" + attempt + "_started");
+            mark("access_request");
+            const useEntry = entry?.endpointId === epId && entry.serverRoomId === serverRoomId;
+            acc = await (useEntry ? entry.result : guestsIpc.access(epId, serverRoomId).catch(() => null));
+            if (useEntry && entry.receivedAt != null) {
+              mountMarks.current.access_prefetch_response = Math.round(entry.receivedAt - mountT0.current);
+            }
+            mark("access_response");
+            if (attempt <= 3) {
+              mark("access_attempt_" + attempt + (acc === null ? "_failed" : "_answered"));
+            }
+            if (!alive) {
+              // Source and video updates replace the roster poll. Preserve
+              // its completed answer for the replacement poll, which still
+              // checks the endpoint and server room before consuming it.
+              if (acc !== null) {
+                entryAccessRef.current = { endpointId: epId, serverRoomId, result: Promise.resolve(acc) };
+                mark("access_answer_handed_off");
+              }
+              return;
+            }
+            if (acc !== null || !boominRoomRef.current) break;
+
+            // Short retries can recover sooner, but must not accelerate the offline host fallback.
+            if (accessTries.current === 0) accessFallbackAt.current = performance.now() + 6000;
             accessTries.current += 1;
             if (accessTries.current >= 3) {
+              if (performance.now() < accessFallbackAt.current) return;
               setAccessPending(false);
-              void refresh(); // the room-apply path was waiting on this answer
+              void refresh();
+              return;
             }
-            return;
+            await new Promise<void>((resolve) =>
+              window.setTimeout(resolve, accessTries.current === 1 ? 200 : 500),
+            );
+            if (!alive) return;
           }
           accessAsked.current = true;
           const info = roomAccessFrom(acc);
@@ -6768,6 +6983,9 @@ export function LiveView({
         }
       } finally {
         rosterTickBusy.current = false;
+        // A render can replace this poll while an access request is pending.
+        // Let the replacement continue access immediately after the old one drains.
+        if (!alive && !accessAsked.current) rosterTickRef.current?.();
       }
     };
     rosterTickRef.current = () => void tick();
@@ -6784,6 +7002,8 @@ export function LiveView({
    * meaning). Per-mic faders live in the mixer. */
   const micItems = (sources.items ?? []).filter((i) => i.kind === "mic");
   const sceneLook = scenes.find((x) => x.id === activeScene)?.look;
+  const missingMics = (cfg.sources.extras ?? []).filter(extra =>
+    snapshot?.room_mic_starting_ids?.includes(extra.id) && !micItems.some(item => item.id === extra.id));
   const memberHere = (id: string) => !sceneLook || id in sceneLook;
   const mixerItems = (sources.items ?? [])
     .filter((i) => (i.kind === "mic" ? memberHere(i.id) : i.has_audio && (i.kind === "guest" || i.kind === "media")))
@@ -6853,6 +7073,27 @@ export function LiveView({
 
 
   // ── Panels: everything that isn't the stage is a dockable panel ────────
+  const sourcesDock = dockOf(layout, "sources");
+  const sourceRowDock = sourcesDock === "top" || sourcesDock === "bottom";
+  const openSourceFilters = (filter: NonNullable<typeof filterFor>, dock = sourcesDock) => {
+    setSrcSettings(null);
+    setFilterFor(filter);
+    if (dock === "top") setTopOpen(true);
+    if (dock === "bottom") setSheetOpen(true);
+    if (dock === "left") setLeftOpen(true);
+    if (dock === "right") setRightOpen(true);
+  };
+  const sourceFilters = filterFor && (
+    <FilterEditor
+      onFilters={editSourceFilters}
+      sourceId={filterFor.id}
+      sourceLabel={filterFor.label}
+      media={filterFor.media}
+      locked={!isHost}
+      onBack={() => setFilterFor(null)}
+    />
+  );
+
   const panelBody = (id: PanelId) => {
     switch (id) {
       case "setControls":
@@ -6860,7 +7101,7 @@ export function LiveView({
           blockedReason={!docApplied ? "Waiting for the room to finish loading." : undefined}
           onChange={changeSet} />;
       case "sounds":
-        return isHost ? <SoundboardPanel key={roomId??"local"} roomId={roomId??"local"} enabled={docApplied}/> : <div className="rm-rows-empty">The host controls room sounds.</div>;
+        return isHost ? <SoundboardPanel key={roomId??"local"} roomId={roomId??"local"} enabled={docApplied} compact={formDockOf("sounds")==="top"}/> : <div className="rm-rows-empty">The host controls room sounds.</div>;
       case "dj":
         return isHost ? <DJPanel key={roomId ?? "local"} roomId={roomId ?? "local"} enabled={docApplied} mini={formDockOf("dj") === "top"} /> : <div className="rm-rows-empty">The host controls the room’s DJ mix.</div>;
       case "scenes":
@@ -7033,18 +7274,7 @@ export function LiveView({
             </div>
           );
         }
-        if (filterFor) {
-          return (
-            <FilterEditor
-              onFilters={editSourceFilters}
-              sourceId={filterFor.id}
-              sourceLabel={filterFor.label}
-              media={filterFor.media}
-              locked={!isHost}
-              onBack={() => setFilterFor(null)}
-            />
-          );
-        }
+        if (filterFor && !sourceRowDock) return sourceFilters;
         if (deviceFor) {
           return (
             <div className="rm-filters">
@@ -7235,6 +7465,7 @@ export function LiveView({
                           {t.label}
                         </span>
                       )}
+                      <div className="rm-source-actions">
                       {item?.kind === "camera" && isHost && (
                         <button
                           className="rm-row-edit rm-row-rename"
@@ -7251,13 +7482,13 @@ export function LiveView({
                       <button
                         className="rm-row-edit rm-row-fx"
                         title="Filters"
-                        onClick={() =>
-                          setFilterFor({
+                        onClick={() => {
+                          openSourceFilters({
                             id: t.key === "alerts" ? "overlay" : t.key,
                             label: t.label,
                             media: itemFor(t.key)?.kind === "mic" ? "audio" : "video",
-                          })
-                        }
+                          });
+                        }}
                       >
                         ƒ
                       </button>
@@ -7266,6 +7497,7 @@ export function LiveView({
                           className={`rm-row-edit${srcSettings === t.key ? " on" : ""}`}
                           title="Source settings"
                           onClick={() => {
+                            setFilterFor(null);
                             // Docked on a ROW (sheet or top rail) → the
                             // horizontal settings strip beside the dock.
                             // Docked on a sidebar → the strip has nowhere to
@@ -7319,6 +7551,7 @@ export function LiveView({
                       <button className="rm-row-edit rm-row-remove" title="Remove from this room" onClick={t.remove}>
                         {ic.x}
                       </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -7430,10 +7663,9 @@ export function LiveView({
                     onMute={() => setSourceAudio(i.id, undefined, !i.muted).catch(() => {})}
                     onFilters={() => {
                       // Every audio strip has its own source filter chain.
-                      if (dockOf(layout, "sources") === "hidden") {
-                        setLayout(movePanel(layout, "sources", dockOf(layout, "mixer")));
-                      }
-                      setFilterFor({ id: i.id, label: i.label || i.kind, media: "audio" });
+                      const dock = sourcesDock === "hidden" ? dockOf(layout, "mixer") : sourcesDock;
+                      if (sourcesDock === "hidden") setLayout(movePanel(layout, "sources", dock));
+                      openSourceFilters({ id: i.id, label: i.label || i.kind, media: "audio" }, dock);
                     }}
                   />
                 ))}
@@ -7988,7 +8220,7 @@ export function LiveView({
   /** WKWebView's HTML5 drag-and-drop is unreliable, so panels drag on raw
    * pointer events (the dnd-kit / VS Code approach): capture the pointer,
    * follow it with a ghost, and work out the drop from geometry. */
-  const dragRef = useRef<{ id: PanelId; x: number; y: number; moved: boolean } | null>(null);
+  const dragRef = useRef<{ id: PanelId; x: number; y: number; moved: boolean; pointerId: number } | null>(null);
 
   const hitTest = (x: number, y: number): { dock: Dock; index: number } | null => {
     const all = Array.from(document.querySelectorAll<HTMLElement>("[data-dock]"));
@@ -8022,35 +8254,54 @@ export function LiveView({
   };
 
   const gripDown = (id: PanelId) => (e: React.PointerEvent) => {
+    if (!layoutEdit || e.button !== 0 || dragRef.current) return;
     e.preventDefault();
     e.stopPropagation();
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    dragRef.current = { id, x: e.clientX, y: e.clientY, moved: false };
+    dragRef.current = { id, x: e.clientX, y: e.clientY, moved: false, pointerId: e.pointerId };
   };
 
   const gripMove = (e: React.PointerEvent) => {
     const d = dragRef.current;
-    if (!d) return;
+    if (!d || d.pointerId !== e.pointerId) return;
     if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 5) return;
     if (!d.moved) {
       d.moved = true;
       setDragging(d.id);
     }
-    setGhost({ x: e.clientX, y: e.clientY });
-    setDropHint(hitTest(e.clientX, e.clientY));
+    d.x = e.clientX;
+    d.y = e.clientY;
+    if (dragFrame.current !== null) return;
+    dragFrame.current = requestAnimationFrame(() => {
+      dragFrame.current = null;
+      if (ghostRef.current) {
+        ghostRef.current.style.translate = d.x + "px " + d.y + "px";
+      }
+      const target = hitTest(d.x, d.y);
+      setDropHint((previous) =>
+        previous?.dock === target?.dock && previous?.index === target?.index ? previous : target,
+      );
+    });
   };
 
-  const gripUp = (e: React.PointerEvent) => {
+  const finishGrip = (e: React.PointerEvent, drop: boolean) => {
     const d = dragRef.current;
+    if (!d || d.pointerId !== e.pointerId) return;
     dragRef.current = null;
-    if (d?.moved) {
+    if (ghostRef.current) ghostRef.current.style.visibility = "hidden";
+    if (dragFrame.current !== null) {
+      cancelAnimationFrame(dragFrame.current);
+      dragFrame.current = null;
+    }
+    if (drop && d.moved && layoutEdit) {
       const target = hitTest(e.clientX, e.clientY);
-      if (target) setLayout(movePanelTo(layout, d.id, target.dock, target.index));
+      if (target) setLayout(movePanelTo(layout, d.id, target.dock, target.index), true);
     }
     setDragging(null);
     setDropHint(null);
-    setGhost(null);
   };
+  const gripUp = (e: React.PointerEvent) => finishGrip(e, true);
+  const gripCancel = (e: React.PointerEvent) => finishGrip(e, false);
 
   /** The layout bar's PANELS list (v0.4.38): every panel with its dock and
    * ONE placement button — the ring includes "hidden", so this is both how a
@@ -8207,7 +8458,8 @@ export function LiveView({
             },
             onPointerMove: gripMove,
             onPointerUp: gripUp,
-            onPointerCancel: gripUp,
+            onPointerCancel: gripCancel,
+            onLostPointerCapture: gripCancel,
           }
         : {})}
       style={(() => {
@@ -8226,7 +8478,8 @@ export function LiveView({
           onPointerDown={gripDown(id)}
           onPointerMove={gripMove}
           onPointerUp={gripUp}
-          onPointerCancel={gripUp}
+          onPointerCancel={gripCancel}
+          onLostPointerCapture={gripCancel}
         >
           {ic.grip}
         </span>
@@ -8255,14 +8508,12 @@ export function LiveView({
     );
   };
 
+  if (mountVeil && !docApplied) {
+    return <RoomOpening name={room?.name} status={veilNote} onLeave={onLeave} />;
+  }
+
   return (
     <div className={`room${layoutEdit ? " layout-edit" : ""}`}>
-      {mountVeil && (
-        <div className="rm-veil">
-          <span className="rm-veil-spin" />
-          <span className="rm-veil-note">{veilNote}</span>
-        </div>
-      )}
       {/* The first-room walkthrough. Renders over everything but the mount
         * veil — teaching a room that has not finished opening would point at
         * controls that are not there yet. */}
@@ -8302,13 +8553,6 @@ export function LiveView({
 
       <header className={`rm-top${layoutEdit?" is-editing":""}`} data-tauri-drag-region>
         <div className="rm-window-drag-handle" data-tauri-drag-region title="Drag to move Producer" aria-label="Drag to move Producer" />
-        <div className="rm-top-left" data-tauri-drag-region>
-          {/* What you are here — the same card a mod seat and a self-hosted
-            * room show (views/RoleCard.tsx). The host's own room says so
-            * quietly; a mod's says what the seat may do. */}
-          <RoleCard access={roomAccess} compact pending={accessPending} />
-        </div>
-
         {/* The way DOWN and the way AROUND both live at the FAR LEFT, apart
           * from the transport cluster: collapse first, then edit. */}
         <button
@@ -8323,7 +8567,8 @@ export function LiveView({
         {isHost && (
           <button
             data-walk="edit"
-            className={`rm-icon-chip${layoutEdit ? " on" : ""}`}
+            className={`rm-icon-chip rm-edit-trigger${layoutEdit ? " on" : ""}`}
+            aria-pressed={layoutEdit}
             onClick={() => {
               setLayoutEdit((e) => !e);
               setLayoutMenu(false);
@@ -8331,18 +8576,15 @@ export function LiveView({
             title={layoutEdit ? "Done editing layout (⌘E)" : "Edit layout (⌘E)"}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m15 4 5 5-10 10-6 1 1-6zM13 6l5 5"/></svg>
+            <span>{layoutEdit ? "Done" : "Edit layout"}</span>
           </button>
         )}
 
-        {/* The header's health chip was the footer's stream-health meter said
-          * twice; the footer keeps it (with fps), the LIVE pill keeps time. */}
-        <div className="rm-top-drag" data-tauri-drag-region>
-          <NoticeHost action={savedRecording && onOpenRecording ? {
-            label: "View in Manager",
-            noticeKey: "recording-saved",
-            onClick: () => onOpenRecording(savedRecording.id),
-          } : undefined} />
-        </div>
+        <NoticeHost hidden={layoutEdit} action={savedRecording && onOpenRecording ? {
+          label: "View in Manager",
+          noticeKey: "recording-saved",
+          onClick: () => onOpenRecording(savedRecording.id),
+        } : undefined} />
 
       {layoutEdit && (
         <div className="rm-editbar">
@@ -8383,9 +8625,6 @@ export function LiveView({
             )}
           </div>
           {panelsMenu()}
-          <button className="rm-editbar-done" onClick={() => setLayoutEdit(false)}>
-            Done
-          </button>
           {/* Where the stage's quick controls float — an edge of the canvas.
             * One placement button: shows the edge, click opens the menu. */}
           <span className="rm-editbar-ctl" title="Quick controls position">
@@ -8547,25 +8786,31 @@ export function LiveView({
             title={
               vcamState?.installed
                 ? "Appear as a webcam in Zoom, Meet and Discord"
-                : "Install Producer's virtual camera (one approval in System Settings)"
+                : vcamState?.error ?? "Install Producer's virtual camera"
             }
           >
             {ic.cam}
             {vcamPending
               ? (vcamPending === "starting" ? "Starting…" : vcamPending === "stopping" ? "Stopping…" : "Installing…")
-              : vcamState?.state === "needs_approval"
-              ? "Approve"
               : vcamOn
                 ? "Cam on"
                 : vcamState?.installed
                   ? "Virtual cam"
-                  : "Install cam"}
+                  : vcamState?.state === "needs_approval"
+                    ? "Approve"
+                    : vcamState?.state === "move_to_applications"
+                      ? "Locate app"
+                      : vcamState?.state === "requested"
+                        ? "Installing…"
+                        : vcamState?.error && vcamState.state !== "failed"
+                          ? "Virtual cam"
+                          : "Install cam"}
           </button>
 
           <button
             className={`hd-chip${recPath ? " rec" : ""}`}
             onClick={toggleRecord}
-            disabled={!engineOk || (!!room && !docApplied && !recPath)}
+            disabled={!engineOk || (!recPath && (micUnready || (!!room && !docApplied)))}
             title={recPath ? `Recording to ${recPath.split("/").pop()}` : "Record locally"}
           >
             <span className="rm-rec-dot" />
@@ -8583,7 +8828,7 @@ export function LiveView({
             <button
               className="hd-golive"
               onClick={goLive}
-              disabled={!engineOk || (!!room && !docApplied) || enabledDests.length === 0}
+              disabled={!engineOk || micUnready || (!!room && !docApplied) || enabledDests.length === 0}
               title={audienceEnabled
                 ? "Boomin audience access is open. Select an external channel to stream there too."
                 : enabledDests.length === 0 ? "Select an external channel, or open audience access in Channels." : undefined}
@@ -8726,7 +8971,10 @@ export function LiveView({
               onClose={() => setSceneSettings(null)}
             />
           )}
-          {(topOpen || layoutEdit) && srcSettings && dockOf(layout, "sources") === "top" && (
+          {(topOpen || layoutEdit) && sourceFilters && sourcesDock === "top" && (
+            <div className="rm-source-filter-strip">{sourceFilters}</div>
+          )}
+          {(topOpen || layoutEdit) && srcSettings && !filterFor && sourcesDock === "top" && (
             <SourceSettingsStrip
               rowKey={srcSettings}
               items={sources.items ?? []}
@@ -8769,6 +9017,12 @@ export function LiveView({
           splitter("left", undefined, undefined, { open: leftOpen, onToggle: () => setLeftOpen((o) => !o) })}
 
         <div className="rm-center">
+          {mountVeil && docApplied && (
+            <div className="rm-veil rm-veil-stage">
+              <span className="rm-veil-spin" />
+              <span className="rm-veil-note">{veilNote}</span>
+            </div>
+          )}
           <RoomOutputView view={engineOk&&isHost?outputView:'landscape'} portrait={portraitMonitor} portraitContent={<PortraitCanvas canvasWidth={vh} selected={portraitSelected} onSelect={id=>{setPortraitSelected(id);setStageSel(null);}} monitor={portraitMonitor} onSources={sources=>setPortraitMonitor(previous=>({...previous,sources}))}/>}>
             {/* Off-host the stage is a PROGRAM MONITOR, not an editor: the
               * native preview is never attached (there is no local set to
@@ -8783,10 +9037,10 @@ export function LiveView({
               <div className="rm-landscape-monitor"><PreviewPanel>
                 <StageEditor
                   // A mic has no picture: never a box on the stage.
-                  items={(sources.items ?? []).filter((i) => i.kind !== "mic")}
+                  items={setOutput.active ? [] : (sources.items ?? []).filter((i) => i.kind !== "mic")}
                   baseW={(vh * 16) / 9}
                   baseH={vh}
-                  disabled={!engineOk || !isHost || (!!room && !docApplied)}
+                  disabled={!engineOk || !isHost || setOutput.active || (!!room && !docApplied)}
                   onOrder={(id, dir) => {
                     const items = sources.items ?? [];
                     const it = items.find((i) => i.id === id);
@@ -8897,6 +9151,7 @@ export function LiveView({
 
           <PermBanner
             sources={sources}
+            micStarting={missingMics.length > 0}
             onGranted={(kind) => {
               // A source created while the grant was missing is bound to
               // nothing — macOS does not retrofit access onto a live
@@ -8910,8 +9165,11 @@ export function LiveView({
               void (async () => {
                 // The grant is confirmed but the sources restart to bind it —
                 // hold the veil over the flicker instead of showing it.
-                setVeilNote("Applying access…");
-                setMountVeil(true);
+                const showVeil = kind !== "mic" || !affected.every(e => deferredMicIds.current.includes(e.id));
+                if (showVeil) {
+                  setVeilNote("Applying access…");
+                  setMountVeil(true);
+                }
                 try {
                   for (const e of affected) {
                     const current = cfgRef.current;
@@ -8923,7 +9181,7 @@ export function LiveView({
                 } catch (error) {
                   notifyError(error, { key: "banner" });
                 } finally {
-                  setMountVeil(false);
+                  if (showVeil) setMountVeil(false);
                 }
               })();
             }}
@@ -9094,8 +9352,8 @@ export function LiveView({
         </Pop>
       )}
 
-      {dragging && ghost && (
-        <div className="rm-ghost" style={{ left: ghost.x, top: ghost.y }}>
+      {dragging && dragRef.current && (
+        <div ref={ghostRef} className="rm-ghost" style={{ left: 0, top: 0, translate: dragRef.current.x + "px " + dragRef.current.y + "px" }}>
           <span className="rm-grip">{ic.grip}</span>
           {PANEL_META[dragging].title}
         </div>
@@ -9122,7 +9380,7 @@ export function LiveView({
       )}
 
       {(layout.bottom.length > 0 || dragging || layoutEdit) && (
-        <div className={`rm-sheet${sheetOpen || layoutEdit ? "" : " collapsed"}${layout.bottom.length === 0 ? " empty" : ""}${sheetOpen && srcSettings && dockOf(layout, "sources") === "bottom" ? " has-strip" : ""}`}>
+        <div className={`rm-sheet${sheetOpen || layoutEdit ? "" : " collapsed"}${layout.bottom.length === 0 ? " empty" : ""}${sheetOpen && (srcSettings || filterFor) && sourcesDock === "bottom" ? " has-strip" : ""}`}>
           {layout.bottom.length > 0 && !layoutEdit && (
             <div
               className="rm-sheet-head"
@@ -9161,7 +9419,10 @@ export function LiveView({
               onClose={() => setSceneSettings(null)}
             />
           )}
-          {sheetOpen && srcSettings && dockOf(layout, "sources") === "bottom" && (
+          {sheetOpen && sourceFilters && sourcesDock === "bottom" && (
+            <div className="rm-source-filter-strip">{sourceFilters}</div>
+          )}
+          {sheetOpen && srcSettings && !filterFor && sourcesDock === "bottom" && (
             <SourceSettingsStrip
               rowKey={srcSettings}
               items={sources.items ?? []}
@@ -9180,6 +9441,9 @@ export function LiveView({
         </div>
       )}
       <footer className="rm-foot">
+        <div className="rm-foot-role" tabIndex={0}>
+          <RoleCard access={roomAccess} compact pending={accessPending} />
+        </div>
         <span className="rm-foot-item">
           Producer v{appVersion ?? "…"}
           {/* Quiet by design: it sits beside the version, reads as label text
@@ -9216,6 +9480,19 @@ export function LiveView({
         {recPath && (
           <span className="rm-foot-item rec">
             <span className="rm-rec-dot" /> Recording {`${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`}
+          </span>
+        )}
+        {isHost && micUnready && (
+          <span className="rm-foot-item">
+            <span role="status" title={snapshot?.room_mic_failed ? "Reopen the room to retry." : undefined}>
+              {snapshot?.room_mic_failed ? "Microphone unavailable" : "Starting microphone…"}
+            </span>
+            {snapshot?.room_mic_failed && missingMics.filter(extra => sceneLook?.[extra.id]?.visible).map(extra => (
+              <button className="rm-foot-bug" key={extra.id} title={`Remove ${extra.label} from this scene`}
+                onClick={() => removeExtraSource(extra.id)}>
+                Remove {extra.label}
+              </button>
+            ))}
           </span>
         )}
         <span className="rm-foot-item dim">

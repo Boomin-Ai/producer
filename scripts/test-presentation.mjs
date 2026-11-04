@@ -39,6 +39,29 @@ const texts = projection => JSON.stringify(projection);
 const control = (session, type, args = {}) => session.send({ type: 'control', action: { type, ...args } });
 const round = () => { const s = new RehearsalSession(HEAD_TO_HEAD, 'test'); assert.ok(control(s, 'show.start')); assert.ok(control(s, 'show.next')); return s; };
 
+test('prepared Set handoffs share only validated immutable designs', () => {
+  const authored = edit(doc => {
+    doc.set.values.liveCaption = { type: 'text', default: '', maxLength: 80 };
+  });
+  const draft = new RehearsalSession(authored, undefined, 'prepare');
+  const layout = draft.package.set.layouts[1].id;
+  assert.ok(control(draft, 'layout.select', { layoutId: layout }));
+  assert.ok(draft.send({ type: 'field', key: 'liveCaption', value: 'Transient caption' }));
+  const snapshot = draft.preparedPackage();
+  assert.equal(snapshot, draft.preparedPackage());
+  assert.equal(snapshot.set.layouts, draft.package.set.layouts);
+  assert.equal(snapshot.set.initialLayout, layout);
+  assert.equal(snapshot.set.values.liveCaption.default, '');
+  assert.ok(Object.isFrozen(snapshot.set.layouts[0].root));
+  assert.equal(new RehearsalSession(snapshot, undefined, 'prepare').package, snapshot);
+  assert.deepEqual(parsePackage(snapshot), snapshot);
+
+  const exported = draft.exportPreparedPackage();
+  exported.set.initialLayout = 'missing';
+  assert.equal(draft.preparedPackage().set.initialLayout, layout);
+  assert.throws(() => new RehearsalSession(Object.freeze(exported)), /Unknown layout/);
+});
+
 test('presentation/2 rejects old packages and private module output references',()=>{
  const doc=JSON.parse(readFileSync('docs/shows/just-facts.json','utf8'));assert.throws(()=>parsePackage({...doc,schema:'producer.presentation/1'}));
  const bad=structuredClone(doc);bad.set.layouts[0].root.children.push({id:'private-response',type:'text',text:{get:'modules.research.response'}});assert.throws(()=>parsePackage(bad));

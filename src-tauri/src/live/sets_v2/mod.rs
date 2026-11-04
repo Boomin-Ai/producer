@@ -649,6 +649,7 @@ pub struct RoomProgram {
     draft_revision: u64,
     current: Option<Rc<Draft>>,
     bank: HashMap<String, (String, Rc<Draft>)>,
+    capture_placements: HashMap<usize, Source>,
     preparing_key: Option<(String, String)>,
     building: Option<Building>,
     latest_revision: u64,
@@ -685,6 +686,7 @@ impl RoomProgram {
             draft_revision: 0,
             current: None,
             bank: HashMap::new(),
+            capture_placements: HashMap::new(),
             preparing_key: None,
             building: None,
             latest_revision: 0,
@@ -998,6 +1000,18 @@ impl RoomProgram {
         Ok(())
     }
     unsafe fn finish_build(&mut self, b: Building) -> Result<Rc<Draft>, String> {
+        for capture in b.captures.values() {
+            let source = capture.0 .0;
+            if let std::collections::hash_map::Entry::Vacant(entry) =
+                self.capture_placements.entry(source as usize)
+            {
+                let placement = ffi::producer_source_placement_create(source);
+                if placement.is_null() {
+                    return Err("Native capture placement could not be created".into());
+                }
+                entry.insert(Source(placement));
+            }
+        }
         let mut arena = Arena::new(&self.resources);
         let sx = self.width as f32 / b.plan.root.bounds.width;
         let sy = self.height as f32 / b.plan.root.bounds.height;
@@ -1019,7 +1033,10 @@ impl RoomProgram {
                 .sources
                 .get(id)
                 .map(|s| s.0)
-                .or_else(|| b.captures.get(id).map(|s| s.0 .0))
+                .or_else(|| {
+                    let source = b.captures.get(id)?.0 .0 as usize;
+                    self.capture_placements.get(&source).map(|placement| placement.0)
+                })
                 .ok_or_else(|| format!("Source {id} is unavailable"))
         })?;
         let mut error = [0 as c_char; 200];
@@ -1198,8 +1215,44 @@ impl RoomProgram {
         }
         Ok(())
     }
-    pub unsafe fn raise(&self) {
-        ffi::obs_sceneitem_set_order_position(self.item, i32::MAX);
+    pub(super) fn scene_item(&self) -> *mut ffi::obs_sceneitem_t {
+        self.item
+    }
+    pub(super) fn has_capture_placement(&self, source: *mut ffi::obs_source_t) -> bool {
+        self.capture_placements.contains_key(&(source as usize))
+    }
+    /// Replace the video child behind a stable Set placement, or clear just
+    /// that placement when its source leaves. Current and transitional
+    /// compositions can continue drawing the rest of the Set.
+    pub(super) unsafe fn retarget_capture(
+        &mut self,
+        old: *mut ffi::obs_source_t,
+        replacement: Option<*mut ffi::obs_source_t>,
+    ) {
+        let old_key = old as usize;
+        if let Some(placement) = self.capture_placements.remove(&old_key) {
+            if let Some(replacement) = replacement.filter(|source| {
+                ffi::producer_source_placement_retarget(placement.0, *source)
+            }) {
+                self.capture_placements.insert(replacement as usize, placement);
+            } else {
+                ffi::producer_source_placement_retarget(placement.0, ptr::null_mut());
+            }
+        }
+    }
+
+    pub(super) fn invalidate_capture(&mut self, old: *mut ffi::obs_source_t) {
+        let uses_old = |draft: &Draft| draft.captures.values().any(|source| *source == old as usize);
+        self.bank.retain(|_, (_, draft)| !uses_old(draft));
+        if self.draft.as_ref().is_some_and(|draft| uses_old(draft)) {
+            self.preparing_key = None;
+        }
+        if self.building.as_ref().is_some_and(|build| {
+            build.captures.values().any(|capture| capture.0 .0 == old)
+        }) {
+            self.building = None;
+            self.preparing_key = None;
+        }
     }
     pub unsafe fn poll(&mut self) -> Result<Status, String> {
         if let Some(building) = self.building.take() {

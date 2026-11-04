@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { keyIs } from "../lib/keys";
 import { ipc, type LiveItem, type LiveTransformPatch } from "../lib/ipc";
 import { resizeBox } from "../lib/stageMath";
@@ -98,6 +98,17 @@ export function StageEditor({
     if (!el) return 1;
     return el.getBoundingClientRect().width / baseW;
   }, [baseW]);
+
+  const [s, setScale] = useState(1);
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element || disabled) return;
+    const update = () => setScale(scale());
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [disabled, scale]);
 
   const toCanvas = useCallback(
     (e: { clientX: number; clientY: number }) => {
@@ -336,7 +347,6 @@ export function StageEditor({
   }, [selected, items, commit, onOrder, onDelete]);
 
   if (disabled) return null;
-  const s = scale();
   const sel = selected ? shown(selected) : null;
   const cropped = !!sel && !!(sel.crop_left || sel.crop_top || sel.crop_right || sel.crop_bottom);
   const vr = sel ? visRect(sel) : { x: 0, y: 0, w: 0, h: 0 };

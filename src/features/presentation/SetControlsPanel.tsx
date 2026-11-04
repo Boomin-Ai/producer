@@ -1,4 +1,5 @@
 import {SetIntegrationConnections} from './SetIntegrationConnections';
+import {integrationRequirements} from './integrationRequirements';
 import {layoutViews,preferredViewLayout,viewForLayout} from './layoutViews';
 import {useDataConnections} from './useDataConnections';
 import {requestModuleData,type ModuleBindings} from './moduleConnections';
@@ -11,14 +12,14 @@ import {ModuleConfiguration} from './ModuleConfiguration';
 import {useShowClock} from './showClock';
 import {layoutMedia,mediaConfig} from './playback';
 import {MediaPlaybackControls} from './MediaPlaybackControls';
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type CSSProperties } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type CSSProperties } from 'react';
 import { evaluate, RehearsalSession, voteLeaders } from './rehearsal';
 import { RehearsalPreview } from './RehearsalPreview';
 import {SetPreview} from './SetPreview';
 import { outputProjection } from './projection';
 import { layoutFieldKeys } from './layoutFields';
 import { rundown, timeLabel } from './rundown';
-import type { PresentationPackage, SetControl } from './schema';
+import type { PresentationPackage, SetControl, SlotFraming } from './schema';
 import type { SetOutputControls } from './useSetOutput';
 import './presentation.css';
 import {SetSourceCreator} from './SetSourceCreator';
@@ -26,10 +27,20 @@ import {SetConfiguration} from './SetConfiguration';
 import {ControlArrangementEditor,useControlArrangement} from './ControlArrangementEditor';
 import {CommittedField} from './CommittedField';
 
+export type SetEditorTake = {
+  phase: string;
+  layout: string;
+  bindings: Record<string, string>;
+  framing: Record<string, SlotFraming>;
+};
+
 type PanelProps={
   endpoint?:string;serverRoomId?:string;preferenceRoomId?:string;moduleBindings?:ModuleBindings;
-  voting?:ReactNode; sourceNames?: Record<string,string>; onFieldEdit?: (key:string)=>void; output?: SetOutputControls; session: RehearsalSession; blocked?: boolean; blockedReason?: string; onChange: (doc: PresentationPackage,moduleBindings?:ModuleBindings) => void;
+  voting?:ReactNode; sourceNames?: Record<string,string>; onFieldEdit?: (key:string)=>void; output?: SetOutputControls; session: RehearsalSession; blocked?: boolean; blockedReason?: string;
+  onChange: (doc: PresentationPackage, moduleBindings?: ModuleBindings, take?: SetEditorTake) => void | RehearsalSession | Promise<void | RehearsalSession>;
 };
+
+type PublishRequest = { previous: RehearsalSession; installed?: RehearsalSession; take: SetEditorTake };
 function designIdentity(doc:PresentationPackage) {
   const definitions=(values:PresentationPackage['set']['values'])=>Object.fromEntries(Object.entries(values).map(([key,{default:_,...definition}])=>[key,definition]));
   return JSON.stringify({...doc,set:{...doc.set,initialLayout:'',values:definitions(doc.set.values),feeds:definitions(doc.set.feeds)}});
@@ -37,39 +48,67 @@ function designIdentity(doc:PresentationPackage) {
 function recordIdentity(record:Record<string,unknown>){return JSON.stringify(Object.entries(record).filter(([,value])=>value!==''&&value!==undefined).sort(([a],[b])=>a.localeCompare(b)));}
 function DraftPreparation({session,output,bindings,framing}:{session:RehearsalSession;output?:SetOutputControls;bindings:Record<string,string>;framing:Record<string,import('./schema').SlotFraming>}){
   const state=useSyncExternalStore(session.subscribe,session.snapshot);
-  useEffect(()=>{output?.prepareDraft?.(session.exportPreparedPackage(),bindings,framing);},[session.package,JSON.stringify(state.values),JSON.stringify(state.feeds),JSON.stringify(bindings),JSON.stringify(framing)]);
+  useEffect(()=>{
+    if (state.workspaceMode === 'prepare') output?.prepareDraft?.(session.preparedPackage(), bindings, framing, state.show.phase);
+  },[session.package,state.workspaceMode,state.layoutId,state.show.phase,JSON.stringify(state.values),JSON.stringify(state.feeds),JSON.stringify(bindings),JSON.stringify(framing)]);
   useEffect(()=>()=>output?.clearDraftPreparation?.(),[]);
   return null;
 }
 export function SetControlsPanel(props:PanelProps) {
-  const [draft,setDraft]=useState(()=>new RehearsalSession(props.session.exportPreparedPackage(),undefined,'prepare'));
+  const [draft,setDraft]=useState(()=>new RehearsalSession(props.session.preparedPackage(),undefined,'prepare'));
   const [moduleBindings,setModuleBindings]=useState<ModuleBindings>(props.moduleBindings??{});
   const {connections,adapters,connectionError,retryConnections}=useDataConnections(props.endpoint);
   const [bindings,setBindings]=useState({...props.output?.bindings});
   const [framing,setFraming]=useState({...props.output?.framing});
-  const pending=useRef<{doc:PresentationPackage;phase:string;layout:string}|undefined>(undefined);
+  const [requested,setRequested]=useState<PublishRequest>();
+  const handled=useRef<PublishRequest>(undefined);
+  const publishingRef=useRef(false);
   const [publishError,setPublishError]=useState(''),[publishing,setPublishing]=useState(false);
   const draftState=useSyncExternalStore(draft.subscribe,draft.snapshot);
   const roomState=useSyncExternalStore(props.session.subscribe,props.session.snapshot);
-  const sameDesign=useMemo(()=>designIdentity(draft.package)===designIdentity(props.session.package),[draft.package,props.session.package]);
+  const sameDesign=useMemo(()=>draft.package===props.session.package||designIdentity(draft.package)===designIdentity(props.session.package),[draft.package,props.session.package]);
   const matches=recordIdentity(moduleBindings)===recordIdentity(props.moduleBindings??{})&&sameDesign&&draftState.layoutId===roomState.layoutId&&draftState.show.phase===roomState.show.phase&&recordIdentity(draftState.values)===recordIdentity(roomState.values)&&recordIdentity(draftState.feeds)===recordIdentity(roomState.feeds)&&recordIdentity(bindings)===recordIdentity(props.output?.bindings??{})&&recordIdentity(framing)===recordIdentity(props.output?.framing??{});
-  const editorStatus=publishing||props.output?.busy&&matches?'applying':publishError||props.output?.error?'error':props.output?.active&&matches?'applied':'changed';
+  const onOutput = props.output?.currentPresented ?? props.output?.active;
+  const editorStatus=publishing||props.output?.busy&&matches?'applying':publishError||props.output?.error?'error':onOutput&&matches?'applied':'changed';
   useEffect(()=>{
-    const next=new RehearsalSession(props.session.exportPreparedPackage(),undefined,'prepare');
-    const phase=pending.current?.phase??props.session.snapshot().show.phase;
-    const layout=pending.current?.layout??props.session.snapshot().layoutId;
+    const next=new RehearsalSession(props.session.preparedPackage(),undefined,'prepare');
+    const phase=props.session.snapshot().show.phase;
+    const layout=props.session.snapshot().layoutId;
     if(phase)next.send({type:'segment.select',phaseId:phase});
     if(next.snapshot().layoutId!==layout)next.send({type:'control',action:{type:'layout.select',layoutId:layout}});
     setDraft(next);
     setModuleBindings(props.moduleBindings??{});setBindings({...props.output?.bindings});setFraming({...props.output?.framing});
   },[props.session]);
-  useEffect(()=>{
-    if(!pending.current||JSON.stringify(props.session.package)!==JSON.stringify(pending.current.doc))return;
-    const take=pending.current;pending.current=undefined;
-    if(take.phase)props.session.send({type:'segment.select',phaseId:take.phase});
-    if(props.session.snapshot().layoutId!==take.layout)props.session.send({type:'control',action:{type:'layout.select',layoutId:take.layout}});
-    void Promise.resolve(props.output?.apply()).catch(e=>setPublishError(String(e))).finally(()=>setPublishing(false));
-  },[props.session,props.output]);
+  const finishPublish = (error?: unknown) => {
+    publishingRef.current = false;
+    setPublishing(false);
+    if (error !== undefined) setPublishError(String(error));
+  };
+  useEffect(() => {
+    if (!requested || handled.current === requested || props.session === requested.previous) return;
+    handled.current = requested;
+    const output = props.output;
+    if (!output || (requested.installed && props.session !== requested.installed)) {
+      finishPublish(new Error('The room Set changed before it could be shown. Try again.'));
+      return;
+    }
+    if (!requested.installed) {
+      const {phase, layout} = requested.take;
+      if (phase) props.session.send({type:'segment.select',phaseId:phase});
+      if (props.session.snapshot().layoutId !== layout) props.session.send({type:'control',action:{type:'layout.select',layoutId:layout}});
+    }
+    void Promise.resolve().then(() => (output.applyConfirmed ?? output.apply)())
+      .then(() => finishPublish(), finishPublish);
+  }, [requested, props.session, props.output]);
+  useEffect(() => {
+    if (!requested) return;
+    const timer = setTimeout(() => {
+      if (handled.current === requested) return;
+      handled.current = requested;
+      finishPublish(new Error('The room did not load the Set. Try again.'));
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [requested]);
   const previewOutput=props.output?{...props.output,active:false,busy:false,error:'',bindings,framing,
     bind:(slot:string,id:string)=>setBindings(old=>({...old,[slot]:id})),
     frame:(slot:string,value:import('./schema').SlotFraming)=>setFraming(old=>({...old,[slot]:value})),
@@ -78,20 +117,50 @@ export function SetControlsPanel(props:PanelProps) {
       const id=await props.output!.createSource!(slot,spec,label,false);if(id)setBindings(old=>({...old,[slot]:id}));
     }:undefined,
   }:undefined;
-  const publish=()=>{
-    if(draft.snapshot().workspaceMode==='rehearsal')return;
-    const doc=draft.exportPreparedPackage();pending.current={doc,phase:draft.snapshot().show.phase,layout:draft.snapshot().layoutId};setPublishError('');setPublishing(true);
-    for(const [key,definition] of Object.entries(doc.set.values))if(definition.default!==props.session.snapshot().values[key])props.onFieldEdit?.(key);
-    for(const slot of doc.set.slots){props.output?.bind(slot.id,bindings[slot.id]??'');if(framing[slot.id])props.output?.frame(slot.id,framing[slot.id]);}
-    props.onChange(doc,moduleBindings);
+  const publish=async()=>{
+    const state=draft.snapshot();
+    const output=props.output;
+    if(state.workspaceMode==='rehearsal'||!output||publishingRef.current)return;
+    publishingRef.current=true;
+    setPublishError('');
+    setPublishing(true);
+    try {
+      const doc=draft.preparedPackage();
+      const take = {
+        phase: state.show.phase,
+        layout: state.layoutId,
+        bindings: Object.fromEntries(Object.entries(bindings).filter(([, id]) => !!id)),
+        framing,
+      };
+      if (!output.setAssignments) {
+        for(const [key,definition] of Object.entries(doc.set.values))if(definition.default!==props.session.snapshot().values[key])props.onFieldEdit?.(key);
+        for(const slot of doc.set.slots){output.bind(slot.id,bindings[slot.id]??'');if(framing[slot.id])output.frame(slot.id,framing[slot.id]);}
+      }
+      const installed=await props.onChange(doc,moduleBindings,take);
+      setRequested({previous:props.session,installed:installed??undefined,take});
+    } catch (error) {
+      finishPublish(error);
+    }
   };
-  const workspace=<><DraftPreparation session={draft} output={props.output} bindings={bindings} framing={framing}/><SetControlsPanelView {...props} moduleBindings={moduleBindings} connections={connections} adapters={adapters} connectionError={connectionError} onRetryConnections={retryConnections} onModuleBinding={(role,binding)=>setModuleBindings(old=>({...old,[role]:binding}))} session={draft} output={previewOutput} onFieldEdit={undefined} onChange={doc=>setDraft(new RehearsalSession(doc,undefined,'prepare'))} editorOnly onPublish={publish} publishError={publishError||props.output?.error||''} editorStatus={editorStatus}/></>;
-  return <SetControlsPanelView {...props} connections={connections} adapters={adapters} connectionError={connectionError} onRetryConnections={retryConnections} workspace={workspace} onWorkspaceClose={()=>draft.exitRehearsal()}/>;
+  const workspace = (onClose: () => void) => <>
+    <DraftPreparation session={draft} output={props.output} bindings={bindings} framing={framing} />
+    <SetControlsPanelView {...props} moduleBindings={moduleBindings} connections={connections} adapters={adapters}
+      connectionError={connectionError} onRetryConnections={retryConnections}
+      onModuleBinding={(role,binding)=>setModuleBindings(old=>({...old,[role]:binding}))}
+      session={draft} output={previewOutput} onFieldEdit={undefined}
+      onChange={doc=>setDraft(new RehearsalSession(doc,undefined,'prepare'))} editorOnly
+      onPublish={publish} publishError={publishError||props.output?.error||''}
+      editorStatus={editorStatus} workspaceBusy={publishing} onWorkspaceClose={onClose} />
+  </>;
+  return <SetControlsPanelView {...props} connections={connections} adapters={adapters} connectionError={connectionError}
+    onRetryConnections={retryConnections} workspace={workspace} workspaceBusy={publishing}
+    onWorkspaceClose={()=>draft.exitRehearsal()} />;
 }
-function SetControlsPanelView({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, voting, onFieldEdit, workspace, editorOnly=false,onPublish,publishError,onWorkspaceClose,editorStatus='changed',endpoint,serverRoomId,preferenceRoomId,moduleBindings={},connections=[],adapters=[],connectionError='',onRetryConnections,onModuleBinding }: PanelProps & {connections?:SavedConnection[];adapters?:import('../../../shared/set-runtime/dataAdapters').DataAdapterManifest[];connectionError?:string;onRetryConnections?:()=>void;onModuleBinding?:(role:string,binding:{id:string;revision:number})=>void;} & {editorStatus?:'changed'|'applying'|'applied'|'error';onWorkspaceClose?:()=>void;workspace?:ReactNode;editorOnly?:boolean;onPublish?:()=>void;publishError?:string}) {
+function SetControlsPanelView({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, voting, onFieldEdit, workspace, workspaceBusy=false, editorOnly=false,onPublish,publishError,onWorkspaceClose,editorStatus='changed',endpoint,serverRoomId,preferenceRoomId,moduleBindings={},connections=[],adapters=[],connectionError='',onRetryConnections,onModuleBinding }: PanelProps & {connections?:SavedConnection[];adapters?:import('../../../shared/set-runtime/dataAdapters').DataAdapterManifest[];connectionError?:string;onRetryConnections?:()=>void;onModuleBinding?:(role:string,binding:{id:string;revision:number})=>void;} & {editorStatus?:'changed'|'applying'|'applied'|'error';onWorkspaceClose?:()=>void;workspace?:(onClose:()=>void)=>ReactNode;workspaceBusy?:boolean;editorOnly?:boolean;onPublish?:()=>void;publishError?:string}) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const arrangements=useControlArrangement(session.package,JSON.stringify([endpoint??'local',serverRoomId??preferenceRoomId??'preview']));
   const [player, setPlayer] = useState('player-1');
+  const rundownId = useId();
   useShowClock(session);
   // Fast Refresh can retain a session built by the previous runtime module.
   // Replace that rehearsal instance while retaining its prepared configuration.
@@ -101,6 +170,10 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
   }, [staleSession, session, onChange]);
   if (staleSession) return <div className="set-controls"><p role="status">Updating rehearsal controls…</p></div>;
   const doc = session.package;
+  const missingConnections = useMemo(
+    () => integrationRequirements(doc).filter(requirement => !requirement.optional && !moduleBindings[requirement.role]?.id),
+    [doc, moduleBindings],
+  );
   const views=layoutViews(doc.set),selectedView=viewForLayout(doc.set,state.layoutId);
   const viewReadiness=(view:typeof views[number])=>{const statuses=[...new Set(output?.requiredOrientations?output.requiredOrientations.map(o=>view.variants[o]??preferredViewLayout(view)):Object.values(view.variants))].map(id=>output?.layoutReadiness?.[id]);return statuses.find(s=>s?.state==='error')??statuses.find(s=>s&&s.state!=='ready')??statuses.find(Boolean);};
   const hasHostMedia=[...layoutMedia(doc,state.layoutId,false,state)].some(id=>mediaConfig(doc,id).hostControls);
@@ -110,8 +183,10 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
   const outputStatus = output?.active
     ? output.busy && output.pendingChange === 'set' ? 'Switching set…'
       : output.busy && output.pendingChange === 'segment' ? 'Switching segment…'
-      : 'On output'
-    : output?.busy ? 'Preparing output…' : 'Show the set on output';
+      : 'Set on output'
+    : output?.busy ? 'Preparing set…' : 'Room scene on output';
+  const canReturnToScene = output?.active || output?.busy;
+  const outputAction = canReturnToScene ? 'Show room scene' : 'Show set';
   const showControls = doc.set.controls.filter(c => c.type === 'button' && c.action.type.startsWith('show.'));
   const layoutControls = doc.set.controls.filter(c => c.type === 'button' && !c.action.type.startsWith('show.'));
   const actionControls=layoutControls.filter(c=>c.type==='button'&&c.action.type!=='layout.select');
@@ -196,6 +271,19 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
   const editSegment=(id:string)=>{session.send({type:'segment.select',phaseId:id});};
   const ready=(layout:string)=>output?.layoutReadiness?.[layout];
   const readinessLabel=(layout:string)=>{const status=ready(layout);return !status?'':status.state==='ready'?'Ready':status.state==='error'?`Layout unavailable: ${status.error}`:'Loading layout';};
+  const segmentList = (compact = false) => <ol>{schedule.phases.map((step, index) =>
+    <li key={step.id} aria-current={index === displayedStepIndex ? 'step' : undefined}
+      data-readiness={ready(step.layoutId)?.state} title={readinessLabel(step.layoutId)}
+      className={index === displayedStepIndex ? 'current' : state.running && index < displayedStepIndex ? 'passed' : ''}>
+      <button type="button" className="set-segment-select" onClick={event => {
+        editSegment(step.id);
+        if (compact) event.currentTarget.closest<HTMLElement>('[popover]')?.hidePopover();
+      }}>
+        <span className="set-step-number">{String(index + 1).padStart(2, '0')}</span>
+        <span>{step.label}</span>
+        <small>{step.collectMs ? `${timeLabel(step.collectMs)} vote` : 'Manual'}</small>
+      </button>
+    </li>)}</ol>;
   const modulePanel=(controlRefs?:readonly string[],compact=false,includeRuntimeControls=controlRefs===undefined)=><OperatorPanel controlRefs={controlRefs} compact={compact} includeRuntimeControls={includeRuntimeControls} definition={doc.runtime} snapshot={session.moduleSnapshot()} segment={state.show.phase} disabled={blocked||state.workspaceMode==='prepare'||state.moduleConnection==='connecting'||state.moduleConnection==='error'} send={session.sendModule} searchWeatherLocations={endpoint?async query=>(await dataIntegrations.locations(endpoint,query)).locations:undefined} simulateWeather={rehearsing?async(module,condition,isDay)=>{const snapshot=session.moduleSnapshot(),now=Date.now();return session.receiveModuleData({id:crypto.randomUUID(),setEpoch:snapshot.setEpoch,module,epoch:snapshot.modules[module].epoch,op:'weather.update',input:{locationRevision:snapshot.modules[module].weatherLocationRevision??0,observedAt:now,temperature:condition==='snow'?-4:18,condition,isDay,wind:12,precipitation:['rain','snow','storm'].includes(condition)?3:0,provider:'Rehearsal',location:snapshot.modules[module].weather?.location??'Preview location',units:'celsius'}});}:undefined} requestAgent={endpoint?(module,question,refresh)=>requestModuleData(session,module,question,endpoint,serverRoomId,moduleBindings,connections,refresh):undefined}/>;
   const moduleControls=doc.runtime.instances.length>0&&<>
     {modulePanel()}
@@ -220,7 +308,17 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
   };
   const arrangedControl=(ref:string,compact=false):ReactNode=>{
     if(!controlVisible(ref))return null;
-    if(ref==='builtin:layout')return <label key={ref} data-control-ref={ref}>Layout<select aria-label={compact?'Minimized layout':'Set layout'} disabled={blocked||!!state.controlPending} value={selectedView?preferredViewLayout(selectedView):state.layoutId} onChange={e=>session.send({type:'control',action:{type:'layout.select',layoutId:e.target.value}})}>{views.map(view=><option key={view.id} value={preferredViewLayout(view)}>{view.label}</option>)}</select></label>;
+    if(ref==='builtin:layout')return <div key={ref} className="set-layout-picker" role="group"
+      aria-label={compact?'Minimized layouts':'Set layouts'} data-control-ref={ref}>
+      {views.map(view => {
+        const readiness = viewReadiness(view);
+        const layoutId = preferredViewLayout(view);
+        return <button key={view.id} type="button" aria-pressed={selectedView?.id === view.id}
+          data-layout-id={layoutId} data-readiness={readiness?.state} disabled={blocked || !!state.controlPending}
+          title={readiness?.state === 'error' ? `${view.label} · ${readiness.error}` : readiness?.state === 'loading' ? `${view.label} · Loading…` : view.label}
+          onClick={() => session.send({type:'control',action:{type:'layout.select',layoutId}})}>{view.label}</button>;
+      })}
+    </div>;
     const entry=arrangements.catalog.controls.find(c=>c.id===ref);
     if(!entry)return null;
     if(entry.kind==='module')return <div key={ref} className="set-arranged-module" data-control-ref={ref}>{modulePanel([ref],compact)}</div>;
@@ -230,9 +328,14 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
     if(item.type==='button'&&['show.vote','show.react'].includes(item.action.type)&&(!editorOnly||!collecting))return null;
     return <div key={ref} className="set-arranged-control" data-control-ref={ref}>{control(item)}</div>;
   };
-  const arrangedExpanded=<div className="set-arranged-sections">{arrangements.arrangement.sections.filter(section=>section.controls.some(controlVisible)).map(section=><section key={section.id} className="set-arranged-section" data-section-id={section.id}>
+  const visibleLayoutIds = new Set(views.map(preferredViewLayout));
+  const redundantLayoutControls = new Set(doc.set.controls.flatMap(item =>
+    item.type === 'button' && item.action.type === 'layout.select' && item.when === undefined && item.enabled === undefined &&
+    visibleLayoutIds.has(item.action.layoutId) ? [`set:${item.id}`] : []));
+  const expandedControlVisible = (ref: string) => (doc.show || ref !== 'builtin:layout') && !redundantLayoutControls.has(ref) && controlVisible(ref);
+  const arrangedExpanded=<div className="set-arranged-sections">{arrangements.arrangement.sections.filter(section=>section.controls.some(expandedControlVisible)).map(section=><section key={section.id} className="set-arranged-section" data-section-id={section.id}>
     <h4><button type="button" aria-expanded={!section.collapsed} aria-label={`${section.collapsed?'Expand':'Collapse'} ${section.label} section`} onClick={()=>arrangements.update({...arrangements.preferences,collapsed:{...arrangements.preferences.collapsed,[section.id]:!section.collapsed}})}><span>{section.collapsed?'▸':'▾'}</span>{section.label}</button></h4>
-    <div className="set-arranged-section-controls" hidden={section.collapsed}>{section.controls.map(ref=>arrangedControl(ref))}</div>
+    <div className="set-arranged-section-controls" hidden={section.collapsed}>{section.controls.filter(expandedControlVisible).map(ref=>arrangedControl(ref))}</div>
   </section>)}</div>;
   const editor = <>
         <div className="set-editor-details-header"><strong>{doc.show?'Segment details':'Set details'}</strong><p>{editorOnly?'Changes stay in this preview until you show the set on output.':'Changes update room output.'}</p></div>
@@ -259,9 +362,12 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
   </>;
   if(editorOnly)return <>
     <SetConfiguration hideOutputAction session={session} onChange={onChange} output={output?{...output,apply:async()=>onPublish?.()}:undefined} actions={<div className="set-editor-top-actions">
-      <span role="status" className={`set-editor-apply-status ${rehearsing?'practice':editorStatus}`} title={rehearsing?'Private rehearsal':editorStatus==='applied'?'This set is on output':editorStatus==='applying'?'Applying to output':editorStatus==='error'?'Output update failed':'Changes not on output'}>{rehearsing?'Private rehearsal':editorStatus==='applied'?'✓ On output':editorStatus==='applying'?'Applying…':editorStatus==='error'?'Update failed':'Changes not on output'}</span>
-      {(doc.show||doc.runtime.instances.length>0)&&<button onClick={()=>{if(rehearsing)session.exitRehearsal();else if(doc.show)startShow();else session.enterRehearsal();}}>{rehearsing?'Exit rehearsal':'Rehearse'}</button>}
-      <button className="set-editor-apply" disabled={rehearsing||!output||editorStatus==='applying'||editorStatus==='applied'} onClick={onPublish}>{editorStatus==='applying'?'Applying…':'Show on output'}</button>
+      {(doc.show||doc.runtime.instances.length>0)&&<button type="button" disabled={workspaceBusy} onClick={()=>{if(rehearsing)session.exitRehearsal();else if(doc.show)startShow();else session.enterRehearsal();}}>{rehearsing?'Exit rehearsal':'Rehearse'}</button>}
+      <div className="set-editor-publish" role="group" aria-label="Room output">
+        <span role="status" className={`set-editor-apply-status ${rehearsing?'practice':editorStatus}`}>{rehearsing?'Private rehearsal':editorStatus==='applied'?'✓ On output':editorStatus==='applying'?'Applying to room…':editorStatus==='error'?'Update failed':'Changes not on output'}</span>
+        <button type="button" className="set-editor-apply" disabled={rehearsing||!output||editorStatus==='applying'||editorStatus==='applied'} onClick={onPublish}>{editorStatus==='applying'?'Applying…':'Show on output'}</button>
+      </div>
+      {onWorkspaceClose&&<button type="button" className="set-editor-close" disabled={workspaceBusy} onClick={onWorkspaceClose}>Close editor</button>}
     </div>}/>
     {doc.show&&rehearsing&&<div className="set-editor-run-tools">{transport}</div>}
     {publishError&&<p role="alert">{publishError}</p>}
@@ -280,7 +386,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
     {visibleSlots.size>0&&<section className="set-controls set-editor-source-tray" aria-label="Edit source assignments">{sourceEditor}</section>}
   </>;
   if (blocked) return <div className="set-controls"><p>{blockedReason ?? 'Waiting for the room to finish loading.'}</p></div>;
-  return <div className="set-controls" data-output-busy={output?.busy?'true':'false'} data-layouts-ready={Object.values(output?.layoutReadiness??{}).filter(s=>s.state==='ready').length} data-layouts-total={Object.keys(output?.layoutReadiness??{}).length} data-controls-total={Object.keys(output?.controlReadiness??{}).length} data-controls-ready={Object.values(output?.controlReadiness??{}).filter(s=>s.state==='ready').length}>
+  return <div className={`set-controls${doc.show?'':' set-controls--standalone'}`} data-output-busy={output?.busy?'true':'false'} data-layouts-ready={Object.values(output?.layoutReadiness??{}).filter(s=>s.state==='ready').length} data-layouts-total={Object.keys(output?.layoutReadiness??{}).length} data-controls-total={Object.keys(output?.controlReadiness??{}).length} data-controls-ready={Object.values(output?.controlReadiness??{}).filter(s=>s.state==='ready').length}>
     <header className="set-controls-toolbar">
       <div className="set-header-main">
       <span className={`set-mode-badge ${rehearsing ? 'rehearsal' : 'prepared'}`}>{rehearsing ? 'Rehearsal' : state.workspaceMode==='live'&&state.running?'Show':'Prepared'}</span>
@@ -291,36 +397,50 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
       {doc.show&&<button className="set-mode-action" disabled={!canRun||state.running} onClick={startShow}>Start show</button>}
       </div>
       {output && <div className="set-output-actions">
-        {output.active || output.busy ? <button onClick={() => void output.returnToRoom()}>Show room scene</button> : <button disabled={output.busy&&!output.active} onClick={() => void output.apply()} className="set-send-output">Show set</button>}
-        <span className="set-output-status" title={outputStatus}>{outputStatus}</span>
+        <button type="button" className="set-output-switch" data-output={output.busy?'busy':output.active?'set':'scene'}
+          aria-label={outputAction} title={`${outputStatus} · ${outputAction}`}
+          onClick={() => void (canReturnToScene ? output.returnToRoom() : output.apply())}>
+          <span className="set-output-cue" aria-hidden="true">{outputStatus}</span>
+          <span className="set-output-action">{outputAction}</span>
+          <span className="set-output-action-short" aria-hidden="true">{canReturnToScene?'Room scene':'Show set'}</span>
+          <svg className="set-output-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+            <path d="M2 4h12v8H2zM5.5 14h5M8 12v2"/>
+          </svg>
+        </button>
+        <span className="set-output-announcement" role="status">{outputStatus}</span>
       </div>}
+      {!doc.show && views.length > 1 && <div className="set-primary-layout">{arrangedControl('builtin:layout')}</div>}
       {doc.show && <div className="set-fixed-playback">{transport}</div>}
+      {doc.show && <button type="button" className="set-rundown-trigger" popoverTarget={rundownId} aria-label="Show rundown" title={phase?.label}>
+        <span>{String(displayedStepIndex + 1).padStart(2, '0')}/{schedule.phases.length}</span>
+        <strong>{phase?.label}</strong>
+        <span aria-hidden="true">▾</span>
+      </button>}
       <div className="set-compact-run" aria-label={doc.show?'Compact show controls':'Compact set controls'}>
-        {arrangements.arrangement.minimized.map(ref=>arrangedControl(ref,true))}
+        {arrangements.arrangement.minimized.filter(ref => doc.show || ref !== 'builtin:layout').map(ref=>arrangedControl(ref,true))}
 
       </div>
       <div className="set-toolbar-tools">
-        <ControlArrangementEditor value={arrangements}/>
-        <RehearsalPreview doc={doc} state={state} output={output} outputActive={output?.active} workspace={workspace} onEditorClose={onWorkspaceClose} configuration={<SetConfiguration session={session} onChange={onChange} output={output}/>} editor={editor} sources={visibleSlots.size ? sourceEditor : undefined} />
+        <ControlArrangementEditor value={arrangements} fixedLayout={!doc.show} redundantLayoutControls={redundantLayoutControls}/>
+        <RehearsalPreview doc={doc} state={state} output={output} outputActive={output?.active} workspace={workspace} workspaceBusy={workspaceBusy} onEditorClose={onWorkspaceClose} configuration={<SetConfiguration session={session} onChange={onChange} output={output}/>} editor={editor} sources={visibleSlots.size ? sourceEditor : undefined} />
       </div>
     </header>
     {session.hasRoomControl()&&<p role="status">{state.controlPending?"Sending room command…":"Shared room controls · changes require output confirmation"}</p>}
     {state.controlError&&<p role="alert" className="set-error">{state.controlError}</p>}
-    {doc.runtime.instances.length>0&&state.workspaceMode==='live'&&state.moduleConnection!=='live'&&<p role="status" className={state.moduleError?'set-error':'set-section-note'}>{state.moduleError?`Modules disconnected — reconnecting. ${state.moduleError}`:'Connecting live controls…'}</p>}
+    {missingConnections.length > 0 && (
+      <p className="set-section-note">
+        Choose a connection for {missingConnections.map(requirement => requirement.label).join(", ")} in Set → Data connections.
+      </p>
+    )}
+    {doc.runtime.instances.length>0&&state.workspaceMode==='live'&&state.moduleConnection!=='live'&&<p role="status" className={state.moduleError?'set-error':'set-section-note'}>{!endpoint||!serverRoomId?'Connect this room to a workspace to use live modules.':state.moduleError?`Modules disconnected — reconnecting. ${state.moduleError}`:'Connecting live controls…'}</p>}
     {output?.layoutReadiness&&views.some(view=>viewReadiness(view)?.state==='error')&&<p className="set-error">Some layouts could not load. <button onClick={output.retryPreparation}>Retry loading</button></p>}
     {output?.error && <div role="alert" className="set-error">{output.error} <button disabled={output.busy&&!output.active} onClick={()=>void output.apply()}>Retry update</button></div>}
     {state.trace[state.trace.length - 1]?.message.startsWith('Rejected:') && <p role="status" className="set-error">{state.trace[state.trace.length - 1]!.message}</p>}
     <div className={`set-sections ${rehearsing ? 'is-rehearsing' : 'is-prepared'}${doc.show ? ' has-show' : ' set-only'}${hasHostMedia ? ' has-media' : ''}`}>
       {!doc.show && <>
-        <section className="set-layouts" aria-label="Layouts">
-          <h3>Layouts <span>{views.length} layouts</span></h3>
-          <div className="set-layout-list">{views.map(view=>{const status=viewReadiness(view);return <button type="button" key={view.id} aria-pressed={selectedView?.id===view.id} data-readiness={status?.state} title={status?.state==='error'?`Layout unavailable: ${status.error}`:status?.state==='ready'?'Ready':status?.state==='loading'?'Preparing layout…':'Prepares when selected'} disabled={blocked}
-            onClick={()=>session.send({type:'control',action:{type:'layout.select',layoutId:preferredViewLayout(view)}})}><span>{view.label}</span><small>{Object.keys(view.variants).length>1?'Both':Object.keys(view.variants)[0]}</small></button>;})}</div>
-        </section>
         <section className="set-manual-controls" aria-label="Set controls">
-          <h3>Controls <span>{activeLayout?.label}</span></h3>{arrangedExpanded}
+          {arrangedExpanded}
           {hasHostMedia&&<MediaPlaybackControls session={session}/>}
-          {!layoutFields.length&&!actionControls.length&&!hasHostMedia&&<p className="set-section-note">Switch layouts to change the set’s output.</p>}
           {voting&&!doc.runtime.instances.some(i=>doc.runtime.definitions[i.definition].behavior?.type==='vote')&&<section className="set-room-voting" aria-label="Room voting"><h3>Voting</h3>{voting}</section>}
         </section>
       </>}
@@ -347,10 +467,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
           <div className="set-segments" role="region" aria-label="Show segments">
             <h3 className="set-segments-heading">Segments<span>{schedule.phases.length} segments</span></h3>
             <div className="set-segments-scroll" role="region" tabIndex={0} aria-label="Segment list">
-              <ol>{schedule.phases.map((p, i) => <li key={p.id} aria-current={i === displayedStepIndex ? 'step' : undefined}
-                data-readiness={ready(p.layoutId)?.state} title={readinessLabel(p.layoutId)} className={i === displayedStepIndex ? 'current' : state.running && i < displayedStepIndex ? 'passed' : ''}>
-                <button type="button" className="set-segment-select" disabled={blocked} onClick={()=>editSegment(p.id)}><span className="set-step-number">{String(i + 1).padStart(2,'0')}</span><span>{p.label}</span><small>{p.collectMs ? `${timeLabel(p.collectMs)} vote` : 'Manual'}</small></button>
-              </li>)}</ol>
+              {segmentList()}
               <div className="set-run-timing">
                 <span className="set-rehearsal-note">{schedule.repeats ? 'Repeating · No fixed total' : schedule.timedMs ? `${timeLabel(schedule.timedMs)} timed${schedule.manual ? ' + manual steps' : ''}` : 'Manual timing'}</span>
                 <span className="set-rehearsal-note">{state.workspaceMode==='live'?`Elapsed ${timeLabel(state.elapsedMs)}`:rehearsing?`Elapsed ${timeLabel(state.elapsedMs)} · Simulated clock`:'Ready to start'}</span>
@@ -399,7 +516,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
           <p className="set-rehearsal-note">Reopen adds {timeLabel(phase?.collectMs ?? 0)} and keeps votes. A tie-break starts a new ballot.</p>
         </div>}
       </section>}
-      <div className="set-reference">
+      {(doc.show || visibleSlots.size > 0) && <div className="set-reference">
         <section className="set-assignments" aria-label="Assigned sources">
           <h3>Sources <span>{visibleSlots.size} slots</span></h3>
           <ul>{doc.set.slots.filter(slot=>visibleSlots.has(slot.id)).map((slot,index) => {
@@ -408,9 +525,13 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
             return <li key={slot.id}><span className="set-source-number">{index+1}</span><div><strong>{id ? sourceNames[id] ?? item?.label ?? 'Source unavailable' : 'Unassigned'}</strong><small>{slot.label} · {visibleSlots.has(slot.id) ? phase?.label ?? 'Current layout' : 'Not in this layout'}</small></div><span className={`set-source-indicator${id && visibleSlots.has(slot.id) && item?.has_frame ? ' is-ready' : ''}`} /></li>;
           })}</ul>
         </section>
-        <p className="set-prepared-note">{rehearsing ? output?.active ? "Rehearsal is on room output · Audience inputs are simulated" : "Rehearsal preview only · Choose Show set to put it on air" : output ? output.active ? "Set is on the room output · Audio follows the room mixer" : "Assign sources in Set edit, then choose Show set" : "Prepared for preview and rehearsal · Live set output is not connected yet"}</p>
-      </div>
+        {doc.show && <p className="set-prepared-note">{rehearsing ? output?.active ? "Rehearsal is on room output · Audience inputs are simulated" : "Rehearsal preview only · Choose Show set to put it on air" : output ? output.active ? "Set is on the room output · Audio follows the room mixer" : "Assign sources in Set edit, then choose Show set" : "Prepared for preview and rehearsal · Live set output is not connected yet"}</p>}
+      </div>}
     </div>
+    {doc.show && <div id={rundownId} className="set-compact-rundown set-run set-segments" popover="auto" role="region" aria-label="Show rundown">
+      <header><strong>Show rundown</strong><button type="button" popoverTarget={rundownId} popoverTargetAction="hide" aria-label="Close rundown">×</button></header>
+      {segmentList(true)}
+    </div>}
   </div>;
 }
 

@@ -215,7 +215,13 @@ export const ipc = {
     overlay_window: number | null;
     overlay_url: string | null;
     changes: { id: string; patch: LiveTransformPatch; muted?: boolean }[];
-  }) => invoke<{ sources: LiveSources; warnings: string[] }>("live_restore_room", { restore }),
+  }) => invoke<{
+    sources: LiveSources;
+    warnings: string[];
+    room_mic_starting_ids?: string[];
+    room_mic_pending?: boolean;
+    room_mic_failed?: boolean;
+  }>("live_restore_room", { restore }),
   livePortraitRoom: ()=>invoke<LiveSources>('live_portrait_room'),
   liveSelectOutput: (portrait:boolean)=>invoke<void>('live_select_output',{portrait}),
   liveVirtualCamMirror: (on?:boolean)=>invoke<boolean>('live_virtual_cam_mirror',{on:on??null}),
@@ -342,6 +348,9 @@ export interface LiveDestStatus {
 export type LiveSessionState = "idle" | "starting" | "streaming" | "stopping";
 
 export interface LiveSnapshot {
+  room_mic_pending?: boolean;
+  room_mic_failed?: boolean;
+  room_mic_starting_ids?: string[];
   engine_ready: boolean;
   bootstrap_ok: boolean;
   graphics_backend?: string | null;
@@ -518,7 +527,17 @@ export interface LocalRecording {
 export interface VcamStatus {
   /** The camera's label as other apps see it; per platform (Windows: OBS's filter name). */
   device_name?: string;
-  state: "idle" | "requested" | "needs_approval" | "active" | "failed" | "unavailable";
+  state:
+    | "idle"
+    | "requested"
+    | "needs_approval"
+    | "active"
+    | "failed"
+    | "unsupported"
+    | "move_to_applications"
+    | "requires_signed_app"
+    | "restart_required"
+    | "unavailable";
   installed: boolean;
   error: string | null;
 }
@@ -527,6 +546,8 @@ export const vcam = {
   status: () => invoke<VcamStatus>("live_vcam_status"),
   /** Asks macOS to install the camera extension; the user approves once. */
   activate: () => invoke("live_vcam_activate"),
+  revealApp: () => invoke("live_vcam_setup", { action: "reveal_app" }),
+  openSettings: () => invoke("live_vcam_setup", { action: "open_settings" }),
   /** Starts/stops sending the program feed to the virtual camera. */
   output: (on: boolean) => invoke<boolean>("live_vcam_output", { on }),
 };

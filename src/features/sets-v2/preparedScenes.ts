@@ -17,7 +17,7 @@ export function preparationInventory(inventory:SceneSpec[],candidates:SceneSpec[
  return [...candidates,...(replacing?inventory.filter(s=>currentLayouts.has(s.layout)):inventory)];
 }
 type Entry={pins:number;key:string;identity:string;spec:SceneSpec;state:SceneReadiness;plan?:Plan;promise?:Promise<Entry>};
-type Job={priority:number;run:(abort:()=>boolean)=>Promise<unknown>;resolve:(v:any)=>void;reject:(e:unknown)=>void;preemptible:boolean};
+type Job={priority:number;run:(abort:()=>boolean)=>Promise<unknown>;resolve:(v:any)=>void;reject:(e:unknown)=>void;preemptible:boolean;entry?:Entry};
 const sleep=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 function digest(text:string){let a=2166136261,b=5381;for(let i=0;i<text.length;i++){a=Math.imul(a^text.charCodeAt(i),16777619);b=Math.imul(b,33)^text.charCodeAt(i);}return 'scene-'+(a>>>0).toString(16)+'-'+(b>>>0).toString(16);}
 function visual(node:RenderNode):unknown{const {playback:_playback,motionClass:_motion,...rest}=node;if(rest.scene3d){const {cue:_cue,view:_view,cueSequence:_sequence,...definition}=rest.scene3d;rest.scene3d={...definition,cue:"neutral"};}return {...rest,children:node.children.map(visual)};}
@@ -41,26 +41,40 @@ export class PreparedScenes {
  private trace:string[]=[];
  debug(){return {counters:{...this.counters},working:this.working,abort:this.abort,queue:this.jobs.map(j=>j.priority),trace:this.trace,active:[...this.active.values()].map(s=>({layout:s.layout,target:s.target.id,key:digest(sceneIdentity(s))})),inventory:this.inventory?.map(s=>({layout:s.layout,target:s.target.id,key:digest(sceneIdentity(s))})),entries:[...this.entries.values()].map(e=>({layout:e.spec.layout,target:e.spec.target,key:e.key,pins:e.pins,state:e.state}))};}
  private log(message:string){this.trace=[...this.trace.slice(-79),message];}
- private entries=new Map<string,Entry>();private jobs:Job[]=[];private working=false;private abort=false;private background=false;private disposed=false;private revision=0;
+ private entries=new Map<string,Entry>();private jobs:Job[]=[];private working=false;private abort=false;private running?:Job;private disposed=false;private revision=0;
+ private trimTimer?:ReturnType<typeof setTimeout>;
  constructor(private send:(request:Record<string,unknown>)=>Promise<NativeSceneStatus>,private changed:()=>void,private compile=compileRoomScene){
   const originalSend=this.send;this.send=async request=>{if(request.op==='preload')this.counters.preloads++;if(request.op==='retain')this.counters.retains++;const started=performance.now();try{return await originalSend(request);}finally{this.log(`${request.op}:${request.outputId??'program'} ${(performance.now()-started).toFixed(1)}ms`);}};
   debugSessions.add(this);
  }
  get(spec:SceneSpec){const identity=sceneIdentity(spec),key=digest(identity);let entry=this.entries.get(key);if(entry&&entry.identity!==identity)throw Error('Prepared scene identity collision');if(!entry){entry={pins:0,key,identity,spec,state:{state:'queued'}};this.entries.set(key,entry);}return entry;}
  readiness(spec:SceneSpec):SceneReadiness{return {...this.get(spec).state};}
- private enqueue<T>(priority:number,preemptible:boolean,run:(abort:()=>boolean)=>Promise<T>):Promise<T>{
-  if(this.disposed)return Promise.reject(Error('Room preparation closed'));
-  if(priority>=100&&this.background)this.abort=true;
-  return new Promise((resolve,reject)=>{this.jobs.push({priority,preemptible,run,resolve,reject});void this.pump();});
+ private preemptBackground(){
+  if(this.running?.preemptible&&!this.running.entry?.pins)this.abort=true;
  }
- private async pump(){if(this.working||this.disposed)return;this.working=true;try{while(this.jobs.length&&!this.disposed){this.jobs.sort((a,b)=>b.priority-a.priority);const job=this.jobs.shift()!;this.abort=false;this.background=job.preemptible;try{job.resolve(await job.run(()=>this.abort||this.disposed));}catch(e){job.reject(e);}}}finally{this.background=false;this.working=false;}}
+ private enqueue<T>(priority:number,preemptible:boolean,run:(abort:()=>boolean)=>Promise<T>,entry?:Entry):Promise<T>{
+  if(this.disposed)return Promise.reject(Error('Room preparation closed'));
+  if(priority>=100)this.preemptBackground();
+  return new Promise((resolve,reject)=>{this.jobs.push({priority,preemptible,run,resolve,reject,entry});void this.pump();});
+ }
+ private async pump(){if(this.working||this.disposed)return;this.working=true;try{while(this.jobs.length&&!this.disposed){this.jobs.sort((a,b)=>b.priority-a.priority);const job=this.jobs.shift()!;this.abort=false;this.running=job;try{job.resolve(await job.run(()=>this.abort||this.disposed));}catch(e){job.reject(e);}}}finally{this.running=undefined;this.working=false;}}
  async ensure(spec:SceneSpec,priority=0):Promise<Entry>{
   this.outputs.add(spec.target.id);
-  const entry=this.get(spec);if(entry.state.state==='ready')return entry;if(priority<100&&this.warmingBlocked.has(spec.target.id))return entry;if(entry.promise){if(priority>=100&&this.background)this.abort=true;return entry.promise;}
+  const entry=this.get(spec);
+  const speculative=()=>priority<100&&!entry.pins;
+  if(entry.state.state==='ready'||(speculative()&&this.warmingBlocked.has(spec.target.id)))return entry;
+  if(entry.promise){
+   if(priority>=100){
+    const queued=this.jobs.find(job=>job.entry===entry);
+    if(queued){queued.priority=priority;queued.preemptible=false;}
+    this.preemptBackground();
+   }
+   return entry.promise;
+  }
   entry.promise=this.enqueue(priority,priority<100,async abort=>{
    this.log('loading '+entry.key+' priority '+priority);entry.state={state:'loading'};this.changed();let revision=0;
    try{
-    if(priority<100&&this.warmingBlocked.has(spec.target.id)){entry.state={state:'queued'};return entry;}
+    if(speculative()&&this.warmingBlocked.has(spec.target.id)){entry.state={state:'queued'};return entry;}
     if(!entry.plan){this.counters.plans++;const started=performance.now();entry.plan=await this.compile(spec.projection,{definitionId:spec.definition,instanceId:spec.instance,canvasId:spec.layout,target:spec.target,bindings:spec.bindings,retainedTargets:spec.targets}) as Plan;this.log(`compiled ${entry.key} ${(performance.now()-started).toFixed(1)}ms`);}
     if(abort()){this.log('aborted compile '+entry.key);entry.state={state:'queued'};return entry;}
     for(let attempt=0;;attempt++){
@@ -86,7 +100,7 @@ export class PreparedScenes {
       if(!String(error).includes('Loaded set texture budget reached'))throw error;
       if(revision)await this.send({op:'cancel',outputId:spec.target.id,revision}).catch(()=>{});
       this.warmingBlocked.add(spec.target.id);
-      if(priority<100){this.log('deferred full cache '+entry.key);entry.state={state:'queued'};return entry;}
+      if(speculative()){this.log('deferred full cache '+entry.key);entry.state={state:'queued'};return entry;}
       if(attempt)throw error;
       // Cache pressure is not a broken Set. Keep every in-flight paired take
       // pinned, release cold snapshots and retry the requested view once.
@@ -102,7 +116,7 @@ export class PreparedScenes {
 
    }catch(e){if(revision)await this.send({op:'cancel',outputId:spec.target.id,revision}).catch(()=>{});entry.plan=undefined;entry.state={state:'error',error:String(e)};throw e;}
    finally{entry.promise=undefined;this.changed();}
-  });return entry.promise;
+  },entry);return entry.promise;
  }
  async take(spec:SceneSpec,run:(entry:Entry,revision:number)=>Promise<void>){
   return this.takeGroup([spec],entries=>run(entries[0].entry,entries[0].revision));
@@ -114,7 +128,7 @@ export class PreparedScenes {
    // Cold preparation needs room first. A ready take allocates no scene: do
    // not put unrelated eviction/destruction in front of its presentation.
    // The finally trim reconciles inventory after the new frame is confirmed.
-   if(!pinned.every(entry=>entry.state.state==='ready'))await this.trim(100,specs);
+   if(!pinned.every(entry=>entry.state.state==='ready'||entry.promise))await this.trim(100,specs);
    const entries:Entry[]=[];
    for(const spec of specs){let entry=await this.ensure(spec,100);while(entry.state.state==='queued')entry=await this.ensure(spec,100);entries.push(entry);}
    return await this.enqueue(100,false,async()=>{
@@ -126,7 +140,11 @@ export class PreparedScenes {
     const result=await run(entries.map(entry=>({entry,revision:++this.revision})));
     specs.forEach(spec=>this.active.set(spec.target.id,spec));return result;
    });
-  }finally{pinned.forEach(e=>e.pins--);await this.trim(100);}
+  }finally{
+   pinned.forEach(e=>e.pins--);
+   clearTimeout(this.trimTimer);
+   this.trimTimer=setTimeout(()=>void this.trim().catch(()=>{}),0);
+  }
  }
 
  async preload(specs:SceneSpec[],cancel:()=>boolean){for(const spec of specs){if(cancel()||this.disposed)return;try{const entry=await this.ensure(spec);if(entry.state.state==='queued'&&!cancel()){await sleep(50);await this.ensure(spec);}}catch{/* Per-layout error is exposed; later layouts keep loading. */}}}
@@ -161,7 +179,7 @@ export class PreparedScenes {
  invalidate(spec:SceneSpec){const entry=this.get(spec);entry.state={state:'queued'};entry.plan=undefined;this.changed();}
  invalidateOutput(outputId:string){this.warmingBlocked.delete(outputId);this.sentAssets.delete(outputId);this.retained.delete(outputId);this.retentionEpoch++;for(const e of this.entries.values())if(e.spec.target.id===outputId)e.state={state:'queued'};this.changed();}
  retry(){for(const e of this.entries.values())if(e.state.state==='error')e.state={state:'queued'};this.changed();}
- dispose(){debugSessions.delete(this);this.disposed=true;this.abort=true;for(const job of this.jobs)job.reject(Error('Room preparation closed'));this.jobs=[];this.entries.clear();this.active.clear();this.inventory=undefined;}
+ dispose(){debugSessions.delete(this);this.disposed=true;this.abort=true;clearTimeout(this.trimTimer);for(const job of this.jobs)job.reject(Error('Room preparation closed'));this.jobs=[];this.entries.clear();this.active.clear();this.inventory=undefined;}
 }
 
 /** Inventory includes alternate layouts and both design canvases, not only phase.next. */

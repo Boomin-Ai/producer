@@ -31,11 +31,14 @@ export const unsafeKey = (key: string) => ['__proto__', 'prototype', 'constructo
 const literal = <T extends string>(value: T): Codec<T> => ({
   json: { const: value }, read: (v, p) => v === value ? value : fail(p, `Expected ${value}.`),
 });
-const string = (maxLength = 160, pattern?: string): Codec<string> => ({
-  json: { type: 'string', maxLength, ...(pattern ? { pattern } : {}) },
-  read(v, p) { return typeof v === 'string' && v.length <= maxLength && (!pattern || new RegExp(pattern).test(v))
-    ? v : fail(p, 'Invalid or oversized text.'); },
-});
+const string = (maxLength = 160, pattern?: string): Codec<string> => {
+  const matcher = pattern ? new RegExp(pattern) : undefined;
+  return {
+    json: { type: 'string', maxLength, ...(pattern ? { pattern } : {}) },
+    read(v, p) { return typeof v === 'string' && v.length <= maxLength && (!matcher || matcher.test(v))
+      ? v : fail(p, 'Invalid or oversized text.'); },
+  };
+};
 const number = (minimum: number, maximum: number): Codec<number> => ({
   json: { type: 'number', minimum, maximum }, read: (v, p) => typeof v === 'number' && Number.isFinite(v) && v >= minimum && v <= maximum
     ? v : fail(p, `Expected a finite number from ${minimum} to ${maximum}.`),
@@ -74,6 +77,13 @@ const object = <S extends Shape>(shape: S): Codec<ObjectType<S>> => ({
     return result as ObjectType<S>;
   },
 });
+function possibleUnionBranch(schema: JsonSchema, value: unknown, kind: string): boolean {
+  if (typeof schema.const === 'string') return value === schema.const;
+  if (['string', 'number', 'boolean', 'array', 'object'].includes(schema.type as string)) return schema.type === kind;
+  if (Array.isArray(schema.anyOf)) return schema.anyOf.some(branch => possibleUnionBranch(branch, value, kind));
+  return true;
+}
+
 const union = <C extends Codec<unknown>[]>(...codecs: C): Codec<Type<C[number]>> => ({
   json: { anyOf: codecs.map(c => c.json) },
   read(v, p, d) {
@@ -84,7 +94,14 @@ const union = <C extends Codec<unknown>[]>(...codecs: C): Codec<Type<C[number]>>
       const matching=codecs.filter(codec=>(codec.json.properties as Record<string,{const?:unknown}>|undefined)?.type?.const===(v as {type:unknown}).type);
       if(matching.length===1)return matching[0].read(v,p,d) as Type<C[number]>;
     }
-    for (const codec of codecs) { try { return codec.read(v, p, d) as Type<C[number]>; } catch (e) { if (!(e instanceof PackageError)) throw e; } }
+    const kind = v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v;
+    for (const codec of codecs) {
+      // Scalar and object bindings are ordinary input. Avoid constructing
+      // validation errors for alternatives their type already rules out.
+      if (v !== undefined && !possibleUnionBranch(codec.json, v, kind)) continue;
+      try { return codec.read(v, p, d) as Type<C[number]>; }
+      catch (e) { if (!(e instanceof PackageError)) throw e; }
+    }
     return fail(p, 'Unsupported value or invalid fields.');
   },
 });

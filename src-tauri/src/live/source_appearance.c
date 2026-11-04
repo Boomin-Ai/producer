@@ -22,40 +22,116 @@ static float producer_audio_reactive_level(void){return 0;}
 static double audio_clock(void){struct timespec t;timespec_get(&t,TIME_UTC);return (double)t.tv_sec+(double)t.tv_nsec/1e9;}
 static void producer_shader_register(void);
 struct appearance_filter {obs_source_t *source;gs_effect_t *effect;float radius,outline,gray,opacity,width,height,circle,r,g,b;};
-/* Immutable video-only reference. The trusted owner binds it before adding it
- * to a graph; imported settings can neither choose nor replace its capture.
- * Two placements retain one capture, with independent filter chains. */
-struct source_placement {obs_source_t *source,*capture;};
+/* Video-only reference. Only the native room owner can change its child.
+ * Rendering and updates hold the graphics context. Width and child enumeration
+ * may run elsewhere, so they take a strong reference under a small lock. */
+struct source_placement {
+ obs_source_t *source,*capture;
+#ifdef _WIN32
+ SRWLOCK lock;
+#else
+ atomic_flag lock;
+#endif
+};
+static void placement_lock(struct source_placement *p){
+#ifdef _WIN32
+ AcquireSRWLockExclusive(&p->lock);
+#else
+ while(atomic_flag_test_and_set_explicit(&p->lock,memory_order_acquire)){}
+#endif
+}
+static void placement_unlock(struct source_placement *p){
+#ifdef _WIN32
+ ReleaseSRWLockExclusive(&p->lock);
+#else
+ atomic_flag_clear_explicit(&p->lock,memory_order_release);
+#endif
+}
+static obs_source_t *placement_capture_ref(struct source_placement *p){
+ placement_lock(p);
+ obs_source_t *ref=p->capture?obs_source_get_ref(p->capture):NULL;
+ placement_unlock(p);
+ return ref;
+}
 static const char *placement_name(void *unused){(void)unused;return "Set source placement";}
 static void *placement_create(obs_data_t *settings,obs_source_t *source){
- (void)settings;struct source_placement *p=calloc(1,sizeof(*p));if(p)p->source=source;return p;
+ (void)settings;
+ struct source_placement *p=calloc(1,sizeof(*p));
+ if(!p)return NULL;
+ p->source=source;
+#ifdef _WIN32
+ InitializeSRWLock(&p->lock);
+#else
+ atomic_flag_clear(&p->lock);
+#endif
+ return p;
 }
 static void placement_destroy(void *data){
  struct source_placement *p=data;if(!p)return;
  if(p->capture){obs_source_remove_active_child(p->source,p->capture);obs_source_release(p->capture);}free(p);
 }
-static uint32_t placement_width(void *data){struct source_placement *p=data;return p->capture?obs_source_get_width(p->capture):0;}
-static uint32_t placement_height(void *data){struct source_placement *p=data;return p->capture?obs_source_get_height(p->capture):0;}
+static uint32_t placement_width(void *data){
+ obs_source_t *capture=placement_capture_ref(data);
+ if(!capture)return 0;
+ uint32_t value=obs_source_get_width(capture);
+ obs_source_release(capture);
+ return value;
+}
+static uint32_t placement_height(void *data){
+ obs_source_t *capture=placement_capture_ref(data);
+ if(!capture)return 0;
+ uint32_t value=obs_source_get_height(capture);
+ obs_source_release(capture);
+ return value;
+}
 static void placement_render(void *data,gs_effect_t *unused){
  (void)unused;struct source_placement *p=data;if(p->capture)obs_source_video_render(p->capture);
 }
 static void placement_children(void *data,void *callback,void *param){
  struct source_placement *p=data;
- if(p->capture)((void (*)(obs_source_t *,obs_source_t *,void *))callback)(p->source,p->capture,param);
+ obs_source_t *capture=placement_capture_ref(p);
+ if(capture){
+  ((void (*)(obs_source_t *,obs_source_t *,void *))callback)(p->source,capture,param);
+  obs_source_release(capture);
+ }
 }
-/* Engine owner thread only, after source-readiness/grant checks. No IPC entry
- * point exposes this constructor. Refuse scenes/proxies to prevent cycles. */
+/* Owner thread only. A null capture makes the placement transparent and
+ * releases the old active-child reference even if a cached Set still uses it. */
+bool producer_source_placement_retarget(obs_source_t *wrapper,obs_source_t *capture){
+ if(!wrapper || strcmp(obs_source_get_id(wrapper),"producer_source_placement")!=0 ||
+    (capture && (obs_source_get_type(capture)!=OBS_SOURCE_TYPE_INPUT ||
+     !(obs_source_get_output_flags(capture)&OBS_SOURCE_VIDEO) ||
+     strcmp(obs_source_get_id(capture),"producer_source_placement")==0)))return false;
+ struct source_placement *p=obs_obj_get_data(wrapper);
+ if(!p)return false;
+ obs_enter_graphics();
+ if(p->capture==capture){obs_leave_graphics();return true;}
+ obs_source_t *next=capture?obs_source_get_ref(capture):NULL;
+ if(capture && (!next || !obs_source_add_active_child(wrapper,next))){
+  if(next)obs_source_release(next);
+  obs_leave_graphics();
+  return false;
+ }
+ placement_lock(p);
+ obs_source_t *previous=p->capture;
+ p->capture=next;
+ placement_unlock(p);
+ if(previous){
+  obs_source_remove_active_child(wrapper,previous);
+  obs_source_release(previous);
+ }
+ obs_leave_graphics();
+ return true;
+}
 obs_source_t *producer_source_placement_create(obs_source_t *capture){
- if(!capture || obs_source_get_type(capture)!=OBS_SOURCE_TYPE_INPUT ||
-    !(obs_source_get_output_flags(capture)&OBS_SOURCE_VIDEO) ||
-    strcmp(obs_source_get_id(capture),"producer_source_placement")==0)return NULL;
+ if(!capture)return NULL;
  obs_source_t *wrapper=obs_source_create_private("producer_source_placement","Set placement",NULL);
  if(!wrapper)return NULL;
- struct source_placement *p=obs_obj_get_data(wrapper);
- if(!p){obs_source_release(wrapper);return NULL;}
- obs_enter_graphics();p->capture=obs_source_get_ref(capture);
- bool linked=p->capture && obs_source_add_active_child(wrapper,p->capture);obs_leave_graphics();
- if(!linked){obs_source_release(wrapper);return NULL;}return wrapper;
+ if(!producer_source_placement_retarget(wrapper,capture)){
+  obs_source_release(wrapper);
+  return NULL;
+ }
+ return wrapper;
 }
 static const char *name(void *unused){(void)unused;return "Source appearance";}
 static float bounded(double n,float max){return isfinite(n)?fminf(max,fmaxf(0,(float)n)):0;}

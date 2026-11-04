@@ -1,10 +1,11 @@
 <!doctype html><html><body style="margin:0;background:#08111c;color:white"><div id="root"></div><script type="module">
 import React from 'react';import {createRoot} from 'react-dom/client';import {SoundboardPanel} from '/src/components/SoundboardPanel.tsx';import {sounds} from '/src/lib/soundboard.ts';
 const pad=(id,name)=>({id:id.repeat(64),name,color:'#36DFFF',mode:'restart',volume:.8,fade_ms:5});
-let library={sounds:[{id:'a'.repeat(64),name:'Air horn',path:'/audio/a.mp3'},{id:'b'.repeat(64),name:'Applause',path:'/audio/b.mp3'}],board:{pads:[pad('a','Air horn'),pad('b','Applause')],volume:.8,monitor:true}};
+let library={sounds:[{id:'a'.repeat(64),name:'Air horn',path:'/audio/a.mp3'},{id:'b'.repeat(64),name:'Applause',path:'/audio/b.mp3'},{id:'c'.repeat(64),name:'Bell',path:'/audio/c.mp3'}],board:{pads:[pad('a','Air horn'),pad('b','Applause')],volume:.8,monitor:true}};
 let status={room:'test',playing:[],previewing:[],cached_bytes:0,volume:.8,monitor:true};window.calls=[];
 sounds.library=async()=>structuredClone(library);sounds.save=async(room,board)=>{library.board=structuredClone(board);return structuredClone(library)};
 sounds.control=async(room,action,id,value)=>{window.calls.push({room,action,id,value});if(action==='play')status.playing=[id];if(action==='preview')status.previewing=[id];if(action==='stop_all'){status.playing=[];status.previewing=[];}if(action==='stop')status.playing=status.playing.filter(x=>x!==id);if(action==='volume')status.volume=value;if(action==='monitor')status.monitor=!!value;return structuredClone(status)};
 sounds.pairing=async()=>({port:17955,token:'f'.repeat(64)});sounds.hotkeys=async()=>{};
-createRoot(document.getElementById('root')).render(React.createElement(SoundboardPanel,{roomId:'test',enabled:true}));
+if(new URLSearchParams(location.search).has('compact')) document.getElementById('root').style.height='34px';
+createRoot(document.getElementById('root')).render(React.createElement(SoundboardPanel,{roomId:'test',enabled:true,compact:new URLSearchParams(location.search).has('compact')}));
 </script></body></html>

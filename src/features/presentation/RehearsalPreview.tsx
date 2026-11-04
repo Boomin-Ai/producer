@@ -5,8 +5,10 @@ import type { PresentationPackage } from './schema';
 import type { RehearsalState } from './rehearsal';
 import type { SetOutputControls } from './useSetOutput';
 
-function PreviewDialog({ doc, state, onClose, returnFocus, editor, sources, outputActive, output, configuration, workspace }: {
-  workspace?:ReactNode; configuration?:ReactNode; output?:SetOutputControls; editor?:ReactNode; sources?:ReactNode; outputActive?:boolean; doc: PresentationPackage; state: RehearsalState; onClose: () => void; returnFocus: HTMLButtonElement | null;
+type EditorWorkspace = (onClose: () => void) => ReactNode;
+
+function PreviewDialog({ doc, state, onClose, returnFocus, editor, sources, outputActive, output, configuration, workspace, workspaceBusy }: {
+  workspace?:EditorWorkspace; workspaceBusy?:boolean; configuration?:ReactNode; output?:SetOutputControls; editor?:ReactNode; sources?:ReactNode; outputActive?:boolean; doc: PresentationPackage; state: RehearsalState; onClose: () => void; returnFocus: HTMLButtonElement | null;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -16,14 +18,19 @@ function PreviewDialog({ doc, state, onClose, returnFocus, editor, sources, outp
   }, [returnFocus]);
   const layout = doc.set.layouts.find(l => l.id === state.layoutId)!;
   const previewMode = state.workspaceMode === 'prepare' ? 'set' : 'rehearsal';
+  const requestClose = () => { if (!workspaceBusy) onClose(); };
   return createPortal(<dialog ref={dialog} className="set-preview-dialog" aria-label={`${doc.name} ${previewMode} preview`}
-    onCancel={event=>{if(event.target===event.currentTarget)onClose();}} onKeyDown={event=>{
+    onCancel={event=>{
+      if(event.target!==event.currentTarget)return;
+      event.preventDefault();
+      requestClose();
+    }} onKeyDown={event=>{
       if(event.key!=='Tab'||event.defaultPrevented||!event.currentTarget.contains(event.target as Node))return;
       const controls=Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),summary,[tabindex="0"]')).filter(el=>el.getClientRects().length>0);
       const current=controls.indexOf(document.activeElement as HTMLElement);
       if(controls.length){event.preventDefault();controls[(current+(event.shiftKey?-1:1)+controls.length)%controls.length]?.focus();}
-    }} onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
-    <div className="set-preview-dialog-content">{workspace&&<button className="set-editor-close" onClick={onClose}>Close editor</button>}{workspace ?? <>
+    }} onClick={event => { if (event.target === event.currentTarget) requestClose(); }}>
+    <div className="set-preview-dialog-content">{workspace ? workspace(requestClose) : <>
       {configuration}
       <header><div><strong>{doc.name}</strong><span>{previewMode === 'set' ? 'Set preview' : 'Rehearsal preview'} · {outputActive ? 'Changes update room output' : 'Preview only'}</span></div>
         <button autoFocus onClick={onClose}>Close preview</button></header>
@@ -35,7 +42,7 @@ function PreviewDialog({ doc, state, onClose, returnFocus, editor, sources, outp
   </dialog>, document.body);
 }
 
-export function RehearsalPreview({ doc, state, editor, sources, outputActive, output, configuration, workspace, onEditorClose }: { onEditorClose?:()=>void; workspace?:ReactNode; configuration?:ReactNode; output?:SetOutputControls; editor?:ReactNode; sources?:ReactNode; outputActive?:boolean; doc: PresentationPackage; state: RehearsalState }) {
+export function RehearsalPreview({ doc, state, editor, sources, outputActive, output, configuration, workspace, workspaceBusy, onEditorClose }: { onEditorClose?:()=>void; workspace?:EditorWorkspace; workspaceBusy?:boolean; configuration?:ReactNode; output?:SetOutputControls; editor?:ReactNode; sources?:ReactNode; outputActive?:boolean; doc: PresentationPackage; state: RehearsalState }) {
   const [expanded, setExpanded] = useState(false);
   useEffect(()=>{const open=()=>setExpanded(true);window.addEventListener('producer:edit-set',open);return()=>window.removeEventListener('producer:edit-set',open);},[]);
   const expandButton = useRef<HTMLButtonElement>(null);
@@ -43,6 +50,6 @@ export function RehearsalPreview({ doc, state, editor, sources, outputActive, ou
     <div className="set-preview-tools">
       <button ref={expandButton} aria-label={editor ? "Set settings" : "Set preview"} title={editor ? "Choose and edit sets" : "Preview set"} aria-haspopup="dialog" aria-expanded={expanded} onClick={() => setExpanded(true)}>{editor ? 'Set' : 'Set preview ↗'}</button>
     </div>
-    {expanded && <PreviewDialog doc={doc} state={state} editor={editor} sources={sources} outputActive={outputActive} output={output} configuration={configuration} workspace={workspace} returnFocus={expandButton.current} onClose={() => {onEditorClose?.();setExpanded(false);}} />}
+    {expanded && <PreviewDialog doc={doc} state={state} editor={editor} sources={sources} outputActive={outputActive} output={output} configuration={configuration} workspace={workspace} workspaceBusy={workspaceBusy} returnFocus={expandButton.current} onClose={() => {onEditorClose?.();setExpanded(false);}} />}
   </div>;
 }

@@ -22,8 +22,9 @@
     "url": "https://github.com/obsproject/obs-studio/releases/download/32.1.2/OBS-Studio-32.1.2-macOS-Apple.dmg",
     "sha256": "2aeb3aaa99544fefd557f10ac6550e73df71540dd57528b2a1e6f39a55ebacfb"
   },
-  "artifact_rev": 10,
+  "artifact_rev": 11,
   "artifact_adds": [
+    "rev 11: clear the display render target before queued Metal offscreen rendering",
     "rev 10: synchronize Metal swapchain target ownership and display-link snapshots during preview navigation/resize",
     "rev 9: current-frame asynchronous Metal texture copy API for responsive Apple Vision cutout",
     "rev 8: stage the source-built Producer camera system extension in the engine archive for clean release runners",
@@ -50,7 +51,7 @@
     {
       "dir": "engine/patches/metal",
       "target": "libobs-metal",
-      "sha256": "c7010aea0ef737adf7ed403973de54ba59ed89014390f189a9e42819d6df01a6",
+      "sha256": "65aee1af9e6e1233d0eb7f65aadfee562f46f86679853a98658c0e34c2693a1d",
       "note": "Serialize Swift ARC target ownership between CVDisplayLink and graphics, and snapshot the swapchain array under its writer queue."
     }
   ]

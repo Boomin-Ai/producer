@@ -8,9 +8,34 @@ try{
   const {SetControlsPanel}=await import('/src/features/presentation/SetControlsPanel.tsx'),{HEAD_TO_HEAD}=await import('/src/features/presentation/fixtures.ts');
   const source=await(await fetch('/src/features/presentation/SetControlsPanel.tsx')).text(),{RehearsalSession}=await import(source.match(/from "([^"]*rehearsal\.ts[^"]*)"/)[1]);
   window.__TAURI_INTERNALS__={transformCallback:()=>1,invoke:async(cmd)=>cmd==='set_library_list'?[]:null};window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
-  const fixture=structuredClone(HEAD_TO_HEAD);fixture.set.controls.push({id:'preview-spotlight',type:'button',label:'Preview spotlight',action:{type:'value.set',key:'hostName',value:'Private spotlight'}});window.roomSession=new RehearsalSession(fixture,undefined,'prepare');window.takes=0;window.bindCalls=[];
-  function Harness(){const [session,setSession]=R.useState(window.roomSession),[bindings,setBindings]=R.useState({host:'camera-a'}),[active,setActive]=R.useState(false);window.roomSession=session;
-   return R.createElement(SetControlsPanel,{session,onChange:doc=>setSession(new RehearsalSession(doc,undefined,'prepare')),output:{renderer:'native',active,busy:false,error:'',bindings,framing:{},sources:{items:[{id:'camera-a',label:'Camera A',kind:'camera',visible:true,has_frame:true},{id:'camera-b',label:'Camera B',kind:'camera',visible:true,has_frame:true}]},bind:(slot,id)=>{window.bindCalls.push([slot,id]);setBindings(old=>({...old,[slot]:id}));},frame:()=>{},apply:async()=>{window.takes++;setActive(true);},returnToRoom:async()=>true}});
+  const fixture=structuredClone(HEAD_TO_HEAD);fixture.set.controls.push({id:'preview-spotlight',type:'button',label:'Preview spotlight',action:{type:'value.set',key:'hostName',value:'Private spotlight'}});window.roomSession=new RehearsalSession(fixture,undefined,'prepare');window.takes=0;window.takeRequests=0;window.fallbackTakes=0;window.bindCalls=[];
+  function Harness(){
+   const [session,setSession]=R.useState(window.roomSession),[bindings,setBindings]=R.useState({host:'camera-a'}),[framing,setFraming]=R.useState({}),[active,setActive]=R.useState(false);
+   window.roomSession=session;
+   const setAssignments=(nextBindings,nextFraming)=>{
+    window.bindCalls.push(nextBindings);
+    setBindings(nextBindings);
+    setFraming(nextFraming);
+   };
+   const onChange=(doc,_moduleBindings,take)=>{
+    const next=new RehearsalSession(doc,undefined,'prepare');
+    if(take){
+     if(take.phase)next.send({type:'segment.select',phaseId:take.phase});
+     if(next.snapshot().layoutId!==take.layout)next.send({type:'control',action:{type:'layout.select',layoutId:take.layout}});
+     setAssignments(take.bindings,take.framing);
+    }
+    setSession(next);
+    return next;
+   };
+   const applyConfirmed=async()=>{
+    window.takeRequests++;
+    await new Promise((resolve,reject)=>{
+     window.finishApply=accepted=>accepted ? resolve() : reject(new Error('The test renderer did not confirm output.'));
+    });
+    window.takes++;
+    setActive(true);
+   };
+   return R.createElement(SetControlsPanel,{session,onChange,output:{renderer:'native',active,busy:false,error:'',bindings,framing,sources:{items:[{id:'camera-a',label:'Camera A',kind:'camera',visible:true,has_frame:true},{id:'camera-b',label:'Camera B',kind:'camera',visible:true,has_frame:true}]},bind:()=>{},frame:()=>{},setAssignments,apply:async()=>{window.fallbackTakes++;},applyConfirmed,returnToRoom:async()=>true}});
   }
   const host=document.createElement('div');host.style.cssText='height:900px';document.body.replaceChildren(host);(D.createRoot??D.default.createRoot)(host).render(R.createElement(Harness));
  });
@@ -39,9 +64,24 @@ try{
  const firstSource=editor.locator('.set-source-picker select').first();await firstSource.selectOption('camera-b');assert.equal(await page.evaluate(()=>window.bindCalls.length),0);
  await editor.getByRole('button',{name:'Close editor',exact:true}).click();await page.getByRole('button',{name:'Set settings',exact:true}).click();
  assert.equal(await editor.getByRole('textbox',{name:'Host name',exact:false}).inputValue(),'Prepared draft');
- await editor.getByRole('button',{name:'Show on output',exact:true}).click();await page.waitForFunction(()=>window.takes===1);
+ const apply=editor.getByRole('button',{name:'Show on output',exact:true});
+ const close=editor.getByRole('button',{name:'Close editor',exact:true});
+ await apply.click();await page.waitForFunction(()=>window.takeRequests===1);
+ assert(await close.isDisabled());
+ await page.keyboard.press('Escape');
+ await editor.dispatchEvent('click');
+ assert.equal(await editor.count(),1);
+ assert.equal(await page.evaluate(()=>window.takes),0);
+ await page.evaluate(()=>window.finishApply(false));
+ await editor.getByRole('alert').filter({hasText:'The test renderer did not confirm output.'}).waitFor();
+ assert(await close.isEnabled());
+ assert(await apply.isEnabled());
+ await apply.click();await page.waitForFunction(()=>window.takeRequests===2);
+ await page.evaluate(()=>window.finishApply(true));
  await page.waitForFunction(()=>document.querySelector('.set-editor-apply-status')?.textContent==='✓ On output');
- assert(await editor.getByRole('button',{name:'Show on output',exact:true}).isDisabled());
+ assert(await apply.isDisabled());
+ assert(await close.isEnabled());
+ assert.deepEqual(await page.evaluate(()=>[window.takes,window.fallbackTakes]),[1,0]);
  assert.equal(await page.evaluate(()=>window.roomSession.snapshot().values.hostName),'Prepared draft');
  assert.equal(await page.evaluate(()=>window.roomSession.snapshot().show.phase),'round');
  assert.equal(await editor.getByRole('combobox',{name:'Edit segment',exact:true}).inputValue(),'round');
@@ -52,5 +92,5 @@ try{
  await editor.getByRole('combobox',{name:'Edit segment',exact:true}).selectOption('round');assert.equal(await page.evaluate(()=>window.roomSession.snapshot().show.phase),phase);
  await editor.getByRole('button',{name:'Close editor',exact:true}).click();
  assert.equal(await page.getByRole('textbox',{name:'Simulated player'}).count(),0);
- assert.deepEqual(errors,[]);console.log('PASS: rehearsal and draft source/content edits stay private; exit resets practice; close retains draft; explicit take commits once; room starts independent show clock');
+ assert.deepEqual(errors,[]);console.log('PASS: drafts stay private and survive close; a pending take blocks dismissal; renderer rejection can retry; confirmed output commits once; room starts its own show clock');
 }finally{await browser.close();}

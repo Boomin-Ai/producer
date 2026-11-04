@@ -12,8 +12,8 @@ void producer_person_mask_register_native(void) {}
 @end
 static void check(NSView *preview,WKWebView *web,NSView *content,double x,double y,double w,double h){
  NSRect local=[web convertRect:preview.frame fromView:content];
- double top=(web.isFlipped?local.origin.y-NSMinY(web.bounds):NSMaxY(web.bounds)-NSMaxY(local))-web.safeAreaInsets.top;
- if(fabs(local.origin.x-NSMinX(web.bounds)-web.safeAreaInsets.left-x)>.01||fabs(top-y)>.01||fabs(local.size.width-w)>.01||fabs(local.size.height-h)>.01){fprintf(stderr,"FAIL native preview differs from DOM viewport rect\n");exit(1);}
+ double top=(web.isFlipped?local.origin.y-NSMinY(web.bounds):NSMaxY(web.bounds)-NSMaxY(local));
+ if(fabs(local.origin.x-NSMinX(web.bounds)-x)>.01||fabs(top-y)>.01||fabs(local.size.width-w)>.01||fabs(local.size.height-h)>.01){fprintf(stderr,"FAIL native preview differs from DOM viewport rect\n");exit(1);}
 }
 int main(){@autoreleasepool{
  [NSApplication sharedApplication];
@@ -34,5 +34,5 @@ int main(){@autoreleasepool{
   producer_preview_set_frame(handle,50,110,720,405,&pw,&ph);check(preview,web,content,50,110,720,405);
   producer_preview_detach(handle);[window close];
  }
- puts("PASS preview attach/move use actual nested webview coordinates in inset, flipped and full-size titlebar content views");
+ puts("PASS preview attach/move use full-viewport coordinates in inset, flipped and full-size titlebar content views");
 }return 0;}

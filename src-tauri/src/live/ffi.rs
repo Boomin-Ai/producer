@@ -595,16 +595,23 @@ extern "C" {
     /// Video-only private placement; owner thread after readiness/grant checks.
     /// Caller owns the returned reference. Capture is retained, never cloned.
     pub fn producer_source_placement_create(capture: *mut obs_source_t) -> *mut obs_source_t;
+    pub fn producer_source_placement_retarget(
+        placement: *mut obs_source_t,
+        capture: *mut obs_source_t,
+    ) -> bool;
     pub fn producer_open_screen_settings();
     pub fn producer_open_camera_settings();
     /// Virtual camera (R13): ask macOS to install the bundled CMIO extension.
     pub fn producer_vcam_activate();
+    #[cfg(target_os = "macos")]
+    pub fn producer_vcam_reveal_app();
+    #[cfg(target_os = "macos")]
+    pub fn producer_vcam_open_settings();
     #[cfg(target_os = "windows")]
     pub fn producer_sdr_white_nits() -> f32;
     #[cfg(target_os = "windows")]
     pub fn producer_vcam_set_module_dir(dir: *const c_char);
-    /// 0 idle, 1 requested, 2 needs approval, 3 active, 4 failed; fills `buf`
-    /// with the last error.
+    /// Activation or preflight state. Fills `buf` with any action detail.
     pub fn producer_vcam_state(buf: *mut c_char, len: c_int) -> c_int;
     pub fn producer_vcam_installed() -> c_int;
     pub fn producer_open_mic_settings();

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { hasTauri, ipc, vcam as vcamIpc, type LivePermissions } from "../lib/ipc";
+import { hasTauri, ipc, vcam as vcamIpc, type LivePermissions, type VcamStatus } from "../lib/ipc";
 import { Wordmark } from "./Onboarding";
 
 /** First Light — the first-launch experience. A cinematic intro (once,
@@ -214,8 +214,8 @@ function Permissions({ onDone }: { onDone: () => void }) {
   // The virtual camera is a system EXTENSION, not a TCC permission: macOS
   // installs it, the user approves it in Settings, and it only becomes a real
   // device afterwards. Optional by design — you can stream all day without it.
-  const [vcam, setVcam] = useState<{ state: string; installed: boolean; error?: string | null } | null>(null);
-  const [vcamAsked, setVcamAsked] = useState(false);
+  const [vcam, setVcam] = useState<VcamStatus | null>(null);
+  const [vcamBusy, setVcamBusy] = useState(false);
   // Screen Recording only takes effect for processes launched after the
   // grant. If it flips to granted during THIS run, a relaunch is required.
   const initialScreen = useRef<string | null>(null);
@@ -277,6 +277,54 @@ function Permissions({ onDone }: { onDone: () => void }) {
     await relaunch();
   }
 
+  async function installVirtualCamera() {
+    setVcamBusy(true);
+    try {
+      await vcamIpc.activate();
+      setVcam(await vcamIpc.status());
+    } finally {
+      setVcamBusy(false);
+    }
+  }
+
+  let cameraDetail = "Lets Producer appear as a webcam in Zoom, Meet and Discord.";
+  let cameraAction: React.ReactNode = null;
+  if (vcam && !vcam.installed) {
+    switch (vcam.state) {
+      case "move_to_applications":
+        cameraDetail = "Drag Producer to Applications, then reopen it from there to install the virtual camera.";
+        cameraAction = (
+          <button className="fl-ghost" onClick={() => vcamIpc.revealApp().catch(() => {})}>
+            Show in Finder
+          </button>
+        );
+        break;
+      case "needs_approval":
+        cameraDetail = "Open System Settings to approve Producer Virtual Camera.";
+        cameraAction = (
+          <button className="fl-primary" onClick={() => vcamIpc.openSettings().catch(() => {})}>
+            Open Settings
+          </button>
+        );
+        break;
+      case "requires_signed_app":
+      case "restart_required":
+      case "unsupported":
+      case "unavailable":
+        cameraDetail = vcam.error ?? "The virtual camera is unavailable in this build.";
+        break;
+      default: {
+        const installing = vcamBusy || vcam.state === "requested" || vcam.state === "active";
+        if (vcam.state === "failed") cameraDetail = vcam.error ?? "macOS refused the camera extension.";
+        cameraAction = (
+          <button className="fl-ghost" disabled={installing} onClick={() => void installVirtualCamera().catch(() => {})}>
+            {installing ? "Installing…" : "Install"}
+          </button>
+        );
+      }
+    }
+  }
+
   return (
     <div className="fl-screen">
       <div className="fl-body">
@@ -335,43 +383,9 @@ function Permissions({ onDone }: { onDone: () => void }) {
         <PermRow
           title="Virtual camera"
           optional
-          detail={
-            // Windows reports state:"unsupported" — there is no camera
-            // extension to approve. The virtual camera there is win-dshow's
-            // DirectShow filter, registered by the installer, so there is
-            // nothing for a button to do at runtime.
-            vcam?.state === "unsupported"
-              ? "Not available on Windows yet. Producer will register a DirectShow camera at install time."
-              : vcam?.installed
-              ? "Producer can appear as a webcam in Zoom, Meet and Discord."
-              : vcam?.state === "needs_approval"
-                ? "Approve “Producer Virtual Camera” in System Settings › General › Login Items & Extensions › Camera Extensions."
-                : vcam?.state === "failed"
-                  ? vcam.error || "macOS refused the camera extension."
-                  : "Optional. Lets Producer appear as a webcam in Zoom, Meet and Discord."
-          }
-          status={vcam?.installed ? "granted" : vcam?.state === "unsupported" ? "unknown" : vcam ? "pending" : "unknown"}
-          action={
-            vcam?.state === "unsupported" || vcam?.installed ? null : vcam?.state === "needs_approval" ? (
-              <button
-                className="fl-primary"
-                onClick={() => ipc.liveScreenCoach("open_settings").catch(() => {})}
-              >
-                Open Settings
-              </button>
-            ) : (
-              <button
-                className="fl-ghost"
-                disabled={vcamAsked && vcam?.state === "requested"}
-                onClick={() => {
-                  setVcamAsked(true);
-                  vcamIpc.activate().catch(() => {});
-                }}
-              >
-                {vcamAsked && vcam?.state === "requested" ? "Installing…" : "Install"}
-              </button>
-            )
-          }
+          detail={cameraDetail}
+          status={vcam?.installed ? "granted" : cameraAction ? "pending" : "unknown"}
+          action={cameraAction}
         />
 
         <div className="fl-actions">

@@ -1162,7 +1162,7 @@ textarea::placeholder {
   width: 100%;
   aspect-ratio: 16 / 9;
   background: #000;
-  border-radius: 10px;
+  border-radius: 0;
   border: 1px solid var(--border);
 }
 
@@ -2051,7 +2051,7 @@ textarea::placeholder {
   justify-content: center;
   container-type: size;
   padding: 10px;
-  border-radius: 14px;
+  border-radius: 0;
   background: oklch(0.125 0.022 250);
 }
 
@@ -2059,9 +2059,11 @@ textarea::placeholder {
   position: relative;
   width: min(100%, 100cqh * 16 / 9);
   aspect-ratio: 16 / 9;
-  border-radius: 8px;
+  border-radius: 0;
+  overflow: clip;
   /* hairline frame so the output edge is legible even over dark video */
-  border: 1px solid oklch(0.32 0.04 250 / 0.55);
+  border: 0;
+  box-shadow: inset 0 0 0 1px oklch(0.32 0.04 250 / 0.55);
 }
 
 .rm-canvas-msg {
@@ -2963,17 +2965,42 @@ textarea::placeholder {
 .rm-src-add:focus-visible {
   opacity: 1;
 }
-.rm-panel-sources .rm-row .rm-row-edit {
+.rm-panel-sources .rm-row { position: relative; }
+.rm-source-actions {
+  position: absolute;
+  inset: 1px 1px 1px 27px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+  border-radius: inherit;
+  background: var(--surface-2);
   opacity: 0;
-  transition: opacity 0.12s ease;
+  pointer-events: none;
 }
-.rm-panel-sources .rm-row:hover .rm-row-edit,
-.rm-panel-sources .rm-row .rm-row-edit:focus-visible {
+.rm-panel-sources .rm-row:hover .rm-source-actions,
+.rm-panel-sources .rm-row:focus-within .rm-source-actions {
   opacity: 1;
+  pointer-events: auto;
 }
-/* a hidden source keeps its eye faintly lit so the dim row explains itself */
-.rm-panel-sources .rm-row:not(:hover) .rm-row-eye.off {
-  opacity: 0.5;
+.rm-panel-sources .rm-row:not(:has(.rm-row-rename-field)):is(:hover, :focus-within) .rm-row-name,
+.rm-panel-sources .rm-row:not(:has(.rm-row-rename-field)):is(:hover, :focus-within) .rm-row-icon {
+  visibility: hidden;
+}
+.rm-source-actions .rm-row-edit { min-width: 18px; min-height: 24px; }
+.rm-panel-sources[data-in="top"] .rm-row { min-width: 140px; }
+.rm-panel-sources .rm-row:has(.rm-row-rename-field) .rm-source-actions { display: none; }
+.rm-source-filter-strip {
+  position: relative;
+  z-index: 3;
+  flex: 0 0 auto;
+  max-height: min(40vh, 320px);
+  overflow: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-card);
 }
 .rm-pop-empty {
   padding: 10px 14px;
@@ -3749,9 +3776,9 @@ textarea::placeholder {
  * native preview shows through; the window itself paints the base color
  * (#010610, matching the old stage backdrop). Panels paint themselves. */
 
-[data-stage="transparent"],
-[data-stage="transparent"] body,
-[data-stage="transparent"] #root,
+[data-stage="transparent"]:has(#root > .room),
+[data-stage="transparent"] body:has(#root > .room),
+[data-stage="transparent"] #root:has(> .room),
 [data-stage="transparent"] .room,
 [data-stage="transparent"] .rm-body,
 [data-stage="transparent"] .rm-center,
@@ -5014,20 +5041,43 @@ textarea::placeholder {
   font-variant-numeric: tabular-nums;
 }
 
-.rm-filter-hint {
-  margin-left: auto;
-  font-size: 11px;
-  color: oklch(0.55 0.025 250);
-  text-align: right;
+.rm-filter-choices {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 4px;
 }
-
-.rm-addfilter {
+.rm-filter-choice {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-ctl);
+  background: var(--surface-2);
+}
+.rm-filter-add, .rm-filter-help {
+  border: 0;
+  padding: 7px 10px;
+  background: transparent;
+  color: var(--fg-1);
+  font: inherit;
   cursor: pointer;
 }
-
-.rm-addfilter:hover {
-  border-color: oklch(0.45 0.09 168 / 0.6);
+.rm-filter-help {
+  border-left: 1px solid var(--line-1);
+  color: var(--fg-2);
 }
+.rm-filter-add:hover, .rm-filter-help:hover, .rm-filter-help[aria-expanded="true"] {
+  color: var(--mint);
+}
+.rm-filter-description {
+  margin: 0;
+  padding: 6px 10px 10px;
+  color: var(--fg-2);
+  font-size: 12px;
+}
+.rm-filter-description strong { color: var(--fg-1); margin-right: 4px; }
 
 .rm-row-fx {
   font-size: 13px;
@@ -6060,6 +6110,9 @@ textarea::placeholder {
   gap: 14px;
   background: var(--bg);
 }
+.rm-veil-stage {
+  position: absolute;
+}
 .rm-veil-spin {
   width: 26px;
   height: 26px;
@@ -6115,7 +6168,7 @@ textarea::placeholder {
 
 /* The room's transparent-hole stage (preview below the webview) must beat
    the opaque view net above — same ID specificity plus the attribute. */
-[data-stage="transparent"] #root > * {
+[data-stage="transparent"] #root > .room {
   background: transparent;
 }
 .rm-guest-thumb.empty {
@@ -7127,18 +7180,6 @@ textarea::placeholder {
   .rm-chat-chips .rm-chip-name { display: none; }
 }
 
-/* Sources in a NARROW side rail: the title owns the row. No leading type
- * icon, no controls — they float in over the right edge on hover, so the
- * name keeps its full width until you reach for it. */
-@container panel (max-width: 320px) {
-  /* At rest: icon + title, nothing else. On hover: the icon DROPS and every
-   * control takes its place, in flow — grip, filters, settings, eye, ✕. */
-  .rm-panel-sources .rm-row .rm-row-name { flex: 1; min-width: 0; }
-  .rm-panel-sources .rm-row .rm-row-edit { display: none; }
-  .rm-panel-sources .rm-row:hover .rm-row-icon { display: none; }
-  .rm-panel-sources .rm-row:hover .rm-row-edit { display: inline-flex; }
-}
-
 /* Guests in a ROW dock (bottom, or an expanded top): people side by side,
  * cards sized by the rail's height, never one stretched card. */
 /* The whole chain is FLEX, never percentage heights: body → wrapper → list
@@ -7274,22 +7315,6 @@ textarea::placeholder {
   flex: 1;
   min-width: 0;
 }
-/* Filter picker on a side mount: title above its description, full width. */
-.rm-panel[data-in="left"] .rm-addfilter,
-.rm-panel[data-in="right"] .rm-addfilter {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  height: auto;
-  padding-top: 8px;
-  padding-bottom: 8px;
-}
-.rm-panel[data-in="left"] .rm-addfilter .rm-filter-hint,
-.rm-panel[data-in="right"] .rm-addfilter .rm-filter-hint {
-  text-align: left;
-  white-space: normal;
-}
-
 /* Chat mini cluster: one mark + how many more you're streaming to. */
 .rm-chip-more {
   display: inline-flex;
@@ -9339,17 +9364,18 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   white-space: nowrap;
 }
 .rm-top-seat-note { font-size: 12px; color: var(--fg-3); padding: 0 6px; white-space: nowrap; }
-.rm-top-left .role-card.compact { margin-left: 6px; }
+
 /* The header is one 48px bar and the transport must never fall off its right
  * edge. In the bar the card is the role in words; the capability chips are
  * hover-revealed (the title attribute carries them too) at every width. */
-.rm-top-left .role-card.compact .role-card-chips { display: none; }
-.rm-top-left .role-card.compact:hover .role-card-chips {
-  display: flex; position: absolute; top: calc(100% + 6px); left: 0; z-index: 12;
+.rm-foot-role .role-card.compact .role-card-chips { display: none; }
+.rm-foot-role:hover .role-card.compact .role-card-chips,
+.rm-foot-role:focus-within .role-card.compact .role-card-chips {
+  display: flex; position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 12;
   padding: 8px 10px; border-radius: var(--r-card); border: 1px solid var(--line-1);
   background: var(--bg); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); flex-wrap: wrap; max-width: 420px;
 }
-.rm-top-left .role-card.compact { position: relative; }
+.rm-foot-role .role-card.compact { position: relative; height: 22px; }
 
 /* ── Account sheet: pulls OUT beside the rail's avatar (the one account
    button), the way Settings pulls out of the rail ─────────────────────── */
@@ -11122,7 +11148,7 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 /* Match the native attachment rectangle to a contained 16:9 room frame. */
 .rm-landscape-monitor > .live-preview {flex:none;width:min(100cqw,calc(100cqh * 16 / 9));height:min(100cqh,calc(100cqw * 9 / 16));min-width:0;min-height:0;}
 .rm-canvas.output-view-both {display:grid;grid-template-columns:256fr 81fr;gap:14px;}
-.rm-portrait-monitor {position:relative;aspect-ratio:9/16;width:min(100%,100cqh * 9 / 16);max-height:100%;border:1px solid #334052;border-radius:8px;overflow:hidden;background:#081019;display:flex;align-items:center;justify-content:center;color:#a7b8c8;font-size:13px;}
+.rm-portrait-monitor {position:relative;aspect-ratio:9/16;width:min(100%,100cqh * 9 / 16);max-height:100%;border:0;box-shadow:inset 0 0 0 1px #334052;border-radius:0;overflow:clip;background:#081019;display:flex;align-items:center;justify-content:center;color:#a7b8c8;font-size:13px;}
 .rm-portrait-monitor img {width:100%;height:100%;object-fit:contain;display:block;}
 .rm-portrait-monitor [role="status"] {padding:20px;text-align:center;}
 .rm-portrait-native {position:absolute;inset:0;background:transparent;}
@@ -11137,25 +11163,114 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .rm-window-drag-handle {position:absolute;left:84px;right:12px;top:0;height:12px;cursor:grab;-webkit-app-region:drag;z-index:1;}
 .rm-window-drag-handle::after {content:"";position:absolute;top:3px;left:50%;transform:translateX(-50%);width:64px;height:3px;border-radius:3px;background:#64758a;opacity:.6;pointer-events:none;}
 .rm-window-drag-handle:hover::after {opacity:1;background:#a8b9cd;}
-.rm-top .rm-top-drag .rm-notices {position:fixed;inset:auto;top:calc(var(--h-header) + 12px);left:50%;transform:translateX(-50%);width:max-content;max-width:min(520px,calc(100vw - 24px));flex-wrap:wrap;justify-content:center;gap:6px;}
-.rm-top .rm-top-drag .rm-notice,.rm-top .rm-top-drag .rm-notice.clipped:hover {max-width:100%;min-width:0;}
-.rm-top .rm-top-drag .rm-notice-action {height:30px;background:var(--surface-2);box-shadow:0 4px 16px #0005;}
-/* Room ledger: one quiet trigger, messages inside an opaque readable panel. */
-.rm-top .rm-top-drag {flex:0 0 38px;min-width:38px;}
-.rm-activity {position:relative;pointer-events:auto;}
-.rm-activity-trigger {position:relative;display:grid;place-items:center;width:34px;height:34px;border:1px solid var(--line-1);border-radius:10px;background:var(--surface-2);color:var(--fg-2);cursor:pointer;}
-.rm-activity-count {position:absolute;right:-4px;top:-4px;min-width:15px;height:15px;padding:0 3px;border-radius:8px;background:#85d8b7;color:#082218;font:10px system-ui;}
-.rm-activity-panel {position:fixed;top:calc(var(--h-header) + 10px);right:16px;width:min(380px,calc(100vw - 32px));border:1px solid #354051;border-radius:14px;background:#111925;color:#e6edf5;box-shadow:0 16px 50px #0008;z-index:500;overflow:hidden;}
-.rm-activity-panel header {display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #2c3747;font-size:13px;}
-.rm-activity-panel button {border:0;background:transparent;color:#a4d5fc;cursor:pointer;font:inherit;}
-.rm-activity-list {max-height:min(420px,65vh);overflow:auto;}
-.rm-activity-entry {display:flex;gap:10px;padding:13px 16px;border-bottom:1px solid #263141;font-size:12px;line-height:1.5;}
-.rm-activity-entry p {margin:0;overflow-wrap:anywhere;}
-.rm-activity-entry button {padding:7px 0 0;font-weight:600;}
-.rm-activity-tone {color:#8fc7ff;}.rm-activity-entry.tone-success .rm-activity-tone {color:#85d8b7;}.rm-activity-entry.tone-error .rm-activity-tone {color:#ff8f9b;}
-.rm-activity-empty {padding:16px;font-size:12px;color:#a7b4c7;}
+/* Activity drops from its toolbar slot over the room. */
+.rm-top-activity { position:relative; flex:1 1 0; min-width:28px; container-type:inline-size; }
+.rm-edit-trigger.rm-icon-chip {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:auto;
+  gap:6px;
+  padding:0 8px;
+  white-space:nowrap;
+  font-size:11px;
+}
+@media (max-width:1100px) {
+  .rm-edit-trigger:not(.on) span { display:none; }
+}
+.rm-activity-trigger {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  width:100%;
+  height:30px;
+  padding:0 6px;
+  border:0;
+  border-radius:6px;
+  background:transparent;
+  color:var(--fg-2);
+  font:inherit;
+  font-size:12px;
+  text-align:left;
+  white-space:nowrap;
+  cursor:pointer;
+}
+.rm-activity-trigger:hover { background:var(--surface-1); color:var(--fg-1); }
+.rm-activity-trigger[aria-expanded=true] { color:var(--fg-1); }
+.rm-activity-trigger[aria-expanded=true] .rm-activity-chevron { transform:rotate(180deg); }
+.rm-activity-trigger > svg, .rm-activity-count, .rm-activity-chevron { flex:none; }
+.rm-activity-preview { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.rm-activity-preview::before { content:'·'; margin-inline-end:6px; }
+.rm-activity-trigger[data-tone=success] > svg, .rm-activity-preview.tone-success, .rm-activity-entry.tone-success .rm-activity-tone { color:var(--mint,#85d8b7); }
+.rm-activity-trigger[data-tone=warning] > svg, .rm-activity-preview.tone-warning, .rm-activity-entry.tone-warning .rm-activity-tone { color:#edc78b; }
+.rm-activity-trigger[data-tone=error] > svg, .rm-activity-preview.tone-error, .rm-activity-entry.tone-error .rm-activity-tone { color:#ff8f9b; }
+.rm-activity-count { font-size:10px; color:var(--fg-3); }
+.rm-activity-chevron { margin-inline-start:auto; opacity:.7; }
+@container (max-width:140px) {
+  .rm-activity-preview, .rm-activity-count { display:none; }
+}
+@container (max-width:88px) {
+  .rm-activity-label, .rm-activity-chevron { display:none; }
+}
+.rm-activity-announcement { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+.rm-activity-panel {
+  position:absolute;
+  inset-block-start:calc(50% + var(--h-header) / 2);
+  inset-inline-start:0;
+  width:max(100%,144px);
+  z-index:2;
+  box-sizing:border-box;
+  padding-inline:10px;
+  border:1px solid var(--line-1,#293647);
+  border-top:0;
+  border-radius:0 0 7px 7px;
+  background:var(--surface-0,#0c131e);
+  color:var(--fg-1,#e6edf5);
+}
+.rm-activity-list { max-height:min(160px,26dvh); margin:0; padding:0; overflow:auto; list-style:none; }
+.rm-activity-entry { display:flex; gap:10px; padding:7px 0; font-size:12px; line-height:1.5; }
+.rm-activity-entry + .rm-activity-entry { border-top:1px solid var(--line-1,#263141); }
+.rm-activity-entry p { margin:0; overflow-wrap:anywhere; }
+.rm-activity-entry button { padding:3px 0 0; border:0; background:transparent; color:#a4d5fc; font:inherit; font-weight:600; cursor:pointer; }
+.rm-activity-tone { color:#8fc7ff; }
+.rm-activity-empty { margin:0; padding:9px 0; font-size:12px; color:var(--fg-2,#a7b4c7); }
 .rm-top.is-editing .rm-top-right {display:none;}
 .rm-top .rm-editbar {flex:1;min-width:0;margin:0;padding:0 6px;height:38px;border:0;border-radius:0;background:transparent;gap:8px;}
 .rm-top .rm-editbar-text {display:none;}
 .rm-top .set-picker-trigger {max-width:240px;gap:8px;}
 .rm-top .set-picker-trigger>span:first-child {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+.rm-opening {
+  display: flex;
+  flex-direction: column;
+  place-content: normal;
+  gap: 0;
+}
+.rm-opening-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 16px 0 84px;
+  border-bottom: 1px solid var(--line-1);
+  color: var(--fg-1);
+  font-size: 13px;
+}
+.rm-opening-back {
+  border: 1px solid var(--line-1);
+  border-radius: var(--r-ctl);
+  padding: 5px 9px;
+  background: var(--surface-2);
+  color: inherit;
+  cursor: pointer;
+}
+.rm-opening-stage {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rm-veil-spin { animation: none; }
+}

@@ -1,7 +1,7 @@
 import {notify,dismissKey} from "../lib/notices";
 import {DataIntegrations} from "../components/DataIntegrations";
 import { ShareDomainSettings } from "../components/ShareDomainSettings";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StoragePanel } from "../components/StoragePanel";
 import { PullPostsButton } from "../components/PullPostsButton";
 import { Select } from "../components/Select";
@@ -26,7 +26,9 @@ import { PREF_WALKTHROUGH_OFF, PREF_WALKTHROUGH_ROOM, PREF_WALKTHROUGH_STEP } fr
 import { FEATURE_FLAGS, FLAG_CONTACT } from "../lib/featureFlags";
 import { useFeatureFlags } from "../lib/useFeatureFlags";
 import { copyText, ensureRoomJoinLink } from "../lib/roomLink";
+import { afterPreviewWork } from "../lib/previewSession";
 import { ipc,
+  guests,
   firewall,
   isRoomClosedError,
   network,
@@ -49,7 +51,8 @@ import { KEYMAP, getKey, setKey, resetKey, displayKey, type KeyBinding } from ".
 import { liveRoomId, parseConfig, serializeConfig } from "../lib/room";
 import { ROOMS_EVENT, deleteRoomEverywhere, notifyRoomsChanged, renameRoom, roomOccupancy, syncRooms } from "../lib/roomSync";
 import { useUpdater } from "../lib/updater";
-import { DestinationEditor, LiveView } from "./Live";
+import { DestinationEditor, LiveView, type RoomEntryAccess } from "./Live";
+import { RoomOpening } from "./RoomOpening";
 import { HostedManager } from "../features/manager/HostedManager";
 import { ModSeat } from "./ModSeat";
 import { ModLinkDrop } from "./ModLinkDrop";
@@ -65,9 +68,44 @@ const STATE_LABEL: Record<string, string> = {
   canceled: "Canceled",
 };
 
+// Room cards only need metadata. Reuse it when Home remounts with cached
+// rows instead of parsing large embedded Set assets again.
+const roomMetadataCache = new WeakMap<LiveRoom, Pick<ReturnType<typeof parseConfig>, "server_room_id" | "visibility">>();
+function roomMetadata(room: LiveRoom) {
+  const cached = roomMetadataCache.get(room);
+  if (cached) return cached;
+  const metadata: Pick<ReturnType<typeof parseConfig>, "server_room_id" | "visibility"> = {};
+  try {
+    const config = JSON.parse(room.config);
+    if (config && typeof config === "object" && (!("screen" in config) || "sources" in config)) {
+      if (typeof config.server_room_id === "string") metadata.server_room_id = config.server_room_id;
+      const visibility = config.visibility;
+      if (visibility === "connections" || visibility === "public" || visibility === "private") {
+        metadata.visibility = visibility;
+      }
+    }
+  } catch { /* The full room loader handles invalid documents. */ }
+  roomMetadataCache.set(room, metadata);
+  return metadata;
+}
+
+function reconcileRoomRows(previous: LiveRoom[], incoming: LiveRoom[]) {
+  // Room configurations can contain megabytes of Set assets. Compare the
+  // stored strings directly and keep the identity of each unchanged card.
+  const byId = new Map(previous.map(room => [room.id, room]));
+  const next = incoming.map(room => {
+    const old = byId.get(room.id);
+    return old && old.config === room.config && old.name === room.name
+      && old.created_at === room.created_at && old.last_live_at === room.last_live_at
+      && old.endpoint_id === room.endpoint_id ? old : room;
+  });
+  return next.length === previous.length && next.every((room, index) => room === previous[index])
+    ? previous : next;
+}
+
 type MainView =
   | { kind: "home" }
-  | { kind: "room"; room: LiveRoom }
+  | { kind: "opening" | "room"; room: LiveRoom; access?: RoomEntryAccess }
   /** GUEST MODE: a room opened on a seat in someone else's show (a deal
    * entered, a live stage knocked on). `room` is this Producer's own stage
    * — the scene that is their camera — when they have one. */
@@ -141,6 +179,28 @@ export function Home({
   onEndpointsChanged?: () => void;
 }) {
   const [view, setView] = useState<MainView>({ kind: "home" });
+  useEffect(() => {
+    if (view.kind !== "opening") return;
+    const opening = view;
+    let frame = 0;
+    const mountRoom = () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(fallback);
+      startTransition(() => {
+        setView(current => current === opening ? { ...opening, kind: "room" } : current);
+      });
+    };
+    // Give the shell a paint before React builds the full room. WebKit can
+    // suspend animation frames behind native previews, so bound the wait.
+    const fallback = window.setTimeout(mountRoom, 100);
+    frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(mountRoom);
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(fallback);
+    };
+  }, [view]);
   // Settings is a rail-side surface: it expands out of the left rail and
   // pushes the home surfaces right (never a panel over them). It only exists
   // at home, so opening it from another view returns home first.
@@ -177,7 +237,12 @@ export function Home({
   // Rooms strip the window glass so stage overlays work (shim.m); returning
   // home puts it back.
   useEffect(() => {
-    if (view.kind === "home") ipc.liveHomeGlass().catch(() => {});
+    if (view.kind !== "home") return;
+    let current = true;
+    void afterPreviewWork(async () => {
+      if (current) await ipc.liveHomeGlass();
+    }).catch(() => {});
+    return () => { current = false; };
   }, [view.kind]);
   const [errorDismissed, setErrorDismissed] = useState(false);
   const updater = useUpdater();
@@ -211,7 +276,7 @@ export function Home({
       alive = false;
     };
   }, [endpoints, activeId]);
-  const [destinations, setDestinations] = useState<LiveDestination[]>([]);
+  const [destinations, setDestinations] = useState<LiveDestination[]>(() => cached<LiveDestination[]>("destinations:" + (activeEndpointId() ?? "")) ?? []);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -251,30 +316,42 @@ export function Home({
     setJobs(all);
   }, [endpoints]);
 
-  const activeIdRef = useRef(activeId);
-  activeIdRef.current = activeId;
+  const liveRequest = useRef(0);
+  const liveDataEndpoint = useRef(activeId);
   const loadLive = useCallback(async () => {
+    const request = ++liveRequest.current;
+    const showWorkspace = (id: string | null) => {
+      if (id === liveDataEndpoint.current) return;
+      liveDataEndpoint.current = id;
+      setRooms(cached<LiveRoom[]>("rooms:" + (id ?? "")) ?? []);
+      setDestinations(cached<LiveDestination[]>("destinations:" + (id ?? "")) ?? []);
+      setActiveId(id);
+    };
+    // The switch event already carries the selected workspace in storage.
+    // Swap the displayed data before waiting for endpoint resolution.
+    showWorkspace(activeEndpointId());
     try {
-      const ep = await resolveActiveEndpoint();
-      const key = `rooms:${ep?.id ?? ""}`;
-      if (ep?.id !== activeIdRef.current) {
-        // Workspace changed: nothing from the previous brand may linger, not
-        // even for a frame. The NEW brand's last-known list (if any) shows
-        // at once; otherwise empty until it answers.
-        setRooms(cached<LiveRoom[]>(key) ?? []);
-        setDestinations([]);
-      }
-      setActiveId(ep?.id ?? null);
-      // Local rows are cheap and change under us (a rename, a delete, a
-      // sync): always re-read, but reconcile so an unchanged list keeps
-      // its identity and nothing downstream re-renders or re-sorts.
-      const list = remember(key, await ipc.liveListRooms(ep?.id ?? undefined));
-      setRooms((prev) => reconcile(prev, list));
-      const dests = await ipc.liveListDestinations(ep?.id ?? undefined);
-      setDestinations((prev) => reconcile(prev, dests));
-      setSnapshot(await ipc.liveEngineStatus());
+      const id = (await resolveActiveEndpoint())?.id ?? null;
+      const current = () => request === liveRequest.current && activeEndpointId() === id;
+      if (!current()) return;
+      showWorkspace(id);
+      const roomKey = "rooms:" + (id ?? "");
+      const destinationKey = "destinations:" + (id ?? "");
+      await Promise.allSettled([
+        ipc.liveListRooms(id ?? undefined).then((rows) => {
+          if (!current()) return;
+          const previous = cached<LiveRoom[]>(roomKey) ?? [];
+          setRooms(remember(roomKey, reconcileRoomRows(previous, rows)));
+        }),
+        ipc.liveListDestinations(id ?? undefined).then((rows) => {
+          if (current()) setDestinations((prev) => reconcile(prev, remember(destinationKey, rows)));
+        }),
+        ipc.liveEngineStatus().then((status) => {
+          if (current()) setSnapshot((prev) => reconcile(prev, status));
+        }),
+      ]);
     } catch {
-      /* engine-less build — live sections render empty */
+      /* engine-less build — keep last-known data */
     }
   }, []);
   useEffect(() => {
@@ -299,7 +376,7 @@ export function Home({
     const ep = await resolveActiveEndpoint().catch(() => null);
     if (!ep) return;
     const res = await syncRooms(ep.id).catch(() => null);
-    if (!res) return;
+    if (!res || activeEndpointId() !== ep.id) return;
     setOffNetwork(new Set(res.offNetwork));
     if (res.changed) void loadLive();
   }, [loadLive]);
@@ -339,10 +416,24 @@ export function Home({
     snapshot?.session_state === "starting" ||
     snapshot?.session_state === "stopping";
 
+  const openRoom = (room: LiveRoom) => {
+    markRoomClick();
+    const endpoint = endpoints.find((candidate) => candidate.id === activeEndpointId());
+    const serverRoomId = roomMetadata(room).server_room_id;
+    const access: RoomEntryAccess | undefined = endpoint && serverRoomId && isBoomin(endpoint)
+      ? {
+          endpointId: endpoint.id,
+          endpointBaseUrl: endpoint.base_url,
+          serverRoomId,
+          result: Promise.resolve().then(() => guests.access(endpoint.id, serverRoomId)).catch(() => null),
+        }
+      : undefined;
+    if (access) void access.result.then(() => { access.receivedAt = performance.now(); });
+    setView({ kind: "opening", room, access });
+  };
   const back = () => {
     setView({ kind: "home" });
-    loadLive();
-    loadJobs();
+    void loadLive();
   };
 
   /** Take a seat in someone else's room, natively: open OUR room (the
@@ -355,6 +446,8 @@ export function Home({
   }, []);
 
 
+  if (view.kind === "opening") return <RoomOpening name={view.room.name} onLeave={back} />;
+
   if (view.kind === "modseat") {
     return <ModSeat link={view.link} onLeave={back} />;
   }
@@ -366,6 +459,7 @@ export function Home({
         <LiveView
           key={view.room.id}
           room={view.room}
+          entryAccess={view.access}
           onLeave={back}
           onOpenRecording={isBoomin(endpoints.find((ep) => ep.id === activeId)) ? (captureId) => { setManagerRecordingId(captureId); setSurface("manager"); back(); } : undefined}
           onOpenIntegrations={() => {
@@ -502,8 +596,7 @@ export function Home({
           rooms={rooms}
           onResume={(room) => {
             closeSettings();
-            markRoomClick();
-            setView({ kind: "room", room });
+            openRoom(room);
           }}
         />
       )}
@@ -522,10 +615,7 @@ export function Home({
           channels={channels}
           jobs={jobs}
           streaming={streaming}
-          onOpenRoom={(room) => {
-            markRoomClick();
-            setView({ kind: "room", room });
-          }}
+          onOpenRoom={openRoom}
           onRoomsChanged={loadLive}
           onEnterSeat={enterSeat}
           onModLink={(link) => setView({ kind: "modseat", link })}
@@ -1303,9 +1393,9 @@ function ControlRoomHome({
               onMenuToggle={(open) => setOpenMenuRoom(open ? room.id : null)}
               isMain={room.id === mainId}
               seat={seats[room.id]}
-              canMakeMain={!!mainEndpointId && !!parseConfig(room.config).server_room_id}
+              canMakeMain={!!mainEndpointId && !!roomMetadata(room).server_room_id}
               onMakeMain={async () => {
-                const sid = parseConfig(room.config).server_room_id;
+                const sid = roomMetadata(room).server_room_id;
                 if (!mainEndpointId || !sid) return;
                 setMain(room.id); // optimistic: the card wears the pin now
                 await roomSetDefault(mainEndpointId, sid).catch(() => {});
@@ -2092,7 +2182,7 @@ const NetworkRail = memo(function NetworkRail({
     try {
       // The deal names a SERVER room; register the local one lazily (idempotent
       // by external_ref) and mirror the id the same way RoomShareChip does.
-      let sid = parseConfig(room.config).server_room_id;
+      let sid = roomMetadata(room).server_room_id;
       if (!sid) {
         const reg = await registerRoom(endpointId, room.name, room.id);
         sid = reg.room.id;
@@ -3014,7 +3104,7 @@ function useMainRoom(rooms: LiveRoom[]): { mainId: string | null; endpointId: st
   // rows they point at), not on every list identity — and read the server
   // list through the cache, so a re-run inside the stale window costs
   // nothing and the pin cannot blink off while a request is in flight.
-  const key = rooms.map((r) => `${r.id}:${parseConfig(r.config).server_room_id ?? ""}`).join("|");
+  const key = rooms.map((r) => `${r.id}:${roomMetadata(r).server_room_id ?? ""}`).join("|");
   const roomsRef = useRef(rooms);
   roomsRef.current = rooms;
   useEffect(() => {
@@ -3029,7 +3119,7 @@ function useMainRoom(rooms: LiveRoom[]): { mainId: string | null; endpointId: st
         () => cached<ServerRoom[]>(`srvrooms:${ep.id}`) ?? [],
       );
       const main = srv.find((r) => r.is_default);
-      const local = main ? roomsRef.current.find((r) => parseConfig(r.config).server_room_id === main.id) : undefined;
+      const local = main ? roomsRef.current.find((r) => roomMetadata(r).server_room_id === main.id) : undefined;
       if (!dead) setState((p) => reconcile(p, { mainId: local?.id ?? null, endpointId: ep.id }));
     };
     void run(false);
@@ -3058,13 +3148,13 @@ function useMainRoom(rooms: LiveRoom[]): { mainId: string | null; endpointId: st
 function useRoomSeats(rooms: LiveRoom[], activeEp: EndpointInfo | null): Record<string, RoomAccessInfo> {
   const [seats, setSeats] = useState<Record<string, RoomAccessInfo>>({});
   const epId = activeEp && isBoomin(activeEp) ? activeEp.id : null;
-  const key = rooms.map((r) => `${r.id}:${parseConfig(r.config).server_room_id ?? ""}`).join(",");
+  const key = rooms.map((r) => `${r.id}:${roomMetadata(r).server_room_id ?? ""}`).join(",");
   useEffect(() => {
     let dead = false;
     if (!epId) { setSeats({}); return; }
     (async () => {
       const pairs = rooms
-        .map((r) => [r.id, parseConfig(r.config).server_room_id] as const)
+        .map((r) => [r.id, roomMetadata(r).server_room_id] as const)
         .filter((p): p is readonly [string, string] => !!p[1]);
       const out: Record<string, RoomAccessInfo> = {};
       await Promise.all(
@@ -3324,10 +3414,10 @@ function RoomShareChip({ room, onChanged }: { room: LiveRoom; onChanged: () => v
   const activeEp = useActiveEndpoint();
   const [busy, setBusy] = useState(false);
   const [vis, setVis] = useState<"private" | "connections" | "public">(
-    () => parseConfig(room.config).visibility ?? "private",
+    () => roomMetadata(room).visibility ?? "private",
   );
   useEffect(() => {
-    setVis(parseConfig(room.config).visibility ?? "private");
+    setVis(roomMetadata(room).visibility ?? "private");
   }, [room.config]);
 
   const cycle = async (e: React.MouseEvent) => {
@@ -3344,7 +3434,7 @@ function RoomShareChip({ room, onChanged }: { room: LiveRoom; onChanged: () => v
     try {
       const ep = await resolveActiveEndpoint();
       if (!ep || !isBoomin(ep)) throw new Error("no Boomin endpoint");
-      let sid = parseConfig(room.config).server_room_id;
+      let sid = roomMetadata(room).server_room_id;
       if (!sid) {
         const reg = await registerRoom(ep.id, room.name, room.id);
         sid = reg.room.id;

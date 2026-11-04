@@ -3,7 +3,7 @@ type Driver = { attach: (r: PreviewBounds) => Promise<boolean>; move: (r: Previe
 // Native preview is one per window. Serialize teardown before a new mount can
 // attach, including when the previous attach has not resolved yet.
 let tail: Promise<unknown> = Promise.resolve();
-function enqueue<T>(work: () => Promise<T>): Promise<T> {
+export function afterPreviewWork<T>(work: () => Promise<T>): Promise<T> {
   const result = tail.then(work); tail = result.catch(() => {}); return result;
 }
 export function previewSession(driver: Driver, stage: (transparent: boolean) => void) {
@@ -17,7 +17,7 @@ export function previewSession(driver: Driver, stage: (transparent: boolean) => 
       if (!r || !Object.values(r).every(Number.isFinite) || r.width < 10 || r.height < 10 || (attached && same(r) && !refresh)) return;
       busy = true;
       try {
-        await enqueue(async () => {
+        await afterPreviewWork(async () => {
           if (!alive) return;
           if (!attached) {
             const transparent = await driver.attach(r);
@@ -33,13 +33,13 @@ export function previewSession(driver: Driver, stage: (transparent: boolean) => 
         if (alive) {
           attached = false; last = undefined; stage(false); retryAt = Date.now() + 1000;
           // Attach may have reached the engine even when the bridge rejected.
-          await enqueue(() => driver.detach()).catch(() => {});
+          await afterPreviewWork(() => driver.detach()).catch(() => {});
         }
       } finally { busy = false; }
     },
     close() {
       alive = false; stage(false);
-      return enqueue(() => driver.detach()).catch(() => {});
+      return afterPreviewWork(() => driver.detach()).catch(() => {});
     },
   };
 }

@@ -313,6 +313,7 @@ impl Portrait {
         captures: HashMap<String, *mut ffi::obs_source_t>,
         width: f32,
         height: f32,
+        set_item: Option<*mut ffi::obs_sceneitem_t>,
     ) {
         if self.room_scene.is_null() || self.active.is_some() {
             return;
@@ -362,8 +363,14 @@ impl Portrait {
             let item = self
                 .room_items
                 .entry(state.id.clone())
-                .or_insert_with(|| (ffi::obs_scene_add(self.room_scene, src), src as usize))
+                .or_insert_with(|| {
+                    (super::graph::add_scene_item(self.room_scene, src, false, set_item), src as usize)
+                })
                 .0;
+            if item.is_null() {
+                self.room_items.remove(&state.id);
+                continue;
+            }
             state.x = ox + state.x * scale;
             state.y = oy + state.y * scale;
             state.w *= scale;
@@ -426,10 +433,28 @@ impl Portrait {
                 },
             );
             ffi::obs_sceneitem_set_visible(item, state.visible);
-            ffi::obs_sceneitem_set_order_position(item, state.z.max(0));
+            ffi::obs_sceneitem_set_order_position(
+                item,
+                super::graph::room_item_order(item, state.z, set_item),
+            );
         }
         states.sort_by_key(|state| state.z);
         self.room_states = states;
+    }
+    pub(super) unsafe fn detach_room_item(
+        &mut self,
+        id: &str,
+        source: *mut ffi::obs_source_t,
+        replacing: bool,
+    ) {
+        if self.room_items.get(id).is_some_and(|(_, old)| *old == source as usize) {
+            let (item, _) = self.room_items.remove(id).unwrap();
+            ffi::obs_sceneitem_remove(item);
+            if !replacing {
+                self.overrides.remove(id);
+            }
+            self.room_fingerprint.clear();
+        }
     }
     pub unsafe fn program_source(&self) -> *mut ffi::obs_source_t {
         let scene = if !self.blend_scene.is_null() {

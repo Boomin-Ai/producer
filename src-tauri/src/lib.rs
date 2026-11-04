@@ -394,6 +394,7 @@ pub fn run() {
             live::commands::live_prepare_stinger,
             live::commands::live_vcam_status,
             live::commands::live_vcam_activate,
+            live::commands::live_vcam_setup,
             live::commands::live_vcam_output,
             live::commands::live_filters,
             live::commands::live_set_opacity,

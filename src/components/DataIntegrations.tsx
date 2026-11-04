@@ -5,6 +5,7 @@ const weather=():Connection=>({id:'weather-'+crypto.randomUUID().slice(0,8),name
 const agent=():Connection=>({id:'agent-'+crypto.randomUUID().slice(0,8),name:'Research agent',kind:'agent',provider:'anthropic',model:'',webSearch:true,maxOutputTokens:2048});
 export function DataIntegrations({endpointId,initialKind}:{endpointId:string|null;initialKind?:'weather'|'agent'}){
  const [connections,setConnections]=useState<SavedConnection[]>([]),[draft,setDraft]=useState<Connection|null>(null),[revision,setRevision]=useState<number>(),[secret,setSecret]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[loaded,setLoaded]=useState(false);
+ const visibleConnections=initialKind?connections.filter(({connection})=>connection.kind===initialKind):connections;
  const current=useRef(endpointId);current.current=endpointId;
  const refresh=async(id=endpointId)=>{if(!id)return;const response=await dataIntegrations.list(id);if(current.current===id){setConnections(response.connections);setLoaded(true);}};
  useEffect(()=>{let cancelled=false;setConnections([]);setDraft(initialKind==='weather'?weather():initialKind==='agent'?agent():null);setSecret('');setError('');setLoaded(false);setBusy(false);setRevision(undefined);if(endpointId)void refresh(endpointId).catch(e=>{if(!cancelled)setError(String(e));});return()=>{cancelled=true;};},[endpointId]);
@@ -17,14 +18,14 @@ export function DataIntegrations({endpointId,initialKind}:{endpointId:string|nul
   <div className="set-list">
    <div className="cr-sheet-row"><span className="cr-sheet-row-name">Data integrations</span><span className="cr-sheet-row-sub">Saved connections for sets and shows</span></div>
    {!endpointId&&<p className="cr-hint">Select a workspace to configure weather and agent connections.</p>}
-   {endpointId&&loaded&&!connections.length&&<p className="cr-hint">Connect weather data or an agent, then select it in a set’s module settings.</p>}
-   {connections.map(saved=><div className="cr-sheet-row data-connection" key={saved.connection.id}>
+   {endpointId&&loaded&&!visibleConnections.length&&<p className="cr-hint">Connect weather data or an agent, then select it in a set’s module settings.</p>}
+   {visibleConnections.map(saved=><div className="cr-sheet-row data-connection" key={saved.connection.id}>
     <span className="cr-sheet-row-name">{saved.connection.name}</span><span className="cr-sheet-row-sub">{saved.connection.kind==='weather'?`${saved.connection.location} · Open-Meteo`:`${saved.connection.model} · ${saved.connection.provider==='anthropic'?'Claude':'OpenAI'}${saved.connection.webSearch?' · Web research':''}`}</span>
     <span className="data-connection-status" role="status">{saved.status==='ready'?'Connected':saved.status==='error'?'Needs attention':'Not tested'}</span>
     <div className="data-connection-actions"><button disabled={busy} onClick={()=>edit(saved)}>Edit</button><button disabled={busy} onClick={()=>void run(async id=>{await dataIntegrations.test(id,saved);await refresh(id);})}>Test connection</button><button disabled={busy} onClick={()=>void run(async id=>{await dataIntegrations.remove(id,saved);await refresh(id);})}>Remove</button></div>
     {saved.error&&<span className="cr-hint" role="alert">{saved.error}</span>}
    </div>)}
-   {endpointId&&loaded&&!draft&&<div className="data-connection-actions"><button disabled={busy} onClick={()=>{setDraft(weather());setRevision(undefined);setSecret('');}}>Add weather connection</button><button disabled={busy} onClick={()=>{setDraft(agent());setRevision(undefined);setSecret('');}}>Add LLM connection</button></div>}
+   {endpointId&&loaded&&!draft&&<div className="data-connection-actions">{initialKind!=='agent'&&<button disabled={busy} onClick={()=>{setDraft(weather());setRevision(undefined);setSecret('');}}>Add weather connection</button>}{initialKind!=='weather'&&<button disabled={busy} onClick={()=>{setDraft(agent());setRevision(undefined);setSecret('');}}>Add LLM connection</button>}</div>}
    {draft&&<form className="data-connection-editor" aria-label="Configure data connection" onSubmit={e=>{e.preventDefault();save();}}>
     <label>Name<input required maxLength={80} value={draft.name} onChange={e=>change({name:e.target.value})}/></label>
     {draft.kind==='agent'?<label>LLM provider<select aria-label="LLM provider" disabled={revision!==undefined} value={draft.provider} onChange={e=>change({provider:e.target.value as 'openai'|'anthropic'})}><option value="anthropic">Anthropic / Claude</option><option value="openai">OpenAI</option></select></label>:<label>Provider<input disabled value="Open-Meteo"/></label>}

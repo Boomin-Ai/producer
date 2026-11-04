@@ -103,6 +103,7 @@ fn link_live_engine_macos() {
     println!("cargo:rustc-link-lib=framework=AVFoundation");
     // Virtual camera (R13): OSSystemExtensionManager activation.
     println!("cargo:rustc-link-lib=framework=SystemExtensions");
+    println!("cargo:rustc-link-lib=framework=Security");
     println!("cargo:rustc-link-lib=framework=CoreGraphics");
     println!("cargo:rustc-link-lib=framework=CoreMedia");
     // Bundled app resolves the engine beside the executable. Debug builds may

@@ -19,6 +19,22 @@ try{
   const send=async request=>{await new Promise(r=>setTimeout(r,5));calls.push(request.op);if(request.op==='preload'){revision=request.revision;cache.add(request.key);}if(request.op==='retain')for(const key of cache)if(!request.keys.includes(key))cache.delete(key);return {preparedRevision:revision,renderedRevision:revision,ready:true,warmed:true,transitioning:false,queued:false,cachedKeys:[...cache],renderSerial:1};};
   const bank=new PreparedScenes(send,()=>updates++,async(...args)=>{compiles++;return compileRoomScene(...args);});
   const background=bank.preload(specs,()=>false);await new Promise(r=>setTimeout(r,1));await Promise.all([bank.take(specs[0],async()=>{}),bank.take({...specs[1],target:{...specs[1].target,id:'portrait',orientation:'portrait',width:720,height:1280}},async()=>{})]);await background;const loaded=compiles;
+  const foregroundCache=new Set(), foregroundCalls=[];
+  let releaseWarm, signalWarm;
+  const warmStarted=new Promise(resolve=>{signalWarm=resolve;});
+  const warmFinish=new Promise(resolve=>{releaseWarm=resolve;});
+  const promotion=new PreparedScenes(async request=>{
+   foregroundCalls.push(request.op);
+   if(request.op==='preload'){signalWarm();await warmFinish;foregroundCache.add(request.key);}
+   return {preparedRevision:0,renderedRevision:0,cachedKeys:[...foregroundCache],ready:true,warmed:true};
+  },()=>{},async()=>({root:{id:'root',kind:'group',bounds:{x:0,y:0,width:100,height:100},children:[]},assets:{}}));
+  const prewarming=promotion.ensure(specs[0]);
+  await warmStarted;
+  const promoted=promotion.take(specs[0],async()=>{});
+  releaseWarm();
+  await Promise.all([prewarming,promoted]);
+  if(foregroundCalls.filter(op=>op==='preload').length!==1||foregroundCalls.includes('cancel'))throw Error('Applying the exact layout restarted in-flight preparation');
+  promotion.dispose();
   for(let i=0;i<4;i++)await bank.take(specs[i%specs.length],async(entry)=>{if(!entry.plan)throw Error('missing plan');});
   const pin=bank.take(specs[0],async()=>{await new Promise(r=>setTimeout(r,10));});await bank.retain(specs.slice(1));await pin;
   const repeatCompiles=compiles;
@@ -35,6 +51,7 @@ try{
   for(let i=0;i<80;i++){
    const changing=structuredClone(specs[0]);changing.projection.root.styles.background='#'+i.toString(16).padStart(6,'0');if(i%2)changing.target={...changing.target,id:'portrait',orientation:'portrait'};
    await churn.take(changing,async entry=>{compiledKeys.push(entry.key);});
+   await churn.retain(specs.slice(0,2));
    if(churnCache.size>4||churn.debug().entries.length>4)throw Error('Live snapshots accumulated');
   }
   if(peak>5)throw Error('Unbounded overlapping preparation');if(!churnCache.has(compiledKeys.at(-1)))throw Error('Active snapshot was evicted');
@@ -63,6 +80,7 @@ try{
   await tight.retain(specs);await tight.take(oldPhoto,async()=>{});
   await tight.retain(editedSpecs);await tight.preload(editedSpecs.slice(1),()=>false);
   await tight.take(editedSpecs[0],async()=>{});
+  await tight.retain(editedSpecs);
   if(tight.readiness(editedSpecs[0]).state!=='ready'||!tightManifests.some(ids=>ids.includes('oldPhoto'))||tightManifests.at(-1).includes('oldPhoto'))throw Error('Replacement lost live artwork or retained it after replacement');tight.dispose();
   // A new live text snapshot must not re-upload the loaded artwork. The native
   // retain operation discards only assets outside this explicitly bounded list.
@@ -74,6 +92,7 @@ try{
   if(uploaded.join(',')!=='art'||manifests.some(ids=>ids.join(',')!=='art'))throw Error('Loaded artwork was re-uploaded during live snapshots');
   await mediaBank.retain([]); // The active output retains its artwork until replaced.
   const empty=structuredClone(mediaSpec);empty.projection.assets={};empty.projection.root.styles.background='empty';await mediaBank.take(empty,async()=>{});
+  await mediaBank.retain([]);
   if(manifests.at(-1).length)throw Error('Unused artwork manifest was retained');mediaBank.dispose();
   // Cold WebGL can become ready after the former 600-poll deadline. Advance
   // a synthetic clock while yielding microtasks so this exercises the fence
@@ -142,6 +161,8 @@ try{
   const readyTrim=new PreparedScenes(async request=>{if(request.op==='preload'){readyKeys.add(request.key);readyRevision=request.revision;}if(request.op==='retain')for(const key of readyKeys)if(!request.keys.includes(key))readyKeys.delete(key);return {preparedRevision:readyRevision,renderedRevision:readyRevision,cachedKeys:[...readyKeys],ready:true,warmed:true};},()=>{},async()=>({root:{id:'root',kind:'group',bounds:{x:0,y:0,width:100,height:100},children:[]},assets:{}}));
   await readyTrim.retain(specs);await readyTrim.preload(specs,()=>false);readyTrim.setInventory([specs[0]]);
   await readyTrim.take(specs[0],async()=>{if(readyKeys.size!==3)throw Error('Cold eviction blocked a ready presentation');});
+  if(readyKeys.size!==3)throw Error('Native eviction delayed the presentation acknowledgement');
+  for(let i=0;i<40&&readyKeys.size!==1;i++)await new Promise(resolve=>setTimeout(resolve,5));
   if(readyKeys.size!==1)throw Error('Post-presentation eviction did not reconcile ownership');readyTrim.dispose();
   bank.dispose();
   return {layouts:specs.length,loaded,repeatCompiles,edited,updates,preloads:calls.filter(c=>c==='preload').length,hasPlan:!!plan.root,churnPeak:peak,churnFinal:churnCache.size};

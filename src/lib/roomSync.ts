@@ -113,22 +113,24 @@ async function writeCfg(room: LiveRoom, patch: Partial<RoomConfig>) {
   await ipc.liveUpdateRoom(room.id, { config: serializeConfig({ ...cfg, ...patch }) });
 }
 
-let inflight: Promise<RoomSyncResult | null> | null = null;
+const inflight = new Map<string, Promise<RoomSyncResult | null>>();
 
 /** Reconcile once; concurrent callers (mount + focus firing together) share
  * the same run rather than racing each other into duplicate local rows. */
 export function syncRooms(endpointId: string | null | undefined): Promise<RoomSyncResult | null> {
   if (!endpointId) return Promise.resolve(null);
-  if (inflight) return inflight;
-  inflight = runSync(endpointId)
+  const pending = inflight.get(endpointId);
+  if (pending) return pending;
+  const run = runSync(endpointId)
     .then((res) => {
       if (res?.changed) notifyRoomsChanged();
       return res;
     })
     .finally(() => {
-      inflight = null;
+      inflight.delete(endpointId);
     });
-  return inflight;
+  inflight.set(endpointId, run);
+  return run;
 }
 
 async function runSync(endpointId: string): Promise<RoomSyncResult | null> {

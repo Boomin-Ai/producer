@@ -968,6 +968,10 @@ pub fn vcam_status() -> serde_json::Value {
                 3 => "active",
                 4 => "failed",
                 5 => "unsupported",
+                6 => "move_to_applications",
+                7 => "requires_signed_app",
+                8 => "restart_required",
+                9 => "unavailable",
                 _ => "idle",
             },
             "installed": installed,
@@ -984,6 +988,23 @@ pub fn vcam_activate() {
     #[cfg(have_engine)]
     unsafe {
         ffi::producer_vcam_activate();
+    }
+}
+
+pub fn vcam_setup(action: &str) -> Result<(), String> {
+    #[cfg(all(have_engine, target_os = "macos"))]
+    unsafe {
+        match action {
+            "reveal_app" => ffi::producer_vcam_reveal_app(),
+            "open_settings" => ffi::producer_vcam_open_settings(),
+            _ => return Err("Unknown virtual camera setup action".into()),
+        }
+        Ok(())
+    }
+    #[cfg(not(all(have_engine, target_os = "macos")))]
+    {
+        let _ = action;
+        Err("Camera extension setup is available on macOS with the bundled engine".into())
     }
 }
 

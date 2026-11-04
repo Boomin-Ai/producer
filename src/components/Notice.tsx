@@ -1,23 +1,85 @@
-import { useEffect, useRef, useState } from "react";
-import { type Notice as NoticeT, fade, subscribeNotices } from "../lib/notices";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { type Notice, fade, subscribeNotices } from "../lib/notices";
 
-/** The live list of notices; one subscriber per host. */
-export function useNotices(): NoticeT[] {
-  const [list, setList] = useState<NoticeT[]>([]);
+export function useNotices(): Notice[] {
+  const [list, setList] = useState<Notice[]>([]);
   useEffect(() => subscribeNotices(setList), []);
   return list;
 }
 
-export function NoticeHost({ action }: { action?: { label: string; onClick: () => void; noticeKey: string } } = {}) {
-  const list=useNotices(),[history,setHistory]=useState<NoticeT[]>([]),[open,setOpen]=useState(false);
-  const panel=useRef<HTMLDivElement>(null);
-  useEffect(()=>{if(list.length)setHistory(old=>{const rows=new Map(old.map(n=>[n.id,n]));for(const n of list)rows.set(n.id,n);return [...rows.values()].slice(-20);});},[list]);
-  useEffect(()=>{const timers=list.filter(n=>!n.faded&&!n.sticky&&n.tone!=='error').map(n=>setTimeout(()=>fade(n.id),n.ttl));return()=>timers.forEach(clearTimeout);},[list]);
-  useEffect(()=>{if(!open)return;const close=(e:PointerEvent)=>{if(!panel.current?.contains(e.target as Node))setOpen(false);};const escape=(e:KeyboardEvent)=>{if(e.key==='Escape')setOpen(false);};window.addEventListener('pointerdown',close);window.addEventListener('keydown',escape);return()=>{window.removeEventListener('pointerdown',close);window.removeEventListener('keydown',escape);};},[open]);
-  const active=list.filter(n=>!n.faded),latest=history[history.length-1];
-  const actionRows=history.filter(row=>row.key===action?.noticeKey),actionId=actionRows[actionRows.length-1]?.id;
-  return <div className="rm-activity" ref={panel}>
-    <button type="button" className="rm-activity-trigger" aria-label="Room activity" title={latest?.text??'Room activity'} aria-expanded={open} onClick={()=>setOpen(o=>!o)}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M5 17h14l-2-3V9a5 5 0 0 0-10 0v5zM10 20h4"/></svg>{active.length>0&&<span className="rm-activity-count">{active.length}</span>}</button>
-    {open&&<section className="rm-activity-panel" aria-label="Room activity ledger"><header><strong>Room activity</strong><button type="button" onClick={()=>setOpen(false)} aria-label="Close room activity">×</button></header><div className="rm-activity-list">{history.length?history.slice().reverse().map(n=><article key={n.id} className={'rm-activity-entry tone-'+n.tone}><span className="rm-activity-tone">{n.tone==='success'?'✓':n.tone==='error'?'!':'•'}</span><div><p>{n.text}</p>{action&&n.key===action.noticeKey&&n.id===actionId&&<button type="button" onClick={()=>{action.onClick();setOpen(false);}}>{action.label} ↗</button>}</div></article>):<p className="rm-activity-empty">Room updates will appear here.</p>}</div></section>}
+type NoticeAction = { label: string; onClick: () => void; noticeKey: string };
+
+export function NoticeHost({ action, hidden = false }: {
+  hidden?: boolean;
+  action?: NoticeAction;
+}) {
+  const list = useNotices();
+  const [history, setHistory] = useState<Notice[]>([]);
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const trigger = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!list.length) return;
+    setHistory(old => {
+      const rows = new Map(old.map(notice => [notice.id, notice]));
+      for (const notice of list) rows.set(notice.id, notice);
+      return [...rows.values()].slice(-20);
+    });
+  }, [list]);
+
+  useEffect(() => {
+    const timers = list.filter(notice => !notice.faded && !notice.sticky && notice.tone !== "error")
+      .map(notice => setTimeout(() => fade(notice.id), notice.ttl));
+    return () => timers.forEach(clearTimeout);
+  }, [list]);
+
+  useEffect(() => {
+    if (hidden) setOpen(false);
+  }, [hidden]);
+
+  const closeOnEscape = (event: KeyboardEvent) => {
+    if (!open || event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    setOpen(false);
+    trigger.current?.focus();
+  };
+
+  const active = list.filter(notice => !notice.faded);
+  const latest = active[active.length - 1];
+  const activityText = latest?.text ?? history[history.length - 1]?.text;
+  const actionId = history.filter(notice => notice.key === action?.noticeKey).pop()?.id;
+  if (hidden) return null;
+
+  return <div className="rm-top-activity" onKeyDown={closeOnEscape}>
+    <button ref={trigger} type="button" className="rm-activity-trigger" aria-label="Room activity" data-tone={latest?.tone}
+      title={activityText ?? "Room activity"} aria-expanded={open} aria-controls={open ? panelId : undefined}
+      onClick={() => setOpen(current => !current)}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <path d="M3 12h4l3-6 4 12 3-6h4" />
+      </svg>
+      <span className="rm-activity-label">Activity</span>
+      {latest && <span className={`rm-activity-preview tone-${latest.tone}`}>{latest.text}</span>}
+      {active.length > 1 && <span className="rm-activity-count" aria-hidden="true">{active.length}</span>}
+      <svg className="rm-activity-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+        <path d="m3 4.5 3 3 3-3" />
+      </svg>
+    </button>
+    <span className="rm-activity-announcement" role="status">{latest?.text}</span>
+    {open && <section id={panelId} className="rm-activity-panel" aria-label="Room activity feed">
+      {history.length ? <ul className="rm-activity-list" tabIndex={0} aria-label="Recent updates">
+        {history.slice().reverse().map(notice => <li key={notice.id} className={`rm-activity-entry tone-${notice.tone}`}>
+          <span className="rm-activity-tone" aria-label={notice.tone}>{notice.tone === "success" ? "✓" : notice.tone === "error" || notice.tone === "warning" ? "!" : "•"}</span>
+          <div>
+            <p>{notice.text}</p>
+            {action && notice.id === actionId && <button type="button" onClick={() => {
+              setOpen(false);
+              action.onClick();
+            }}>{action.label} ↗</button>}
+          </div>
+        </li>)}
+      </ul> : <p className="rm-activity-empty">No room updates yet.</p>}
+    </section>}
   </div>;
 }

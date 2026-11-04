@@ -307,7 +307,7 @@ jobs:
         run: |
           clang -fobjc-arc -fblocks scripts/test-preview-geometry.m src-tauri/src/live/shim.m \
             -framework AppKit -framework WebKit -framework AVFoundation \
-            -framework CoreMediaIO -framework SystemExtensions -framework CoreGraphics \
+            -framework CoreMediaIO -framework SystemExtensions -framework CoreGraphics -framework Security \
             -o /tmp/producer-preview-geometry-test
           /tmp/producer-preview-geometry-test
           node scripts/test-preview-session.mjs

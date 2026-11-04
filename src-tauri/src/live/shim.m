@@ -7,6 +7,7 @@
 #import <AppKit/AppKit.h>
 #import <AVFoundation/AVFoundation.h>
 #import <CoreMediaIO/CMIOHardware.h>
+#import <Security/SecTask.h>
 #import <SystemExtensions/SystemExtensions.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <WebKit/WebKit.h>
@@ -29,13 +30,10 @@ static NSRect frame_from_css(NSView *content, double x, double y, double w, doub
     NSView *web = find_webview(content);
     if (web) {
         NSRect bounds = web.bounds;
-        // In full-size-content windows, WebKit excludes its safe area from
-        // the DOM viewport while keeping it in native bounds. Convert the
-        // viewport origin first; convertRect then handles container offsets.
-        NSEdgeInsets inset = web.safeAreaInsets;
-        NSRect local = NSMakeRect(NSMinX(bounds) + inset.left + x,
-            web.isFlipped ? NSMinY(bounds) + inset.top + y
-                          : NSMaxY(bounds) - inset.top - y - h, w, h);
+        // viewport-fit=cover makes the DOM origin the webview bounds origin.
+        // AppKit conversion handles offsets introduced by the view hierarchy.
+        NSRect local = NSMakeRect(NSMinX(bounds) + x,
+            web.isFlipped ? NSMinY(bounds) + y : NSMaxY(bounds) - y - h, w, h);
         return [content convertRect:local fromView:web];
     }
     NSRect bounds = content.bounds;
@@ -120,7 +118,6 @@ void *producer_preview_attach(void *ns_window, double x, double y, double w, dou
         view = [[NSView alloc] initWithFrame:frame_from_css(content, x, y, w, h)];
         view.wantsLayer = YES;
         view.layer.backgroundColor = CGColorGetConstantColor(kCGColorBlack);
-        view.layer.cornerRadius = 8; // the stage canvas is a rounded card
         view.layer.masksToBounds = YES;
         [content addSubview:view
                  positioned:(below_webview ? NSWindowBelow : NSWindowAbove)
@@ -353,10 +350,20 @@ void producer_open_screen_settings(void) {
 // and its result arrives on a delegate, so activation state is a small
 // state machine the UI polls rather than a call that returns an answer.
 //
-// 0 = unknown/idle, 1 = requested, 2 = needs user approval, 3 = active,
-// 4 = failed.
-static int g_vcam_state = 0;
+enum {
+    VcamIdle = 0,
+    VcamRequested = 1,
+    VcamNeedsApproval = 2,
+    VcamActive = 3,
+    VcamFailed = 4,
+    VcamMoveToApplications = 6,
+    VcamRequiresSignedApp = 7,
+    VcamRestartRequired = 8,
+    VcamUnavailable = 9,
+};
+static int g_vcam_state = VcamIdle;
 static char g_vcam_error[512] = {0};
+static NSString * const VcamProviderID = @"ai.boomin.producer.camera-extension";
 
 @interface ProducerExtensionDelegate : NSObject <OSSystemExtensionRequestDelegate>
 @end
@@ -371,16 +378,23 @@ static char g_vcam_error[512] = {0};
 }
 
 - (void)requestNeedsUserApproval:(OSSystemExtensionRequest *)request {
-    g_vcam_state = 2;
+    g_vcam_state = VcamNeedsApproval;
 }
 
 - (void)request:(OSSystemExtensionRequest *)request
     didFinishWithResult:(OSSystemExtensionRequestResult)result {
-    g_vcam_state = 3;
+    g_vcam_state = result == OSSystemExtensionRequestWillCompleteAfterReboot
+        ? VcamRestartRequired : VcamActive;
 }
 
 - (void)request:(OSSystemExtensionRequest *)request didFailWithError:(NSError *)error {
-    g_vcam_state = 4;
+    g_vcam_state = VcamFailed;
+    if ([error.domain isEqualToString:OSSystemExtensionErrorDomain]) {
+        if (error.code == OSSystemExtensionErrorUnsupportedParentBundleLocation)
+            g_vcam_state = VcamMoveToApplications;
+        else if (error.code == OSSystemExtensionErrorMissingEntitlement)
+            g_vcam_state = VcamRequiresSignedApp;
+    }
     snprintf(g_vcam_error, sizeof(g_vcam_error), "%s",
              error.localizedDescription.UTF8String ?: "activation failed");
 }
@@ -388,41 +402,57 @@ static char g_vcam_error[512] = {0};
 
 static ProducerExtensionDelegate *g_vcam_delegate = nil;
 
-// The extension's bundle id — read from the bundle we actually ship so the
-// two can never drift apart.
-static NSString *producer_camera_extension_id(void) {
-    NSURL *dir = [[NSBundle mainBundle] builtInPlugInsURL];
-    NSURL *ext = [[[dir URLByDeletingLastPathComponent]
-        URLByAppendingPathComponent:@"Library"]
-        URLByAppendingPathComponent:@"SystemExtensions"];
-    NSArray *items = [[NSFileManager defaultManager] contentsOfDirectoryAtURL:ext
-                                                  includingPropertiesForKeys:nil
-                                                                     options:0
-                                                                       error:nil];
-    for (NSURL *u in items) {
-        if ([u.pathExtension isEqualToString:@"systemextension"]) {
-            return [u.lastPathComponent stringByDeletingPathExtension];
+static BOOL producer_vcam_has_install_entitlement(void) {
+    SecTaskRef task = SecTaskCreateFromSelf(NULL);
+    if (!task) return NO;
+    CFTypeRef value = SecTaskCopyValueForEntitlement(
+        task, CFSTR("com.apple.developer.system-extension.install"), NULL);
+    BOOL allowed = value && CFEqual(value, kCFBooleanTrue);
+    if (value) CFRelease(value);
+    CFRelease(task);
+    return allowed;
+}
+
+static BOOL producer_vcam_is_in_applications(NSURL *app) {
+    NSString *apps = [[NSURL fileURLWithPath:@"/Applications" isDirectory:YES]
+        URLByResolvingSymlinksInPath].path;
+    NSString *path = [app URLByResolvingSymlinksInPath].path;
+    return [path hasPrefix:[apps stringByAppendingString:@"/"]];
+}
+
+static int producer_vcam_preflight(void) {
+    static dispatch_once_t once;
+    static int state;
+    dispatch_once(&once, ^{
+        NSBundle *app = [NSBundle mainBundle];
+        NSURL *extensionURL = [[app.bundleURL URLByAppendingPathComponent:@"Contents/Library/SystemExtensions"]
+            URLByAppendingPathComponent:[VcamProviderID stringByAppendingPathExtension:@"systemextension"]];
+        NSBundle *extension = [NSBundle bundleWithURL:extensionURL];
+        // The retired portrait extension also ships in this folder. Select
+        // the provider used by the output plugin, even when both are present.
+        if (![extension.bundleIdentifier isEqualToString:VcamProviderID]) {
+            state = VcamUnavailable;
+        } else if (!producer_vcam_has_install_entitlement()) {
+            state = VcamRequiresSignedApp;
+        } else if (!producer_vcam_is_in_applications(app.bundleURL)) {
+            state = VcamMoveToApplications;
         }
-    }
-    return nil;
+    });
+    return state;
 }
 
 void producer_vcam_activate(void) {
     run_on_main(^{
-        NSString *ident = producer_camera_extension_id();
-        if (!ident) {
-            g_vcam_state = 4;
-            snprintf(g_vcam_error, sizeof(g_vcam_error),
-                     "no camera extension is bundled with this build");
-            return;
-        }
+        if (producer_vcam_preflight() != VcamIdle ||
+            g_vcam_state == VcamRequested || g_vcam_state == VcamNeedsApproval ||
+            g_vcam_state == VcamRestartRequired) return;
         if (!g_vcam_delegate) {
             g_vcam_delegate = [ProducerExtensionDelegate new];
         }
-        g_vcam_state = 1;
+        g_vcam_state = VcamRequested;
         g_vcam_error[0] = 0;
         OSSystemExtensionRequest *req =
-            [OSSystemExtensionRequest activationRequestForExtension:ident
+            [OSSystemExtensionRequest activationRequestForExtension:VcamProviderID
                                                               queue:dispatch_get_main_queue()];
         req.delegate = g_vcam_delegate;
         [[OSSystemExtensionManager sharedManager] submitRequest:req];
@@ -430,10 +460,45 @@ void producer_vcam_activate(void) {
 }
 
 int producer_vcam_state(char *buf, int len) {
-    if (buf && len > 0) {
-        snprintf(buf, (size_t)len, "%s", g_vcam_error);
-    }
-    return g_vcam_state;
+    __block int state;
+    run_on_main(^{
+        state = producer_vcam_preflight();
+        if (state == VcamIdle) state = g_vcam_state;
+        const char *detail = g_vcam_error;
+        switch (state) {
+            case VcamMoveToApplications:
+                detail = "Move Producer to Applications, then reopen it from there to install the virtual camera.";
+                break;
+            case VcamRequiresSignedApp:
+                detail = "Install the virtual camera from a signed Producer release.";
+                break;
+            case VcamRestartRequired:
+                detail = "Restart your Mac to finish installing Producer Virtual Camera.";
+                break;
+            case VcamUnavailable:
+                detail = "This build does not include the Producer camera extension.";
+                break;
+        }
+        if (buf && len > 0) snprintf(buf, (size_t)len, "%s", detail);
+    });
+    return state;
+}
+
+void producer_vcam_reveal_app(void) {
+    run_on_main(^{
+        [[NSWorkspace sharedWorkspace]
+            activateFileViewerSelectingURLs:@[[NSBundle mainBundle].bundleURL]];
+    });
+}
+
+void producer_vcam_open_settings(void) {
+    run_on_main(^{
+        NSString *pane = @"x-apple.systempreferences:com.apple.preference.security?General";
+        if (@available(macOS 15.0, *)) {
+            pane = @"x-apple.systempreferences:com.apple.LoginItems-Settings.extension";
+        }
+        [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:pane]];
+    });
 }
 
 // Is the virtual camera already present as a capture device? That is the

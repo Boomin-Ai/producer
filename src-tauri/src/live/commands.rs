@@ -199,6 +199,7 @@ pub async fn live_go_live(
     endpoint_id: Option<String>,
     server_room_id: Option<String>,
 ) -> EngineResult<()> {
+    use tauri::Manager;
     // Capture credentials/workspace once for THIS room, before enqueueing the
     // engine start. They never cross back into the webview.
     let presence = match (endpoint_id, server_room_id) {
@@ -230,10 +231,13 @@ pub async fn live_go_live(
     if specs.is_empty() {
         return Err(EngineError::Other("no enabled destinations".into()));
     }
-    state
-        .live
-        .go_live_specs(specs)
-        .map_err(EngineError::Other)?;
+    let engine_app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        engine_app.state::<AppState>().live.go_live_specs(specs)
+    })
+    .await
+    .map_err(|e| EngineError::Other(e.to_string()))?
+    .map_err(EngineError::Other)?;
     if let Some((base, brand, token, room)) = presence {
         crate::live::presence::start(app, base, brand, token, room);
     }
@@ -611,11 +615,25 @@ pub async fn live_replace_source(
 
 #[tauri::command]
 pub async fn live_restore_room(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     restore: serde_json::Value,
 ) -> EngineResult<serde_json::Value> {
+    let started = std::time::Instant::now();
+    let trace = std::env::var_os("PRODUCER_TRACE_ROOM_OPEN").is_some();
+    if trace { eprintln!("[room-open] ipc_received"); }
     crate::rtc_ipc::stop_host(&state).await?;
-    state.live.restore_room(restore).map_err(EngineError::Other)
+    if trace { eprintln!("[room-open] rtc_stop_ms={}", started.elapsed().as_millis()); }
+    use tauri::Manager;
+    // The native engine reply can wait on an OS capture service. Keep that
+    // synchronous wait off the async runtime used by other room requests.
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        app.state::<AppState>().live.restore_room(restore).map_err(EngineError::Other)
+    })
+    .await
+    .map_err(|e| EngineError::Other(e.to_string()))?;
+    if trace { eprintln!("[room-open] ipc_total_ms={}", started.elapsed().as_millis()); }
+    result
 }
 
 #[tauri::command]
@@ -875,6 +893,11 @@ pub async fn live_vcam_status() -> EngineResult<serde_json::Value> {
 pub async fn live_vcam_activate() -> EngineResult<()> {
     crate::live::vcam_activate();
     Ok(())
+}
+
+#[tauri::command]
+pub async fn live_vcam_setup(action: String) -> EngineResult<()> {
+    crate::live::vcam_setup(&action).map_err(EngineError::Other)
 }
 
 #[tauri::command]

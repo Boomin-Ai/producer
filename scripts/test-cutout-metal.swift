@@ -48,6 +48,19 @@ struct CutoutMetalTest {
     static func main() throws {
         let gpu = MTLCreateSystemDefaultDevice()!
         let device = try MetalDevice(device: gpu)
+        let chain = OBSSwapChain(device: device, size: MTLSize(width: 32, height: 32, depth: 1),
+                                 colorSpace: GS_BGRA)!
+        let devicePointer = UnsafeRawPointer(Unmanaged.passUnretained(device).toOpaque())
+        device_load_swapchain(device: devicePointer,
+                              swap: UnsafeRawPointer(Unmanaged.passUnretained(chain).toOpaque()))
+        precondition(device_get_render_target(device: devicePointer) != nil)
+        // Resizing drops the swapchain's reference before the display finishes
+        // presenting. A queued texrender must start without a borrowed target.
+        chain.resize(MTLSize(width: 64, height: 48, depth: 1))
+        precondition(chain.renderTarget == nil)
+        device_present(device: devicePointer)
+        precondition(device_get_render_target(device: devicePointer) == nil,
+                     "present left the resized display's render target current")
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .bgra8Unorm, width: 32, height: 32, mipmapped: false)
         descriptor.usage = [.renderTarget, .shaderRead]

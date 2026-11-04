@@ -209,7 +209,11 @@ fn reset_video(module: &str, height: u32, fps: u32) -> Result<(), i32> {
         range: ffi::VIDEO_RANGE_PARTIAL,
         scale_type: ffi::OBS_SCALE_BILINEAR,
     };
+    let started = Instant::now();
     let rc = unsafe { ffi::obs_reset_video(&mut ovi) };
+    if std::env::var_os("PRODUCER_TRACE_ROOM_OPEN").is_some() {
+        eprintln!("[room-open] video_reset module={module} ms={} rc={rc}", started.elapsed().as_millis());
+    }
     if rc == 0 {
         Ok(())
     } else {
@@ -657,6 +661,159 @@ use std::time::{Duration, Instant};
 use super::graph;
 use super::multi::{DestStatus, MultiConfig, MultiReport, Session};
 
+// The macOS capture plugin can block in HAL while creating its input unit.
+// Prepare one unparented input at a time. Only the engine may attach it.
+enum RoomMicStage {
+    Queued,
+    Preparing,
+    Attached(graph::RoomMicPacket),
+    Failed,
+}
+
+struct RoomMicStart {
+    extra: graph::RestoreExtra,
+    change: graph::SceneChange,
+    cancelled: Arc<AtomicBool>,
+    started: Instant,
+    stage: RoomMicStage,
+    volume: Option<f32>,
+}
+
+impl RoomMicStart {
+    fn expects_audio(&self) -> bool {
+        self.change.patch.visible == Some(true) && self.change.muted == Some(false)
+    }
+
+    fn is_attached(&self) -> bool {
+        matches!(self.stage, RoomMicStage::Attached(_))
+    }
+
+    fn update_audio_plan(&mut self, visible: Option<bool>, muted: Option<bool>) {
+        self.change.patch.visible = visible.or(self.change.patch.visible);
+        self.change.muted = muted.or(self.change.muted);
+    }
+
+    fn restart(&mut self, spec: graph::ExtraSpec) {
+        self.cancelled.store(true, AtomicOrdering::Release);
+        self.cancelled = Arc::new(AtomicBool::new(false));
+        self.extra.spec = spec;
+        self.started = Instant::now();
+        self.stage = RoomMicStage::Queued;
+    }
+}
+
+impl Drop for RoomMicStart {
+    fn drop(&mut self) {
+        self.cancelled.store(true, AtomicOrdering::Release);
+    }
+}
+
+type RoomMicWorker = (
+    Arc<AtomicBool>,
+    std::thread::JoinHandle<Result<graph::DetachedRoomMic, String>>,
+);
+
+fn defer_room_microphones(restore: &mut graph::RoomRestore, started: Instant) -> Vec<RoomMicStart> {
+    // Leave invalid plans to the ordinary restore path, where they produce the
+    // same validation errors or warnings as before.
+    let mut ids = std::collections::HashSet::new();
+    if restore.extras.len() > 128 || restore.changes.len() > 128
+        || restore.extras.iter().any(|extra| {
+            extra.id == "overlay" || extra.id.contains('\0')
+                || restore.keep_ids.contains(&extra.id) || !ids.insert(extra.id.as_str())
+        })
+        || restore.changes.iter().any(|change| {
+            let p = &change.patch;
+            [p.x, p.y, p.w, p.h, p.rot].into_iter().flatten().any(|value| !value.is_finite())
+        })
+    {
+        return Vec::new();
+    }
+    let mut microphones = Vec::new();
+    let mut others = Vec::new();
+    for extra in std::mem::take(&mut restore.extras) {
+        if matches!(extra.spec, graph::ExtraSpec::Mic { .. }) {
+            let change = restore.changes.iter().rev().find(|change| change.id == extra.id)
+                .cloned().unwrap_or_else(|| graph::SceneChange {
+                    id: extra.id.clone(),
+                    patch: graph::TransformPatch::default(),
+                    muted: None,
+                });
+            microphones.push(RoomMicStart {
+                extra, change, cancelled: Arc::new(AtomicBool::new(false)),
+                started, stage: RoomMicStage::Queued, volume: None,
+            });
+        } else {
+            others.push(extra);
+        }
+    }
+    restore.extras = others;
+    microphones
+}
+
+fn room_mic_status(snapshot: &mut Snapshot, microphones: &[RoomMicStart]) {
+    snapshot.room_mic_pending = false;
+    snapshot.room_mic_failed = false;
+    snapshot.room_mic_starting_ids.clear();
+    for mic in microphones {
+        if !mic.is_attached() {
+            snapshot.room_mic_starting_ids.push(mic.extra.id.clone());
+        }
+        if mic.expects_audio() {
+            if matches!(mic.stage, RoomMicStage::Failed) || mic.started.elapsed() >= Duration::from_secs(8) {
+                snapshot.room_mic_failed = true;
+            } else {
+                snapshot.room_mic_pending = true;
+            }
+        }
+    }
+}
+
+fn current_video_mode(snapshot: &Mutex<Snapshot>, height: u32, fps: u32) -> bool {
+    let snapshot = snapshot.lock().unwrap();
+    snapshot.video_height == height && snapshot.video_fps == fps
+}
+
+#[cfg(test)]
+mod room_mic_tests {
+    use super::*;
+
+    #[test]
+    fn deferred_microphones_follow_saved_audibility_and_cancel_independently() {
+        let mut restore: graph::RoomRestore = serde_json::from_value(serde_json::json!({
+            "keep_ids": [],
+            "extras": [
+                {"id":"mic-a","label":"Mic A","spec":{"kind":"mic"}},
+                {"id":"mic-b","label":"Mic B","spec":{"kind":"mic"}},
+                {"id":"image","label":"Image","spec":{"kind":"image","path":"image.png"}}
+            ],
+            "changes": [
+                {"id":"mic-a","patch":{"visible":true},"muted":false},
+                {"id":"mic-b","patch":{"visible":true},"muted":true}
+            ]
+        })).unwrap();
+        let mut microphones = defer_room_microphones(&mut restore, Instant::now());
+        assert_eq!(restore.extras.len(), 1);
+        let token = microphones[0].cancelled.clone();
+        let mut snapshot = Snapshot::default();
+        room_mic_status(&mut snapshot, &microphones);
+        assert!(snapshot.room_mic_pending);
+        assert_eq!(snapshot.room_mic_starting_ids, ["mic-a", "mic-b"]);
+
+        microphones[0].stage = RoomMicStage::Failed;
+        room_mic_status(&mut snapshot, &microphones);
+        assert!(snapshot.room_mic_failed);
+        assert!(!snapshot.room_mic_pending);
+
+        microphones.remove(0);
+        assert!(token.load(AtomicOrdering::Acquire));
+        room_mic_status(&mut snapshot, &microphones);
+        assert_eq!(snapshot.room_mic_starting_ids, ["mic-b"]);
+        assert!(!snapshot.room_mic_failed);
+        assert!(!snapshot.room_mic_pending);
+    }
+}
+
 /// What to do to a source's filter chain. Every op answers with the chain's
 /// new state, so the UI never has to guess what happened.
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -787,7 +944,10 @@ pub enum Command {
         portrait: bool,
         reply: mpsc::Sender<Result<(), String>>,
     },
-    GoLive(MultiConfig),
+    GoLive {
+        config: MultiConfig,
+        reply: mpsc::SyncSender<Result<(), String>>,
+    },
     StopLive,
     ReleaseIdleRoom {
         reply: mpsc::Sender<Result<bool, String>>,
@@ -884,6 +1044,7 @@ pub enum Command {
         reply: mpsc::Sender<Result<graph::SourcesState, String>>,
     },
     RestoreRoom {
+        queued_at: Instant,
         restore: graph::RoomRestore,
         reply: mpsc::Sender<Result<graph::RoomRestoreResult, String>>,
     },
@@ -1060,6 +1221,9 @@ pub enum LiveEvent {
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct Snapshot {
     pub engine_ready: bool,
+    pub room_mic_pending: bool,
+    pub room_mic_failed: bool,
+    pub room_mic_starting_ids: Vec<String>,
     /// Thumbnail readback instrumentation (docs/THUMB-PIPELINE-V2.md,
     /// amendment 1): worst map wait and count of >200µs maps since boot.
     #[serde(default)]
@@ -1363,7 +1527,7 @@ impl LiveHandle {
     ) -> Result<graph::RoomRestoreResult, String> {
         let (tx, rx) = mpsc::channel();
         self.cmd
-            .send(Command::RestoreRoom { restore, reply: tx })
+            .send(Command::RestoreRoom { queued_at: Instant::now(), restore, reply: tx })
             .map_err(|e| e.to_string())?;
         // Multiple cold browser/capture creations can take longer than a cut.
         rx.recv_timeout(Duration::from_secs(120))
@@ -2352,9 +2516,12 @@ impl LiveProxy {
         if self.streaming.load(AtomicOrdering::SeqCst) {
             return Err("a live session is already running".into());
         }
+        let (reply, accepted) = mpsc::sync_channel(0);
         self.cmd
-            .send(Command::GoLive(config))
-            .map_err(|e| e.to_string())
+            .send(Command::GoLive { config, reply })
+            .map_err(|e| e.to_string())?;
+        accepted.recv_timeout(Duration::from_secs(5))
+            .map_err(|_| "The engine did not acknowledge Go Live".to_string())?
     }
     pub fn stop_live(&self) -> Result<(), String> {
         self.cmd.send(Command::StopLive).map_err(|e| e.to_string())
@@ -2763,6 +2930,16 @@ pub fn start(
                 }
             };
 
+            let async_room_mic = cfg!(target_os = "macos")
+                && std::env::var_os("PRODUCER_ASYNC_ROOM_MIC").is_some();
+            let mic_proof_delay = if cfg!(debug_assertions) {
+                std::env::var("PRODUCER_MIC_PROOF_DELAY_MS").ok()
+                    .and_then(|value| value.parse::<u64>().ok()).unwrap_or(0).min(30000)
+            } else { 0 };
+            let mut microphones: Vec<RoomMicStart> = Vec::new();
+            let mut mic_worker: Option<RoomMicWorker> = None;
+            let trace_room_open = std::env::var_os("PRODUCER_TRACE_ROOM_OPEN").is_some();
+
             // Stall log: any loop iteration over 150ms is written with the
             // command it was handling (or "idle"). The frame probe showed the
             // loop asleep for ~4.6s during room open — this names the sleeper.
@@ -2882,6 +3059,84 @@ pub fn start(
                     }
                 }
 
+                let mic_status_changed = !microphones.is_empty();
+                if mic_worker.as_ref().is_some_and(|(_, worker)| worker.is_finished()) {
+                    let (token, worker) = mic_worker.take().unwrap();
+                    let result = worker.join().unwrap_or_else(|_| Err("Microphone setup failed".into()));
+                    if let Some(mic) = microphones.iter_mut().find(|mic| Arc::ptr_eq(&mic.cancelled, &token)) {
+                        let result = result.and_then(|source| {
+                            let graph = scene.as_mut().ok_or("Room scene is unavailable")?;
+                            let packet = graph.attach_prepared_room_mic(mic.extra.clone(), source, Some(mic.change.clone()))?;
+                            if let Some(volume) = mic.volume {
+                                graph.set_source_audio(&mic.extra.id, Some(volume), None)?;
+                            }
+                            Ok(packet)
+                        });
+                        match result {
+                            Ok(packet) => {
+                                mic.stage = RoomMicStage::Attached(packet);
+                                if trace_room_open {
+                                    eprintln!("[room-open] mic_attached_ms={}", mic.started.elapsed().as_millis());
+                                }
+                                if let Some(graph) = scene.as_ref() {
+                                    let sources = graph.state();
+                                    {
+                                        let mut snapshot = snap.lock().unwrap();
+                                        snapshot.sources = sources.clone();
+                                        room_mic_status(&mut snapshot, &microphones);
+                                    }
+                                    sink(&LiveEvent::SourcesChanged { sources });
+                                }
+                            }
+                            Err(message) => {
+                                mic.stage = RoomMicStage::Failed;
+                                sink(&LiveEvent::EngineError { message });
+                            }
+                        }
+                    } else if trace_room_open {
+                        eprintln!("[room-open] dropped stale microphone completion");
+                    }
+                }
+                if mic_worker.is_none() {
+                    if let Some(mic) = microphones.iter_mut().find(|mic| matches!(mic.stage, RoomMicStage::Queued)) {
+                        let extra = mic.extra.clone();
+                        let cancelled = mic.cancelled.clone();
+                        let worker = std::thread::Builder::new().name("room-mic-prepare".into()).spawn(move || {
+                            if mic_proof_delay > 0 {
+                                std::thread::sleep(Duration::from_millis(mic_proof_delay));
+                            }
+                            if cancelled.load(AtomicOrdering::Acquire) {
+                                return Err("Microphone setup cancelled".into());
+                            }
+                            let source = graph::DetachedRoomMic::prepare(&extra);
+                            if cancelled.load(AtomicOrdering::Acquire) {
+                                return Err("Microphone setup cancelled".into());
+                            }
+                            source
+                        });
+                        match worker {
+                            Ok(worker) => {
+                                mic.stage = RoomMicStage::Preparing;
+                                mic_worker = Some((mic.cancelled.clone(), worker));
+                            }
+                            Err(error) => {
+                                mic.stage = RoomMicStage::Failed;
+                                sink(&LiveEvent::EngineError { message: error.to_string() });
+                            }
+                        }
+                    }
+                }
+                microphones.retain(|mic| {
+                    let RoomMicStage::Attached(packet) = &mic.stage else { return true; };
+                    let Some(first) = packet.first_packet() else { return true; };
+                    if trace_room_open {
+                        eprintln!("[room-open] mic_first_packet_ms={}", first.duration_since(mic.started).as_millis());
+                    }
+                    false
+                });
+                if mic_status_changed {
+                    room_mic_status(&mut snap.lock().unwrap(), &microphones);
+                }
                 // 120ms tick: meters want ~8Hz; command latency stays low.
                 if let Some(g)=scene.as_mut(){g.warm_ready_buffers();}
                 let received = cmd_rx.recv_timeout(Duration::from_millis(120));
@@ -2934,16 +3189,24 @@ pub fn start(
                             Ok(())
                         })();let _=reply.send(result);
                     }
-                    Ok(Command::GoLive(config)) => {
-                        if session.is_some() {
-                            sink(&LiveEvent::EngineError {
-                                message: "go-live refused: session already running".into(),
-                            });
+                    Ok(Command::GoLive { config, reply }) => {
+                        let mic_unready = {
+                            let snapshot = snap.lock().unwrap();
+                            snapshot.room_mic_pending || snapshot.room_mic_failed
+                        };
+                        let approval = if mic_unready {
+                            Err("The room microphone is not ready".into())
+                        } else if session.is_some() {
+                            Err("go-live refused: session already running".into())
                         } else if !report.ok {
-                            sink(&LiveEvent::EngineError {
-                                message: "go-live refused: engine bootstrap failed".into(),
-                            });
+                            Err("go-live refused: engine bootstrap failed".into())
                         } else {
+                            Ok(())
+                        };
+                        let approved = approval.is_ok();
+                        // The caller may start Boomin presence after this reply.
+                        // A request that timed out waiting in the queue must not start later.
+                        if reply.send(approval).is_ok() && approved {
                             set_state(&mut state, SessionState::Starting, &snap, &sink);
                             match Session::start_video(config,if selected_portrait{selected_video}else{unsafe{ffi::obs_get_video()}}) {
                                 Ok(s) => {
@@ -2967,6 +3230,10 @@ pub fn start(
                         }
                     }
                     Ok(Command::SetTransform { id, patch, commit }) => {
+                        if let Some(mic) = microphones.iter_mut().find(|mic| mic.extra.id == id) {
+                            mic.update_audio_plan(patch.visible, None);
+                            if !mic.is_attached() { continue; }
+                        }
                         if let Some(g) = scene.as_mut() {
                             if let Err(e) = g.set_transform(&id, &patch) {
                                 sink(&LiveEvent::EngineError { message: e });
@@ -3038,12 +3305,34 @@ pub fn start(
                     Ok(Command::PresentationAbort {token,revision})=> {if let Some(g)=scene.as_mut(){g.abort_presentation(&token,revision);}}
                     Ok(Command::PresentationReturn {lease,reply})=> {let result=scene.as_mut().ok_or_else(||"The room scene is not running".to_string()).and_then(|g|g.return_presentation(lease.as_deref()));let _=reply.send(result);}
                     Ok(Command::ApplyScene { changes, reply }) => {
+                        let mut changes = changes;
+                        let mut deferred = Vec::new();
+                        if !microphones.is_empty() && changes.len() <= 128 {
+                            changes.retain(|change| {
+                                if microphones.iter().any(|mic| mic.extra.id == change.id && !mic.is_attached()) {
+                                    deferred.push(change.clone());
+                                    false
+                                } else {
+                                    true
+                                }
+                            });
+                        }
                         let result = match scene.as_mut() {
+                            Some(g) if changes.is_empty() && !deferred.is_empty() => Ok(g.state()),
                             Some(g) => g.apply_scene(&changes).map(|()| g.state()),
                             None => Err("The room scene is not running".into()),
                         };
                         if let Ok(sources) = &result {
-                            snap.lock().unwrap().sources = sources.clone();
+                            for change in changes.iter().chain(&deferred) {
+                                if let Some(mic) = microphones.iter_mut().find(|mic| mic.extra.id == change.id) {
+                                    mic.update_audio_plan(change.patch.visible, change.muted);
+                                }
+                            }
+                            {
+                                let mut snapshot = snap.lock().unwrap();
+                                snapshot.sources = sources.clone();
+                                room_mic_status(&mut snapshot, &microphones);
+                            }
                             sink(&LiveEvent::SourcesChanged { sources: sources.clone() });
                         }
                         let _ = reply.send(result);
@@ -3066,7 +3355,13 @@ pub fn start(
                         let _ = reply.send(r);
                     }
                     Ok(Command::StartRecording { stamp, dual, reply }) => {
-                        if recorder.is_some() {
+                        let mic_unready = {
+                            let snapshot = snap.lock().unwrap();
+                            snapshot.room_mic_pending || snapshot.room_mic_failed
+                        };
+                        if mic_unready {
+                            let _ = reply.send(Err("The room microphone is not ready".into()));
+                        } else if recorder.is_some() {
                             let _ = reply.send(Err("already recording".into()));
                         } else {
                             // Recording rides the same canvas as the stream at
@@ -3102,6 +3397,11 @@ pub fn start(
                         }
                     }
                     Ok(Command::SetSourceAudio { id, volume, muted }) => {
+                        if let Some(mic) = microphones.iter_mut().find(|mic| mic.extra.id == id) {
+                            mic.update_audio_plan(None, muted);
+                            mic.volume = volume.or(mic.volume);
+                            if !mic.is_attached() { continue; }
+                        }
                         if let Some(g) = scene.as_mut() {
                             match g.set_source_audio(&id, volume, muted) {
                                 Ok(()) => {
@@ -3270,6 +3570,10 @@ pub fn start(
                         }
                     }
                     Ok(Command::SetDevice { id, device }) => {
+                        if let Some(mic) = microphones.iter_mut().find(|mic| mic.extra.id == id && !mic.is_attached()) {
+                            mic.restart(graph::ExtraSpec::Mic { device: Some(device) });
+                            continue;
+                        }
                         if let Some(g) = scene.as_mut() {
                             match g.set_device(&id, &device) {
                                 Ok(()) => {
@@ -3282,10 +3586,31 @@ pub fn start(
                         }
                     }
                     Ok(Command::ReplaceExtra { id, label, spec, initial, reply }) => {
+                        if matches!(spec, graph::ExtraSpec::Mic { .. }) {
+                            if let Some(mic) = microphones.iter_mut().find(|mic| mic.extra.id == id && !mic.is_attached()) {
+                                if let Some(change) = initial {
+                                    if change.id != id {
+                                        let _ = reply.send(Err("Replacement source identity does not match".into()));
+                                        continue;
+                                    }
+                                    mic.update_audio_plan(change.patch.visible, change.muted);
+                                }
+                                mic.extra.label = label;
+                                mic.restart(spec);
+                                let mut snapshot = snap.lock().unwrap();
+                                room_mic_status(&mut snapshot, &microphones);
+                                let _ = reply.send(Ok(snapshot.sources.clone()));
+                                continue;
+                            }
+                        }
                         let result = match scene.as_mut() {
                             Some(g) => g.replace_extra(&id, &label, &spec, initial),
                             None => Err("The room scene is not running".into()),
                         };
+                        if result.is_ok() {
+                            microphones.retain(|mic| mic.extra.id != id);
+                            room_mic_status(&mut snap.lock().unwrap(), &microphones);
+                        }
                         if let Some(g) = scene.as_ref() {
                             let sources = g.state();
                             snap.lock().unwrap().sources = sources.clone();
@@ -3293,14 +3618,39 @@ pub fn start(
                         }
                         let _ = reply.send(result);
                     }
-                    Ok(Command::RestoreRoom { restore, reply }) => {
-                        let result = if session.is_some() || recorder.is_some() {
+                    Ok(Command::RestoreRoom { queued_at, mut restore, reply }) => {
+                        if trace_room_open {
+                            eprintln!("[room-open] engine_queue_ms={}", queued_at.elapsed().as_millis());
+                        }
+                        let result = if session.is_some() || recorder.is_some() || portrait_recorder.is_some() {
                             Err("Stop streaming and recording before restoring a room".into())
+                        } else if restore.extras.len() > 128 || restore.changes.len() > 128 {
+                            Err("A room has too many sources".into())
                         } else {
-                            match scene.as_mut() {
+                            microphones.retain(|mic| mic.is_attached() && restore.keep_ids.contains(&mic.extra.id));
+                            for mic in &mut microphones {
+                                mic.change.patch.visible = Some(false);
+                                mic.change.muted = Some(true);
+                                if let Some(change) = restore.changes.iter().rev().find(|change| change.id == mic.extra.id) {
+                                    mic.update_audio_plan(change.patch.visible, change.muted);
+                                }
+                            }
+                            let deferred = if async_room_mic {
+                                defer_room_microphones(&mut restore, queued_at)
+                            } else { Vec::new() };
+                            let mut result = match scene.as_mut() {
                                 Some(g) => g.restore_room(restore),
                                 None => Err("The room scene is not running".into()),
+                            };
+                            if result.is_ok() { microphones.extend(deferred); }
+                            let mut snapshot = snap.lock().unwrap();
+                            room_mic_status(&mut snapshot, &microphones);
+                            if let Ok(restored) = &mut result {
+                                restored.room_mic_starting_ids = snapshot.room_mic_starting_ids.clone();
+                                restored.room_mic_pending = snapshot.room_mic_pending;
+                                restored.room_mic_failed = snapshot.room_mic_failed;
                             }
+                            result
                         };
                         // Even a failure leaves the graph hidden. Publish actual engine
                         // truth, never the pre-restore snapshot or a per-source echo.
@@ -3312,6 +3662,10 @@ pub fn start(
                         let _ = reply.send(result);
                     }
                     Ok(Command::AddExtra { id, label, spec }) => {
+                        if microphones.iter().any(|mic| mic.extra.id == id && !mic.is_attached()) {
+                            sink(&LiveEvent::EngineError { message: format!("an item named {id} already exists") });
+                            continue;
+                        }
                         if let Some(g) = scene.as_mut() {
                             match g.add_extra(&id, &label, &spec) {
                                 Ok(()) => {
@@ -3324,6 +3678,10 @@ pub fn start(
                         }
                     }
                     Ok(Command::RemoveExtra { id }) => {
+                        let was_deferred = microphones.iter().any(|mic| mic.extra.id == id && !mic.is_attached());
+                        microphones.retain(|mic| mic.extra.id != id);
+                        room_mic_status(&mut snap.lock().unwrap(), &microphones);
+                        if was_deferred { continue; }
                         if let Some(g) = scene.as_mut() {
                             match g.remove_extra(&id) {
                                 Ok(()) => {
@@ -3378,6 +3736,10 @@ pub fn start(
                             sink(&LiveEvent::EngineError {
                                 message: "4K on an Intel Mac runs at 30 fps".into(),
                             });
+                        } else if current_video_mode(&snap, height, fps) {
+                            // A stale frontend request can arrive after this
+                            // mode is already applied. Keep the running graph.
+                            sink(&LiveEvent::VideoChanged { height, fps });
                         } else {
                             if let Some(p)=portrait_preview.take(){p.detach();}
                             #[cfg(any(target_os = "macos", target_os = "windows"))]if let Some(g)=scene.as_mut(){g.portrait_stop();}
@@ -3513,9 +3875,11 @@ pub fn start(
                     Ok(Command::ReleaseIdleRoom { reply }) => {
                         // Evaluate on the engine thread, so an output starting
                         // during navigation cannot lose its capture sources.
-                        if session.is_some() || recorder.is_some() {
+                        if session.is_some() || recorder.is_some() || portrait_recorder.is_some() {
                             let _ = reply.send(Ok(false));
                         } else {
+                            microphones.clear();
+                            room_mic_status(&mut snap.lock().unwrap(), &microphones);
                             #[cfg(any(target_os = "macos", target_os = "windows"))]super::portrait::select_program(false);
                             selected_portrait=false;selected_video=unsafe{ffi::obs_get_video()};hub_engine.program_portrait.store(false,std::sync::atomic::Ordering::Relaxed);
                             dj.clear();
@@ -3544,6 +3908,7 @@ pub fn start(
                         }
                     }
                     Ok(Command::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        microphones.clear();
                         if let Some(r)=portrait_recorder.take(){r.stop();}
                         if let Some(r)=recorder.take(){r.stop();}
                         unsafe {

@@ -53,8 +53,9 @@ try{
   const host=document.createElement('div');document.body.replaceChildren(host);(D.createRoot??D.default.createRoot)(host).render(R.createElement(Harness));
  },doc);
  await page.waitForFunction(()=>window.pairOutput?.configurePortrait);
- assert.equal(await page.locator('.set-layout-list button').count(),2,'one button per offer');
- assert.equal(await page.locator('.set-layout-list button[aria-pressed="true"]').count(),1,'one selected offer even when initial layout is portrait');
+ const layouts=page.getByRole('group',{name:'Set layouts',exact:true}).getByRole('button');
+ assert.equal(await layouts.count(),2,'one button per offer');
+ assert.equal(await layouts.first().getAttribute('aria-pressed'),'true','paired offer stays selected when initial layout is portrait');
  await page.getByRole('button',{name:'Output settings',exact:true}).click();
  await page.getByRole('button',{name:'Both',exact:true}).click();
  await page.keyboard.press('Escape');
@@ -65,13 +66,13 @@ try{
  const contentBefore=await page.evaluate(()=>window.pairProof.taken.length);
  await page.evaluate(()=>window.pairSession.send({type:'control',action:{type:'value.set',key:'moneySupport',value:'Portrait-only content changed'}}));
  await page.waitForFunction(count=>window.pairProof.taken.length>count,contentBefore);
- await page.locator('.set-layout-list button').nth(1).click();
+ await layouts.nth(1).click();
  await page.waitForFunction(()=>window.pairProof.taken.at(-1)?.portrait==='screen-four');
  assert.deepEqual(await page.evaluate(()=>window.pairProof.taken.at(-1)),{program:'wide-two',portrait:'screen-four'});
  // New content requires fresh preparation. A portrait failure must prevent both takes.
  const before=await page.evaluate(()=>{window.pairProof.failPortrait=true;return window.pairProof.taken.length;});
  await page.evaluate(()=>window.pairSession.send({type:'control',action:{type:'value.set',key:'moneyTitle',value:'A changed offer'}}));
- await page.locator('.set-layout-list button').first().click();
+ await layouts.first().click();
  await page.waitForFunction(()=>window.pairOutput.error.includes('Portrait fixture unavailable'));
  assert.equal(await page.evaluate(()=>window.pairProof.taken.length),before,'failed portrait retains both previous outputs');
  assert.deepEqual(await page.evaluate(()=>window.pairProof.taken.at(-1)),{program:'wide-two',portrait:'screen-four'});
@@ -83,7 +84,7 @@ try{
  await page.getByRole('button',{name:'Landscape',exact:true}).click();
  await page.keyboard.press('Escape');
  await page.waitForFunction(()=>window.pairOutput.requiredOrientations.length===1);
- await page.locator('.set-layout-list button').nth(1).click();
+ await layouts.nth(1).click();
  await page.waitForFunction(()=>window.pairProof.taken.at(-1)?.program==='wide-two'&&!window.pairProof.taken.at(-1)?.portrait);
  assert.deepEqual(errors,[]);
  console.log('PASS: consolidated controls; explicit IDs; legacy and unpaired layouts; correct dual-output routing; failed portrait retains both; retry; landscape-only mode');

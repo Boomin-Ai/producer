@@ -84,12 +84,10 @@ export async function openSetEditorReview(name:string,roomId?:string){
    await invoke('live_set_v2_report',{result:{kind:'set-output-verifying',name,stage:'taken; waiting for all layouts'}});
    await until(()=>{if(Date.now()>deadline)throw Error('Layout readiness deadline exceeded');const panel=document.querySelector<HTMLElement>('.set-controls[data-layouts-total]');return panel&&Number(panel.dataset.layoutsTotal)>0&&panel.dataset.layoutsReady===panel.dataset.layoutsTotal;},'all room layouts ready',1800);
    const checks=[];
-   const view=(label:string)=>label.replace(/ · (Landscape|Portrait)$/,'');
-   const labels=Array.from(new Map(Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).map(b=>{const label=b.querySelector('span')?.textContent??'';return [view(label),label] as const;})).values());
-   for(const label of [...labels,...labels.slice(0,1)]){
-    const target=Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).find(b=>b.querySelector('span')?.textContent===label)!;
-    const selected=document.querySelector('.set-layouts button[aria-pressed="true"] span')?.textContent??'';
-    if(view(selected)===view(label)){checks.push({label,alreadySelected:true,...await status()});continue;}
+   const layouts=roomLayoutButtons();
+   for(const target of [...layouts,...layouts.slice(0,1)]){
+    const label=target.textContent?.trim()??'';
+    if(target.getAttribute('aria-pressed')==='true'){checks.push({label,alreadySelected:true,...await status()});continue;}
     const before=await status();target.click();
     const receipt=await until(async()=>{if(Date.now()>deadline)throw Error('Layout switching deadline exceeded');const s=await status();return s.program.renderedRevision>before.program.renderedRevision&&!s.program.transitioning&&(import.meta.env.VITE_SET_EDITOR_VERIFY_BOTH!=='1'||s.portrait.renderedRevision>before.portrait.renderedRevision&&!s.portrait.transitioning)?s:null;},'room layout '+label,1800);
     checks.push({label,...receipt});
@@ -103,7 +101,7 @@ export async function openSetEditorReview(name:string,roomId?:string){
      await until(()=>document.querySelector('.set-controls[data-output-busy="false"]'),'paired transaction settled '+label,2400);
     };
     const pick=async(prefix:string)=>{
-     const target=Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).find(b=>b.querySelector('span')?.textContent?.startsWith(prefix));
+     const target=roomLayoutButton(prefix);
      if(!target)throw Error('Missing handoff chapter '+prefix);
      if(target.getAttribute('aria-pressed')==='true')return;
      const before=await status();target.click();await settle(before,'chapter '+prefix);
@@ -130,7 +128,7 @@ export async function openSetEditorReview(name:string,roomId?:string){
      const receipt=await until(async()=>{const error=document.querySelector('.set-controls .set-error')?.textContent;if(error)throw Error('Product walkthrough failed: '+error);const s=await status();return s.program.renderedRevision>before.program.renderedRevision&&s.portrait.renderedRevision>before.portrait.renderedRevision&&!s.program.transitioning&&!s.portrait.transitioning?s:null;},'paired product '+label,2400);
      interactiveChecks.push({label,clickToSettledMs:performance.now()-clickAt,timingEvents:[...timingEvents],...receipt});await until(()=>document.querySelector('.set-controls[data-output-busy="false"]'),'product settled '+label,2400);
     };
-    const layout=Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).find(b=>b.querySelector('span')?.textContent?.startsWith('02'));
+    const layout=roomLayoutButton('02');
     if(!layout)throw Error('Missing full-stack layout');const previous=await status();clickAt=performance.now();timingEvents.length=0;layout.click();await settle(previous,'Full stack');
     for(const label of ['Workers Static Assets','Workers','D1','R2','Workers AI','Access / WAF','Hide descriptions']){
      const target=await until(()=>button(label,document.querySelector('.set-controls')??document),'product control '+label);const before=await status();clickAt=performance.now();timingEvents.length=0;target.click();await invoke('live_set_v2_report',{result:{kind:'set-output-verifying',name,stage:'product: '+label}});await settle(before,label);
@@ -163,6 +161,8 @@ export async function openSetEditorReview(name:string,roomId?:string){
   }
  }catch(error){await invoke('live_set_v2_report',{result:{kind:'set-editor-review',ok:false,name,error:String(error),debug:(await import('./preparedScenes')).preparationDebug(),alerts:Array.from(document.querySelectorAll('[role=alert], .set-error')).map(e=>e.textContent)}});}
 }
+const roomLayoutButtons=()=>Array.from(document.querySelectorAll<HTMLButtonElement>('.set-primary-layout button[data-layout-id]'));
+const roomLayoutButton=(prefix:string)=>roomLayoutButtons().find(button=>button.textContent?.trim().startsWith(prefix));
 function select(el: HTMLSelectElement, value: string) {
   Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value')!.set!.call(el,value);
   el.dispatchEvent(new Event('change',{bubbles:true}));
@@ -220,7 +220,7 @@ export async function roomSmoke(timingOnly=false,resolutionOnly=false,showcaseOn
    const checks=[];const generation=(await invoke<{generation:number}>('live_set_status')).generation;
    document.querySelector<HTMLButtonElement>('.set-mode-action')!.click();
    for(let step=0;step<3;step++){
-    await until(()=>document.querySelector('.set-output-status')?.textContent==='On output','showcase output idle');await sleep(800);
+    await until(()=>document.querySelector('.set-output-switch[data-output="set"]'),'showcase output idle');await sleep(800);
     const before=await invoke<{renderedRevision:number}>('live_set_v2',{request:{op:'status',generation}});
     (await until(()=>button('Next'),'showcase next')).click();
     const status=await until(async()=>{const s=await invoke<{renderedRevision:number;transitioning:boolean}>('live_set_v2',{request:{op:'status',generation}});const failure=document.querySelector('.set-error')?.textContent;if(failure)throw Error(failure);return s.renderedRevision>before.renderedRevision&&!s.transitioning?s:null;},'showcase next rendered');checks.push(status);
@@ -380,12 +380,12 @@ export async function measureExistingWalkthrough(reviewOnly=false){
   (await until(()=>button('Output settings'),'timing output settings')).click();
   const views=await until(()=>document.querySelector('[aria-label="Room output view"]'),'timing output view');(await until(()=>button('Both',views),'timing both outputs')).click();button('Close output settings')?.click();
   await until(()=>document.querySelector('.set-controls[data-output-busy="false"]'),'timing output idle',2400);
-  const layout=await until(()=>Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).find(b=>b.querySelector('span')?.textContent?.startsWith('02')),'timing full-stack layout');
+  const layout=await until(()=>roomLayoutButton('02'),'timing full-stack layout');
   if(layout.getAttribute('aria-pressed')!=='true')layout.click();
   const labels=['Workers Static Assets','Workers','D1','R2','Workers AI','Access / WAF','Hide descriptions'];
   await until(async()=>{
-   const selected=Array.from(document.querySelectorAll<HTMLButtonElement>('.set-layouts button')).find(b=>b.querySelector('span')?.textContent?.startsWith('02'));
-   if(selected?.getAttribute('aria-pressed')!=='true'&&!selected?.disabled){selected?.click();return false;}
+   const current=roomLayoutButton('02');
+   if(current?.getAttribute('aria-pressed')!=='true'){if(!current?.disabled)current?.click();return false;}
    const panel=document.querySelector<HTMLElement>('.set-controls[data-layouts-total]');
    const preparation=(await import('./preparedScenes')).preparationDebug();
    const failures=preparation.flatMap(s=>s.entries.filter(e=>e.state.state==='error').map(e=>e.state.error));if(failures.length)throw Error(failures.join('; '));
@@ -397,7 +397,7 @@ export async function measureExistingWalkthrough(reviewOnly=false){
   await until(()=>button('Show room scene')&&document.querySelector('.set-controls[data-output-busy="false"]'),'timing set on output',2400);
   await report('layouts ready');
   if(reviewOnly){await report('ready for manual review',{ok:true});return;}
-  const assertLayout=()=>{const selected=document.querySelector('.set-layouts button[aria-pressed="true"] span')?.textContent?.trim();if(!selected?.startsWith('02'))throw Error('Layout changed during walkthrough timing; stopped without further control clicks.');};
+  const assertLayout=()=>{if(roomLayoutButton('02')?.getAttribute('aria-pressed')!=='true')throw Error('Layout changed during walkthrough timing; stopped without further control clicks.');};
   window.addEventListener('producer:set-render-timing',receive);
   for(const [index,label] of [...labels,...labels].entries()){
    assertLayout();
@@ -406,7 +406,7 @@ export async function measureExistingWalkthrough(reviewOnly=false){
    if(target.getAttribute('aria-pressed')==='true')continue;
    await report('reading status '+label);
    const before=await status(),preparationBefore=(await import('./preparedScenes')).preparationDebug().map(s=>s.counters);events=[];assertLayout();const start=performance.now();target.click();
-   await report('clicked '+label,{events:[...events],button:target.outerHTML,outputStatus:document.querySelector('.set-output-status')?.textContent,errors:Array.from(document.querySelectorAll('.set-controls .set-error')).map(e=>e.textContent)});
+   await report('clicked '+label,{events:[...events],button:target.outerHTML,outputStatus:document.querySelector('.set-output-announcement')?.textContent,errors:Array.from(document.querySelectorAll('.set-controls .set-error')).map(e=>e.textContent)});
    // Observe the adapter's own paired presentation receipt. A second status
    // poller adds graphics-context contention and distorts the measured click.
    await until(()=>{assertLayout();const errors=Array.from(document.querySelectorAll('.set-controls .set-error')).map(e=>e.textContent);if(errors.length)throw Error(errors.join('; '));return events.some(e=>e.stage==='render-complete');},'timing receipt '+label,2400);

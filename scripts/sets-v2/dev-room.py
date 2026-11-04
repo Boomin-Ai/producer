@@ -62,7 +62,7 @@ subprocess.run(['clang', '-fobjc-arc', '-fblocks',
                 str(root / 'src-tauri/src/live/shim.m'),
                 '-framework', 'AppKit', '-framework', 'WebKit',
                 '-framework', 'AVFoundation', '-framework', 'CoreMediaIO',
-                '-framework', 'SystemExtensions', '-framework', 'CoreGraphics',
+                '-framework', 'SystemExtensions', '-framework', 'CoreGraphics', '-framework', 'Security',
                 '-o', str(geometry_probe)], check=True)
 subprocess.run([str(geometry_probe)], check=True)
 with urllib.request.urlopen('http://127.0.0.1:1436/', timeout=3) as response:

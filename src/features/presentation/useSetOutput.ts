@@ -23,7 +23,7 @@ export interface SetOutputControls {
   controlReadiness?:Record<string,import('../sets-v2/preparedScenes').SceneReadiness>;
   layoutReadiness?:Record<string,import('../sets-v2/preparedScenes').SceneReadiness>;
   retryPreparation?:()=>void;
-  prepareDraft?:(doc:import('./schema').PresentationPackage,bindings:Record<string,string>,framing:Record<string,import('./schema').SlotFraming>)=>void;
+  prepareDraft?:(doc:import('./schema').PresentationPackage,bindings:Record<string,string>,framing:Record<string,import('./schema').SlotFraming>,phase?:string)=>void;
   clearDraftPreparation?:()=>void;
 
   requiredOrientations?:readonly import('./layoutViews').LayoutOrientation[];
@@ -35,6 +35,9 @@ export interface SetOutputControls {
   framing:Record<string,import('./schema').SlotFraming>; frame:(slot:string,value:import('./schema').SlotFraming)=>void;
   pendingChange?:'set'|'segment'|'content';
   active:boolean; busy:boolean; error:string; bindings:Record<string,string>; sources:LiveSources;
+  currentPresented?:boolean;
+  setAssignments?:(bindings:Record<string,string>,framing:Record<string,import('./schema').SlotFraming>)=>void;
+  applyConfirmed?:()=>Promise<void>;
   bind:(slot:string,source:string)=>void; apply:()=>Promise<void>; returnToRoom:()=>Promise<boolean>;
 }
 export function setOutputProjection(session:RehearsalSession, revision:number,layoutId?:string):OutputProjection {
@@ -78,7 +81,9 @@ function useLegacySetOutput(session:RehearsalSession,roomId:string|null,sources:
   const [bindings,setBindings]=useState(initialBindings);
   const [framing,setFraming]=useState(initialFraming);
   const [active,setActive]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
-  const owner=useRef<string|null>(null),generation=useRef(0),revision=useRef(0),operation=useRef(0),inFlight=useRef(false);
+  const [presentedSession,setPresentedSession]=useState<RehearsalSession|null>(null);
+  const owner=useRef<string|null>(null),generation=useRef(0),revision=useRef(0),operation=useRef(0);
+  const inFlight=useRef<Promise<boolean>|null>(null),alive=useRef(true),returnIntent=useRef(0);
   const latest=useRef({session,bindings,framing,sources,enabled,roomId});latest.current={session,bindings,framing,sources,enabled,roomId};
   const warmFlight=useRef<Promise<void>|null>(null),warmLease=useRef<string|null>(null),warmed=useRef('');const [warmVersion,setWarmVersion]=useState(0);
   const acknowledged=useRef('');const media=useRef(new AssetTransport());
@@ -86,22 +91,27 @@ function useLegacySetOutput(session:RehearsalSession,roomId:string|null,sources:
   const sourceDimensions=(current:typeof latest.current)=>Object.values(current.bindings).map(id=>{const item=current.sources.items?.find(s=>s.id===id);return [id,item?.src_w,item?.src_h];});
   const fingerprint=()=>JSON.stringify({projection:media.current.signature(project(latest.current,0)),bindings:latest.current.bindings,dimensions:sourceDimensions(latest.current)});
   const returnToRoom=async()=> {
+    ++returnIntent.current;
     ++operation.current;
     const lease=owner.current;owner.current=null;acknowledged.current='';media.current.clear();setActive(false);
-    if (!lease)return true;
-    try {const status=await ipc.liveSetReturn(lease);generation.current=status.generation;setError('');return true;}
+    if (!lease){setPresentedSession(null);return true;}
+    try {const status=await ipc.liveSetReturn(lease);generation.current=status.generation;setPresentedSession(null);setError('');return true;}
     catch(e){owner.current=lease;setActive(true);setError(String(e));return false;}
   };
-  const apply=async()=> {
-    if (!latest.current.enabled || inFlight.current)return;
-    const ticket=++operation.current;inFlight.current=true;setBusy(true);setError('');
+  const takeOnce=async():Promise<boolean>=> {
+    const ticket=++operation.current;
+    const {roomId:requestedRoom,session:requestedSession}=latest.current;
+    const stillTaking=()=>alive.current&&ticket===operation.current&&latest.current.enabled
+      &&latest.current.roomId===requestedRoom&&latest.current.session===requestedSession;
+    setBusy(true);setError('');
     let lease=owner.current;
     try {
       if(warmFlight.current)await warmFlight.current;
+      if(!stillTaking())return false;
       const current={...latest.current,bindings:resolveRoomBindings(latest.current.bindings,latest.current.sources)};lease??=warmLease.current;
       const status=await ipc.liveSetStatus();
-      if(ticket!==operation.current)return;
-      if(status.generation!==generation.current){media.current.clear();warmed.current='';}
+      if(!stillTaking())return false;
+      if(status.generation!==generation.current){media.current.clear();warmed.current='';setPresentedSession(null);}
       if(status.lease && status.lease!==lease)throw new Error('Another set owns the output. Choose Show room scene before replacing it.');
       generation.current=status.generation;
       lease ??= crypto.randomUUID();owner.current=lease;warmLease.current=null;
@@ -110,26 +120,53 @@ function useLegacySetOutput(session:RehearsalSession,roomId:string|null,sources:
       const resolved=Object.fromEntries(Object.entries(current.bindings).filter(([slot])=>declared.has(slot)));
       const signature=JSON.stringify({projection:media.current.signature(projection),bindings:current.bindings,dimensions:sourceDimensions(current)});
       const send=()=>ipc.liveSetApply({assetIds:Object.keys(current.session.package.set.assets??{}),generation:status.generation,lease:lease!,projection:media.current.compact(projection),preload:preload?media.current.compact(preload):undefined,bindings:resolved});
-      try{await send();}catch(e){
+      let receipt;
+      try{receipt=await send();}catch(e){
         if(!String(e).includes('Missing media asset'))throw e;
         // A cancelled native preparation may have discarded its cache without
         // changing the room generation. Refill it once with complete assets.
-        media.current.clear();await send();
+        if(!stillTaking())return false;
+        media.current.clear();receipt=await send();
       }
-      if(ticket!==operation.current || latest.current.roomId!==current.roomId){await ipc.liveSetReturn(lease);return;}
-      media.current.acknowledge(projection);if(preload)media.current.acknowledge(preload);acknowledged.current=signature;setActive(true);
+      if(ticket!==operation.current || latest.current.roomId!==current.roomId){await ipc.liveSetReturn(lease);return false;}
+      if(!stillTaking()){setPresentedSession(null);return false;}
+      if(receipt.revision!==projection.revision||receipt.lease!==lease)throw Error('Set activation did not confirm the requested output.');
+      media.current.acknowledge(projection);if(preload)media.current.acknowledge(preload);acknowledged.current=signature;setPresentedSession(current.session);setActive(true);
+      return true;
     } catch(e) {
       if(ticket===operation.current) {
         setError(String(e));
         media.current.clear();warmed.current='';
         const status=await ipc.liveSetStatus().catch(()=>null);
-        if(status?.lease!==owner.current){owner.current=null;setActive(false);}
+        if(status?.lease!==owner.current){owner.current=null;setPresentedSession(null);setActive(false);}
       }
-    } finally {inFlight.current=false;setBusy(false);}
+      throw e;
+    } finally {if(alive.current)setBusy(false);}
+  };
+  const startTake=()=>{
+    const pending=takeOnce();
+    inFlight.current=pending;
+    const finish=()=>{if(inFlight.current===pending)inFlight.current=null;};
+    void pending.then(finish,finish);
+    return pending;
+  };
+  const apply=async()=>{
+    if(!latest.current.enabled||inFlight.current)return;
+    await startTake().catch(()=>{});
+  };
+  const applyConfirmed=async()=>{
+    const {roomId:requestedRoom,session:requestedSession}=latest.current;
+    const intent=returnIntent.current;
+    while(inFlight.current)await inFlight.current.catch(()=>{});
+    if(!alive.current||intent!==returnIntent.current||latest.current.roomId!==requestedRoom
+      ||latest.current.session!==requestedSession)throw Error('The Set update was cancelled because the room or output changed.');
+    if(!latest.current.enabled)throw Error('Room output is not ready.');
+    if(!await startTake())throw Error('The Set changed before output could confirm it. Try showing it again.');
   };
   useEffect(()=> {
-    owner.current=null;warmLease.current=null;warmed.current='';acknowledged.current='';media.current.clear();setActive(false);setBindings(initialBindings);setFraming(initialFraming);setError('');
-    return ()=> {++operation.current;const lease=owner.current??warmLease.current;owner.current=null;warmLease.current=null;warmed.current='';if(lease)void ipc.liveSetReturn(lease).catch(()=>{});};
+    alive.current=true;
+    owner.current=null;warmLease.current=null;warmed.current='';acknowledged.current='';media.current.clear();setPresentedSession(null);setActive(false);setBindings(initialBindings);setFraming(initialFraming);setError('');
+    return ()=> {alive.current=false;++operation.current;const lease=owner.current??warmLease.current;owner.current=null;warmLease.current=null;warmed.current='';if(lease)void ipc.liveSetReturn(lease).catch(()=>{});};
   },[roomId]);
   useEffect(()=>{media.current.clear();warmed.current='';},[session.package.id]);
   useEffect(()=>{
@@ -165,10 +202,35 @@ function useLegacySetOutput(session:RehearsalSession,roomId:string|null,sources:
   useEffect(()=> {
     if(!enabled)return;
     let stopped=false;
-    const timer=setInterval(()=> {if(inFlight.current)return;void ipc.liveSetStatus().then(status=>{if(stopped)return;if(generation.current!==status.generation){media.current.clear();warmed.current='';}generation.current=status.generation;if(status.lease && !owner.current){media.current.clear();owner.current=status.lease;revision.current=Math.max(revision.current,status.revision);setActive(true);}else if(status.lease!==owner.current){owner.current=null;setActive(false);}}).catch(()=>{});},1000);
+    const timer=setInterval(()=> {
+      if(inFlight.current)return;
+      void ipc.liveSetStatus().then(status=>{
+        if(stopped)return;
+        if(generation.current!==status.generation){
+          media.current.clear();warmed.current='';setPresentedSession(null);
+        }
+        generation.current=status.generation;
+        if(status.lease&&!owner.current){
+          media.current.clear();
+          owner.current=status.lease;
+          revision.current=Math.max(revision.current,status.revision);
+          setPresentedSession(null);
+          setActive(true);
+        }else if(status.lease!==owner.current){
+          owner.current=null;
+          setPresentedSession(null);
+          setActive(false);
+        }
+      }).catch(()=>{});
+    },1000);
     return()=>{stopped=true;clearInterval(timer);};
   },[enabled]);
-  return {framing,frame:(slot,value)=>{const next={...latest.current.framing,[slot]:value};latest.current.framing=next;setFraming(next);onFraming?.(next);},active,busy,error,bindings,sources,apply,returnToRoom,bind:(slot,source)=>{
+  return {framing,frame:(slot,value)=>{const next={...latest.current.framing,[slot]:value};latest.current.framing=next;setFraming(next);onFraming?.(next);},active,currentPresented:active&&presentedSession===session,busy,error,bindings,sources,apply,applyConfirmed,returnToRoom,setAssignments:(nextBindings,nextFraming)=>{
+    latest.current.bindings=nextBindings;
+    latest.current.framing=nextFraming;
+    setBindings(nextBindings);
+    setFraming(nextFraming);
+  },bind:(slot,source)=>{
     const next={...latest.current.bindings};if(source)next[slot]=source;else delete next[slot];latest.current.bindings=next;setBindings(next);onBindings?.(next);
   }};
 }
@@ -191,5 +253,6 @@ export function useSetOutput(session:RehearsalSession,roomId:string|null,sources
  const native=useRoomOutput(session,roomId,sources,enabled&&renderer==='native'&&featuresReady,initialBindings,onBindings,initialFraming,onFraming);
  const legacy=useLegacySetOutput(session,roomId,sources,enabled&&renderer==='legacy'&&featuresReady,initialBindings,onBindings,initialFraming,onFraming);
  const output=renderer==='native'?native:legacy;
- return features.error?{...output,error:features.error,apply:async()=>{throw Error(features.error);}}:output;
+ const unsupported=async()=>{throw Error(features.error);};
+ return features.error?{...output,error:features.error,apply:unsupported,applyConfirmed:unsupported}:output;
 }

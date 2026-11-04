@@ -1,0 +1,16 @@
+--- a/metal-subsystem.swift
++++ b/metal-subsystem.swift
+@@ -591,6 +591,13 @@
+     let device: MetalDevice = unretained(device)
+ 
+     device.finishPendingCommands()
++
++    // libobs runs offscreen graphics tasks after presenting its displays.
++    // A resize may already have released the swapchain's reference to this
++    // target. Leaving it current lets a texrender save a borrowed pointer
++    // and then destroy its last owner when it switches targets.
++    device.renderState.renderTarget = nil
++    device.renderState.depthStencilAttachment = nil
+ }
+ 
+ /// Commits the current command buffer to schedule and execute the GPU commands encoded within it and waits until they

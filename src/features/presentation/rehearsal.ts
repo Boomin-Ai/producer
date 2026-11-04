@@ -6,13 +6,40 @@ import {enterMedia,mediaPosition,layoutMedia,playable,type MediaTransport,type P
 import {outputProjection} from './projection';
 import {layoutTransition} from './layoutTransition';
 import {clockPosition,type AnimationTrack,type AnimationClock} from './animation';
-import { parsePackage, validateValue, type Binding, type PresentationPackage, type RehearsalAction, type Scalar } from './schema';
+import { PACKAGE_BYTES } from './assets';
+import { PackageError, parsePackage, validateValue, type Binding, type PresentationPackage, type RehearsalAction, type Scalar, type ValueDefinition } from './schema';
 
 function freeze<T>(value: T): T {
   if (value && typeof value === 'object') {
     Object.values(value).forEach(freeze); Object.freeze(value);
   }
   return value;
+}
+
+// Identity is meaningful only for packages validated and frozen in this
+// module. A parsed import, a structured clone, or a caller's frozen object
+// still goes through the complete schema.
+const validatedPackages = new WeakSet<PresentationPackage>();
+function sealPackage(doc: PresentationPackage): PresentationPackage {
+  const sealed = freeze(doc);
+  validatedPackages.add(sealed);
+  return sealed;
+}
+
+function preparedDefaults(
+  definitions: Record<string, ValueDefinition>,
+  values: Record<string, Scalar>,
+  clearCaption = false,
+): Record<string, ValueDefinition> {
+  let prepared = definitions;
+  for (const [key, definition] of Object.entries(definitions)) {
+    const value = clearCaption && key === 'liveCaption' ? '' : values[key];
+    if (value === definition.default) continue;
+    validateValue(definition, value, key);
+    if (prepared === definitions) prepared = { ...definitions };
+    prepared[key] = { ...definition, default: value } as ValueDefinition;
+  }
+  return prepared;
 }
 
 export interface RehearsalState {
@@ -80,7 +107,13 @@ function hasShader(doc:PresentationPackage,node:PresentationPackage['set']['layo
  * cannot change that; unknown event/action types are refused at this boundary.
  */
 export class RehearsalSession {
-  package: PresentationPackage;
+  #package: PresentationPackage;
+  get package(): PresentationPackage { return this.#package; }
+  #prepared?: {
+    source: PresentationPackage;
+    configured: Pick<RehearsalState, 'layoutId' | 'values' | 'feeds'>;
+    package: PresentationPackage;
+  };
   private state: RehearsalState;
   moduleRuntime:SetRuntime;
   private stopModules?:()=>void;
@@ -104,7 +137,9 @@ export class RehearsalSession {
   private preparation?: Pick<RehearsalState, 'layoutId' | 'values' | 'feeds'>;
   constructor(doc: unknown, sandboxId = `rehearsal-${crypto.randomUUID()}`, workspaceMode: RehearsalState['workspaceMode'] = 'rehearsal') {
     this.workspaceMode = workspaceMode;
-    this.package = freeze(parsePackage(doc)); this.sandboxId = sandboxId;this.moduleRuntime=this.createModules();this.state = freeze(this.initial());this.observeModules();
+    const packageDoc = doc as PresentationPackage;
+    this.#package = validatedPackages.has(packageDoc) ? packageDoc : sealPackage(parsePackage(doc));
+    this.sandboxId = sandboxId;this.moduleRuntime=this.createModules();this.state = freeze(this.initial());this.observeModules();
   }
   private initial(): RehearsalState {
     const media:Record<string,MediaTransport>={};enterMedia(this.package,undefined,this.preparation?.layoutId??this.package.set.initialLayout,media);
@@ -217,26 +252,44 @@ export class RehearsalSession {
     return this.moduleRuntime.dispatch(command,{role:participant?'audience':'operator',id:participant??'operator',modules:[module]},Date.now());
   };
   snapshot = () => this.state;
-  /** Export configured defaults, never practice edits, identities or results. */
-  exportPreparedPackage = (): PresentationPackage => {
-    const doc = structuredClone(this.package);
+  /** Immutable editor-to-output snapshot. Only the configured defaults and
+   * starting layout change, so the already validated design can be shared. */
+  preparedPackage = (): PresentationPackage => {
+    const source = this.#package;
     const configured = this.workspaceMode === 'prepare' ? this.state : this.preparation;
-    if (configured) {
-      doc.set.initialLayout = configured.layoutId;
-      if(doc.set.views){const view=Object.entries(doc.set.views).find(([,variants])=>Object.values(variants).includes(configured.layoutId));if(view)doc.set.initialView=view[0];else delete doc.set.initialView;}
-      for (const [key, value] of Object.entries(configured.values)) doc.set.values[key].default = key==='liveCaption'?'':value;
-      for (const [key, value] of Object.entries(configured.feeds)) doc.set.feeds[key].default = value;
+    if (!configured) return source;
+    if (this.#prepared?.source === source && this.#prepared.configured === configured) return this.#prepared.package;
+    const { set } = source;
+    const initialLayout = configured.layoutId;
+    const initialView = set.views
+      ? Object.entries(set.views).find(([, variants]) => Object.values(variants).includes(initialLayout))?.[0]
+      : set.initialView;
+    const values = preparedDefaults(set.values, configured.values, true);
+    const feeds = preparedDefaults(set.feeds, configured.feeds);
+    let doc = source;
+    if (initialLayout !== set.initialLayout || initialView !== set.initialView || values !== set.values || feeds !== set.feeds) {
+      if (!set.layouts.some(layout => layout.id === initialLayout)) throw new PackageError('$.set.initialLayout', 'Unknown layout.');
+      const preparedSet = { ...set, initialLayout, initialView, values, feeds };
+      if (initialView === undefined) delete preparedSet.initialView;
+      const prepared = { ...source, set: preparedSet };
+      if (new TextEncoder().encode(JSON.stringify(prepared)).length > PACKAGE_BYTES) {
+        throw new PackageError('$', 'Set package exceeds 40 MB.');
+      }
+      doc = sealPackage(prepared);
     }
-    return parsePackage(doc);
+    this.#prepared = { source, configured, package: doc };
+    return doc;
   };
+  /** Export a mutable copy without practice edits, identities or results. */
+  exportPreparedPackage = (): PresentationPackage => structuredClone(this.preparedPackage());
   configureMedia = (id:string,config:PlaybackConfig) => {
     const doc=structuredClone(this.package);if(!doc.set.assets?.[id])throw new Error('Unknown asset.');
-    doc.set.assets[id].playback=config;this.package=freeze(parsePackage(doc));
+    doc.set.assets[id].playback=config;this.#package=sealPackage(parsePackage(doc));
     this.state=freeze({...this.state,revision:this.state.revision+1});this.emit();
   };
   replaceMedia = (id:string,asset:import('./assets').MediaAsset) => {
     const doc=structuredClone(this.package);if(!doc.set.assets?.[id])throw new Error('Unknown asset.');
-    doc.set.assets[id]={...asset,playback:doc.set.assets[id].playback};this.package=freeze(parsePackage(doc));
+    doc.set.assets[id]={...asset,playback:doc.set.assets[id].playback};this.#package=sealPackage(parsePackage(doc));
     const media={...this.state.media,[id]:{playing:false,positionMs:0,anchorMs:Date.now()}};
     this.state=freeze({...this.state,media,revision:this.state.revision+1});this.emit();
   };

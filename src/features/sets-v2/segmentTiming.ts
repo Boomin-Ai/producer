@@ -6,7 +6,7 @@ function select(el:HTMLSelectElement,value:string){Object.getOwnPropertyDescript
 /** Exercise Next on the real room panel; status receipts come from native render. */
 export async function measureSegmentTiming(sourceId:string){
  const measurements:unknown[]=[];
- const settled=async()=>{await wait(()=>document.querySelector('.set-output-status')?.textContent==='On output','output idle');await sleep(200);await wait(()=>document.querySelector('.set-output-status')?.textContent==='On output','output idle confirmed');};
+ const settled=async()=>{const onOutput=()=>document.querySelector('.set-output-switch[data-output="set"]');await wait(onOutput,'output idle');await sleep(200);await wait(onOutput,'output idle confirmed');};
  let events:Array<Record<string,any>>=[];
  const receive=(e:Event)=>events.push((e as CustomEvent).detail);
  window.addEventListener('producer:set-render-timing',receive);
