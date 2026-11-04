@@ -10,6 +10,7 @@
   },
   "type": "module",
   "scripts": {
+    "test:performance-trace": "node scripts/test-performance-trace.mjs",
     "test:updater": "node scripts/test-updater.mjs",
     "test:manager-cache": "node scripts/test-manager-cache.mjs",
     "dev": "vite",

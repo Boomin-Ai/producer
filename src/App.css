@@ -11289,3 +11289,8 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   pointer-events: none;
 }
 .set-update-error { color: #fca5a5; overflow-wrap: anywhere; }
+
+.set-diagnostics { margin-block: 24px; }
+.set-diagnostics label { display:flex; align-items:center; gap:10px; margin-block:12px; }
+.set-diagnostics p { max-width:72ch; color:var(--muted); font-size:13px; line-height:1.5; }
+.set-diagnostics-actions { display:flex; gap:10px; flex-wrap:wrap; margin-block:16px; }

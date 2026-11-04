@@ -1,3 +1,4 @@
+import { recordTraceEvent, snapshotTraceContext } from "../../lib/performanceTrace";
 import {outputLayout} from '../presentation/layoutViews';
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -253,7 +254,8 @@ export function useRoomOutput(
     const interrupted = Symbol('Set take superseded');
     let failureStage:'prepare'|'render'='prepare';
     const started=performance.now();
-    const timing=(stage:string,extra:Record<string,unknown>={})=>{if(import.meta.env.DEV)window.dispatchEvent(new CustomEvent('producer:set-render-timing',{detail:{stage,at:performance.now(),elapsedMs:performance.now()-started,definition:selection.definition,layout:selection.layout,phase:selection.phase,revision:attempted,...extra}}));};
+    const traceContext=snapshotTraceContext();
+    const timing=(stage:string,extra:Record<string,unknown>={})=>{recordTraceEvent(`set.${stage}`,{elapsedMs:performance.now()-started,revision:attempted,...Object.fromEntries(Object.entries(extra).filter(([,value])=>typeof value==='number'||typeof value==='boolean'))} as Record<string,number|boolean>,'set',traceContext);if(import.meta.env.DEV)window.dispatchEvent(new CustomEvent('producer:set-render-timing',{detail:{stage,at:performance.now(),elapsedMs:performance.now()-started,definition:selection.definition,layout:selection.layout,phase:selection.phase,revision:attempted,...extra}}));};
     const cancelAttempt = async () => {
       if(portraitAttempted)await request({op:'cancel',generation:takeGeneration,outputId:'portrait',revision:portraitAttempted}).catch(()=>{});
       if(attempted)await request({op:'cancel',generation:takeGeneration,revision:attempted}).catch(()=>{});

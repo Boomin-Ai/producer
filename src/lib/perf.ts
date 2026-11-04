@@ -1,3 +1,7 @@
+import { recordTraceEvent, setTraceContext } from "./performanceTrace";
+
+let roomVisit = 0;
+export function currentRoomVisit(): number { return roomVisit; }
 // Room-open ruler, upstream half. The room component measures itself from
 // its own mount; what a person FEELS starts at the click on the home tile
 // (and, on a cold start, at app launch). Stash the click so the room can
@@ -8,6 +12,8 @@ let roomClickAt: number | null = null;
 /** Call at the instant a room tile is clicked. */
 export function markRoomClick() {
   roomClickAt = performance.now();
+  setTraceContext({ roomVisit: ++roomVisit });
+  recordTraceEvent("room.click", { roomVisit }, "room");
 }
 
 /** The click timestamp, consumed once by the room that mounts next. */
@@ -22,7 +28,10 @@ let homePaintedAt: number | null = null;
 /** Call once when the home screen has painted — separates app-launch cost
  * from the user's own reaction time inside `since_launch`. */
 export function markHomePainted() {
-  if (homePaintedAt == null) homePaintedAt = Math.round(performance.now());
+  if (homePaintedAt == null) {
+    homePaintedAt = Math.round(performance.now());
+    recordTraceEvent("app.home.painted", { elapsedMs: homePaintedAt }, "session");
+  }
 }
 
 export function homePaintedMs(): number | null {

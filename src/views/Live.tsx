@@ -118,7 +118,8 @@ import {
   type RoomExtra,
   type CaptureKind,
 } from "../lib/room";
-import { homePaintedMs, takeRoomClick } from "../lib/perf";
+import { recordTraceEvent, setTraceContext, startTraceSpan, endTraceSpan, type TraceSpan } from "../lib/performanceTrace";
+import { currentRoomVisit, homePaintedMs, takeRoomClick } from "../lib/perf";
 import { RoomControlLink, type ControlFrame, type SceneCutFrame } from "../lib/roomControl";
 import { overlayBridge, type Contribution, type Interaction } from "../lib/ipc";
 import { copyText, mintJoinLink } from "../lib/roomLink";
@@ -2675,6 +2676,7 @@ export function LiveView({
    * above it is the seat. Leaving the view leaves the seat. */
   seat?: GuestSeatSpec;
 }) {
+  const traceVisit = useRef(currentRoomVisit());
   // Windows float mode: popovers/toasts over the stage are punched out of
   // the native preview so they stay visible. No-op elsewhere.
   useEffect(() => {
@@ -2689,7 +2691,10 @@ export function LiveView({
     const session = roomSession();
     roomEngineRef.current = session;
     return () => {
+      const closeSpan = startTraceSpan("room.close", {}, { roomVisit: traceVisit.current });
       void session.close(async () => {
+        const releaseSpan = startTraceSpan("room.native_release", {}, { roomVisit: traceVisit.current });
+        try {
         const serverRoom = cfgRef.current.server_room_id;
         // An active output keeps its room engine and native guest owner.
         if (serverRoom && (await ipc.liveEngineStatus()).session_state === "idle") {
@@ -2702,7 +2707,12 @@ export function LiveView({
           localSetSkipped.current = false;
           studioApplied.current = false;
         }
-      }).catch((error) => console.warn("Room capture cleanup failed", error));
+        endTraceSpan(releaseSpan);
+        } catch (error) { endTraceSpan(releaseSpan, "error"); throw error; }
+      }).then(() => endTraceSpan(closeSpan), (error) => {
+        endTraceSpan(closeSpan, "error");
+        console.warn("Room capture cleanup failed", error);
+      });
     };
   }, []);
   /** 60-sample render-PRESSURE history for the stats chart (1 Hz): mean
@@ -2738,8 +2748,19 @@ export function LiveView({
     home_painted: homePaintedMs() ?? -1,
   });
   const mark = (k: string) => {
-    if (mountMarks.current[k] == null) mountMarks.current[k] = Math.round(performance.now() - mountT0.current);
+    if (mountMarks.current[k] == null) {
+      mountMarks.current[k] = Math.round(performance.now() - mountT0.current);
+      recordTraceEvent(`room.${k}`, { elapsedMs: mountMarks.current[k] }, "room");
+    }
   };
+  useEffect(() => {
+    setTraceContext({ roomVisit: traceVisit.current });
+    recordTraceEvent("room.mounted", { elapsedMs: Math.round(performance.now() - mountT0.current) }, "room");
+    return () => {
+      recordTraceEvent("room.unmounted", {}, "room");
+      setTraceContext({});
+    };
+  }, []);
   const [mountMs, setMountMs] = useState<number | null>(null);
   /** Largest gap between 100ms ticks until the veil lifts — a ready room
    * that cannot paint for seconds is a MAIN-THREAD stall, not engine work. */
@@ -2802,6 +2823,11 @@ export function LiveView({
       setPendingFrames([]);
       mark("first_frames");
       const m = mountMarks.current;
+      recordTraceEvent("room.first_frames.finished", {
+        elapsedMs: Math.round(performance.now() - mountT0.current),
+        framedCount: Object.keys(seen).length, pendingCount: pending.length,
+        stallMaxMs: Math.round(stallMax.current),
+      }, "room");
       roomOpenReport({
         ...m,
         first_frame_by_item: seen,
@@ -2867,6 +2893,16 @@ export function LiveView({
   const [panelMenu, setPanelMenu] = useState<PanelId | null>(null);
   const [layoutMenu, setLayoutMenu] = useState(false);
   const [layoutEdit, setLayoutEdit] = useState(false);
+  const layoutToggleTrace = useRef<TraceSpan | undefined>(undefined);
+  const traceLayoutToggle = () => {
+    endTraceSpan(layoutToggleTrace.current, "cancelled");
+    layoutToggleTrace.current = startTraceSpan("layout.toggle_to_react_commit");
+  };
+  useLayoutEffect(() => {
+    endTraceSpan(layoutToggleTrace.current, "ok", { editing: layoutEdit });
+    layoutToggleTrace.current = undefined;
+  }, [layoutEdit]);
+  useEffect(() => () => endTraceSpan(layoutToggleTrace.current, "cancelled"), []);
   /** GATED CAPABILITIES (lib/featureFlags.ts). Guests and Mods are hidden
    *  from accounts that do not hold the flag: their panels, their rows in the
    *  Panels menu, their entries in Sources → +, and the room's guest Link.
@@ -2966,6 +3002,26 @@ export function LiveView({
   const cfgRef = useRef(cfg);
   cfgRef.current = cfg;
   const layout = cfg.layout;
+  // Measure the custom pointer drag through React's commit. An animation
+  // frame is only a presentation opportunity, never proof of visible paint.
+  const pendingDropTrace = useRef<{ span: TraceSpan; layout: typeof layout; sequence: number } | null>(null);
+  const dropTraceSequence = useRef(0);
+  const dropTraceFrame = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const pending = pendingDropTrace.current;
+    if (!pending || pending.layout !== layout) return;
+    pendingDropTrace.current = null;
+    endTraceSpan(pending.span, "ok", { reactCommitted: true, dropSequence: pending.sequence });
+    const committedAt = performance.now();
+    dropTraceFrame.current = requestAnimationFrame(() => {
+      dropTraceFrame.current = null;
+      recordTraceEvent("panel.drop.presentation_opportunity", { afterCommitMs: performance.now() - committedAt, dropSequence: pending.sequence }, "presentation_opportunity");
+    });
+  }, [layout]);
+  useEffect(() => () => {
+    endTraceSpan(pendingDropTrace.current?.span, "cancelled");
+    if (dropTraceFrame.current !== null) cancelAnimationFrame(dropTraceFrame.current);
+  }, []);
   // Demand control (docs/THUMB-PIPELINE-V2.md): pay for preview frames only
   // while the guests panel is somewhere visible. 0 on hide and on unmount.
   const guestsDock = dockOf(layout, "guests");
@@ -4186,6 +4242,8 @@ export function LiveView({
    * panel's link button go through here — the panel button used to copy
    * silently (and swallow clipboard failures), which read as "doesn't work". */
   const copyRoomLink = async () => {
+    const trace = startTraceSpan("guest_link.copy");
+    let copied = false;
     let pending: number | undefined;
     const timer = window.setTimeout(() => {
       pending = notify("Copying guest link…", { key: "link-copy", sticky: true });
@@ -4193,7 +4251,8 @@ export function LiveView({
     try {
       const url = await ensureGuestLink();
       if (!url) return;
-      if (await copyText(url)) {
+      copied = await copyText(url);
+      if (copied) {
         dismissKey("guest-link-error");
         // Deals are a Boomin thing; a self-hosted room has none.
         notify(
@@ -4206,6 +4265,7 @@ export function LiveView({
         notify(url, { key: "banner", tone: "info", ttl: 8000 });
       }
     } finally {
+      endTraceSpan(trace, copied ? "ok" : "error", { copied });
       window.clearTimeout(timer);
       if (pending !== undefined) dismiss(pending);
     }
@@ -5594,6 +5654,7 @@ export function LiveView({
       // key nearest the thing it does. Any seat may rearrange its own panels.
       if (e.key.toLowerCase() === "e" && !e.shiftKey) {
         e.preventDefault();
+        traceLayoutToggle();
         setLayoutEdit((v) => !v);
         return;
       }
@@ -8295,7 +8356,14 @@ export function LiveView({
     }
     if (drop && d.moved && layoutEdit) {
       const target = hitTest(e.clientX, e.clientY);
-      if (target) setLayout(movePanelTo(layout, d.id, target.dock, target.index), true);
+      if (target) {
+        const next = movePanelTo(layout, d.id, target.dock, target.index);
+        endTraceSpan(pendingDropTrace.current?.span, "cancelled");
+        if (dropTraceFrame.current !== null) cancelAnimationFrame(dropTraceFrame.current);
+        const span = startTraceSpan("panel.drop_to_react_commit", { panelIndex: PANEL_ORDER.indexOf(d.id), dockIndex: ["left", "right", "top", "bottom", "hidden"].indexOf(target.dock) });
+        pendingDropTrace.current = span ? { span, layout: next, sequence: ++dropTraceSequence.current } : null;
+        setLayout(next, true);
+      }
     }
     setDragging(null);
     setDropHint(null);
@@ -8557,6 +8625,7 @@ export function LiveView({
           * from the transport cluster: collapse first, then edit. */}
         <button
           className="rm-leave"
+          data-perf-action="room.collapse"
           onClick={() => onLeave?.()}
           title={streaming ? "Collapse — the stream keeps running" : "Collapse room"}
         >
@@ -8567,9 +8636,11 @@ export function LiveView({
         {isHost && (
           <button
             data-walk="edit"
+            data-perf-action="layout.toggle"
             className={`rm-icon-chip rm-edit-trigger${layoutEdit ? " on" : ""}`}
             aria-pressed={layoutEdit}
             onClick={() => {
+              traceLayoutToggle();
               setLayoutEdit((e) => !e);
               setLayoutMenu(false);
             }}
@@ -8654,6 +8725,7 @@ export function LiveView({
           <span className="hd-link-group" hidden={!canGuests}>
             <button
               className="hd-chip hd-link"
+              data-perf-action="guest_link.copy"
               title="Copy this room's guest link"
               onClick={copyRoomLink}
             >

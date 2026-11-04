@@ -8,6 +8,8 @@ mod firewall;
 mod ipc;
 mod live;
 mod outbox;
+mod performance_share;
+mod performance_trace;
 mod recordings;
 #[cfg(feature = "guest-rtc-pilot")]
 mod rtc_control;
@@ -231,6 +233,12 @@ pub fn run() {
                 live::portrait_camera_probe::start(app.handle().clone(), report.into());
             }
 
+            if let Err(error) = performance_trace::init(app.handle()) {
+                eprintln!("Performance diagnostics unavailable: {error}");
+            }
+            if let Err(error) = performance_share::init(app.handle()) {
+                eprintln!("Performance sharing unavailable: {error}");
+            }
             soundboard_remote::start(app.handle().clone());
 
             // Resume any submissions a crash left unacknowledged.
@@ -244,6 +252,14 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            performance_trace::performance_trace_config,
+            performance_trace::performance_trace_set_consent,
+            performance_trace::performance_trace_write,
+            performance_trace::performance_trace_export,
+            performance_share::performance_trace_save_export,
+            performance_share::performance_trace_upload,
+            performance_share::performance_trace_configure_sharing,
+            performance_share::performance_trace_revoke,
             rtc_ipc::live_rtc_start,
             rtc_ipc::live_rtc_enabled,
             rtc_ipc::live_rtc_stop,

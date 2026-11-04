@@ -1,5 +1,6 @@
 import {notify,dismissKey} from "../lib/notices";
 import {DataIntegrations} from "../components/DataIntegrations";
+import { PerformanceDiagnostics } from "../components/PerformanceDiagnostics";
 import { ShareDomainSettings } from "../components/ShareDomainSettings";
 import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StoragePanel } from "../components/StoragePanel";
@@ -441,6 +442,7 @@ export function Home({
    * first) in guest mode with the seat's green room over it. No browser,
    * no popout window. Room-less when this workspace has no rooms yet. */
   const enterSeat = useCallback((seat: GuestSeatSpec) => {
+    markRoomClick();
     const own = [...roomsRef.current].sort((a, b) => (b.last_live_at ?? "").localeCompare(a.last_live_at ?? ""))[0];
     setView({ kind: "seat", room: own, seat });
   }, []);
@@ -1143,6 +1145,7 @@ function SettingsPanel({
             {appTab === "general" && (
               <>
         <ShareDomainSettings />
+        <PerformanceDiagnostics />
         <FeatureFlagsSection />
 
         <div className="cr-label set-gap">GUIDANCE</div>
