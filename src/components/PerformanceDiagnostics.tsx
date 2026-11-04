@@ -1,5 +1,5 @@
 import { useState, useSyncExternalStore } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '../lib/nativeInvoke';
 import { save } from '@tauri-apps/plugin-dialog';
 import { activeEndpointId } from '../lib/workspace';
 import { flushPerformanceTrace, getPerformanceTraceConsent, setPerformanceTraceConsent, subscribePerformanceTraceConsent } from '../lib/performanceTrace';

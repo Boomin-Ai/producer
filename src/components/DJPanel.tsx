@@ -1,6 +1,6 @@
 import { DJSlider } from "./DJSlider";
 import { useEffect, useId, useRef, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc } from "../lib/nativeInvoke";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   dj,

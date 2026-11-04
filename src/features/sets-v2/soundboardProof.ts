@@ -1,4 +1,4 @@
-import{invoke}from'@tauri-apps/api/core';import{sounds}from'../../lib/soundboard';
+import{invoke}from'../../lib/nativeInvoke';import{sounds}from'../../lib/soundboard';
 export async function soundboardProof(room:string,folder:string){
  const report=(result:unknown)=>invoke('live_set_v2_report',{result});
  const pause=(n:number)=>new Promise(r=>setTimeout(r,n));

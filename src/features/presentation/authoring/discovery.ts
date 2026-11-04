@@ -1,4 +1,4 @@
-import {invoke} from '@tauri-apps/api/core';
+import {invoke} from '../../../lib/nativeInvoke';
 import {getVersion} from '@tauri-apps/api/app';
 import {AUTHORING_CATALOG,type AuthoringTarget} from './catalog';
 /** 0.4.78 has no unified native descriptor. This exact-release compatibility

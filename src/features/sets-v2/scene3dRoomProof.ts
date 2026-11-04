@@ -1,6 +1,6 @@
 /** Opt-in dev harness only. Uses the existing native source and v2 plan APIs.
  * It deliberately does not add a public scene3d package capability yet. */
-import {invoke} from '@tauri-apps/api/core';
+import {invoke} from '../../lib/nativeInvoke';
 import {extraSources,recording,type LiveSources} from '../../lib/ipc';
 const sleep=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 type Manifest={recordProof?:boolean;background:string;foreground:string;report:string;control:string};

@@ -1,4 +1,4 @@
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc } from "../../lib/nativeInvoke";
 import { guests, type Channel, type LocalRecording } from "../../lib/ipc";
 import type { Collection, ContentUnit, ManagerSnapshot, PostComment, SocialPost, Stage, UnitMedia } from "./contracts";
 

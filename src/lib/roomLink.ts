@@ -5,7 +5,7 @@ import { formatGuestLink } from "./hostedShare";
 // server (idempotent by external_ref), ask for the join link, and mirror both
 // into the room config so the next click is instant.
 
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./nativeInvoke";
 import { guests, ipc, registerRoom, type LiveRoom } from "./ipc";
 import { parseConfig, serializeConfig } from "./room";
 import { resolveActiveEndpoint } from "./workspace";

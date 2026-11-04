@@ -2,7 +2,7 @@
  * Peers share tracks, but each WebRTC connection can still require an encoder.
  * The audio comes from processed native buses, never a second raw microphone.
  */
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./nativeInvoke";
 const WORKLET = `
 class ProgramPCM extends AudioWorkletProcessor {
   constructor() { super(); this.q=[]; this.read=0; this.frames=0; this.port.onmessage=(e)=>{

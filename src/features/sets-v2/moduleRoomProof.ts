@@ -1,4 +1,4 @@
-import {invoke} from '@tauri-apps/api/core';
+import {invoke} from '../../lib/nativeInvoke';
 import {guests} from '../../lib/ipc';
 import {activeEndpointId} from '../../lib/workspace';
 const sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));

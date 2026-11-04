@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc } from "../../lib/nativeInvoke";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ipc, type Channel, type TargetResult } from "../../lib/ipc";
 import { ChannelPostSettings, DEFAULT_CHANNEL_PARAMS, buildChannelOverrides, type ChannelParams } from "../../components/ChannelPostSettings";

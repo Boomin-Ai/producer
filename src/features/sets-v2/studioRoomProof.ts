@@ -1,5 +1,5 @@
 /** Opt-in local acceptance check through the normal editor and module panel. */
-import {invoke} from '@tauri-apps/api/core';
+import {invoke} from '../../lib/nativeInvoke';
 import type {LiveSnapshot} from '../../lib/ipc';
 const sleep=(ms:number)=>new Promise<void>(r=>setTimeout(r,ms));
 async function until<T>(read:()=>T|Promise<T>,label:string,attempts=900):Promise<NonNullable<T>>{for(let i=0;i<attempts;i++){const v=await read();if(v)return v as NonNullable<T>;await sleep(100);}throw Error('Timed out: '+label);}

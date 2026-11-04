@@ -1,6 +1,6 @@
 import { recordTraceEvent, snapshotTraceContext } from "../../lib/performanceTrace";
 import {outputLayout} from '../presentation/layoutViews';
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../../lib/nativeInvoke";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ipc, uiLog, listenLiveEvents, type LiveSources } from "../../lib/ipc";
 import {

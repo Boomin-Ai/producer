@@ -1,6 +1,6 @@
 import {useShowClock} from './showClock';
 import {useRoomOutput} from '../sets-v2/useRoomOutput';
-import {invoke} from '@tauri-apps/api/core';
+import {invoke} from '../../lib/nativeInvoke';
 import {AssetTransport} from './assetTransport';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ipc } from '../../lib/ipc';

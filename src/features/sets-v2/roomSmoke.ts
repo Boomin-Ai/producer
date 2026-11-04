@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../../lib/nativeInvoke";
 import {listenLiveEvents} from "../../lib/ipc";
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 async function until<T>(read: () => T | Promise<T>, label: string,attempts=600): Promise<NonNullable<T>> {

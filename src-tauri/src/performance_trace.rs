@@ -23,6 +23,8 @@ const MAX_EVENTS_PER_SECOND: usize = 512;
 const MAX_PENDING: usize = 8;
 const NATIVE_STAGE_CAPACITY: usize = 128;
 static NATIVE_STAGE_ENABLED: AtomicBool = AtomicBool::new(false);
+static NATIVE_CAPTURE_EPOCH: AtomicU64 = AtomicU64::new(0);
+static MIC_PROBE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 static NATIVE_STAGE_DROPPED: AtomicU64 = AtomicU64::new(0);
 static NATIVE_STAGE_QUEUE: OnceLock<Mutex<VecDeque<NativeStage>>> = OnceLock::new();
 static ENGINE_METRIC_ORIGIN: OnceLock<Instant> = OnceLock::new();
@@ -60,6 +62,140 @@ struct NativeStage {
     at: Instant,
     duration: Duration,
     success: Option<bool>,
+    mic_probe: Option<u64>,
+}
+impl NativeStage {
+    fn fields(&self) -> BTreeMap<String, Value> {
+        self.mic_probe
+            .map(|probe| BTreeMap::from([("micProbe".into(), json!(probe))]))
+            .unwrap_or_default()
+    }
+}
+
+/// A diagnostics-only correlation for the ordinary, synchronous mic path.
+/// It never owns or changes an OBS source. An opt-out/re-enable invalidates it.
+#[derive(Clone, Copy)]
+pub(crate) struct SyncMicTrace {
+    epoch: u64,
+    probe: u64,
+    started: Instant,
+}
+impl SyncMicTrace {
+    pub(crate) fn begin() -> Option<Self> {
+        if !NATIVE_STAGE_ENABLED.load(Ordering::Acquire) {
+            return None;
+        }
+        let epoch = NATIVE_CAPTURE_EPOCH.load(Ordering::Acquire);
+        let probe = MIC_PROBE_SEQUENCE
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                (value < 9_007_199_254_740_991).then_some(value + 1)
+            })
+            .ok()?
+            + 1;
+        Some(Self {
+            epoch,
+            probe,
+            started: Instant::now(),
+        })
+    }
+
+    pub(crate) fn stage(self, name: &'static str, duration: Duration, success: Option<bool>) {
+        self.stage_at(name, Instant::now(), duration, success);
+    }
+
+    fn active(self) -> bool {
+        NATIVE_STAGE_ENABLED.load(Ordering::Acquire)
+            && self.epoch == NATIVE_CAPTURE_EPOCH.load(Ordering::Acquire)
+    }
+
+    fn stage_at(self, name: &'static str, at: Instant, duration: Duration, success: Option<bool>) {
+        if self.active() {
+            queue_native_stage(name, at, duration, success, Some((self.epoch, self.probe)));
+        }
+    }
+}
+
+/// Embedded in the existing meter slot, not a separate source-pointer table.
+/// The existing audio callback only supplies a timestamp for a valid unmuted
+/// packet. The engine drains it; no PCM, device identifier, allocation or lock
+/// enters diagnostics from the audio thread. MAX means unarmed/already drained.
+pub(crate) struct SyncMicPacketObservation {
+    epoch: AtomicU64,
+    first_nanos: AtomicU64,
+}
+impl SyncMicPacketObservation {
+    pub(crate) const fn new() -> Self {
+        Self {
+            epoch: AtomicU64::new(0),
+            first_nanos: AtomicU64::new(u64::MAX),
+        }
+    }
+
+    // Called before registering the existing callback, and after its removal.
+    pub(crate) fn arm(&self, trace: Option<SyncMicTrace>) {
+        self.epoch
+            .store(trace.map_or(0, |trace| trace.epoch), Ordering::Release);
+        self.first_nanos.store(
+            if trace.is_some() { 0 } else { u64::MAX },
+            Ordering::Release,
+        );
+    }
+
+    /// The caller has already rejected muted/null/invalid-plane audio. Zero
+    /// frames do not establish packet delivery. Silence still is a valid packet.
+    pub(crate) fn observe_valid_unmuted(&self, frames: u32) {
+        if frames == 0 || self.first_nanos.load(Ordering::Relaxed) != 0 {
+            return;
+        }
+        if !NATIVE_STAGE_ENABLED.load(Ordering::Acquire)
+            || self.epoch.load(Ordering::Acquire) != NATIVE_CAPTURE_EPOCH.load(Ordering::Acquire)
+        {
+            return;
+        }
+        let Some(origin) = ENGINE_METRIC_ORIGIN.get() else {
+            return;
+        };
+        let nanos = origin.elapsed().as_nanos().min(u64::MAX as u128 - 2) as u64 + 1;
+        let _ = self
+            .first_nanos
+            .compare_exchange(0, nanos, Ordering::Release, Ordering::Relaxed);
+    }
+
+    pub(crate) fn emit_if_ready(&self, trace: Option<SyncMicTrace>) {
+        let Some(trace) = trace else {
+            return;
+        };
+        if !trace.active() || self.epoch.load(Ordering::Acquire) != trace.epoch {
+            self.first_nanos.store(u64::MAX, Ordering::Release);
+            return;
+        }
+        let nanos = self.first_nanos.load(Ordering::Acquire);
+        if nanos == 0 || nanos == u64::MAX {
+            return;
+        }
+        if self
+            .first_nanos
+            .compare_exchange(nanos, u64::MAX, Ordering::AcqRel, Ordering::Relaxed)
+            .is_err()
+        {
+            return;
+        }
+        let Some(first) = ENGINE_METRIC_ORIGIN
+            .get()
+            .and_then(|origin| origin.checked_add(Duration::from_nanos(nanos - 1)))
+        else {
+            return;
+        };
+        let Some(duration) = first.checked_duration_since(trace.started) else {
+            return;
+        };
+        trace.stage_at(
+            "native.mic.sync.first_unmuted_packet_observed",
+            first,
+            duration,
+            Some(true),
+        );
+    }
 }
 /// Fixed-name engine landmarks only. The disabled path is one atomic load;
 /// the enabled path never waits, allocates, formats text, or performs I/O.
@@ -70,6 +206,15 @@ pub fn native_stage(name: &'static str, duration: Duration, success: Option<bool
     native_stage_at(name, Instant::now(), duration, success);
 }
 pub fn native_stage_at(name: &'static str, at: Instant, duration: Duration, success: Option<bool>) {
+    queue_native_stage(name, at, duration, success, None);
+}
+fn queue_native_stage(
+    name: &'static str,
+    at: Instant,
+    duration: Duration,
+    success: Option<bool>,
+    mic: Option<(u64, u64)>,
+) {
     if !NATIVE_STAGE_ENABLED.load(Ordering::Relaxed) {
         return;
     }
@@ -77,7 +222,9 @@ pub fn native_stage_at(name: &'static str, at: Instant, duration: Duration, succ
         return;
     };
     if let Ok(mut queue) = queue.try_lock() {
-        if !NATIVE_STAGE_ENABLED.load(Ordering::Acquire) {
+        if !NATIVE_STAGE_ENABLED.load(Ordering::Acquire)
+            || mic.is_some_and(|(epoch, _)| epoch != NATIVE_CAPTURE_EPOCH.load(Ordering::Acquire))
+        {
             return;
         }
         if queue.len() < NATIVE_STAGE_CAPACITY {
@@ -86,6 +233,7 @@ pub fn native_stage_at(name: &'static str, at: Instant, duration: Duration, succ
                 at,
                 duration,
                 success,
+                mic_probe: mic.map(|(_, probe)| probe),
             });
             return;
         }
@@ -94,6 +242,7 @@ pub fn native_stage_at(name: &'static str, at: Instant, duration: Duration, succ
 }
 fn native_collection(enabled: bool) {
     NATIVE_STAGE_ENABLED.store(false, Ordering::Release);
+    NATIVE_CAPTURE_EPOCH.fetch_add(1, Ordering::AcqRel);
     let queue = NATIVE_STAGE_QUEUE
         .get_or_init(|| Mutex::new(VecDeque::with_capacity(NATIVE_STAGE_CAPACITY)));
     ENGINE_METRIC_ORIGIN.get_or_init(Instant::now);
@@ -866,7 +1015,7 @@ fn initialize_trace(app: &tauri::AppHandle) -> Result<Arc<Inner>, String> {
                             status: stage
                                 .success
                                 .map(|ok| if ok { "ok" } else { "error" }.into()),
-                            fields: BTreeMap::new(),
+                            fields: stage.fields(),
                         });
                     }
                     fields.insert("nativeStageQueued".into(), json!(queue.len()));
@@ -1400,6 +1549,140 @@ mod tests {
         assert!(queue.lock().unwrap().is_empty());
         native_stage("native.room.restore.complete", Duration::ZERO, Some(true));
         assert!(queue.lock().unwrap().is_empty());
+    }
+    #[test]
+    fn synchronous_mic_trace_is_opt_in_correlated_and_has_only_numeric_fields() {
+        let _gate = NATIVE_TEST_LOCK.lock().unwrap();
+        native_collection(false);
+        assert!(SyncMicTrace::begin().is_none());
+        native_collection(true);
+        let first = SyncMicTrace::begin().unwrap();
+        let second = SyncMicTrace::begin().unwrap();
+        assert_ne!(first.probe, second.probe);
+        first.stage("native.mic.sync.create.start", Duration::ZERO, None);
+        first.stage(
+            "native.mic.sync.create.complete",
+            Duration::from_millis(9),
+            Some(false),
+        );
+        second.stage(
+            "native.mic.sync.attach.complete",
+            Duration::from_millis(2),
+            Some(true),
+        );
+        let queue = NATIVE_STAGE_QUEUE.get().unwrap();
+        {
+            let stages = queue.lock().unwrap();
+            assert_eq!(stages.len(), 3);
+            assert_eq!(stages[0].mic_probe, stages[1].mic_probe);
+            assert_ne!(stages[1].mic_probe, stages[2].mic_probe);
+            assert_eq!(stages[1].success, Some(false));
+            assert_eq!(stages[2].success, Some(true));
+            for stage in stages.iter() {
+                let fields = stage.fields();
+                assert_eq!(fields.len(), 1);
+                assert!(fields["micProbe"].is_number());
+                let mut b = batch();
+                b.events[0].name = stage.name.into();
+                b.events[0].kind = "native_metric".into();
+                b.events[0].fields = fields;
+                assert!(validate(&b, "session-1").is_ok());
+            }
+        }
+        native_collection(false);
+        first.stage(
+            "native.mic.sync.attach.complete",
+            Duration::from_secs(4),
+            Some(true),
+        );
+        assert!(queue.lock().unwrap().is_empty());
+    }
+    #[test]
+    fn synchronous_mic_packet_is_first_valid_unmuted_observation_not_peak_or_drain_time() {
+        let _gate = NATIVE_TEST_LOCK.lock().unwrap();
+        native_collection(true);
+        let trace = SyncMicTrace::begin().unwrap();
+        let packet = SyncMicPacketObservation::new();
+        let queue = NATIVE_STAGE_QUEUE.get().unwrap();
+        packet.arm(Some(trace));
+        packet.observe_valid_unmuted(0);
+        packet.emit_if_ready(Some(trace));
+        assert!(queue.lock().unwrap().is_empty());
+        // The audio-side recorder does not acquire the stage queue, format or
+        // export an event. Silence also qualifies: no PCM level is an input.
+        {
+            let _held_queue = queue.lock().unwrap();
+            packet.observe_valid_unmuted(480);
+        }
+        let observed = packet.first_nanos.load(Ordering::Acquire);
+        assert!(observed > 0 && observed < u64::MAX);
+        packet.observe_valid_unmuted(480);
+        assert_eq!(packet.first_nanos.load(Ordering::Acquire), observed);
+        assert!(queue.lock().unwrap().is_empty());
+        let drained = Instant::now();
+        packet.emit_if_ready(Some(trace));
+        packet.emit_if_ready(Some(trace));
+        packet.observe_valid_unmuted(480);
+        packet.emit_if_ready(Some(trace));
+        {
+            let stages = queue.lock().unwrap();
+            assert_eq!(stages.len(), 1);
+            let stage = stages[0];
+            assert_eq!(stage.name, "native.mic.sync.first_unmuted_packet_observed");
+            assert_eq!(
+                stage.at,
+                ENGINE_METRIC_ORIGIN
+                    .get()
+                    .unwrap()
+                    .checked_add(Duration::from_nanos(observed - 1))
+                    .unwrap()
+            );
+            assert!(stage.at <= drained);
+            assert_eq!(stage.duration, stage.at.duration_since(trace.started));
+            assert_eq!(stage.mic_probe, Some(trace.probe));
+        }
+        native_collection(false);
+    }
+    #[test]
+    fn synchronous_mic_packet_slot_reuse_and_capture_restart_discard_old_measurements() {
+        let _gate = NATIVE_TEST_LOCK.lock().unwrap();
+        native_collection(true);
+        let first = SyncMicTrace::begin().unwrap();
+        let packet = SyncMicPacketObservation::new();
+        packet.arm(Some(first));
+        packet.observe_valid_unmuted(480);
+        // Slot retirement happens after the existing callback is removed.
+        packet.arm(None);
+        packet.observe_valid_unmuted(480);
+        packet.emit_if_ready(Some(first));
+        let queue = NATIVE_STAGE_QUEUE.get().unwrap();
+        assert!(queue.lock().unwrap().is_empty());
+        let replacement = SyncMicTrace::begin().unwrap();
+        packet.arm(Some(replacement));
+        packet.emit_if_ready(Some(replacement));
+        assert!(queue.lock().unwrap().is_empty());
+        packet.observe_valid_unmuted(480);
+        native_collection(false);
+        packet.emit_if_ready(Some(replacement));
+        packet.observe_valid_unmuted(480);
+        native_collection(true);
+        replacement.stage(
+            "native.mic.sync.attach.complete",
+            Duration::from_secs(9),
+            Some(true),
+        );
+        packet.emit_if_ready(Some(replacement));
+        assert!(queue.lock().unwrap().is_empty());
+        let fresh = SyncMicTrace::begin().unwrap();
+        packet.arm(Some(fresh));
+        packet.observe_valid_unmuted(480);
+        packet.emit_if_ready(Some(fresh));
+        {
+            let stages = queue.lock().unwrap();
+            assert_eq!(stages.len(), 1);
+            assert_eq!(stages[0].mic_probe, Some(fresh.probe));
+        }
+        native_collection(false);
     }
     #[test]
     fn native_export_contract_fixture() {

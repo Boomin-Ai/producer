@@ -1,6 +1,7 @@
 /** Opt-in, metadata-only frontend performance tracing. Never records UI text,
  * field values, element IDs/classes, URLs, IPC arguments/results, or errors.
  * Native consent is authoritative; localStorage is only a display mirror. */
+import { invoke as appInvoke, observeNativeInvoke } from './nativeInvoke';
 export type PerformanceTraceConsent = { local: boolean; sharing: boolean };
 export type TraceKind = 'session' | 'action' | 'span_start' | 'span_end' | 'ipc' | 'presentation_opportunity' | 'loop_lag' | 'observer' | 'room' | 'set' | 'native_metric';
 export type TraceFields = Record<string, number | boolean>;
@@ -12,7 +13,7 @@ type ConfigSample = { config: NativeConfig; requestedAt: number; receivedAt: num
 type TraceEvent = { seq: number; atMs: number; kind: TraceKind; name: string; spanId?: string; actionId?: string; durationMs?: number; status?: string; fields?: TraceFields };
 export type TraceSpan = Readonly<{ id: string; name: string; startedAt: number; actionId?: string; roomVisit?: number; generation: number }>;
 type Capture = {
-  generation: number; collectorId: string; sessionId: string; bridge: NativeBridge; original: NativeInvoke; wrapped: NativeInvoke;
+  generation: number; collectorId: string; sessionId: string; bridge: NativeBridge; original: NativeInvoke; stopInvokeObservation?: () => void;
   seq: number; actionSeq: number; spanSeq: number; queue: TraceEvent[]; dropped: number; stopped: boolean;
   currentAction?: string; actionTimer?: ReturnType<typeof setTimeout>; timer?: ReturnType<typeof setInterval>;
   raf?: number; presentations: { actionId: string; startedAt: number; roomVisit?: number }[];
@@ -30,7 +31,8 @@ const listeners = new Set<() => void>(), endedSpans = new WeakSet<TraceSpan>();
 const now = () => performance.now();
 const rounded = (value: number) => Math.round(value * 1000) / 1000;
 const usableNativeClock = (config: NativeConfig) => typeof config.sessionElapsedMs === 'number' && Number.isFinite(config.sessionElapsedMs) && config.sessionElapsedMs >= 0 && config.sessionElapsedMs <= 1e15;
-const bridge = (): NativeBridge | undefined => (window as Window & { __TAURI_INTERNALS__?: NativeBridge }).__TAURI_INTERNALS__;
+const diagnosticBridge: NativeBridge = { invoke: appInvoke as NativeInvoke };
+const bridge = (): NativeBridge | undefined => typeof (window as Window & { __TAURI_INTERNALS__?: NativeBridge }).__TAURI_INTERNALS__?.invoke === 'function' ? diagnosticBridge : undefined;
 const safeName = (name: unknown): name is string => typeof name === 'string' && name.length <= 160 && /^[a-zA-Z][a-zA-Z0-9_.:/|\[\]+-]*$/.test(name) && !name.includes('://');
 function cleanFields(fields: TraceFields): TraceFields {
   const clean: TraceFields = {};
@@ -103,7 +105,7 @@ function stopCapture() {
   for (const { type, listener } of capture.otherListeners) document.removeEventListener(type, listener, true);
   if (capture.raf !== undefined) cancelAnimationFrame(capture.raf);
   capture.observers.forEach(observer => observer.disconnect());
-  try { if (capture.bridge.invoke === capture.wrapped) capture.bridge.invoke = capture.original; } catch { /* A host may make its bridge immutable. */ }
+  capture.stopInvokeObservation?.();
   capture.queue = []; capture.presentations = [];
 }
 function collectSummaries(capture: Capture, forceIpc = false) {
@@ -209,13 +211,13 @@ function applyConfig(config: NativeConfig, requestedAt = now(), receivedAt = now
   // webview reloads while the native process keeps the same session ID.
   const collectorId = 'c-' + (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 14));
   const nativeClockAligned = usableNativeClock(config);
-  const capture: Capture = { generation: ++nextGeneration, collectorId, sessionId: config.sessionId, bridge: native, original: native.invoke, wrapped: native.invoke, seq: 0, actionSeq: 0, spanSeq: 0, queue: [], dropped: 0, stopped: false, presentations: [], lastTick: now(), lastIpcSummaryAt: now(), elapsedOffsetMs: nativeClockAligned ? config.sessionElapsedMs! - (requestedAt + receivedAt) / 2 : 0, nativeClockAligned, clockUncertaintyMs: Math.max(0, receivedAt - requestedAt) / 2, observers: [], otherListeners: [], inputs: new Map(), ipcSummaries: new Map(), click: () => {} };
+  const capture: Capture = { generation: ++nextGeneration, collectorId, sessionId: config.sessionId, bridge: native, original: native.invoke, seq: 0, actionSeq: 0, spanSeq: 0, queue: [], dropped: 0, stopped: false, presentations: [], lastTick: now(), lastIpcSummaryAt: now(), elapsedOffsetMs: nativeClockAligned ? config.sessionElapsedMs! - (requestedAt + receivedAt) / 2 : 0, nativeClockAligned, clockUncertaintyMs: Math.max(0, receivedAt - requestedAt) / 2, observers: [], otherListeners: [], inputs: new Map(), ipcSummaries: new Map(), click: () => {} };
   active = capture;
-  capture.wrapped = function (this: unknown, command: string, ...args: unknown[]) {
-    if (capture.stopped || capture !== active || typeof command !== 'string' || command.startsWith('performance_trace_')) return capture.original.call(this, command, ...args);
+  capture.stopInvokeObservation = observeNativeInvoke(command => {
+    if (capture.stopped || capture !== active) return;
     const startedAt = now(), actionId = capture.currentAction, roomVisit = context.roomVisit;
     const name = safeName(command) ? command : 'unknown';
-    const finish = (status: 'ok' | 'error') => {
+    return (status: 'ok' | 'error') => {
       try {
         if (capture !== active || capture.stopped) return;
         const durationMs = Math.max(0, now() - startedAt);
@@ -234,15 +236,8 @@ function applyConfig(config: NativeConfig, requestedAt = now(), receivedAt = now
         }
       } catch { /* Never reject a diagnostic continuation. */ }
     };
-    try {
-      const result = capture.original.call(this, command, ...args);
-      // Observe without replacing the original promise/result/rejection.
-      try { if (result && typeof (result as Promise<unknown>).then === 'function') void (result as Promise<unknown>).then(() => finish('ok'), () => finish('error')); else finish('ok'); } catch { /* Native return semantics win over diagnostics. */ }
-      return result;
-    } catch (error) { finish('error'); throw error; }
-  };
-  let ipcTiming = false;
-  try { native.invoke = capture.wrapped; ipcTiming = native.invoke === capture.wrapped; } catch { /* Keep UI measurements if the host bridge is immutable. */ }
+  });
+  const ipcTiming = true;
   capture.click = event => {
     if (!event.isTrusted || capture !== active) return;
     const startedAt = now(), roomVisit = context.roomVisit;
@@ -284,7 +279,7 @@ function applyConfig(config: NativeConfig, requestedAt = now(), receivedAt = now
     if (event.isTrusted && capture === active) { endTraceSpan(capture.drag, 'cancelled'); capture.drag = undefined; }
   });
   const eventTiming = observe(capture, 'event'), longTasks = observe(capture, 'longtask');
-  append(capture, { kind: 'session', name: 'session.start', fields: { ipcTiming, debugBuildKnown: typeof config.debugBuild === 'boolean', ...(typeof config.debugBuild === 'boolean' ? { debugBuild: config.debugBuild } : {}), sourceRevisionAvailable: typeof config.sourceRevision === 'string' && /^[a-f0-9]{40}$/.test(config.sourceRevision), ...(typeof config.logicalCores === 'number' && Number.isFinite(config.logicalCores) ? { logicalCores: config.logicalCores } : {}), eventTiming, longTasks, animationFrame: typeof requestAnimationFrame === 'function', nativeClockAligned: Number.isFinite(config.sessionElapsedMs), configRoundTripMs: Math.max(0, receivedAt - requestedAt), frontendAnchorMs: (requestedAt + receivedAt) / 2, clockAnchorUncertaintyMs: Math.max(0, receivedAt - requestedAt) / 2, ...(typeof config.sessionElapsedMs === 'number' ? { nativeSessionAnchorMs: config.sessionElapsedMs } : {}), ...(typeof config.wallClockMs === 'number' ? { nativeWallClockAnchorMs: config.wallClockMs } : {}) } });
+  append(capture, { kind: 'session', name: 'session.start', fields: { ipcTiming, ipcApplicationBoundary: true, ipcPluginInternal: false, debugBuildKnown: typeof config.debugBuild === 'boolean', ...(typeof config.debugBuild === 'boolean' ? { debugBuild: config.debugBuild } : {}), sourceRevisionAvailable: typeof config.sourceRevision === 'string' && /^[a-f0-9]{40}$/.test(config.sourceRevision), ...(typeof config.logicalCores === 'number' && Number.isFinite(config.logicalCores) ? { logicalCores: config.logicalCores } : {}), eventTiming, longTasks, animationFrame: typeof requestAnimationFrame === 'function', nativeClockAligned: Number.isFinite(config.sessionElapsedMs), configRoundTripMs: Math.max(0, receivedAt - requestedAt), frontendAnchorMs: (requestedAt + receivedAt) / 2, clockAnchorUncertaintyMs: Math.max(0, receivedAt - requestedAt) / 2, ...(typeof config.sessionElapsedMs === 'number' ? { nativeSessionAnchorMs: config.sessionElapsedMs } : {}), ...(typeof config.wallClockMs === 'number' ? { nativeWallClockAnchorMs: config.wallClockMs } : {}) } });
   capture.timer = setInterval(() => {
     if (capture !== active) return;
     const at = now();

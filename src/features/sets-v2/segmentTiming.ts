@@ -1,4 +1,4 @@
-import {invoke} from '@tauri-apps/api/core';
+import {invoke} from '../../lib/nativeInvoke';
 const sleep=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 async function wait<T>(read:()=>T|Promise<T>,label:string):Promise<NonNullable<T>>{for(let i=0;i<1200;i++){const value=await read();if(value)return value as NonNullable<T>;await sleep(25);}throw Error('Timing probe timed out: '+label);}
 const button=(label:string,root:ParentNode=document)=>Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(b=>!b.disabled&&(b.getAttribute('aria-label')===label||b.textContent?.trim()===label));

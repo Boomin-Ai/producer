@@ -5,7 +5,7 @@ import factsShow from '../../docs/shows/just-facts.json';
 import {parsePackage} from '../features/presentation/schema';
 import {upgradeJustFacts,upgradeJustFactsShow} from '../features/presentation/upgradeJustFacts';
 import {setActiveEndpointId} from '../lib/workspace';
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../lib/nativeInvoke";
 import { useEffect, useRef, useState } from "react";
 import { ipc, type LiveRoom } from "../lib/ipc";
 import studio3d from '../../docs/shows/grand-arena-3d-study.json';

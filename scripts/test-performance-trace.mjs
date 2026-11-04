@@ -2,11 +2,23 @@
 // No browser/native app is launched, avoiding pollution of a live CPU baseline.
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import {readFile} from 'node:fs/promises';
+import {readFile,readdir} from 'node:fs/promises';
 import {transform} from 'esbuild';
 import {performance} from 'node:perf_hooks';
 const source=await readFile(new URL('../src/lib/performanceTrace.ts',import.meta.url),'utf8');
 const {code}=await transform(source,{loader:'ts',format:'cjs',target:'es2022'});
+const adapterSource=await readFile(new URL('../src/lib/nativeInvoke.ts',import.meta.url),'utf8');
+const {code:adapterCode}=await transform(adapterSource,{loader:'ts',format:'cjs',target:'es2022'});
+async function checkApplicationBoundary(directory){
+ for(const entry of await readdir(directory,{withFileTypes:true})){
+  const path=new URL(entry.name+(entry.isDirectory()?'/':''),directory);
+  if(entry.isDirectory())await checkApplicationBoundary(path);
+  else if(/\.[cm]?[jt]sx?$/.test(entry.name)&&path.pathname.endsWith('/lib/nativeInvoke.ts')===false){
+   const text=await readFile(path,'utf8');assert(!/(?:from\s*|import\s*\()\s*['"]@tauri-apps\/api\/core['"]/.test(text),'application bypasses instrumented invoke boundary: '+path.pathname);
+  }
+ }
+}
+await checkApplicationBoundary(new URL('../src/',import.meta.url));
 function environment(enabled=false,options={}){
  let clock=100,local=enabled,sharing=false,session=1,nextHandle=0,writeFailure=false,writeReceipt,configReads=0;
  const pendingConfigs=new Map();
@@ -28,11 +40,16 @@ function environment(enabled=false,options={}){
  }};
  let resolveFixture;const fixturePromise=options.settledPromise?Promise.resolve(42):new Promise(r=>resolveFixture=r),fixtureError=Error('secret native rejection text');
  class Observer {static supportedEntryTypes=options.observers===false?[]:['event','longtask'];constructor(callback){observerCallbacks.push(callback);}observe(){}disconnect(){}}
+ // Match the real framework property descriptor, rather than a writable mock.
+ Object.defineProperty(bridge,'invoke',{value:bridge.invoke,writable:false,configurable:false});
+ const core={invoke:function(...args){return Reflect.apply(bridge.invoke,this,args);},convertFileSrc:function(path){return 'unchanged:'+path;},isTauri:()=>true};
  const sandbox={module:{exports:{}},exports:{},window:{__TAURI_INTERNALS__:bridge},document,Element,PerformanceObserver:Observer,performance:{now:()=>options.realClock?performance.now():clock},localStorage:{setItem:(k,v)=>storage.set(k,v)},
   setTimeout:(f,ms)=>{const id=++nextHandle;timeouts.set(id,{f,ms});return id;},clearTimeout:id=>timeouts.delete(id),setInterval:f=>{const id=++nextHandle;intervals.set(id,f);return id;},clearInterval:id=>intervals.delete(id),
   requestAnimationFrame:f=>{const id=++nextHandle;frames.set(id,f);return id;},cancelAnimationFrame:id=>frames.delete(id),console};
- sandbox.exports=sandbox.module.exports;vm.runInNewContext(code,sandbox,{filename:'performanceTrace.cjs'});
- return {api:sandbox.module.exports,bridge,writes,calls,original:bridge.invoke,document,Element,clicks,intervals,frames,fixturePromise,fixtureError,resolveFixture,
+ const adapterSandbox={...sandbox,module:{exports:{}},require:name=>{assert.equal(name,'@tauri-apps/api/core');return core;}};adapterSandbox.exports=adapterSandbox.module.exports;vm.runInNewContext(adapterCode,adapterSandbox,{filename:'nativeInvoke.cjs'});
+ const app=adapterSandbox.module.exports;
+ sandbox.require=name=>{assert.equal(name,'./nativeInvoke');return app;};sandbox.exports=sandbox.module.exports;vm.runInNewContext(code,sandbox,{filename:'performanceTrace.cjs'});
+ return {api:sandbox.module.exports,app,core,bridge,writes,calls,original:bridge.invoke,document,Element,clicks,intervals,frames,fixturePromise,fixtureError,resolveFixture,
   click(target,trusted=true){for(const callback of [...clicks])callback({isTrusted:trusted,target});},
   advance(ms){clock+=ms;},runFrames(){const list=[...frames.values()];frames.clear();list.forEach(f=>f(clock));},
   runTimeouts(){const list=[...timeouts.values()];timeouts.clear();list.forEach(({f})=>f());},tick(){for(const callback of [...intervals.values()])callback();},
@@ -52,23 +69,25 @@ const drain=async()=>{for(let i=0;i<6;i++)await Promise.resolve();};
  const env=environment();await env.api.initializePerformanceTrace();
  assert.equal(env.bridge.invoke,env.original,'disabled capture never patches native invoke');assert.equal(env.clicks.size,0);assert.equal(env.intervals.size,0);
  assert.equal(env.calls.filter(call=>call.command==='performance_trace_config').length,1,'disabled startup does not resample config');
+ assert.equal(env.app.convertFileSrc,env.core.convertFileSrc);assert.equal(env.app.isTauri,env.core.isTauri,'unchanged SDK helpers are re-exported by identity');
+ const owner={};assert.equal(env.app.invoke.call(owner,'sync_result'),42);assert.equal(env.calls.at(-1).self,owner);assert.equal(env.calls.at(-1).args.length,0,'omitted optional arguments stay omitted');
  env.api.recordTraceEvent('room.open',{elapsedMs:1},'room');await env.api.flushPerformanceTrace();assert.equal(env.writes.length,0);
  assert.deepEqual({...env.api.getPerformanceTraceConsent()},{local:false,sharing:false});
 }
 {
  const env=environment(true);const stop=await env.api.initializePerformanceTrace();
- assert.notEqual(env.bridge.invoke,env.original);assert.equal(env.clicks.size,1);assert.equal(env.intervals.size,1);
+ assert.equal(env.bridge.invoke,env.original,'enabled tracing leaves the framework bridge unchanged');assert.equal(env.clicks.size,1);assert.equal(env.intervals.size,1);
  env.api.setTraceContext({roomVisit:7});
  const target=new env.Element('BUTTON',{},new env.Element('SECTION'));
  env.click(target,false);assert.equal(events(env).filter(e=>e.kind==='action').length,0,'synthetic clicks are not user actions');
  env.click(target);const payload={password:'secret IPC argument',url:'https://private.example/invite/secret'},options={headers:{Authorization:'secret header'}};
- const promise=env.bridge.invoke('get_room',payload,options);assert.equal(promise,env.fixturePromise,'original promise identity survives');
- const call=env.calls.at(-1);assert.equal(call.self,env.bridge);assert.equal(call.args[0],payload);assert.equal(call.args[1],options);
+ const promise=env.app.invoke('get_room',payload,options);assert.equal(promise,env.fixturePromise,'original promise identity survives');
+ const call=env.calls.at(-1);assert.equal(call.self,env.app);assert.equal(call.args[0],payload);assert.equal(call.args[1],options);
  const span=env.api.startTraceSpan('room.output',{sourceCount:3});env.api.setTraceContext({roomVisit:8});env.advance(18);env.runFrames();
  env.resolveFixture({password:'secret IPC response'});assert.equal((await promise).password,'secret IPC response');await drain();
  env.api.endTraceSpan(span,'ok',{durationMs:18});env.api.endTraceSpan(span,'ok');
- let rejected;await env.bridge.invoke('reject_room',{streamKey:'secret key'}).catch(error=>rejected=error);assert.equal(rejected,env.fixtureError);
- assert.throws(()=>env.bridge.invoke('sync_failure'),error=>error===env.fixtureError);assert.equal(env.bridge.invoke('sync_result'),42);
+ let rejected;await env.app.invoke('reject_room',{streamKey:'secret key'}).catch(error=>rejected=error);assert.equal(rejected,env.fixtureError);
+ assert.throws(()=>env.app.invoke('sync_failure'),error=>error===env.fixtureError);assert.equal(env.app.invoke('sync_result'),42);
  env.api.recordTraceEvent('safe.metadata',{durationMs:3,email:'private@example.com',token:123,result:123,secretKey:123,videoHeight:1080});
  env.observerCallbacks[0]({getEntries:()=>[{name:'secret event name',duration:24,processingStart:110,startTime:100,processingEnd:122,target}]});
  await env.api.flushPerformanceTrace();
@@ -113,28 +132,28 @@ const drain=async()=>{for(let i=0;i<6;i++)await Promise.resolve();};
  assert.equal(env.writes.at(-1).droppedEvents,0,'write/ACK failures do not fabricate an exact event-loss count');
  await env.api.setPerformanceTraceConsent({local:false,sharing:true});assert.equal(env.bridge.invoke,env.original);assert.equal(env.clicks.size,0);
  assert.deepEqual({...env.api.getPerformanceTraceConsent()},{local:false,sharing:false},'sharing requires local consent');
- await env.api.setPerformanceTraceConsent({local:true,sharing:true});assert.notEqual(env.bridge.invoke,env.original);assert.deepEqual({...env.api.getPerformanceTraceConsent()},{local:true,sharing:true});
+ await env.api.setPerformanceTraceConsent({local:true,sharing:true});assert.equal(env.bridge.invoke,env.original,'enabled tracing leaves the framework bridge unchanged');assert.deepEqual({...env.api.getPerformanceTraceConsent()},{local:true,sharing:true});
  const stale=env.api.startTraceSpan('room.old');await env.api.setPerformanceTraceConsent({local:false,sharing:false});await env.api.setPerformanceTraceConsent({local:true,sharing:false});
  env.api.endTraceSpan(stale);await env.api.flushPerformanceTrace();assert(!events(env).some(e=>e.kind==='span_end'&&e.name==='room.old'),'old spans do not cross consent sessions');
 }
 {
  const env=environment(true);await env.api.initializePerformanceTrace();
- const wrapped=env.bridge.invoke,other=function(command,...args){return wrapped.call(this,command,...args);};env.bridge.invoke=other;
- await env.api.setPerformanceTraceConsent({local:false,sharing:false});assert.equal(env.bridge.invoke,other,'stopping tracing must not overwrite another wrapper');
- const before=env.writes.length;assert.equal(env.bridge.invoke('sync_result'),42);await env.api.flushPerformanceTrace();assert.equal(env.writes.length,before,'retained external wrappers bypass stopped collectors');
+ let observations=0;const restoreOther=env.app.observeNativeInvoke(()=>{observations++;return()=>{};});
+ await env.api.setPerformanceTraceConsent({local:false,sharing:false});const before=env.writes.length;assert.equal(env.app.invoke('sync_result'),42);assert.equal(observations,1,'stopping tracing does not remove a later observer');restoreOther();
+ assert.equal(env.app.invoke('sync_result'),42);await env.api.flushPerformanceTrace();assert.equal(env.writes.length,before,'restored stopped collectors are inert');assert.equal(env.bridge.invoke,env.original);
 }
 {
  const env=environment(true);await env.api.initializePerformanceTrace();
- for(let i=0;i<5;i++)env.bridge.invoke('live_status');env.advance(7);env.resolveFixture(1);await drain();env.dispatch('input',new env.Element('INPUT'));
+ for(let i=0;i<5;i++)env.app.invoke('live_status');env.advance(7);env.resolveFixture(1);await drain();env.dispatch('input',new env.Element('INPUT'));
  env.advance(993);env.tick();await drain();assert(!events(env).some(e=>e.kind==='ipc'),'fast IPC summaries remain buffered at 1s');assert(events(env).some(e=>e.name.startsWith('ui.input:')),'input summaries still flush at 1s');
  for(let i=0;i<3;i++){env.advance(1000);env.tick();await drain();}assert(!events(env).some(e=>e.kind==='ipc'),'fast IPC summaries remain buffered before 5s');
  env.advance(1000);env.tick();await drain();let summaries=events(env).filter(e=>e.kind==='ipc');assert.equal(summaries.length,1);assert.equal(summaries[0].fields.count,5);assert.equal(summaries[0].fields.sumDurationMs,35);assert.equal(summaries[0].fields.maxDurationMs,7);assert.equal(summaries[0].fields.windowMs,5000);
- for(let i=0;i<3;i++)env.bridge.invoke('sync_result');env.advance(2000);await env.api.flushPerformanceTrace();summaries=events(env).filter(e=>e.kind==='ipc');assert.equal(summaries.length,2,'user export forces a partial background window');assert.equal(summaries[1].fields.windowMs,2000);assert.equal(summaries.reduce((sum,e)=>sum+e.fields.count,0),8);assert.equal(summaries.reduce((sum,e)=>sum+e.fields.sumDurationMs,0),35,'aggregation preserves count and total duration');
- const beforeGrant=env.calls.length;env.bridge.invoke('sync_result');await env.api.setPerformanceTraceConsent({local:true,sharing:true});const grant=env.calls.findIndex(call=>call.command==='performance_trace_set_consent');assert(grant>beforeGrant&&env.calls.slice(beforeGrant,grant).some(call=>call.command==='performance_trace_write'&&call.args[0].batch.events.some(event=>event.kind==='ipc'&&event.fields.count===1)),'pre-grant local background aggregates flush before native sharing consent');
+ for(let i=0;i<3;i++)env.app.invoke('sync_result');env.advance(2000);await env.api.flushPerformanceTrace();summaries=events(env).filter(e=>e.kind==='ipc');assert.equal(summaries.length,2,'user export forces a partial background window');assert.equal(summaries[1].fields.windowMs,2000);assert.equal(summaries.reduce((sum,e)=>sum+e.fields.count,0),8);assert.equal(summaries.reduce((sum,e)=>sum+e.fields.sumDurationMs,0),35,'aggregation preserves count and total duration');
+ const beforeGrant=env.calls.length;env.app.invoke('sync_result');await env.api.setPerformanceTraceConsent({local:true,sharing:true});const grant=env.calls.findIndex(call=>call.command==='performance_trace_set_consent');assert(grant>beforeGrant&&env.calls.slice(beforeGrant,grant).some(call=>call.command==='performance_trace_write'&&call.args[0].batch.events.some(event=>event.kind==='ipc'&&event.fields.count===1)),'pre-grant local background aggregates flush before native sharing consent');
 }
 {
  const env=environment(true);await env.api.initializePerformanceTrace();
- for(let i=0;i<1000;i++)assert.equal(env.bridge.invoke('sync_result'),42);
+ for(let i=0;i<1000;i++)assert.equal(env.app.invoke('sync_result'),42);
  await env.api.flushPerformanceTrace();const summaries=events(env).filter(e=>e.kind==='ipc');
  assert.equal(summaries.length,1,'fast background IPC calls coalesce by command');assert.equal(summaries[0].fields.count,1000);assert.equal(summaries[0].fields.aggregated,true);
  for(let i=0;i<1000;i++)env.api.recordTraceEvent('sample.background',{index:i});
@@ -144,7 +163,7 @@ const drain=async()=>{for(let i=0;i<6;i++)await Promise.resolve();};
 }
 {
  const env=environment(true);await env.api.initializePerformanceTrace();
- const pending=env.bridge.invoke('slow_room');env.advance(70);env.resolveFixture(1);await pending;await drain();await env.api.flushPerformanceTrace();
+ const pending=env.app.invoke('slow_room');env.advance(70);env.resolveFixture(1);await pending;await drain();await env.api.flushPerformanceTrace();
  assert(events(env).some(e=>e.kind==='ipc'&&e.name==='slow_room'&&e.durationMs===70&&!e.fields.aggregated),'slow background IPC keeps its individual timing');
 }
 {
@@ -187,11 +206,16 @@ const drain=async()=>{for(let i=0;i<6;i++)await Promise.resolve();};
  assert.equal(env.bridge.invoke,env.original);assert.deepEqual({...env.api.getPerformanceTraceConsent()},{local:false,sharing:false},'last authoritative consent wins concurrent toggles');
 }
 {
- const env=environment(true);Object.defineProperty(env.bridge,'invoke',{value:env.original,writable:false});const stop=await env.api.initializePerformanceTrace();
- assert.equal(env.bridge.invoke,env.original,'immutable bridge remains untouched');env.click(new env.Element('BUTTON'));await env.api.flushPerformanceTrace();
- assert.equal(events(env).find(e=>e.name==='session.start').fields.ipcTiming,false,'unavailable IPC hook is reported honestly');assert(events(env).some(e=>e.kind==='action'));stop();
+ const env=environment(true),descriptor=Object.getOwnPropertyDescriptor(env.bridge,'invoke');assert.equal(descriptor.writable,false);assert.equal(descriptor.configurable,false);const stop=await env.api.initializePerformanceTrace();
+ assert.equal(env.bridge.invoke,env.original,'immutable framework bridge remains untouched');env.click(new env.Element('BUTTON'));const originalPromise=env.app.invoke('live_restore_room');env.core.invoke('plugin_internal_call');env.advance(60);env.resolveFixture(42);assert.equal(await originalPromise,42);await drain();await env.api.flushPerformanceTrace();
+ const start=events(env).find(e=>e.name==='session.start');assert.equal(start.fields.ipcTiming,true,'application IPC is timed with an immutable Tauri bridge');assert.equal(start.fields.ipcApplicationBoundary,true);assert.equal(start.fields.ipcPluginInternal,false,'plugin-internal coverage is explicitly unavailable');assert(events(env).some(e=>e.kind==='ipc'&&e.name==='live_restore_room'&&e.durationMs===60));assert(!events(env).some(e=>e.name==='plugin_internal_call'),'SDK/plugin calls outside the application adapter are not claimed');stop();
+ const before=env.writes.length;env.app.invoke('sync_result');await env.api.flushPerformanceTrace();assert.equal(env.writes.length,before,'disabled adapter records no IPC');
 }
-console.log('PASS: opt-in only; metadata privacy; trusted-click and numeric room correlation; promise/value/this/rejection semantics; bounded batching/drop counts; no recursion; rAF observation vs completion; consent toggles and cleanup');
+{
+ const env=environment();const remove=env.app.observeNativeInvoke(()=>()=>{throw Error('diagnostic callback failure');});assert.equal(env.app.invoke('sync_result'),42);let rejected;await env.app.invoke('reject_room').catch(error=>rejected=error);assert.equal(rejected,env.fixtureError);remove();
+ const removeFactory=env.app.observeNativeInvoke(()=>{throw Error('diagnostic observer failure');});assert.throws(()=>env.app.invoke('sync_failure'),error=>error===env.fixtureError);removeFactory();
+}
+console.log('PASS: immutable Tauri bridge; application invoke coverage; exact promise/value/this/rejection semantics; unchanged core helpers; opt-in privacy; bounded batching/aggregation/drop counts; no recursion; room/clock correlation; cleanup; explicit plugin-internal coverage limit');
 if(process.argv.includes('--benchmark')){
  const median=values=>[...values].sort((a,b)=>a-b)[Math.floor(values.length/2)];
  const results=[];
@@ -201,7 +225,7 @@ if(process.argv.includes('--benchmark')){
   await disabled.api.initializePerformanceTrace();await enabled.api.initializePerformanceTrace();
   for(let trial=-1;trial<7;trial++)for(const key of trial%2?['enabled','disabled']:['disabled','enabled']){
    const env=key==='enabled'?enabled:disabled,command=mode==='sync'?'sync_result':'get_status';
-   const start=performance.now();for(let i=0;i<count;i++){const value=env.bridge.invoke(command);if(mode==='promise')await value;}const elapsedMs=performance.now()-start;
+   const start=performance.now();for(let i=0;i<count;i++){const value=env.app.invoke(command);if(mode==='promise')await value;}const elapsedMs=performance.now()-start;
    if(trial>=0)trials[key].push(elapsedMs);await env.api.flushPerformanceTrace();
   }
   const disabledMedianMs=median(trials.disabled),enabledMedianMs=median(trials.enabled);

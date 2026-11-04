@@ -4,7 +4,7 @@ import {PresentationRelay} from "../features/presentation/presentationRelay";
 import {RoomSetControls} from "../features/presentation/RoomSetControls";
 import {modulePushPublisher} from '../features/presentation/modulePush';
 import {useSetModules} from '../features/presentation/useSetModules';
-import {invoke} from "@tauri-apps/api/core";
+import {invoke} from "../lib/nativeInvoke";
 import { admitGuestThroughTransport, revokeGuestAndConfirm } from "../lib/guestAdmission";
 import {PortraitCanvas} from '../features/presentation/PortraitCanvas';
 import { OutputSettings, RoomOutputView, type OutputView, type PortraitMonitor } from '../features/presentation/OutputSettings';

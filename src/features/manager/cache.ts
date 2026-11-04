@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "../../lib/nativeInvoke";
 import { focusManager, QueryClient } from "@tanstack/react-query";
 import { persistQueryClient, type Persister, type PersistedClient } from "@tanstack/react-query-persist-client";
 import type { EndpointInfo } from "../../lib/ipc";
