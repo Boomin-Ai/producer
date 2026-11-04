@@ -1183,7 +1183,11 @@ mod tests {
         {
             let mut w = inner.writer.lock().unwrap();
             w.append_batch(&inner, batch(), "frontend").unwrap();
-            private_file(&dir.join("trace.jsonl"), true)
+            // Windows append handles cannot resize files; this sparse-file
+            // fixture needs ordinary write access, independently of the sink.
+            OpenOptions::new()
+                .write(true)
+                .open(dir.join("trace.jsonl"))
                 .unwrap()
                 .set_len(ACTIVE_LIMIT)
                 .unwrap();
