@@ -728,10 +728,10 @@ mod room_command_tests {
     #[tokio::test]
     async fn retirement_fence_never_authorizes_renew_session_or_room_mutation() {
         let mut control = closing_control();
-        assert_eq!(
-            control.command("renew").await.unwrap_err(),
-            "No owned RTC run"
-        );
+        assert!(matches!(
+            control.command("renew").await,
+            Err("No owned RTC run")
+        ));
         assert_eq!(
             control.session().await.unwrap_err(),
             "RTC publication authority expired"
