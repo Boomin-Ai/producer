@@ -206,7 +206,37 @@ struct Inner {
     writer: Mutex<Writer>,
 }
 pub struct PerformanceTrace {
-    inner: Arc<Inner>,
+    ready: Arc<tokio::sync::OnceCell<Result<Arc<Inner>, String>>>,
+}
+impl PerformanceTrace {
+    fn current(&self) -> Option<&Arc<Inner>> {
+        self.ready.get()?.as_ref().ok()
+    }
+}
+pub(crate) async fn initialize_once<T: Send + Sync + 'static>(
+    ready: &tokio::sync::OnceCell<Result<Arc<T>, String>>,
+    build: impl FnOnce() -> Result<Arc<T>, String> + Send + 'static,
+) -> Result<Arc<T>, String> {
+    ready
+        .get_or_init(|| async move {
+            tauri::async_runtime::spawn_blocking(build)
+                .await
+                .map_err(|_| "Diagnostic initialization task failed".to_string())?
+        })
+        .await
+        .clone()
+}
+async fn ready_inner(app: &tauri::AppHandle) -> Result<Arc<Inner>, String> {
+    let ready = app
+        .try_state::<PerformanceTrace>()
+        .ok_or("Performance diagnostics unavailable")?
+        .ready
+        .clone();
+    let handle = app.clone();
+    initialize_once(&ready, move || initialize_trace(&handle)).await
+}
+pub async fn ensure_ready(app: &tauri::AppHandle) -> Result<(), String> {
+    ready_inner(app).await.map(|_| ())
 }
 
 fn wall_ms() -> u64 {
@@ -728,6 +758,18 @@ pub fn init(app: &tauri::AppHandle) -> Result<(), String> {
     if app.try_state::<PerformanceTrace>().is_some() {
         return Ok(());
     }
+    app.manage(PerformanceTrace {
+        ready: Arc::new(tokio::sync::OnceCell::new()),
+    });
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = ensure_ready(&handle).await {
+            eprintln!("Performance diagnostics unavailable: {error}");
+        }
+    });
+    Ok(())
+}
+fn initialize_trace(app: &tauri::AppHandle) -> Result<Arc<Inner>, String> {
     let dir = app
         .path()
         .app_data_dir()
@@ -773,9 +815,7 @@ pub fn init(app: &tauri::AppHandle) -> Result<(), String> {
         },
         writer: Mutex::new(Writer::new(dir)),
     });
-    app.manage(PerformanceTrace {
-        inner: inner.clone(),
-    });
+    let initialized = inner.clone();
     native_collection(inner.enabled.load(Ordering::Acquire));
     let handle = app.clone();
     std::thread::Builder::new()
@@ -852,22 +892,50 @@ pub fn init(app: &tauri::AppHandle) -> Result<(), String> {
             let _ = writer.append_batch(&inner, batch, "native");
         })
         .map_err(|_| "Could not start performance sampler")?;
-    Ok(())
+    Ok(initialized)
 }
 
 #[tauri::command]
-pub fn performance_trace_config(state: tauri::State<'_, PerformanceTrace>) -> TraceConfig {
-    state.inner.config()
+pub async fn performance_trace_config(app: tauri::AppHandle) -> Result<TraceConfig, String> {
+    Ok(ready_inner(&app).await?.config())
+}
+
+fn persist_consent(inner: &Inner, local: bool, sharing: bool) -> Result<TraceConfig, String> {
+    let mut writer = inner
+        .writer
+        .lock()
+        .map_err(|_| "Performance writer unavailable")?;
+    if let Some(file) = writer.file.as_mut() {
+        file.flush()
+            .map_err(|_| "Could not flush performance trace")?;
+    }
+    save_consent(
+        &writer.dir,
+        &Consent {
+            installation_id: inner.metadata.installation_id.clone(),
+            local,
+            sharing,
+        },
+    )?;
+    let was_enabled = inner.enabled.swap(local, Ordering::AcqRel);
+    if was_enabled != local {
+        native_collection(local);
+    }
+    inner.sharing.store(sharing, Ordering::Release);
+    Ok(inner.config())
 }
 
 #[tauri::command]
 pub async fn performance_trace_set_consent(
-    state: tauri::State<'_, PerformanceTrace>,
+    app: tauri::AppHandle,
     local: bool,
     sharing: bool,
 ) -> Result<TraceConfig, String> {
     let sharing = local && sharing;
-    let inner = state.inner.clone();
+    if !sharing {
+        crate::performance_share::pause_for_consent_change();
+    }
+    let inner = ready_inner(&app).await?;
     // Revoke before waiting for any queued writer. A successful return also
     // means all prior writes have left the writer critical section.
     if !sharing {
@@ -877,39 +945,16 @@ pub async fn performance_trace_set_consent(
         inner.enabled.store(false, Ordering::Release);
         native_collection(false);
     }
-    tauri::async_runtime::spawn_blocking(move || {
-        let mut writer = inner
-            .writer
-            .lock()
-            .map_err(|_| "Performance writer unavailable")?;
-        if let Some(file) = writer.file.as_mut() {
-            file.flush()
-                .map_err(|_| "Could not flush performance trace")?;
-        }
-        save_consent(
-            &writer.dir,
-            &Consent {
-                installation_id: inner.metadata.installation_id.clone(),
-                local,
-                sharing,
-            },
-        )?;
-        let was_enabled = inner.enabled.swap(local, Ordering::AcqRel);
-        if was_enabled != local {
-            native_collection(local);
-        }
-        inner.sharing.store(sharing, Ordering::Release);
-        Ok(inner.config())
-    })
-    .await
-    .map_err(|_| "Performance consent task failed".to_string())?
+    tauri::async_runtime::spawn_blocking(move || persist_consent(&inner, local, sharing))
+        .await
+        .map_err(|_| "Performance consent task failed".to_string())?
 }
 #[tauri::command]
 pub async fn performance_trace_write(
-    state: tauri::State<'_, PerformanceTrace>,
+    app: tauri::AppHandle,
     batch: TraceBatch,
 ) -> Result<WriteReceipt, String> {
-    let inner = state.inner.clone();
+    let inner = ready_inner(&app).await?;
     validate(&batch, &inner.metadata.session_id)?;
     let count = batch.events.len();
     if !inner.enabled.load(Ordering::Acquire) {
@@ -960,42 +1005,56 @@ pub async fn performance_trace_write(
 /// is implemented here, and an environment flag cannot grant this permission.
 pub fn sharing_enabled(app: &tauri::AppHandle) -> bool {
     app.try_state::<PerformanceTrace>().is_some_and(|s| {
-        s.inner.enabled.load(Ordering::Acquire) && s.inner.sharing.load(Ordering::Acquire)
+        s.current().is_some_and(|inner| {
+            inner.enabled.load(Ordering::Acquire) && inner.sharing.load(Ordering::Acquire)
+        })
     })
+}
+pub fn sharing_status(app: &tauri::AppHandle) -> Option<bool> {
+    let state = app.try_state::<PerformanceTrace>()?;
+    match state.ready.get()? {
+        Ok(inner) => {
+            Some(inner.enabled.load(Ordering::Acquire) && inner.sharing.load(Ordering::Acquire))
+        }
+        Err(_) => Some(false),
+    }
 }
 /// Native receipt-clock cutoff for consent-scoped sharing. No wall-clock or
 /// room/account identity is used to enroll a capture session.
 pub fn capture_position(app: &tauri::AppHandle) -> Option<(String, f64)> {
-    app.try_state::<PerformanceTrace>().map(|state| {
-        (
-            state.inner.metadata.session_id.clone(),
-            state.inner.started.elapsed().as_secs_f64() * 1000.0,
-        )
+    app.try_state::<PerformanceTrace>().and_then(|state| {
+        let inner = state.current()?;
+        Some((
+            inner.metadata.session_id.clone(),
+            inner.started.elapsed().as_secs_f64() * 1000.0,
+        ))
     })
+}
+pub fn installation_id(app: &tauri::AppHandle) -> Option<String> {
+    let state = app.try_state::<PerformanceTrace>()?;
+    Some(state.current()?.metadata.installation_id.clone())
 }
 pub fn export_snapshot(app: &tauri::AppHandle) -> Result<TraceExport, String> {
     let state = app
         .try_state::<PerformanceTrace>()
         .ok_or("Performance diagnostics unavailable")?;
-    let writer = state
-        .inner
+    let inner = state.current().ok_or("Performance diagnostics not ready")?;
+    let writer = inner
         .writer
         .lock()
         .map_err(|_| "Performance writer unavailable")?;
-    let mut export = writer.export(&state.inner.metadata)?;
+    let mut export = writer.export(&inner.metadata)?;
     export.dropped_events = export
         .dropped_events
-        .saturating_add(state.inner.overflow_dropped.load(Ordering::Relaxed));
+        .saturating_add(inner.overflow_dropped.load(Ordering::Relaxed));
     export.dropped_events = export
         .dropped_events
         .saturating_add(NATIVE_STAGE_DROPPED.load(Ordering::Relaxed));
     Ok(export)
 }
 #[tauri::command]
-pub async fn performance_trace_export(
-    state: tauri::State<'_, PerformanceTrace>,
-) -> Result<TraceExport, String> {
-    let inner = state.inner.clone();
+pub async fn performance_trace_export(app: tauri::AppHandle) -> Result<TraceExport, String> {
+    let inner = ready_inner(&app).await?;
     tauri::async_runtime::spawn_blocking(move || {
         let writer = inner
             .writer
@@ -1017,6 +1076,7 @@ pub async fn performance_trace_export(
 #[cfg(test)]
 mod tests {
     use super::*;
+    static NATIVE_TEST_LOCK: Mutex<()> = Mutex::new(());
     fn event() -> TraceEvent {
         TraceEvent {
             seq: 1,
@@ -1307,6 +1367,7 @@ mod tests {
     }
     #[test]
     fn native_stages_are_bounded_nonblocking_and_stop_on_opt_out() {
+        let _gate = NATIVE_TEST_LOCK.lock().unwrap();
         native_collection(false);
         NATIVE_STAGE_DROPPED.store(0, Ordering::Release);
         native_stage("native.mic.prepare.start", Duration::ZERO, None);
@@ -1378,6 +1439,60 @@ mod tests {
             fs::write(path, serde_json::to_vec_pretty(&export).unwrap()).unwrap();
         }
         drop(w);
+        fs::remove_dir_all(dir).unwrap();
+    }
+    #[tokio::test(flavor = "current_thread")]
+    async fn readiness_initializes_once_off_caller_and_caches_failure() {
+        let ready = tokio::sync::OnceCell::new();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let caller = std::thread::current().id();
+        let a = calls.clone();
+        let b = calls.clone();
+        let (first, second) = tokio::join!(
+            initialize_once(&ready, move || {
+                assert_ne!(std::thread::current().id(), caller);
+                a.fetch_add(1, Ordering::Relaxed);
+                Ok(Arc::new(7u8))
+            }),
+            initialize_once(&ready, move || {
+                b.fetch_add(1, Ordering::Relaxed);
+                Ok(Arc::new(9u8))
+            })
+        );
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+        assert!(Arc::ptr_eq(&first.unwrap(), &second.unwrap()));
+        let failed: tokio::sync::OnceCell<Result<Arc<u8>, String>> = tokio::sync::OnceCell::new();
+        assert!(
+            initialize_once(&failed, || Err("storage unavailable".into()))
+                .await
+                .is_err()
+        );
+        assert!(initialize_once(&failed, || Ok(Arc::new(1))).await.is_err());
+    }
+    #[tokio::test(flavor = "current_thread")]
+    async fn opt_out_after_readiness_cannot_be_overwritten_by_late_initialization() {
+        let _gate = NATIVE_TEST_LOCK.lock().unwrap();
+        let (inner, dir) = fixture();
+        let ready = tokio::sync::OnceCell::new();
+        let initial = inner.clone();
+        let initialized = initialize_once(&ready, move || {
+            persist_consent(&initial, true, true)?;
+            Ok(initial)
+        })
+        .await
+        .unwrap();
+        assert!(initialized.config().sharing);
+        let off = initialized.clone();
+        tauri::async_runtime::spawn_blocking(move || persist_consent(&off, false, false))
+            .await
+            .unwrap()
+            .unwrap();
+        let again = initialize_once(&ready, || Err("must not reinitialize".into()))
+            .await
+            .unwrap();
+        assert!(!again.config().enabled && !again.config().sharing);
+        let consent = load_consent(&dir).unwrap();
+        assert!(!consent.local && !consent.sharing);
         fs::remove_dir_all(dir).unwrap();
     }
 }

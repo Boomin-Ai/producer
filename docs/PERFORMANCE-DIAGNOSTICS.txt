@@ -62,3 +62,11 @@ for 90 days. These symbols are separate from the distributed app. Existing
 signed/notarized production hardening remains in force. Native SDK integration,
 Windows/Linux, signed candidate runtime, and a production capture-on/off overhead
 comparison remain release validation gates.
+
+Pilot build: 0.4.84-diagnostics.1. The bundle identifier remains ai.boomin.producer.
+Diagnostics initialization and serialized persistence run off app-critical threads.
+Clock calibration uses one ready-state resample only when capture is enabled.
+Native sign-in fences and private credential-context proofs cover new/changed
+credentials and the normal single-Boomin-account UI. Unsupported mixed-account
+native IPC using already-approved identical credentials is outside this pilot
+guarantee. No universal account-session isolation claim is made.

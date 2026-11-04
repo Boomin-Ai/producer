@@ -8,6 +8,7 @@ export type TraceContext = { roomVisit?: number };
 type NativeConfig = { enabled: boolean; sharing?: boolean; sessionId?: string; version?: string; logicalCores?: number; sessionElapsedMs?: number; wallClockMs?: number; debugBuild?: boolean; sourceRevision?: string };
 type NativeInvoke = (command: string, ...args: unknown[]) => unknown;
 type NativeBridge = { invoke: NativeInvoke };
+type ConfigSample = { config: NativeConfig; requestedAt: number; receivedAt: number };
 type TraceEvent = { seq: number; atMs: number; kind: TraceKind; name: string; spanId?: string; actionId?: string; durationMs?: number; status?: string; fields?: TraceFields };
 export type TraceSpan = Readonly<{ id: string; name: string; startedAt: number; actionId?: string; roomVisit?: number; generation: number }>;
 type Capture = {
@@ -28,6 +29,7 @@ let context: TraceContext = {};
 const listeners = new Set<() => void>(), endedSpans = new WeakSet<TraceSpan>();
 const now = () => performance.now();
 const rounded = (value: number) => Math.round(value * 1000) / 1000;
+const usableNativeClock = (config: NativeConfig) => typeof config.sessionElapsedMs === 'number' && Number.isFinite(config.sessionElapsedMs) && config.sessionElapsedMs >= 0 && config.sessionElapsedMs <= 1e15;
 const bridge = (): NativeBridge | undefined => (window as Window & { __TAURI_INTERNALS__?: NativeBridge }).__TAURI_INTERNALS__;
 const safeName = (name: unknown): name is string => typeof name === 'string' && name.length <= 160 && /^[a-zA-Z][a-zA-Z0-9_.:/|\[\]+-]*$/.test(name) && !name.includes('://');
 function cleanFields(fields: TraceFields): TraceFields {
@@ -206,7 +208,7 @@ function applyConfig(config: NativeConfig, requestedAt = now(), receivedAt = now
   // Collector IDs prevent correlation collisions across opt-in toggles and
   // webview reloads while the native process keeps the same session ID.
   const collectorId = 'c-' + (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 14));
-  const nativeClockAligned = typeof config.sessionElapsedMs === 'number' && Number.isFinite(config.sessionElapsedMs) && config.sessionElapsedMs >= 0 && config.sessionElapsedMs <= 1e15;
+  const nativeClockAligned = usableNativeClock(config);
   const capture: Capture = { generation: ++nextGeneration, collectorId, sessionId: config.sessionId, bridge: native, original: native.invoke, wrapped: native.invoke, seq: 0, actionSeq: 0, spanSeq: 0, queue: [], dropped: 0, stopped: false, presentations: [], lastTick: now(), lastIpcSummaryAt: now(), elapsedOffsetMs: nativeClockAligned ? config.sessionElapsedMs! - (requestedAt + receivedAt) / 2 : 0, nativeClockAligned, clockUncertaintyMs: Math.max(0, receivedAt - requestedAt) / 2, observers: [], otherListeners: [], inputs: new Map(), ipcSummaries: new Map(), click: () => {} };
   active = capture;
   capture.wrapped = function (this: unknown, command: string, ...args: unknown[]) {
@@ -294,13 +296,34 @@ function applyConfig(config: NativeConfig, requestedAt = now(), receivedAt = now
     void flush(capture);
   }, 1000);
 }
+async function readConfigSample(native: NativeBridge, isCurrent: () => boolean): Promise<ConfigSample> {
+  const read = async (): Promise<ConfigSample> => {
+    const requestedAt = now();
+    const config = await native.invoke('performance_trace_config') as NativeConfig;
+    return { config, requestedAt, receivedAt: now() };
+  };
+  const first = await read();
+  if (first.config?.enabled !== true || !isCurrent()) return first;
+  try {
+    // The first response may wait for asynchronous native disk setup. A
+    // single ready-state resample avoids retaining that startup RTT forever.
+    const latest = await read();
+    const sameScope = latest.config?.sessionId === first.config.sessionId && latest.config?.enabled === first.config.enabled && (latest.config?.sharing === true) === (first.config.sharing === true);
+    const firstClockBetter = usableNativeClock(first.config) && (!latest.config || !usableNativeClock(latest.config) || first.receivedAt - first.requestedAt < latest.receivedAt - latest.requestedAt);
+    if (sameScope && firstClockBetter) return { ...first, config: { ...latest.config, sessionElapsedMs: first.config.sessionElapsedMs, wallClockMs: first.config.wallClockMs } };
+    return latest;
+  } catch {
+    // No fabricated fast anchor when the ready-state read fails.
+    return first;
+  }
+}
 export function initializePerformanceTrace(): Promise<() => void> {
   if (!initialized) {
     const epoch = consentEpoch;
     initialized = (async () => {
       try {
         const native = bridge();
-        if (native) { const requestedAt = now(); const config = await native.invoke('performance_trace_config') as NativeConfig; const receivedAt = now(); if (epoch === consentEpoch) applyConfig(config, requestedAt, receivedAt); }
+        if (native) { const sample = await readConfigSample(native, () => epoch === consentEpoch); if (epoch === consentEpoch) applyConfig(sample.config, sample.requestedAt, sample.receivedAt); }
       } catch { /* Missing native support fails closed, without affecting startup. */ }
       return stopCapture;
     })();
@@ -317,9 +340,8 @@ export function setPerformanceTraceConsent(next: PerformanceTraceConsent): Promi
     // its sharing cutoff. This does not grant permission to upload them.
     if (requested.sharing && !consent.sharing) await flushPerformanceTrace();
     await native.invoke('performance_trace_set_consent', requested);
-    const requestedAt = now();
-    const config = await native.invoke('performance_trace_config') as NativeConfig;
-    if (epoch === consentEpoch) applyConfig(config, requestedAt, now());
+    const sample = await readConfigSample(native, () => epoch === consentEpoch);
+    if (epoch === consentEpoch) applyConfig(sample.config, sample.requestedAt, sample.receivedAt);
   });
   transition = pending;
   return pending;

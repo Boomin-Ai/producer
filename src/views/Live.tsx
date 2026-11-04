@@ -3004,14 +3004,14 @@ export function LiveView({
   const layout = cfg.layout;
   // Measure the custom pointer drag through React's commit. An animation
   // frame is only a presentation opportunity, never proof of visible paint.
-  const pendingDropTrace = useRef<{ span: TraceSpan; layout: typeof layout; sequence: number } | null>(null);
+  const pendingDropTrace = useRef<{ span: TraceSpan; layout: typeof layout; sequence: number; dockIndex: number } | null>(null);
   const dropTraceSequence = useRef(0);
   const dropTraceFrame = useRef<number | null>(null);
   useLayoutEffect(() => {
     const pending = pendingDropTrace.current;
     if (!pending || pending.layout !== layout) return;
     pendingDropTrace.current = null;
-    endTraceSpan(pending.span, "ok", { reactCommitted: true, dropSequence: pending.sequence });
+    endTraceSpan(pending.span, "ok", { reactCommitted: true, dropSequence: pending.sequence, dockIndex: pending.dockIndex });
     const committedAt = performance.now();
     dropTraceFrame.current = requestAnimationFrame(() => {
       dropTraceFrame.current = null;
@@ -8348,6 +8348,9 @@ export function LiveView({
   const finishGrip = (e: React.PointerEvent, drop: boolean) => {
     const d = dragRef.current;
     if (!d || d.pointerId !== e.pointerId) return;
+    const dropSpan = drop && d.moved && layoutEdit
+      ? startTraceSpan("panel.drop_to_react_commit", { panelIndex: PANEL_ORDER.indexOf(d.id) })
+      : undefined;
     dragRef.current = null;
     if (ghostRef.current) ghostRef.current.style.visibility = "hidden";
     if (dragFrame.current !== null) {
@@ -8360,10 +8363,10 @@ export function LiveView({
         const next = movePanelTo(layout, d.id, target.dock, target.index);
         endTraceSpan(pendingDropTrace.current?.span, "cancelled");
         if (dropTraceFrame.current !== null) cancelAnimationFrame(dropTraceFrame.current);
-        const span = startTraceSpan("panel.drop_to_react_commit", { panelIndex: PANEL_ORDER.indexOf(d.id), dockIndex: ["left", "right", "top", "bottom", "hidden"].indexOf(target.dock) });
-        pendingDropTrace.current = span ? { span, layout: next, sequence: ++dropTraceSequence.current } : null;
+        pendingDropTrace.current = dropSpan ? { span: dropSpan, layout: next, sequence: ++dropTraceSequence.current,
+          dockIndex: ["left", "right", "top", "bottom", "hidden"].indexOf(target.dock) } : null;
         setLayout(next, true);
-      }
+      } else endTraceSpan(dropSpan, "cancelled", { targetFound: false });
     }
     setDragging(null);
     setDropHint(null);

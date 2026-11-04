@@ -8,7 +8,8 @@ import {performance} from 'node:perf_hooks';
 const source=await readFile(new URL('../src/lib/performanceTrace.ts',import.meta.url),'utf8');
 const {code}=await transform(source,{loader:'ts',format:'cjs',target:'es2022'});
 function environment(enabled=false,options={}){
- let clock=100,local=enabled,sharing=false,session=1,nextHandle=0,writeFailure=false,writeReceipt;
+ let clock=100,local=enabled,sharing=false,session=1,nextHandle=0,writeFailure=false,writeReceipt,configReads=0;
+ const pendingConfigs=new Map();
  const writes=[],calls=[],extraListeners=new Map(),timeouts=new Map(),intervals=new Map(),frames=new Map(),clicks=new Set(),storage=new Map(),observerCallbacks=[];
  class Element {
   constructor(tag='BUTTON',attributes={},parentElement=null){this.tagName=tag;this.attributes=attributes;this.parentElement=parentElement;this.previousElementSibling=null;this.id='private-room-id';this.className='private-user-email@example.com';this.textContent='secret invite URL';this.value='secret entered password';}
@@ -17,7 +18,7 @@ function environment(enabled=false,options={}){
  const document={visibilityState:'visible',addEventListener(type,callback){if(type==='click')clicks.add(callback);else extraListeners.set(type,callback);},removeEventListener(type,callback){if(type==='click')clicks.delete(callback);else if(extraListeners.get(type)===callback)extraListeners.delete(type);}};
  const bridge={invoke:function(command,...args){
   if(options.recordCalls!==false)calls.push({command,args,self:this});
-  if(command==='performance_trace_config'){clock+=options.configRoundTripMs??0;return Promise.resolve({enabled:local,sharing,sessionId:'trace-session-'+session,version:'0.4.83',logicalCores:8,sessionElapsedMs:options.anchors===false?undefined:250,wallClockMs:options.anchors===false?undefined:1793798000000});}
+  if(command==='performance_trace_config'){const step=options.configSamples?.[configReads++]??{};clock+=step.rtt??options.configRoundTripMs??0;if(step.error)return Promise.reject(Error('secret config failure'));const value={enabled:local,sharing,sessionId:'trace-session-'+session,version:'0.4.83',logicalCores:8,sessionElapsedMs:options.anchors===false?undefined:250,wallClockMs:options.anchors===false?undefined:1793798000000,...step.config};return step.defer?new Promise(resolve=>pendingConfigs.set(configReads,()=>resolve(value))):Promise.resolve(value);}
   if(command==='performance_trace_set_consent'){const next=args[0];if(next.local&&!local&&!options.sameNativeSession)session++;local=next.local;sharing=next.sharing;return Promise.resolve();}
   if(command==='performance_trace_write'){if(writeFailure)return Promise.reject(Error('secret native log error'));writes.push(structuredClone(args[0].batch));return Promise.resolve(writeReceipt===undefined?{accepted:args[0].batch.events.length,dropped:0,enabled:local}:writeReceipt);}
   if(command==='sync_failure')throw fixtureError;
@@ -35,7 +36,7 @@ function environment(enabled=false,options={}){
   click(target,trusted=true){for(const callback of [...clicks])callback({isTrusted:trusted,target});},
   advance(ms){clock+=ms;},runFrames(){const list=[...frames.values()];frames.clear();list.forEach(f=>f(clock));},
   runTimeouts(){const list=[...timeouts.values()];timeouts.clear();list.forEach(({f})=>f());},tick(){for(const callback of [...intervals.values()])callback();},
-  setWriteFailure(value){writeFailure=value;},setWriteReceipt(value){writeReceipt=value;},dispatch(type,target){extraListeners.get(type)?.({isTrusted:true,target});},extraListeners,observerCallbacks};
+  setWriteFailure(value){writeFailure=value;},setWriteReceipt(value){writeReceipt=value;},resolveConfig(index){pendingConfigs.get(index)?.();pendingConfigs.delete(index);},pendingConfigs,dispatch(type,target){extraListeners.get(type)?.({isTrusted:true,target});},extraListeners,observerCallbacks};
 }
 const events=env=>env.writes.flatMap(batch=>batch.events);
 const drain=async()=>{for(let i=0;i<6;i++)await Promise.resolve();};
@@ -50,6 +51,7 @@ const drain=async()=>{for(let i=0;i<6;i++)await Promise.resolve();};
 {
  const env=environment();await env.api.initializePerformanceTrace();
  assert.equal(env.bridge.invoke,env.original,'disabled capture never patches native invoke');assert.equal(env.clicks.size,0);assert.equal(env.intervals.size,0);
+ assert.equal(env.calls.filter(call=>call.command==='performance_trace_config').length,1,'disabled startup does not resample config');
  env.api.recordTraceEvent('room.open',{elapsedMs:1},'room');await env.api.flushPerformanceTrace();assert.equal(env.writes.length,0);
  assert.deepEqual({...env.api.getPerformanceTraceConsent()},{local:false,sharing:false});
 }
@@ -150,8 +152,35 @@ const drain=async()=>{for(let i=0;i<6;i++)await Promise.resolve();};
  const start=events(env).find(e=>e.name==='session.start');assert.equal(start.fields.eventTiming,false);assert.equal(start.fields.longTasks,false);assert.equal(start.fields.nativeClockAligned,false);assert(!('nativeSessionAnchorMs' in start.fields));env.api.recordTraceEvent('room.unaligned',{},'room');await env.api.flushPerformanceTrace();assert(events(env).every(event=>event.fields.nativeClockAligned===false&&event.fields.clockUncertaintyMs===0),'each unaligned frontend record is marked for conservative sharing');
 }
 {
+ const env=environment(true,{configSamples:[{rtt:3000,config:{sessionElapsedMs:0}},{rtt:2,config:{sessionElapsedMs:1}}]});await env.api.initializePerformanceTrace();await env.api.flushPerformanceTrace();
+ const start=events(env).find(e=>e.name==='session.start');assert.equal(start.fields.configRoundTripMs,2);assert.equal(start.fields.clockUncertaintyMs,1);assert.equal(start.fields.frontendAnchorMs,3101);assert.equal(start.fields.nativeSessionAnchorMs,1);assert.equal(start.atMs,2);assert.equal(env.calls.filter(call=>call.command==='performance_trace_config').length,2,'enabled cold startup gets exactly one ready-state resample');
+}
+{
+ const env=environment(true,{configSamples:[{rtt:2,config:{sessionElapsedMs:1}},{rtt:20,config:{sessionElapsedMs:12,logicalCores:16,debugBuild:true}}]});await env.api.initializePerformanceTrace();await env.api.flushPerformanceTrace();
+ const start=events(env).find(e=>e.name==='session.start');assert.equal(start.fields.configRoundTripMs,2);assert.equal(start.fields.clockUncertaintyMs,1);assert.equal(start.fields.nativeSessionAnchorMs,1);assert.equal(start.fields.logicalCores,16,'latest metadata remains authoritative when an earlier clock sample wins');assert.equal(start.fields.debugBuild,true);
+}
+{
+ const env=environment(true,{configSamples:[{rtt:2},{rtt:20,config:{sessionId:'trace-new-session',sessionElapsedMs:12}}]});await env.api.initializePerformanceTrace();await env.api.flushPerformanceTrace();
+ assert(env.writes.every(batch=>batch.sessionId==='trace-new-session'));assert.equal(events(env)[0].fields.clockUncertaintyMs,10,'clock anchors cannot cross native sessions');
+}
+{
+ const env=environment(true,{configSamples:[{rtt:2},{rtt:20,config:{sharing:true}}]});await env.api.initializePerformanceTrace();await env.api.flushPerformanceTrace();
+ assert.equal(env.api.getPerformanceTraceConsent().sharing,true);assert.equal(events(env)[0].fields.clockUncertaintyMs,10,'clock anchors cannot cross native consent scopes');
+ const disabled=environment(true,{configSamples:[{rtt:2},{rtt:20,config:{enabled:false}}]});await disabled.api.initializePerformanceTrace();assert.equal(disabled.bridge.invoke,disabled.original);assert.equal(disabled.api.getPerformanceTraceConsent().local,false,'a later disabled response wins over a faster enabled response');
+}
+{
+ const env=environment(true,{configSamples:[{rtt:3000},{rtt:2,error:true}]});await env.api.initializePerformanceTrace();await env.api.flushPerformanceTrace();
+ const start=events(env).find(e=>e.name==='session.start');assert.equal(start.fields.clockUncertaintyMs,1500,'failed resamples retain first-read uncertainty');assert.equal(start.fields.configRoundTripMs,3000);
+}
+{
+ const env=environment(false,{configSamples:[{}, {rtt:800}, {rtt:2}]});await env.api.initializePerformanceTrace();await env.api.setPerformanceTraceConsent({local:true,sharing:false});await env.api.flushPerformanceTrace();assert.equal(events(env)[0].fields.clockUncertaintyMs,1,'consent enable uses the same ready-state sampling helper');
+}
+{
+ const env=environment(true,{configSamples:[{}, {defer:true},{}]});const initialization=env.api.initializePerformanceTrace();await drain();assert(env.pendingConfigs.has(2),'second config request is pending');await env.api.setPerformanceTraceConsent({local:false,sharing:false});env.resolveConfig(2);await initialization;assert.equal(env.bridge.invoke,env.original);assert.equal(env.api.getPerformanceTraceConsent().local,false,'a resample cannot override a newer explicit opt-out');
+}
+{
  const env=environment(true,{configRoundTripMs:20});await env.api.initializePerformanceTrace();await env.api.flushPerformanceTrace();
- const start=events(env).find(e=>e.name==='session.start');assert.equal(start.atMs,260);assert.equal(start.fields.frontendAnchorMs,110);assert.equal(start.fields.clockAnchorUncertaintyMs,10);assert.equal(start.fields.configRoundTripMs,20);env.api.recordTraceEvent('room.aligned',{},'room');await env.api.flushPerformanceTrace();assert(events(env).every(event=>event.fields.nativeClockAligned===true&&event.fields.clockUncertaintyMs===10),'each aligned frontend record carries its native-clock uncertainty');
+ const start=events(env).find(e=>e.name==='session.start');assert.equal(start.atMs,260);assert.equal(start.fields.frontendAnchorMs,130);assert.equal(start.fields.clockAnchorUncertaintyMs,10);assert.equal(start.fields.configRoundTripMs,20);env.api.recordTraceEvent('room.aligned',{},'room');await env.api.flushPerformanceTrace();assert(events(env).every(event=>event.fields.nativeClockAligned===true&&event.fields.clockUncertaintyMs===10),'each aligned frontend record carries its native-clock uncertainty');
 }
 {
  const env=environment();await env.api.initializePerformanceTrace();await Promise.all([env.api.setPerformanceTraceConsent({local:true,sharing:true}),env.api.setPerformanceTraceConsent({local:false,sharing:false})]);

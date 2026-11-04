@@ -173,6 +173,7 @@ pub async fn boomin_request_otp(api_root: Option<String>, email: String) -> Engi
 /// UI a workspace list to pick from (finish via boomin_select_brand).
 #[tauri::command]
 pub async fn boomin_connect(
+    app: AppHandle,
     state: State<'_, AppState>,
     api_root: Option<String>,
     email: String,
@@ -185,8 +186,25 @@ pub async fn boomin_connect(
         0 => Err(EngineError::Other(
             "this account has no workspace yet — create one in the Boomin web app first".into(),
         )),
-        1 => finalize_boomin_endpoint(&state, &root, &token, &brands[0].0).await,
+        1 => {
+            let fence = crate::performance_share::pause_for_boomin_session(&app);
+            let result = finalize_boomin_endpoint(&state, &root, &token, &brands[0].0).await?;
+            crate::performance_share::boomin_session_changed(
+                &app,
+                fence,
+                &boomin::producer_base_for_root(&root),
+                &token,
+            );
+            Ok(result)
+        }
         _ => {
+            let fence = crate::performance_share::pause_for_boomin_session(&app);
+            crate::performance_share::boomin_session_changed(
+                &app,
+                fence,
+                &boomin::producer_base_for_root(&root),
+                &token,
+            );
             *state.pending_auth.lock().expect("auth mutex poisoned") = Some((root, token));
             Ok(json!({
                 "needs_brand": true,
@@ -203,6 +221,7 @@ pub async fn boomin_connect(
 /// token to the chosen workspace and connect the endpoint.
 #[tauri::command]
 pub async fn boomin_select_brand(
+    app: AppHandle,
     state: State<'_, AppState>,
     brand_slug: String,
 ) -> EngineResult<Value> {
@@ -216,7 +235,14 @@ pub async fn boomin_select_brand(
             "the sign-in session expired — start over".into(),
         ));
     };
+    let fence = crate::performance_share::pause_for_boomin_session(&app);
     let result = finalize_boomin_endpoint(&state, &root, &token, &brand_slug).await?;
+    crate::performance_share::boomin_session_changed(
+        &app,
+        fence,
+        &boomin::producer_base_for_root(&root),
+        &token,
+    );
     *state.pending_auth.lock().expect("auth mutex poisoned") = None;
     Ok(result)
 }
