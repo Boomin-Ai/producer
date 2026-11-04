@@ -50,7 +50,7 @@ import { markHomePainted, markRoomClick } from "../lib/perf";
 import { KEYMAP, getKey, setKey, resetKey, displayKey, type KeyBinding } from "../lib/keys";
 import { liveRoomId, parseConfig, serializeConfig } from "../lib/room";
 import { ROOMS_EVENT, deleteRoomEverywhere, notifyRoomsChanged, renameRoom, roomOccupancy, syncRooms } from "../lib/roomSync";
-import { useUpdater } from "../lib/updater";
+import { useUpdater, type UpdaterStatus } from "../lib/updater";
 import { DestinationEditor, LiveView, type RoomEntryAccess } from "./Live";
 import { RoomOpening } from "./RoomOpening";
 import { HostedManager } from "../features/manager/HostedManager";
@@ -562,6 +562,7 @@ export function Home({
           onCompose={() => { closeSettings(); setView({ kind: "compose" }); }}
           onProfile={() => setAccountOpen((v) => !v)}
           settingsOpen={settingsOpen}
+          updateAvailable={updater.version !== null}
           onSettings={() => (settingsOpen ? closeSettings() : openSettings())}
           onBack={closeSettings}
         />
@@ -1035,7 +1036,7 @@ function SettingsPanel({
   destinations: LiveDestination[];
   channels: Channel[];
   onChannelsChanged: () => void;
-  updater: { state: string; version: string | null; restart: () => void; checkNow: () => void };
+  updater: UpdaterStatus;
   onClose: () => void;
 }) {
   const [appVersion, setAppVersion] = useState<string | null>(null);
@@ -1127,12 +1128,14 @@ function SettingsPanel({
               <button className={appTab === "general" ? "on" : ""} onClick={() => setAppTab("general")}>General</button>
               <button className={appTab === "shortcuts" ? "on" : ""} onClick={() => setAppTab("shortcuts")}>Shortcuts</button>
               <span className="set-tabs-spacer" />
-              {updater.state === "ready" ? (
+              {updater.state === "ready" || updater.state === "installed" ? (
                 <button className="set-ver update" onClick={updater.restart} title="Restart to install the update">
-                  ↻ Update{updater.version ? ` to ${updater.version}` : ""}
+                  ↻ {updater.state === "installed" ? "Restart to finish" : `Restart to update${updater.version ? ` to ${updater.version}` : ""}`}
                 </button>
+              ) : updater.state === "installing" || updater.state === "restarting" ? (
+                <button className="set-ver busy" disabled aria-busy="true">{updater.state === "installing" ? "Installing…" : "Restarting…"}</button>
               ) : updater.state === "downloading" ? (
-                <span className="set-ver busy">Updating…</span>
+                <span className="set-ver busy">Downloading update…</span>
               ) : (
                 <span className="set-ver">v{appVersion ?? ""}</span>
               )}
@@ -1146,18 +1149,21 @@ function SettingsPanel({
         <WalkthroughSwitch />
         <div className="cr-label set-gap">UPDATES</div>
         <div className="set-upd">
-          <div className="set-upd-status">
-            {updater.state === "ready" ? (
-              <>An update is ready. <button className="linkish" onClick={updater.restart}>Restart to install{updater.version ? ` ${updater.version}` : ""}</button></>
+          <div className="set-upd-status" role="status" aria-live="polite">
+            {updater.state === "installing" || updater.state === "restarting" ? (
+              updater.state === "installing" ? "Installing the update. Producer will restart when installation finishes…" : "Restarting Producer…"
+            ) : updater.state === "ready" || updater.state === "installed" ? (
+              <>{updater.state === "installed" ? "The update is installed." : "An update is ready."} <button className="linkish" onClick={updater.restart}>{updater.state === "installed" ? "Restart to finish" : "Restart to install"}{updater.version ? ` ${updater.version}` : ""}</button></>
             ) : updater.state === "downloading" ? (
               "Downloading an update…"
             ) : updater.state === "checking" ? (
               "Checking for updates…"
             ) : (
-              <>{updater.state === "current" ? "Up to date." : updater.state === "error" ? "Could not check for updates." : "Updates download automatically."}{" "}
+              <>{updater.state === "current" ? "Up to date." : updater.state === "error" ? "Update needs attention." : "Updates download automatically."}{" "}
                 <button className="linkish" onClick={updater.checkNow}>Check for updates</button></>
             )}
           </div>
+          {updater.error && <p className="set-update-error" role="alert">{updater.error} Try again, or download the installer from producer.dev.</p>}
           {Array.isArray(releases) && releases[0] && (() => {
             const r = releases[0];
             return (
@@ -3570,6 +3576,7 @@ function HomeRail({
   onCompose,
   onProfile,
   settingsOpen,
+  updateAvailable,
   onSettings,
   onBack,
 }: {
@@ -3585,6 +3592,7 @@ function HomeRail({
   /** Settings is a surface beside the rail; while it is open the avatar
    * becomes Back, and the gear at the bottom reads as selected. */
   settingsOpen: boolean;
+  updateAvailable: boolean;
   onSettings: () => void;
   onBack: () => void;
 }) {
@@ -3608,8 +3616,9 @@ function HomeRail({
       </button>
       <div className="home-rail-spring" />
       <button title="New post" onClick={onCompose}>{railIc.plus}</button>
-      <button className={settingsOpen ? "on" : ""} title="Settings" onClick={onSettings}>
+      <button className={`home-settings-button${settingsOpen ? " on" : ""}`} title={updateAvailable ? "Settings — update available" : "Settings"} aria-label={updateAvailable ? "Settings — update available" : "Settings"} onClick={onSettings}>
         {railIc.gear}
+        {updateAvailable && <span className="home-update-dot" aria-hidden="true" />}
       </button>
     </nav>
   );

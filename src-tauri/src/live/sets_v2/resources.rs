@@ -393,6 +393,25 @@ pub struct Prepared {
     pub media: Vec<MediaBinding>,
 }
 impl Prepared {
+    pub unsafe fn pending_reasons(&self) -> Vec<String> {
+        let mut pending = self
+            .scenes3d
+            .iter()
+            .filter_map(|(key, scene)| {
+                scene
+                    .pending_reason()
+                    .map(|reason| format!("3D {key}: {reason}"))
+            })
+            .collect::<Vec<_>>();
+        for (key, source) in &self.sources {
+            if ffi::obs_source_get_width(source.0) == 0 || ffi::obs_source_get_height(source.0) == 0
+            {
+                pending.push(format!("{key}: waiting for source dimensions"));
+            }
+        }
+        pending.sort();
+        pending
+    }
     pub unsafe fn ready(&self) -> bool {
         if !self.scenes3d.values().all(|s| s.ready()) {
             return false;

@@ -1286,7 +1286,21 @@ impl RoomProgram {
                 // can outlast media decoding on memory-constrained hosts.
                 // This is preparation only; cached layout changes never wait
                 // for this startup deadline.
-                return Err("Media did not decode its first frame; current output retained".into());
+                let mut pending = building.resources.pending_reasons();
+                for (id, source) in &building.captures {
+                    if ffi::obs_source_get_width(source.0 .0) == 0
+                        || ffi::obs_source_get_height(source.0 .0) == 0
+                    {
+                        pending.push(format!("capture {id}: waiting for source dimensions"));
+                    }
+                }
+                if pending.is_empty() {
+                    pending.push("waiting for native surface warming".into());
+                }
+                return Err(format!(
+                    "Set first-frame timeout ({}); current output retained",
+                    pending.join("; ")
+                ));
             } else {
                 self.building = Some(building);
             }

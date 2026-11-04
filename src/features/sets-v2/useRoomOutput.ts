@@ -1,7 +1,7 @@
 import {outputLayout} from '../presentation/layoutViews';
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ipc, listenLiveEvents, type LiveSources } from "../../lib/ipc";
+import { ipc, uiLog, listenLiveEvents, type LiveSources } from "../../lib/ipc";
 import {
   setOutputProjection,
   type SetOutputControls,
@@ -109,7 +109,7 @@ export function useRoomOutput(
     const room=await ipc.liveSetStatus();
     if(cacheGeneration.current!==undefined&&cacheGeneration.current!==room.generation)invalidateRoom();
     cacheGeneration.current=room.generation;generation.current=room.generation;
-    return invoke<NativeStatus>('live_set_v2',{request:{generation:room.generation,...value}}).catch(e=>{if(value.op==='status'&&/Prepare (a v2|the portrait) set first/.test(String(e)))return {preparedRevision:0,renderedRevision:0,renderSerial:0,ready:false,warmed:false,queued:false,transitioning:false,cachedKeys:[],generation:room.generation};throw e;});
+    return invoke<NativeStatus>('live_set_v2',{request:{generation:room.generation,...value}}).catch(e=>{if(/Set first-frame timeout|Media did not decode its first frame/.test(String(e)))uiLog(`[sets] ${value.outputId??'program'} generation=${room.generation}: ${String(e)}`);if(value.op==='status'&&/Prepare (a v2|the portrait) set first/.test(String(e)))return {preparedRevision:0,renderedRevision:0,renderSerial:0,ready:false,warmed:false,queued:false,transitioning:false,cachedKeys:[],generation:room.generation};throw e;});
   },()=>notifyPreparation(v=>v+1));
   const bindingDimensions = (selectedBindings: Record<string, string>) =>
     JSON.stringify(Object.values(selectedBindings).map(id => {

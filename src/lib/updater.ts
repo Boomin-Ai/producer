@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { hasTauri } from "./ipc";
 
-export type UpdateState = "idle" | "checking" | "current" | "error" | "downloading" | "ready";
+export type UpdateState = "idle" | "checking" | "current" | "error" | "downloading" | "ready" | "installing" | "restarting" | "installed";
 
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 
@@ -22,10 +22,21 @@ const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
  * this comment always claimed, works on both platforms, and means the app is
  * quiet and expendable at the moment its own binary is replaced.
  */
-export function useUpdater(): { state: UpdateState; version: string | null; restart: () => void; checkNow: () => void } {
+export interface UpdaterStatus {
+  state: UpdateState;
+  version: string | null;
+  error: string | null;
+  restart: () => Promise<void>;
+  checkNow: () => void;
+}
+
+export function useUpdater(): UpdaterStatus {
   const [state, setState] = useState<UpdateState>("idle");
   const [version, setVersion] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const busy = useRef(false);
+  const installing = useRef(false);
+  const installed = useRef(false);
   const checkNow = useRef<() => void>(() => {});
   /** The downloaded-but-not-installed update, kept for `restart`. */
   const staged = useRef<Update | null>(null);
@@ -35,22 +46,28 @@ export function useUpdater(): { state: UpdateState; version: string | null; rest
     let alive = true;
 
     const run = async () => {
-      if (busy.current || staged.current) return;
+      if (busy.current || staged.current || installed.current || installing.current) return;
       busy.current = true;
+      setError(null);
       setState("checking");
+      let downloading = false;
       try {
         const { check } = await import("@tauri-apps/plugin-updater");
         const update = await check();
         if (!alive) return;
-        if (!update) {setState("current");return;}
+        if (!update) {setVersion(null);setState("current");return;}
+        downloading = true;
         setState("downloading");
         setVersion(update.version);
         await update.download();
         if (!alive) return;
         staged.current = update;
         setState("ready");
-      } catch {
-        if (alive && !staged.current) setState("error");
+      } catch (cause) {
+        if (alive && !staged.current) {
+          setError(`${downloading ? "Could not download the update" : "Could not check for updates"}. ${cause instanceof Error ? cause.message : String(cause)}`);
+          setState("error");
+        }
       } finally {
         busy.current = false;
       }
@@ -70,20 +87,35 @@ export function useUpdater(): { state: UpdateState; version: string | null; rest
   return {
     state,
     version,
+    error,
     checkNow: () => checkNow.current(),
     restart: async () => {
-      const update = staged.current;
-      const { relaunch } = await import("@tauri-apps/plugin-process");
-      if (!update) {
-        // Nothing staged — the affordance shouldn't be up, but a plain restart
-        // is the honest thing to do rather than pretending to install.
+      // Guard synchronously: React may not have painted the disabled button yet.
+      if (installing.current || (!staged.current && !installed.current)) return;
+      installing.current = true;
+      setError(null);
+      setState(installed.current ? "restarting" : "installing");
+      try {
+        // Paint acknowledgement before native extraction / bundle replacement.
+        await new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+        const { relaunch } = await import("@tauri-apps/plugin-process");
+        if (!installed.current) {
+          // Windows exits here; macOS/Linux return after bundle replacement.
+          await staged.current!.install();
+          installed.current = true;
+          staged.current = null;
+        }
+        setState("restarting");
         await relaunch();
-        return;
+      } catch (cause) {
+        const detail = cause instanceof Error ? cause.message : String(cause);
+        setError(`${installed.current ? "The update is installed, but Producer could not restart" : "The update could not be installed"}. ${detail}`);
+        // Keep downloaded bytes for an installation retry. A relaunch retry
+        // must never try to install already-consumed bytes a second time.
+        setState(installed.current ? "installed" : "ready");
+      } finally {
+        installing.current = false;
       }
-      // Windows: launches the installer and exits this process, so nothing
-      // below runs. macOS: swaps the bundle in place and comes back here.
-      await update.install();
-      await relaunch();
     },
   };
 }

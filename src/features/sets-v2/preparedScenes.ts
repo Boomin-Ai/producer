@@ -77,7 +77,8 @@ export class PreparedScenes {
     if(speculative()&&this.warmingBlocked.has(spec.target.id)){entry.state={state:'queued'};return entry;}
     if(!entry.plan){this.counters.plans++;const started=performance.now();entry.plan=await this.compile(spec.projection,{definitionId:spec.definition,instanceId:spec.instance,canvasId:spec.layout,target:spec.target,bindings:spec.bindings,retainedTargets:spec.targets}) as Plan;this.log(`compiled ${entry.key} ${(performance.now()-started).toFixed(1)}ms`);}
     if(abort()){this.log('aborted compile '+entry.key);entry.state={state:'queued'};return entry;}
-    for(let attempt=0;;attempt++){
+    let frameRetries=0,budgetRetries=0;
+    for(;;){
      try{
     const status=await this.send({op:'status',outputId:spec.target.id});this.revision=Math.max(this.revision,status.preparedRevision,status.renderedRevision);revision=++this.revision;
     const paused=runtimePlan(entry.plan,{...spec.projection,timeline:spec.projection.timeline?{...spec.projection.timeline,clock:{...spec.projection.timeline.clock,running:false}}:undefined});
@@ -97,11 +98,22 @@ export class PreparedScenes {
     }
     throw Error('Layout did not finish preparing');
      }catch(error){
-      if(!String(error).includes('Loaded set texture budget reached'))throw error;
+      const message=String(error);
+      const firstFrameTimeout=message.includes('Set first-frame timeout')||message.includes('Media did not decode its first frame')||message.includes('Layout did not finish preparing');
+      if(firstFrameTimeout&&frameRetries++===0){
+       if(revision)await this.send({op:'cancel',outputId:spec.target.id,revision}).catch(()=>{});
+       if(abort()){entry.state={state:'queued'};return entry;}
+       // Retry the failed off-air candidate once, keeping its compiled plan,
+       // authorized assets, generation checks and every first-pixel fence.
+       // Nothing touches the currently rendered scene or marks this ready.
+       this.log('retry first frame '+entry.key+': '+message);
+       continue;
+      }
+      if(!message.includes('Loaded set texture budget reached'))throw error;
       if(revision)await this.send({op:'cancel',outputId:spec.target.id,revision}).catch(()=>{});
       this.warmingBlocked.add(spec.target.id);
       if(speculative()){this.log('deferred full cache '+entry.key);entry.state={state:'queued'};return entry;}
-      if(attempt)throw error;
+      if(budgetRetries++>0)throw error;
       // Cache pressure is not a broken Set. Keep every in-flight paired take
       // pinned, release cold snapshots and retry the requested view once.
       // Native program ownership preserves the on-air frame independently.

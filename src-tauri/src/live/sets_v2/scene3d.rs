@@ -800,6 +800,30 @@ impl Lease {
         *self.verified.borrow_mut() = Some(key);
         true
     }
+    /// Describe the stalled startup stage without warming or resetting a
+    /// renderer. A receipt alone is never a substitute for its pixel fence.
+    pub fn pending_reason(&self) -> Option<String> {
+        let state = self.bridge.state.lock().unwrap();
+        if state.session == 0 {
+            Some("waiting for browser startup".into())
+        } else if state.receipt.at.is_none() {
+            Some("waiting for renderer startup receipt".into())
+        } else if !state.receipt.ready {
+            Some("waiting for WebGL first frame".into())
+        } else if state.receipt.revision != state.control.revision {
+            Some("waiting for current renderer revision".into())
+        } else if state
+            .receipt
+            .at
+            .is_some_and(|at| at.elapsed() >= Duration::from_secs(4))
+        {
+            Some("renderer stopped reporting".into())
+        } else if *self.verified.borrow() != Some((state.session, state.control.revision)) {
+            Some("waiting for imported renderer pixels".into())
+        } else {
+            None
+        }
+    }
     pub fn error(&self) -> Option<String> {
         self.bridge.error()
     }

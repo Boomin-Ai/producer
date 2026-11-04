@@ -11274,3 +11274,18 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 @media (prefers-reduced-motion: reduce) {
   .rm-veil-spin { animation: none; }
 }
+
+/* A quiet update cue remains visible before Settings is opened. */
+.home-rail .home-settings-button { position: relative; }
+.home-update-dot {
+  position: absolute;
+  inset-block-start: 3px;
+  inset-inline-end: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mint, #34d399);
+  box-shadow: 0 0 0 2px #0d1117;
+  pointer-events: none;
+}
+.set-update-error { color: #fca5a5; overflow-wrap: anywhere; }

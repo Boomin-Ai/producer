@@ -1,7 +1,7 @@
 {
   "name": "producer",
   "private": true,
-  "version": "0.4.82",
+  "version": "0.4.83",
   "description": "Producer by Boomin \u2014 the open-source studio for creators: post everywhere, stream everywhere.",
   "license": "AGPL-3.0-only",
   "repository": {
@@ -10,6 +10,7 @@
   },
   "type": "module",
   "scripts": {
+    "test:updater": "node scripts/test-updater.mjs",
     "test:manager-cache": "node scripts/test-manager-cache.mjs",
     "dev": "vite",
     "dev:room": "bash scripts/dev-room.sh",

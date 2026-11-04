@@ -44,6 +44,32 @@ try{
   let failed=false,retryCompiles=0;
   const retryBank=new PreparedScenes(async request=>{if(request.op==='preload'&&!failed){failed=true;throw Error('Missing media asset portrait');}return send(request);},()=>{},async(...args)=>{retryCompiles++;return compileRoomScene(...args);});
   await retryBank.ensure(specs[0]).catch(()=>{});if(retryBank.readiness(specs[0]).state!=='error')throw Error('Missing failed state');retryBank.retry();await retryBank.ensure(specs[0]);if(retryCompiles!==2||retryBank.readiness(specs[0]).state!=='ready')throw Error('Retry reused a failed compiled plan');retryBank.dispose();
+  // A cold first-frame timeout gets one off-air retry, without publishing an
+  // error or requiring another click. Invalid assets are deliberately excluded.
+  for(const permanent of [false,true]){
+   const recoveringStates=[],recoveryCalls=[];let attempts=0,compiles=0,lastKey='',failedAttempt=0;
+   const recovering=new PreparedScenes(async request=>{
+    recoveryCalls.push(request);
+    if(request.op==='preload'){attempts++;lastKey=request.key;}
+    if(request.op==='status'&&attempts&&(permanent||attempts===1)&&failedAttempt!==attempts){
+     failedAttempt=attempts;
+     throw Error('Set first-frame timeout (3D sky: waiting for browser startup); current output retained');
+    }
+    return {preparedRevision:attempts,renderedRevision:99,ready:true,warmed:true,cachedKeys:['on-air',...(attempts>1&&!permanent?[lastKey]:[])]};
+   },()=>recoveringStates.push(recovering.readiness(specs[0]).state),async()=>{
+    compiles++;return {root:{id:'root',kind:'group',bounds:{x:0,y:0,width:100,height:100},children:[]},assets:{logo:{mime:'image/png',data:'data:image/png;base64,AA=='}}};
+   });
+   try{
+    let rejected=false;await recovering.ensure(specs[0]).catch(()=>{rejected=true;});
+    if(attempts!==2||compiles!==1)throw Error('First-frame retry was unbounded or rebuilt the plan');
+    if(rejected!==permanent||recovering.readiness(specs[0]).state!==(permanent?'error':'ready'))throw Error('First-frame recovery did not preserve the readiness fence');
+    if(!permanent&&recoveringStates.includes('error'))throw Error('Recoverable cold startup flashed an error');
+    const uploads=recoveryCalls.filter(r=>r.op==='preload').map(r=>Object.keys(r.plan.assets).length);
+    if(uploads.join(',')!=='1,0')throw Error('Cold retry uploaded assets twice');
+    if(recoveryCalls.some(r=>['take','return','activate'].includes(r.op)))throw Error('Cold retry changed current output');
+    if(!recovering.debug().trace.some(line=>line.includes('retry first frame')))throw Error('Cold retry was not diagnosable');
+   }finally{recovering.dispose();}
+  }
   const churnCache=new Map(),compiledKeys=[];let peak=0,churnRevision=0;
   const churnSend=async request=>{if(request.op==='preload'){churnCache.set(request.key,request.outputId);churnRevision=request.revision;peak=Math.max(peak,churnCache.size);}if(request.op==='retain')for(const [key,output]of churnCache)if(output===request.outputId&&!request.keys.includes(key))churnCache.delete(key);return {preparedRevision:churnRevision,renderedRevision:churnRevision,ready:true,warmed:true,transitioning:false,queued:false,cachedKeys:[...churnCache.keys()],renderSerial:1};};
   const churn=new PreparedScenes(churnSend,()=>{},async spec=>({root:{id:'root',kind:'group',bounds:{x:0,y:0,width:100,height:100},children:[]},assets:{}}));
