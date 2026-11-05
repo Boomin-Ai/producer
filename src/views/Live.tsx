@@ -11,7 +11,7 @@ import { OutputSettings, RoomOutputView, type OutputView, type PortraitMonitor }
 import { fetchMe } from '../lib/access';
 import type { RoomSource, RoomAction } from "../../server/src/roomActions";
 import { formatGuestLink, hostedAudienceLink } from "../lib/hostedShare";
-import { previewSession, setPreviewTransparency } from "../lib/previewSession";
+import { afterPreviewWork, closePreviewSessions, previewSession, setPreviewTransparency } from "../lib/previewSession";
 import { useSetOutput } from "../features/presentation/useSetOutput";
 import { SetControlsPanel, type SetEditorTake } from "../features/presentation/SetControlsPanel";
 import { DEFAULT_SET } from "../features/presentation/catalog";
@@ -2688,14 +2688,19 @@ export function LiveView({
   const deferredMicIds = useRef<string[]>([]);
   const entryAccessRef = useRef(entryAccess);
   const roomEngineRef = useRef<ReturnType<typeof roomSession> | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const session = roomSession();
     roomEngineRef.current = session;
     return () => {
+      // Conceal both native views before RTC/source teardown can reveal the
+      // camera underneath the Set. Home may already own this same receipt.
+      const previewClosed=closePreviewSessions(()=>ipc.liveDetachPreview());
+      void previewClosed.catch(()=>{});
       const closeSpan = startTraceSpan("room.close", {}, { roomVisit: traceVisit.current });
-      void session.close(async () => {
+      const retired=session.close(async () => {
         const releaseSpan = startTraceSpan("room.native_release", {}, { roomVisit: traceVisit.current });
         try {
+        await previewClosed.catch(()=>{});
         const serverRoom = cfgRef.current.server_room_id;
         // An active output keeps its room engine and native guest owner.
         if (serverRoom && (await ipc.liveEngineStatus()).session_state === "idle") {
@@ -2710,7 +2715,12 @@ export function LiveView({
         }
         endTraceSpan(releaseSpan);
         } catch (error) { endTraceSpan(releaseSpan, "error"); throw error; }
-      }).then(() => endTraceSpan(closeSpan), (error) => {
+      });
+      // A new room may mount while RTC retirement continues after conceal.
+      // Keep its preview attach behind the outgoing graph cleanup, otherwise
+      // the old release could conceal the new view or expose the old scene.
+      void afterPreviewWork(()=>retired).catch(()=>{});
+      void retired.then(() => endTraceSpan(closeSpan), (error) => {
         endTraceSpan(closeSpan, "error");
         console.warn("Room capture cleanup failed", error);
       });

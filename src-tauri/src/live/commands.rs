@@ -347,8 +347,18 @@ pub async fn live_move_preview(
 }
 
 #[tauri::command]
-pub async fn live_detach_preview(state: State<'_, AppState>) -> EngineResult<()> {
-    state.live.detach_preview().map_err(EngineError::Other)
+pub async fn live_detach_preview(app: tauri::AppHandle) -> EngineResult<()> {
+    // The real engine/UI receipt can wait for graphics retirement. Keep that
+    // synchronous wait off the runtime workers used by RTC and network I/O.
+    tauri::async_runtime::spawn_blocking(move || {
+        use tauri::Manager;
+        app.state::<AppState>()
+            .live
+            .detach_preview()
+            .map_err(EngineError::Other)
+    })
+    .await
+    .map_err(|error| EngineError::Other(error.to_string()))?
 }
 
 #[tauri::command]

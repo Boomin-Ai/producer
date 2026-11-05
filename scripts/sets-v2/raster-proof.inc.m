@@ -52,6 +52,17 @@ static obs_source_t *raster_input_new(uint32_t pw,uint32_t ph,const uint8_t mark
  require(source&&obs_obj_get_data(source),"raster input created");raster_input_set_marker(source,marker);return source;
 }
 static void require_expired(obs_weak_source_t *weak,const char *message){obs_source_t *source=obs_weak_source_get_source(weak);if(source)obs_source_release(source);require(!source,message);}
+static struct producer_set_v2_raster_creation_stats raster_creation_receipt(obs_source_t *source){
+ struct producer_set_v2_raster_creation_stats stats={0},zero={0},consumed;
+ require(sizeof(stats)==64&&producer_set_v2_raster_take_creation_stats(source,&stats),"successful raster construction has one bounded timing receipt");
+ require(stats.elapsed_ns>0&&stats.effect_compiled<=1,"creation receipt has bounded structural values");
+ const uint64_t offsets[]={stats.graphics_wait_offset_ns,stats.effect_compile_offset_ns,stats.texrender_create_offset_ns};
+ const uint64_t durations[]={stats.graphics_wait_ns,stats.effect_compile_ns,stats.texrender_create_ns};
+ for(int i=0;i<3;i++)require(offsets[i]<=stats.elapsed_ns&&durations[i]<=stats.elapsed_ns-offsets[i],"construction components fit within the C constructor");
+ if(!stats.effect_compiled)require(!stats.effect_compile_ns&&!stats.effect_compile_offset_ns,"shader reuse does not invent compile work");
+ memset(&consumed,99,sizeof(consumed));require(!producer_set_v2_raster_take_creation_stats(source,&consumed)&&!memcmp(&consumed,&zero,sizeof(zero)),"timing receipt consumes once and clears repeated output");
+ return stats;
+}
 static NSString *raster_case=@"unspecified";
 static unsigned raster_delta(NSData *actual,NSData *reference){
  require(actual.length==reference.length,"raster reference dimensions");unsigned delta=0;size_t worst=0;const uint8_t *a=actual.bytes,*b=reference.bytes;
@@ -74,16 +85,20 @@ struct raster_context_attempt {obs_source_t *snapshot,*input;bool accepted;};
 static void raster_wrong_thread(void *data){struct raster_context_attempt *a=data;a->accepted=producer_set_v2_raster_capture(a->snapshot,a->input);}
 static NSDictionary *raster_proof(NSString *out){
  (void)out;register_raster_input();NSMutableArray *checks=[NSMutableArray array];
+ require(producer_set_v2_raster_probe_creation_stats_bounds(),"construction offsets include outer-wrapper cost and reject overflow");
  require(!capture_blend_sentinel&&!capture_matrix_sentinel&&!capture_group_count,"raster proof starts with clean capture observers");
  capture_blend_sentinel=solid(8,8,1,0,0,false);capture_matrix_sentinel=solid(8,8,0,1,0,false);
  require(!producer_set_v2_raster_create(0,10,1)&&!producer_set_v2_raster_create(10,0,1)&&!producer_set_v2_raster_create(10,10,NAN)&&!producer_set_v2_raster_create(10,10,.5)&&!producer_set_v2_raster_create(8192,8192,1),"raster validates logical/density/physical budgets");
  uint8_t invalid[18];memset(invalid,99,18);require(!producer_set_v2_raster_get_marker(NULL,invalid),"invalid raster receipt rejected");for(int i=0;i<18;i++)require(!invalid[i],"invalid receipt resets output");
+ struct producer_set_v2_raster_creation_stats invalidStats,zeroStats={0};memset(&invalidStats,99,sizeof(invalidStats));require(!producer_set_v2_raster_take_creation_stats(NULL,&invalidStats)&&!memcmp(&invalidStats,&zeroStats,sizeof(zeroStats)),"invalid construction timing resets output");
  const float densities[]={1,1.5,2};
  for(int orientation=0;orientation<2;orientation++)for(int di=0;di<3;di++){
   uint32_t w=orientation?73:117,h=orientation?117:73;float density=densities[di];
   uint32_t pw=(uint32_t)ceilf(w*density),ph=(uint32_t)ceilf(h*density);uint8_t marker[18];
   obs_source_t *snapshot=producer_set_v2_raster_create(w,h,density);require(snapshot&&producer_set_v2_raster_get_marker(snapshot,marker),"new snapshot owns fresh input receipt");
   require(obs_source_get_width(snapshot)==w&&obs_source_get_height(snapshot)==h&&!producer_set_v2_raster_ready(snapshot)&&!producer_set_v2_raster_texture_bytes(snapshot),"unpainted snapshot has known dimensions and no resident pixels");
+  struct producer_set_v2_raster_creation_stats construction=raster_creation_receipt(snapshot);
+  [checks addObject:@{@"orientation":@(orientation),@"density":@(density),@"constructionNs":@(construction.elapsed_ns),@"graphicsWaitNs":@(construction.graphics_wait_ns),@"effectCompiled":@(construction.effect_compiled),@"effectCompileNs":@(construction.effect_compile_ns),@"texrenderCreateNs":@(construction.texrender_create_ns)}];
   obs_source_t *input=raster_input_new(pw,ph,marker),*clip=raster_old_crop(input,w,h,density);obs_weak_source_t *weak=obs_source_get_weak_source(input);
   require(!producer_set_v2_raster_capture(NULL,input)&&!producer_set_v2_raster_capture(snapshot,NULL)&&!producer_set_v2_raster_capture(snapshot,snapshot),"invalid raster copy sources rejected");
   obs_enter_graphics();require(!producer_set_v2_raster_capture(snapshot,input),"owner copy rejects a held graphics context");obs_leave_graphics();
@@ -126,6 +141,7 @@ static NSDictionary *raster_proof(NSString *out){
  }
  // A previous painter's valid receipt must not authorize a different snapshot.
  uint8_t oldMarker[18],freshMarker[18];obs_source_t *old=producer_set_v2_raster_create(40,30,1),*fresh=producer_set_v2_raster_create(40,30,1);require(old&&fresh&&producer_set_v2_raster_get_marker(old,oldMarker)&&producer_set_v2_raster_get_marker(fresh,freshMarker)&&memcmp(oldMarker,freshMarker,18),"fresh snapshots have distinct input receipts");
+ struct producer_set_v2_raster_creation_stats reused=raster_creation_receipt(fresh);require(!reused.effect_compiled,"second live raster reports shared shader reuse");
  obs_source_t *stale=raster_input_new(40,30,oldMarker);require(!producer_set_v2_raster_capture(fresh,stale)&&!producer_set_v2_raster_ready(fresh)&&!producer_set_v2_raster_copy_blocked(),"current private completion cannot authorize stale input receipt");
  raster_input_set_marker(stale,freshMarker);
  producer_set_v2_raster_probe_fail_next(2);require(!producer_set_v2_raster_capture(fresh,stale)&&!producer_set_v2_raster_ready(fresh)&&!producer_set_v2_raster_copy_blocked(),"input-render no-op plus successful private GPU draw never becomes ready");

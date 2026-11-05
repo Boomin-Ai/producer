@@ -98,6 +98,48 @@ struct NativeKeyframe {
     at_ms: f64,
     value: f32,
 }
+#[repr(C)]
+#[derive(Default)]
+struct RasterCreationStats {
+    elapsed_ns: u64,
+    graphics_wait_offset_ns: u64,
+    graphics_wait_ns: u64,
+    effect_compile_offset_ns: u64,
+    effect_compile_ns: u64,
+    texrender_create_offset_ns: u64,
+    texrender_create_ns: u64,
+    effect_compiled: u64,
+}
+impl RasterCreationStats {
+    fn phase_end(
+        &self,
+        started: std::time::Instant,
+        offset_ns: u64,
+        duration_ns: u64,
+    ) -> Option<std::time::Instant> {
+        let end_ns = offset_ns.checked_add(duration_ns)?;
+        if end_ns > self.elapsed_ns {
+            return None;
+        }
+        started.checked_add(std::time::Duration::from_nanos(end_ns))
+    }
+}
+#[cfg(test)]
+#[test]
+fn raster_creation_phase_receipts_stay_inside_construction() {
+    let started = std::time::Instant::now();
+    let stats = RasterCreationStats {
+        elapsed_ns: 100,
+        ..Default::default()
+    };
+    assert_eq!(std::mem::size_of::<RasterCreationStats>(), 64);
+    assert_eq!(
+        stats.phase_end(started, 20, 30),
+        started.checked_add(std::time::Duration::from_nanos(50))
+    );
+    assert_eq!(stats.phase_end(started, 99, 2), None);
+    assert_eq!(stats.phase_end(started, u64::MAX, 1), None);
+}
 enum NativeScene {}
 extern "C" {
     fn producer_set_v2_register();
@@ -110,6 +152,10 @@ extern "C" {
     fn producer_set_v2_program_register();
     fn producer_set_v2_raster_register();
     fn producer_set_v2_raster_create(w: u32, h: u32, density: f32) -> *mut ffi::obs_source_t;
+    fn producer_set_v2_raster_take_creation_stats(
+        snapshot: *mut ffi::obs_source_t,
+        out: *mut RasterCreationStats,
+    ) -> bool;
     fn producer_set_v2_raster_capture(
         snapshot: *mut ffi::obs_source_t,
         input: *mut ffi::obs_source_t,
@@ -450,6 +496,68 @@ struct Arena<'a> {
     density: f32,
     motion_targets: std::collections::HashSet<String>,
 }
+unsafe fn record_raster_creation(
+    source: *mut ffi::obs_source_t,
+    started: std::time::Instant,
+    finished: std::time::Instant,
+) {
+    let duration = finished.duration_since(started);
+    let mut stats = RasterCreationStats::default();
+    let measured =
+        !source.is_null() && producer_set_v2_raster_take_creation_stats(source, &mut stats);
+    // Only new immutable layers reach this path. Omit fast reused-shader
+    // constructors rather than add several records to every cache fill.
+    if duration < std::time::Duration::from_millis(20) && !(measured && stats.effect_compiled == 1)
+    {
+        return;
+    }
+    crate::performance_trace::native_stage_at(
+        "native.set.graphics.raster_create",
+        finished,
+        duration,
+        Some(!source.is_null()),
+    );
+    if !measured
+        || stats.effect_compiled > 1
+        || std::time::Duration::from_nanos(stats.elapsed_ns) > duration
+    {
+        return;
+    }
+    // C offsets are anchored to the Instant taken immediately before its FFI
+    // call, not to a presumed common wall-clock epoch. The tiny FFI-entry skew
+    // is included in raster_create, and every component must fit inside it.
+    for (name, offset, ns, include) in [
+        (
+            "native.set.raster.graphics_wait",
+            stats.graphics_wait_offset_ns,
+            stats.graphics_wait_ns,
+            true,
+        ),
+        (
+            "native.set.raster.effect_compile",
+            stats.effect_compile_offset_ns,
+            stats.effect_compile_ns,
+            stats.effect_compiled == 1,
+        ),
+        (
+            "native.set.raster.texrender_create",
+            stats.texrender_create_offset_ns,
+            stats.texrender_create_ns,
+            true,
+        ),
+    ] {
+        if include {
+            if let Some(end) = stats.phase_end(started, offset, ns) {
+                crate::performance_trace::native_stage_at(
+                    name,
+                    end,
+                    std::time::Duration::from_nanos(ns),
+                    None,
+                );
+            }
+        }
+    }
+}
 impl Drop for Arena<'_> {
     fn drop(&mut self) {
         self.graphics.clear();
@@ -519,15 +627,21 @@ impl<'a> Arena<'a> {
             return Err("V2 graphics surface budget exceeded".into());
         }
         self.browser_pixels += pixels;
-        let html = contract::graphics_document_scaled(nodes, w, h, (x, y), palette, self.density)?;
+        let html = {
+            let _html = PerformancePhase::slow("native.set.graphics.html");
+            contract::graphics_document_scaled(nodes, w, h, (x, y), palette, self.density)?
+        };
         use sha2::{Digest, Sha256};
         // Exact trusted raster content and dimensions, scoped to this output
         // owner. A pooled layer is immutable; a value edit creates a new layer
         // while unchanged headers/art remain shared with the live scene.
-        let identity = format!(
-            "{}:{pw}:{ph}",
-            format!("{:x}", Sha256::digest(html.as_bytes()))
-        );
+        let identity = {
+            let _identity = PerformancePhase::slow("native.set.graphics.identity");
+            format!(
+                "{}:{pw}:{ph}",
+                format!("{:x}", Sha256::digest(html.as_bytes()))
+            )
+        };
         let mut cache = self.store.graphics.borrow_mut();
         let used = self.store.graphics_clock.get() + 1;
         self.store.graphics_clock.set(used);
@@ -546,7 +660,9 @@ impl<'a> Arena<'a> {
             if producer_set_v2_raster_copy_blocked() {
                 return Err(GRAPHICS_COPY_BLOCKED.into());
             }
+            let started = std::time::Instant::now();
             let snapshot = producer_set_v2_raster_create(w, h, self.density);
+            record_raster_creation(snapshot, started, std::time::Instant::now());
             if snapshot.is_null() {
                 return Err("V2 immutable graphics allocation failed".into());
             }
@@ -946,7 +1062,7 @@ impl RoomProgram {
                 if self.bank.len() >= 64 {
                     return Err("Loaded set scene count budget reached".into());
                 }
-                self.prepare(revision, &plan, &mut resolve)?;
+                self.prepare_inner(revision, &plan, &mut resolve, true)?;
                 self.preparing_key = Some((key, signature));
             }
             Action::Activate {
@@ -1112,6 +1228,15 @@ impl RoomProgram {
         plan: &Plan,
         resolve: &mut impl FnMut(&str) -> Result<*mut ffi::obs_source_t, String>,
     ) -> Result<(), String> {
+        self.prepare_inner(revision, plan, resolve, false)
+    }
+    unsafe fn prepare_inner(
+        &mut self,
+        revision: u64,
+        plan: &Plan,
+        resolve: &mut impl FnMut(&str) -> Result<*mut ffi::obs_source_t, String>,
+        assets_published: bool,
+    ) -> Result<(), String> {
         let validation = PerformancePhase::start("native.set.plan.validate", None);
         contract::validate(plan)?;
         validation.complete(true);
@@ -1127,7 +1252,11 @@ impl RoomProgram {
         if current.transitioning || current.queued || revision <= self.latest_revision {
             return Err("V2 prepare is stale or a take is still rendering".into());
         }
-        self.resources.publish(&plan.assets)?;
+        // Preload published this exact plan before the identity/cache lookup.
+        // Direct Prepare still validates and publishes its own assets here.
+        if !assets_published {
+            self.resources.publish(&plan.assets)?;
+        }
         let prepared = self.resources.open(plan)?;
         let captures_phase = PerformancePhase::start("native.set.capture.resolve", None);
         let mut captures = HashMap::new();

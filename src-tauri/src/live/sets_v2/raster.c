@@ -27,6 +27,8 @@ struct raster {
   atomic_bool ready;
   atomic_size_t resident_bytes;
   uint8_t marker[18];
+  struct producer_set_v2_raster_creation_stats creation;
+  atomic_bool creation_pending;
 #ifdef PRODUCER_SET_V2_PROBE
   bool input_observed;
 #endif
@@ -66,10 +68,13 @@ static const char EFFECT[] =
     "float4 Solid(V v):TARGET{return solid;}"
     "technique Draw{pass{vertex_shader=VS(v);pixel_shader=PS(v);}}"
     "technique Nonce{pass{vertex_shader=VS(v);pixel_shader=Solid(v);}}";
-static gs_effect_t *acquire_effect(void) {
+static gs_effect_t *acquire_effect(struct producer_set_v2_raster_creation_stats *stats) {
   if (!shared_effect) {
     char *error = NULL;
+    stats->effect_compiled = 1;
+    stats->effect_compile_offset_ns = os_gettime_ns();
     shared_effect = gs_effect_create(EFFECT, "producer-set-v2-raster.effect", &error);
+    stats->effect_compile_ns = os_gettime_ns() - stats->effect_compile_offset_ns;
     if (error) bfree(error); /* No arbitrary compiler text enters diagnostics. */
   }
   if (shared_effect) effect_leases++;
@@ -84,6 +89,31 @@ static void release_effect(gs_effect_t *effect) {
 static struct raster *get(obs_source_t *source) {
   return source && !strcmp(obs_source_get_id(source), RASTER_ID)
              ? obs_obj_get_data(source) : NULL;
+}
+static bool relative_phase(uint64_t start, uint64_t end, uint64_t *offset,
+                           uint64_t duration) {
+  if (*offset < start || *offset > end || duration > end - *offset)
+    return false;
+  *offset -= start;
+  return true;
+}
+static bool finish_creation_stats(struct producer_set_v2_raster_creation_stats *stats,
+                                  uint64_t outer_start, uint64_t outer_end) {
+  if (outer_end < outer_start || stats->effect_compiled > 1) return false;
+  struct producer_set_v2_raster_creation_stats relative = *stats;
+  if (!relative_phase(outer_start, outer_end, &relative.graphics_wait_offset_ns,
+                      relative.graphics_wait_ns) ||
+      !relative_phase(outer_start, outer_end, &relative.texrender_create_offset_ns,
+                      relative.texrender_create_ns) ||
+      (relative.effect_compiled &&
+       !relative_phase(outer_start, outer_end, &relative.effect_compile_offset_ns,
+                       relative.effect_compile_ns)) ||
+      (!relative.effect_compiled &&
+       (relative.effect_compile_offset_ns || relative.effect_compile_ns)))
+    return false;
+  relative.elapsed_ns = outer_end - outer_start;
+  *stats = relative;
+  return true;
 }
 static bool dimensions(double w, double h, double density,
                        uint32_t *pw, uint32_t *ph) {
@@ -116,14 +146,21 @@ static void *create(obs_data_t *settings, obs_source_t *source) {
   r->target_width = pw < 12 ? 12 : pw; r->target_height = ph + 1;
   r->density = (float)density;
   atomic_init(&r->ready, false); atomic_init(&r->resident_bytes, 0);
+  atomic_init(&r->creation_pending, false);
+  /* Callback phases store absolute timestamps temporarily. The outer C entry
+   * below rebases all of them only after private-source initialization ends. */
+  r->creation.graphics_wait_offset_ns = os_gettime_ns();
   obs_enter_graphics();
+  r->creation.graphics_wait_ns = os_gettime_ns() - r->creation.graphics_wait_offset_ns;
   if (!process_seed) process_seed = os_gettime_ns();
   if (!process_seed || next_marker == UINT64_MAX || atomic_load(&captures_disabled)) {
     obs_leave_graphics(); free(r); return NULL;
   }
   fence_bytes(r->marker, next_marker++, 0xa55a);
-  r->effect = acquire_effect();
+  r->effect = acquire_effect(&r->creation);
+  r->creation.texrender_create_offset_ns = os_gettime_ns();
   r->target = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
+  r->creation.texrender_create_ns = os_gettime_ns() - r->creation.texrender_create_offset_ns;
   bool valid = r->effect && r->target &&
                gs_effect_get_param_by_name(r->effect, "image") &&
                gs_effect_get_param_by_name(r->effect, "uv_scale") &&
@@ -197,6 +234,7 @@ void producer_set_v2_raster_register(void) {
   obs_register_source_s(&info, sizeof(info));
 }
 obs_source_t *producer_set_v2_raster_create(uint32_t w, uint32_t h, float density) {
+  const uint64_t started = os_gettime_ns();
   uint32_t pw, ph;
   if (!dimensions(w, h, density, &pw, &ph)) return NULL;
   char json[160];
@@ -207,9 +245,49 @@ obs_source_t *producer_set_v2_raster_create(uint32_t w, uint32_t h, float densit
   obs_source_t *source = obs_source_create_private(RASTER_ID, "Set raster", settings);
   obs_data_release(settings);
   if (source && !get(source)) { obs_source_release(source); return NULL; }
+  if (source) {
+    struct raster *r = get(source);
+    /* Includes JSON creation, libOBS initialization before our callback and
+     * bookkeeping after it. Publish only fully validated outer-call offsets. */
+    if (finish_creation_stats(&r->creation, started, os_gettime_ns()))
+      atomic_store_explicit(&r->creation_pending, true, memory_order_release);
+  }
   return source;
 }
+bool producer_set_v2_raster_take_creation_stats(
+    obs_source_t *snapshot, struct producer_set_v2_raster_creation_stats *out) {
+  if (!out) return false;
+  memset(out, 0, sizeof(*out));
+  struct raster *r = get(snapshot);
+  if (!r || !atomic_exchange_explicit(&r->creation_pending, false, memory_order_acq_rel))
+    return false;
+  *out = r->creation;
+  return true;
+}
 #ifdef PRODUCER_SET_V2_PROBE
+bool producer_set_v2_raster_probe_creation_stats_bounds(void) {
+  const struct producer_set_v2_raster_creation_stats absolute = {
+      .graphics_wait_offset_ns = 125, .graphics_wait_ns = 10,
+      .effect_compile_offset_ns = 140, .effect_compile_ns = 20,
+      .texrender_create_offset_ns = 170, .texrender_create_ns = 5,
+      .effect_compiled = 1};
+  struct producer_set_v2_raster_creation_stats stats = absolute;
+  if (!finish_creation_stats(&stats, 100, 200) || stats.elapsed_ns != 100 ||
+      stats.graphics_wait_offset_ns != 25 || stats.effect_compile_offset_ns != 40 ||
+      stats.texrender_create_offset_ns != 70) return false;
+  /* The 25ns pre-callback wrapper prefix survives; invalid arithmetic never
+   * turns into a wrapped or partially published component receipt. */
+  for (int fault = 0; fault < 4; fault++) {
+    stats = absolute;
+    if (fault == 0) stats.graphics_wait_offset_ns = 99;
+    if (fault == 1) stats.texrender_create_ns = UINT64_MAX;
+    if (fault == 2) stats.effect_compiled = 2;
+    struct producer_set_v2_raster_creation_stats before = stats;
+    if (finish_creation_stats(&stats, 100, fault == 3 ? 90 : 200) ||
+        memcmp(&stats, &before, sizeof(stats))) return false;
+  }
+  return true;
+}
 typedef struct obs_weak_source obs_weak_source_t;
 OBS_IMPORT obs_weak_source_t *obs_source_get_weak_source(obs_source_t *);
 OBS_IMPORT bool obs_weak_source_expired(obs_weak_source_t *);
