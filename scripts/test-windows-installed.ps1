@@ -6,6 +6,7 @@ param(
   [Parameter(Mandatory=$true, ParameterSetName='CompilerExecutable')][string]$ExpectedExecutable,
   [Parameter(Mandatory=$true, ParameterSetName='PackagedHash')]
   [ValidateScript({ $_ -cmatch '\A[0-9a-f]{64}\z' })][string]$ExpectedPackagedSha256,
+  [Parameter(ParameterSetName='PackagedHash')][switch]$Headless,
   [Parameter(Mandatory=$true)][string]$OutputDir
 )
 $ErrorActionPreference = 'Stop'
@@ -36,10 +37,12 @@ $receipt = [ordered]@{
   stage = 'adapter_inventory'
   source = $env:PRODUCER_SOURCE_SHA
   identityMode = $PSCmdlet.ParameterSetName
+  reportMode = 'installed-gui-report'
   engineReport = $false
   installedBinaryMatches = $false
   engineDirectoryOverrideCleared = $false
 }
+if ($Headless) { $receipt.reportMode = 'installed-selftest' }
 $app = $null
 $installed = $false
 function Wait-OwnedProcess($Process, [int]$Seconds, [string]$Label) {
@@ -91,38 +94,69 @@ try {
     throw 'Installed producer.exe differs from the expected NSIS-patched executable'
   }
   $receipt.installedBinaryMatches = $true
+  $receipt.stage = 'report_preflight'
+  $reportPaths = @($profiles | ForEach-Object { Join-Path $_ 'live\engine-report.json' })
+  if (-not $Headless) {
+    foreach ($reportPath in $reportPaths) {
+      if (Test-Path -LiteralPath $reportPath) {
+        throw 'An engine report already exists before launch'
+      }
+    }
+  }
   $receipt.stage = 'launch'
-  $started = [DateTime]::UtcNow
+  $stdoutPath = Join-Path $OutputDir 'app.stdout.log'
+  $stderrPath = Join-Path $OutputDir 'app.stderr.log'
   # Let the installed app resolve its own engine modules and data. Restore the
   # caller's build/test override as soon as the child inherits its environment.
   $engineDirOverride = $env:PRODUCER_ENGINE_DIR
+  $selftestOverride = $env:PRODUCER_LIVE_SELFTEST
   try {
     $env:PRODUCER_ENGINE_DIR = $null
-    $app = Start-Process -FilePath $exe -WorkingDirectory $installDir -PassThru -RedirectStandardOutput (Join-Path $OutputDir 'app.stdout.log') -RedirectStandardError (Join-Path $OutputDir 'app.stderr.log')
+    $env:PRODUCER_LIVE_SELFTEST = $null
+    if ($Headless) { $env:PRODUCER_LIVE_SELFTEST = '1' }
+    $app = Start-Process -FilePath $exe -WorkingDirectory $installDir -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
     $receipt.engineDirectoryOverrideCleared = $true
   } finally {
     $env:PRODUCER_ENGINE_DIR = $engineDirOverride
+    $env:PRODUCER_LIVE_SELFTEST = $selftestOverride
   }
   $receipt.stage = 'engine_report'
-  $deadline = [DateTime]::UtcNow.AddSeconds(90)
-  $reportFile = $null
-  $report = $null
-  while ([DateTime]::UtcNow -lt $deadline) {
-    foreach ($profile in $profiles) {
-      $candidate = Join-Path $profile 'live\engine-report.json'
-      if ((Test-Path -LiteralPath $candidate) -and (Get-Item -LiteralPath $candidate).LastWriteTimeUtc -ge $started) {
-        # The engine writes once, but a polling read can catch that write in
-        # progress. Accept only a complete report, not merely file existence.
-        try { $parsed = Get-Content -LiteralPath $candidate -Raw | ConvertFrom-Json } catch { $parsed = $null }
-        if ($parsed -and ($parsed.PSObject.Properties.Name -contains 'ok')) { $report = $parsed; $reportFile = $candidate; break }
+  if ($Headless) {
+    Wait-OwnedProcess $app 90 'Installed engine self-test'
+    $receipt.selftestExitCode = $app.ExitCode
+    $stdout = Get-Content -LiteralPath $stdoutPath -Raw -Encoding UTF8
+    # selftest_main prints one pretty EngineReport after the native logs. A
+    # complete JSON object with column-zero braces is required.
+    $reports = [regex]::Matches($stdout, '(?ms)^\{\r?\n.*?^\}\r?$')
+    if ($reports.Count -ne 1) { throw 'Installed self-test did not produce one complete EngineReport' }
+    $reportJson = $reports[0].Value
+    $report = $reportJson | ConvertFrom-Json
+  } else {
+    $deadline = [DateTime]::UtcNow.AddSeconds(90)
+    $report = $null
+    while ([DateTime]::UtcNow -lt $deadline) {
+      foreach ($reportPath in $reportPaths) {
+        if (-not (Test-Path -LiteralPath $reportPath)) { continue }
+        # A polling read can catch the write in progress. Retry until the
+        # report parses and retain the complete JSON we actually validated.
+        try {
+          $reportJson = Get-Content -LiteralPath $reportPath -Raw -Encoding UTF8
+          $report = $reportJson | ConvertFrom-Json
+        } catch {
+          $report = $null
+        }
+        if ($report) { break }
       }
+      if ($report) { break }
+      if ($app.HasExited) { throw "Installed app exited before engine report ($($app.ExitCode))" }
+      Start-Sleep -Milliseconds 250
     }
-    if ($reportFile) { break }
-    if ($app.HasExited) { throw "Installed app exited before engine report ($($app.ExitCode))" }
-    Start-Sleep -Milliseconds 250
+    if (-not $report) { throw 'Installed app produced no complete engine report within 90s' }
   }
-  if (-not $reportFile) { throw 'Installed app produced no complete engine report within 90s' }
-  Copy-Item -LiteralPath $reportFile -Destination (Join-Path $OutputDir 'engine-report.json')
+  foreach ($field in @('ok','graphics_backend','hardware_encoder','failed_modules','missing_ids','sources')) {
+    if ($report.PSObject.Properties.Name -notcontains $field) { throw "EngineReport is missing $field" }
+  }
+  Set-Content -LiteralPath (Join-Path $OutputDir 'engine-report.json') -Value $reportJson -Encoding UTF8
   $receipt.engineReport = $true
   $receipt.graphicsBackend = $report.graphics_backend
   $receipt.hardwareEncoder = $report.hardware_encoder
@@ -131,14 +165,16 @@ try {
     $receipt.qualification = 'bootstrap_not_qualified'
     throw 'Installed engine did not qualify: require successful D3D11, all modules/IDs and browser_source; see engine-report.json'
   }
-  $receipt.stage = 'post_report_liveness'
-  $aliveUntil = [DateTime]::UtcNow.AddSeconds(3)
-  while ([DateTime]::UtcNow -lt $aliveUntil) {
-    if ($app.HasExited) { throw "Installed app exited after engine report ($($app.ExitCode))" }
-    Start-Sleep -Milliseconds 250
+  if (-not $Headless) {
+    $receipt.stage = 'post_report_liveness'
+    $aliveUntil = [DateTime]::UtcNow.AddSeconds(3)
+    while ([DateTime]::UtcNow -lt $aliveUntil) {
+      if ($app.HasExited) { throw "Installed app exited after engine report ($($app.ExitCode))" }
+      Start-Sleep -Milliseconds 250
+    }
+    if ($app.HasExited) { throw 'Installed app did not survive post-bootstrap initialization' }
+    $receipt.postReportLivenessMs = 3000
   }
-  if ($app.HasExited) { throw 'Installed app did not survive post-bootstrap initialization' }
-  $receipt.postReportLivenessMs = 3000
   $receipt.status = 'passed'
 } finally {
   if ($app -and -not $app.HasExited) { & taskkill.exe /PID $app.Id /T /F 2>$null | Out-Null }

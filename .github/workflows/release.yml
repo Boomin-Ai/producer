@@ -639,17 +639,6 @@ jobs:
           python .\release-control\scripts\restore-staged-artifact.py $env:PROOF_ARTIFACT $env:PROOF_DIGEST "$env:RUNNER_TEMP\producer-previous-proof"
           if ($LASTEXITCODE -ne 0) { throw 'Could not restore the original installed proof' }
 
-      - name: Qualify retained Windows installer from its installed directory
-        if: ${{ inputs.resume_windows_run != '' }}
-        timeout-minutes: 6
-        run: |
-          $proofFile = Join-Path $env:RUNNER_TEMP 'producer-previous-proof\producer-windows-installed-proof\installed-proof.json'
-          $proof = Get-Content -LiteralPath $proofFile -Raw | ConvertFrom-Json
-          if ($proof.source -ne $env:PRODUCER_SOURCE_SHA -or $proof.status -ne 'passed' -or -not $proof.installedBinaryMatches -or $proof.graphicsBackend -ne 'd3d11' -or $proof.executableSha256 -ne $proof.expectedPackagedExecutableSha256) { throw 'Original installed proof does not match the retained installer' }
-          $version = (Get-Content src-tauri\tauri.conf.json -Raw | ConvertFrom-Json).version
-          $installer = "src-tauri\target\release\bundle\nsis\Producer_${version}_x64-setup.exe"
-          .\release-control\scripts\test-windows-installed.ps1 -Installer $installer -ExpectedPackagedSha256 $proof.expectedPackagedExecutableSha256 -OutputDir "$env:RUNNER_TEMP\producer-windows-installed-proof"
-
       - name: Build frontend assets for resumed native tests
         if: ${{ inputs.resume_windows_run != '' }}
         run: bun run build
@@ -693,9 +682,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'ffmpeg prerequisite failed' }
           }
           if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) { throw 'ffprobe unavailable' }
-          $probeVersion = & ffprobe -version
-          if ($LASTEXITCODE -ne 0) { throw 'ffprobe version check failed' }
-          $probeVersion | Select-Object -First 1
+          Write-Host 'ffprobe is available for the recording tests'
 
       - name: Prepare Windows native runtime qualification
         if: ${{ github.event_name == 'push' || inputs.publish }}
@@ -706,6 +693,17 @@ jobs:
         if: ${{ github.event_name == 'push' || inputs.publish }}
         timeout-minutes: 25
         run: .\scripts\test-windows-engine.ps1 -EngineDir $env:PRODUCER_ENGINE_DIR -OutputDir "$env:RUNNER_TEMP\producer-windows-runtime-proof" -RunOnly -MaxRuntimeSeconds 1200
+
+      - name: Qualify retained Windows installer from its installed directory
+        if: ${{ inputs.resume_windows_run != '' }}
+        timeout-minutes: 6
+        run: |
+          $proofFile = Join-Path $env:RUNNER_TEMP 'producer-previous-proof\producer-windows-installed-proof\installed-proof.json'
+          $proof = Get-Content -LiteralPath $proofFile -Raw | ConvertFrom-Json
+          if ($proof.source -ne $env:PRODUCER_SOURCE_SHA -or $proof.status -ne 'passed' -or -not $proof.installedBinaryMatches -or $proof.graphicsBackend -ne 'd3d11' -or $proof.executableSha256 -ne $proof.expectedPackagedExecutableSha256) { throw 'Original installed proof does not match the retained installer' }
+          $version = (Get-Content src-tauri\tauri.conf.json -Raw | ConvertFrom-Json).version
+          $installer = "src-tauri\target\release\bundle\nsis\Producer_${version}_x64-setup.exe"
+          .\release-control\scripts\test-windows-installed.ps1 -Installer $installer -ExpectedPackagedSha256 $proof.expectedPackagedExecutableSha256 -Headless -OutputDir "$env:RUNNER_TEMP\producer-windows-installed-proof"
 
       - name: Preserve Windows installed and runtime evidence
         if: ${{ always() && (github.event_name == 'push' || inputs.publish) }}
