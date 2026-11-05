@@ -1,8 +1,11 @@
 # Installed production binary proof. Only run on a disposable hosted Windows
 # runner: NSIS changes current-user shortcuts/registry and the firewall rule.
+[CmdletBinding(DefaultParameterSetName='CompilerExecutable')]
 param(
   [Parameter(Mandatory=$true)][string]$Installer,
-  [Parameter(Mandatory=$true)][string]$ExpectedExecutable,
+  [Parameter(Mandatory=$true, ParameterSetName='CompilerExecutable')][string]$ExpectedExecutable,
+  [Parameter(Mandatory=$true, ParameterSetName='PackagedHash')]
+  [ValidateScript({ $_ -cmatch '\A[0-9a-f]{64}\z' })][string]$ExpectedPackagedSha256,
   [Parameter(Mandatory=$true)][string]$OutputDir
 )
 $ErrorActionPreference = 'Stop'
@@ -10,7 +13,9 @@ if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hoste
   throw 'Installed qualification requires a disposable GitHub-hosted runner'
 }
 $Installer = (Resolve-Path -LiteralPath $Installer).Path
-$ExpectedExecutable = (Resolve-Path -LiteralPath $ExpectedExecutable).Path
+if ($PSCmdlet.ParameterSetName -eq 'CompilerExecutable') {
+  $ExpectedExecutable = (Resolve-Path -LiteralPath $ExpectedExecutable).Path
+}
 New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 $OutputDir = (Resolve-Path -LiteralPath $OutputDir).Path
 $installDir = Join-Path $OutputDir 'installed'
@@ -30,8 +35,10 @@ $receipt = [ordered]@{
   status = 'failed'
   stage = 'adapter_inventory'
   source = $env:PRODUCER_SOURCE_SHA
+  identityMode = $PSCmdlet.ParameterSetName
   engineReport = $false
   installedBinaryMatches = $false
+  engineDirectoryOverrideCleared = $false
 }
 $app = $null
 $installed = $false
@@ -58,31 +65,44 @@ try {
   $receipt.stage = 'executable_identity'
   $installedHash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
   $receipt.executableSha256 = $installedHash
-  # Tauri CLI 2.11.4 patches the first UNK marker to NSS before bundling,
-  # then restores the original compiler output. Reproduce just that patch on
-  # our in-memory expected bytes before comparing the entire installed file.
-  $compilerMarker = '__TAURI_BUNDLE_TYPE_VAR_UNK'
-  $nsisMarker = [Text.Encoding]::ASCII.GetBytes('__TAURI_BUNDLE_TYPE_VAR_NSS')
-  $expectedBytes = [IO.File]::ReadAllBytes($ExpectedExecutable)
-  $sha256 = [Security.Cryptography.SHA256]::Create()
-  try {
-    $receipt.compilerExecutableSha256 = [BitConverter]::ToString($sha256.ComputeHash($expectedBytes)).Replace('-', '').ToLowerInvariant()
-    $offset = [Text.Encoding]::ASCII.GetString($expectedBytes).IndexOf($compilerMarker, [StringComparison]::Ordinal)
-    if ($offset -lt 0 -or $compilerMarker.Length -ne $nsisMarker.Length) {
-      throw 'Expected Tauri compiler bundle marker is missing or invalid'
+  if ($PSCmdlet.ParameterSetName -eq 'CompilerExecutable') {
+    # Tauri CLI 2.11.4 patches the first UNK marker to NSS before bundling,
+    # then restores the original compiler output. Reproduce just that patch on
+    # our in-memory expected bytes before comparing the entire installed file.
+    $compilerMarker = '__TAURI_BUNDLE_TYPE_VAR_UNK'
+    $nsisMarker = [Text.Encoding]::ASCII.GetBytes('__TAURI_BUNDLE_TYPE_VAR_NSS')
+    $expectedBytes = [IO.File]::ReadAllBytes($ExpectedExecutable)
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+      $receipt.compilerExecutableSha256 = [BitConverter]::ToString($sha256.ComputeHash($expectedBytes)).Replace('-', '').ToLowerInvariant()
+      $offset = [Text.Encoding]::ASCII.GetString($expectedBytes).IndexOf($compilerMarker, [StringComparison]::Ordinal)
+      if ($offset -lt 0 -or $compilerMarker.Length -ne $nsisMarker.Length) {
+        throw 'Expected Tauri compiler bundle marker is missing or invalid'
+      }
+      [Array]::Copy($nsisMarker, 0, $expectedBytes, $offset, $nsisMarker.Length)
+      $receipt.expectedPackagedExecutableSha256 = [BitConverter]::ToString($sha256.ComputeHash($expectedBytes)).Replace('-', '').ToLowerInvariant()
+    } finally {
+      $sha256.Dispose()
     }
-    [Array]::Copy($nsisMarker, 0, $expectedBytes, $offset, $nsisMarker.Length)
-    $receipt.expectedPackagedExecutableSha256 = [BitConverter]::ToString($sha256.ComputeHash($expectedBytes)).Replace('-', '').ToLowerInvariant()
-  } finally {
-    $sha256.Dispose()
+  } else {
+    $receipt.expectedPackagedExecutableSha256 = $ExpectedPackagedSha256
   }
-  if ($receipt.expectedPackagedExecutableSha256 -ne $installedHash) {
+  if ($receipt.expectedPackagedExecutableSha256 -cne $installedHash) {
     throw 'Installed producer.exe differs from the expected NSIS-patched executable'
   }
   $receipt.installedBinaryMatches = $true
   $receipt.stage = 'launch'
   $started = [DateTime]::UtcNow
-  $app = Start-Process -FilePath $exe -WorkingDirectory $installDir -PassThru -RedirectStandardOutput (Join-Path $OutputDir 'app.stdout.log') -RedirectStandardError (Join-Path $OutputDir 'app.stderr.log')
+  # Let the installed app resolve its own engine modules and data. Restore the
+  # caller's build/test override as soon as the child inherits its environment.
+  $engineDirOverride = $env:PRODUCER_ENGINE_DIR
+  try {
+    $env:PRODUCER_ENGINE_DIR = $null
+    $app = Start-Process -FilePath $exe -WorkingDirectory $installDir -PassThru -RedirectStandardOutput (Join-Path $OutputDir 'app.stdout.log') -RedirectStandardError (Join-Path $OutputDir 'app.stderr.log')
+    $receipt.engineDirectoryOverrideCleared = $true
+  } finally {
+    $env:PRODUCER_ENGINE_DIR = $engineDirOverride
+  }
   $receipt.stage = 'engine_report'
   $deadline = [DateTime]::UtcNow.AddSeconds(90)
   $reportFile = $null

@@ -13,6 +13,10 @@ on:
         description: "Include the native LiveKit guest runtime in the Apple Silicon candidate"
         type: boolean
         default: false
+      resume_windows_run:
+        description: "Resume only after a prior public build passed Windows install and failed the FFmpeg prerequisite"
+        type: string
+        default: ""
       promote_run:
         description: "Completed Release run to promote without rebuilding (blank = normal build)"
         type: string
@@ -31,7 +35,7 @@ on:
 # a production release cannot cancel the Mac performance test track. Legacy
 # promotion also writes releases, even when its publish input is false.
 concurrency:
-  group: release-${{ (github.event_name == 'push' || inputs.publish || inputs.promote_run != '') && 'public' || 'private' }}
+  group: release-${{ (github.event_name == 'push' || inputs.publish || inputs.promote_run != '' || inputs.resume_windows_run != '') && 'public' || 'private' }}
   cancel-in-progress: true
 
 env:
@@ -39,16 +43,25 @@ env:
 
 jobs:
   validate-public-source:
-    if: ${{ inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) }}
+    if: ${{ inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish || inputs.resume_windows_run != '') }}
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
       RELEASE_EVENT: ${{ github.event_name }}
       NATIVE_GUEST: ${{ inputs.native_guest }}
+      PUBLISH_RELEASE: ${{ inputs.publish }}
+      RESUME_WINDOWS_RUN: ${{ inputs.resume_windows_run }}
     outputs:
       release_id: ${{ steps.draft.outputs.release_id }}
+      source_sha: ${{ steps.draft.outputs.source_sha }}
+      installer_artifact: ${{ steps.draft.outputs.installer_artifact }}
+      installer_digest: ${{ steps.draft.outputs.installer_digest }}
+      proof_artifact: ${{ steps.draft.outputs.proof_artifact }}
+      proof_digest: ${{ steps.draft.outputs.proof_digest }}
+      engine_run: ${{ steps.draft.outputs.engine_run }}
     steps:
       - uses: actions/checkout@v4
       - name: Validate stable source and reserve one release draft
@@ -70,6 +83,12 @@ jobs:
           else:
               assert os.environ['NATIVE_GUEST'] == 'true', 'Public dispatch must set native_guest=true'
           repo, sha = os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_SHA']
+          resume = os.environ.get('RESUME_WINDOWS_RUN', '')
+          if resume:
+              assert os.environ['RELEASE_EVENT'] == 'workflow_dispatch' and os.environ['PUBLISH_RELEASE'] == 'true'
+              proof = json.loads(subprocess.check_output(['python3', 'scripts/validate-staged-release.py'], env=dict(os.environ, RELEASE_VERSION=version)))
+              sha = proof['source']
+              assert re.fullmatch(r'[0-9a-f]{40}', sha)
           tag = 'v' + version
           endpoint = f'repos/{repo}/releases'
           pages = json.loads(subprocess.check_output(['gh', 'api', '--paginate', '--slurp', endpoint + '?per_page=100']))
@@ -78,15 +97,20 @@ jobs:
           if matches:
               release = matches[0]
           else:
+              assert not resume, 'The original stable draft is missing'
               body = dict(tag_name=tag, target_commitish=sha, name='Producer ' + tag, draft=True, prerelease=False, make_latest='false')
               release = json.loads(subprocess.check_output(['gh', 'api', '--method', 'POST', endpoint, '--input', '-'], input=json.dumps(body), text=True))
           assert release['draft'] and not release['prerelease'] and release['target_commitish'] == sha, 'Release draft belongs to another source or channel'
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
               print(f'release_id={release["id"]}', file=out)
+              print(f'source_sha={sha}', file=out)
+              if resume:
+                  for key, field in (('installer_artifact', 'artifactId'), ('installer_digest', 'artifactDigest'), ('proof_artifact', 'proofArtifactId'), ('proof_digest', 'proofArtifactDigest'), ('engine_run', 'engineRunId')):
+                      print(f'{key}={proof[field]}', file=out)
           print(f'Validated stable {version} at {sha}; reserved draft {release["id"]}')
           PY
   promote-signed-candidate:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.promote_run != '' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.promote_run != '' && inputs.resume_windows_run == '' }}
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -146,7 +170,7 @@ jobs:
   # Windows exe here would race the live one for the same asset names, and
   # tauri-action's latest.json entry would point updaters at a stub build.
   build:
-    if: ${{ inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) }}
+    if: ${{ inputs.promote_run == '' && inputs.resume_windows_run == '' && (github.event_name == 'push' || inputs.publish) }}
     needs: [validate-public-source]
     permissions:
       contents: write
@@ -228,7 +252,7 @@ jobs:
   #     absent artifact = silent stub build — guarded below with otool)
   #   engine inside the .app BEFORE notarization    (Apple scans nested Mach-Os)
   build-macos-arm64-live:
-    if: ${{ !cancelled() && inputs.promote_run == '' && (needs.validate-public-source.result == 'success' || (github.event_name == 'workflow_dispatch' && !inputs.publish)) }}
+    if: ${{ !cancelled() && inputs.promote_run == '' && inputs.resume_windows_run == '' && (needs.validate-public-source.result == 'success' || (github.event_name == 'workflow_dispatch' && !inputs.publish)) }}
     needs: [validate-public-source]
     permissions:
       contents: write
@@ -503,14 +527,16 @@ jobs:
   # + scripts/build-windows.ps1) so CI ships exactly what that box verified.
   # There is no Windows code-signing certificate wired; the installer is unsigned.
   build-windows-live:
-    if: ${{ !cancelled() && inputs.promote_run == '' && (needs.validate-public-source.result == 'success' || (github.event_name == 'workflow_dispatch' && !inputs.publish)) }}
+    if: ${{ !cancelled() && inputs.promote_run == '' && (needs.validate-public-source.result == 'success' || (github.event_name == 'workflow_dispatch' && !inputs.publish && inputs.resume_windows_run == '')) }}
     needs: [validate-public-source]
     permissions:
+      actions: read
       contents: write
     runs-on: windows-2022
     timeout-minutes: 120
     env:
       GH_TOKEN: ${{ github.token }}
+      PRODUCER_SOURCE_SHA: ${{ needs.validate-public-source.outputs.source_sha || github.sha }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     defaults:
@@ -520,6 +546,16 @@ jobs:
         shell: powershell
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-public-source.outputs.source_sha || github.sha }}
+
+      - name: Check out qualification tooling
+        if: ${{ inputs.resume_windows_run != '' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: release-control
+          sparse-checkout: scripts
 
       - name: Parse Windows qualification scripts before building
         if: ${{ github.event_name == 'push' || inputs.publish }}
@@ -549,17 +585,22 @@ jobs:
       # throws "no engine artifact matches the current obs.lock (...)" on a
       # miss - run engine.yml for this lock first, then re-run the release.
       - name: Fetch engine artifact (current obs.lock hash - fail hard on miss)
+        env:
+          RESUME_ENGINE_RUN: ${{ needs.validate-public-source.outputs.engine_run }}
         run: |
           # The script probes `python -c "import zstandard"`; under
           # $ErrorActionPreference=Stop a missing module's traceback on stderr
           # is a terminating NativeCommandError. Satisfy the probe up front.
           python -m pip install --quiet zstandard
-          . .\scripts\windows-engine.ps1
+          if ($env:RESUME_ENGINE_RUN) {
+            . .\release-control\scripts\windows-engine.ps1
+            $RepoRoot = $env:GITHUB_WORKSPACE
+          } else { . .\scripts\windows-engine.ps1 }
           $name = Get-EngineName
           Write-Host "want: $name"
           # Last pipeline element: pip/extract output from inside the function
           # must not turn the path into an array.
-          $dir = @(Get-EngineDir)[-1]
+          $dir = if ($env:RESUME_ENGINE_RUN) { @(Get-EngineDir -RunId $env:RESUME_ENGINE_RUN)[-1] } else { @(Get-EngineDir)[-1] }
           if (-not (Test-Path (Join-Path $dir "bin\obs.dll"))) {
             throw "FATAL: engine artifact missing after fetch - refusing to ship a stub build"
           }
@@ -581,12 +622,42 @@ jobs:
       # refuses to continue if the exe does not import obs.dll. Updater .sig is
       # emitted because TAURI_SIGNING_PRIVATE_KEY is set.
       - name: Build NSIS installer (engine linked + staged beside producer.exe)
+        if: ${{ inputs.resume_windows_run == '' }}
         run: .\scripts\build-windows.ps1
+
+      - name: Restore exact retained Windows installer
+        if: ${{ inputs.resume_windows_run != '' }}
+        timeout-minutes: 12
+        env:
+          INSTALLER_ARTIFACT: ${{ needs.validate-public-source.outputs.installer_artifact }}
+          INSTALLER_DIGEST: ${{ needs.validate-public-source.outputs.installer_digest }}
+          PROOF_ARTIFACT: ${{ needs.validate-public-source.outputs.proof_artifact }}
+          PROOF_DIGEST: ${{ needs.validate-public-source.outputs.proof_digest }}
+        run: |
+          python .\release-control\scripts\restore-staged-artifact.py $env:INSTALLER_ARTIFACT $env:INSTALLER_DIGEST src-tauri\target\release\bundle\nsis
+          if ($LASTEXITCODE -ne 0) { throw 'Could not restore the exact installer' }
+          python .\release-control\scripts\restore-staged-artifact.py $env:PROOF_ARTIFACT $env:PROOF_DIGEST "$env:RUNNER_TEMP\producer-previous-proof"
+          if ($LASTEXITCODE -ne 0) { throw 'Could not restore the original installed proof' }
+
+      - name: Qualify retained Windows installer from its installed directory
+        if: ${{ inputs.resume_windows_run != '' }}
+        timeout-minutes: 6
+        run: |
+          $proofFile = Join-Path $env:RUNNER_TEMP 'producer-previous-proof\producer-windows-installed-proof\installed-proof.json'
+          $proof = Get-Content -LiteralPath $proofFile -Raw | ConvertFrom-Json
+          if ($proof.source -ne $env:PRODUCER_SOURCE_SHA -or $proof.status -ne 'passed' -or -not $proof.installedBinaryMatches -or $proof.graphicsBackend -ne 'd3d11' -or $proof.executableSha256 -ne $proof.expectedPackagedExecutableSha256) { throw 'Original installed proof does not match the retained installer' }
+          $version = (Get-Content src-tauri\tauri.conf.json -Raw | ConvertFrom-Json).version
+          $installer = "src-tauri\target\release\bundle\nsis\Producer_${version}_x64-setup.exe"
+          .\release-control\scripts\test-windows-installed.ps1 -Installer $installer -ExpectedPackagedSha256 $proof.expectedPackagedExecutableSha256 -OutputDir "$env:RUNNER_TEMP\producer-windows-installed-proof"
+
+      - name: Build frontend assets for resumed native tests
+        if: ${{ inputs.resume_windows_run != '' }}
+        run: bun run build
 
       # Preserve the exact installer for diagnosis if the hosted qualification
       # environment fails. It is not staged on the public release draft here.
       - name: Preserve Windows installer before runtime checks
-        if: ${{ github.event_name == 'push' || inputs.publish }}
+        if: ${{ inputs.resume_windows_run == '' && (github.event_name == 'push' || inputs.publish) }}
         uses: actions/upload-artifact@v4
         with:
           name: Producer-windows-x64-unqualified-${{ github.sha }}
@@ -597,7 +668,7 @@ jobs:
           retention-days: 7
 
       - name: Qualify installed Windows engine
-        if: ${{ github.event_name == 'push' || inputs.publish }}
+        if: ${{ inputs.resume_windows_run == '' && (github.event_name == 'push' || inputs.publish) }}
         timeout-minutes: 6
         run: |
           $version = (Get-Content src-tauri\tauri.conf.json -Raw | ConvertFrom-Json).version
@@ -607,6 +678,7 @@ jobs:
       # Hosted Windows runners do not guarantee a D3D11 adapter. Still compile
       # and link the same native pixel probe used on a Windows GPU workstation.
       - name: Check Windows native compositor linkage
+        if: ${{ inputs.resume_windows_run == '' }}
         run: .\scripts\test-windows-native.ps1 -EngineDir .\src-tauri\windows-bundle -CompileOnly
 
       # Compile once before the bounded runtime window. Each exact native
@@ -621,7 +693,9 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'ffmpeg prerequisite failed' }
           }
           if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) { throw 'ffprobe unavailable' }
-          ffprobe -version | Select-Object -First 1
+          $probeVersion = & ffprobe -version
+          if ($LASTEXITCODE -ne 0) { throw 'ffprobe version check failed' }
+          $probeVersion | Select-Object -First 1
 
       - name: Prepare Windows native runtime qualification
         if: ${{ github.event_name == 'push' || inputs.publish }}
@@ -650,6 +724,7 @@ jobs:
       # must not sink the release. Same build-only config the script wrote, so
       # the resources map identically; cargo sees no change and just re-bundles.
       - name: Build MSI installer (best-effort)
+        if: ${{ inputs.resume_windows_run == '' }}
         id: msi
         continue-on-error: true
         run: |
@@ -699,7 +774,7 @@ jobs:
 
   # Keep the previous public release current until every new platform passes.
   publish-verified-release:
-    if: ${{ inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) }}
+    if: ${{ !cancelled() && inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) && needs.validate-public-source.result == 'success' && needs.build-windows-live.result == 'success' && ((inputs.resume_windows_run == '' && needs.build.result == 'success' && needs.build-macos-arm64-live.result == 'success') || (inputs.resume_windows_run != '' && needs.build.result == 'skipped' && needs.build-macos-arm64-live.result == 'skipped')) }}
     needs: [validate-public-source, build, build-macos-arm64-live, build-windows-live]
     runs-on: ubuntu-latest
     permissions:
@@ -708,13 +783,16 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       PRODUCER_RELEASE_ID: ${{ needs.validate-public-source.outputs.release_id }}
+      PRODUCER_SOURCE_SHA: ${{ needs.validate-public-source.outputs.source_sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-public-source.outputs.source_sha }}
       - name: Require successful CI for this exact release commit
         run: |
           python3 - <<'PY'
           import json, os, subprocess
-          repo, sha = os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_SHA']
+          repo, sha = os.environ['GITHUB_REPOSITORY'], os.environ['PRODUCER_SOURCE_SHA']
           runs = json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/actions/workflows/ci.yml/runs?head_sha={sha}&per_page=100']))['workflow_runs']
           green = [r for r in runs if r['name'] == 'CI' and r['head_sha'] == sha and r['status'] == 'completed' and r['conclusion'] == 'success']
           assert green, 'No successful CI workflow exists for the exact release commit; finish CI before publishing'
@@ -725,7 +803,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y minisign
-          python3 scripts/verify-release-payloads.py
+          GITHUB_SHA="$PRODUCER_SOURCE_SHA" python3 scripts/verify-release-payloads.py
       - name: Publish the verified release
         run: |
           python3 - <<'PY'
@@ -733,7 +811,7 @@ jobs:
           from pathlib import Path
           out = Path('/tmp/producer-release-verification')
           receipt = json.loads((out / 'verification.json').read_text())
-          repo, sha = os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_SHA']
+          repo, sha = os.environ['GITHUB_REPOSITORY'], os.environ['PRODUCER_SOURCE_SHA']
           release_id = os.environ['PRODUCER_RELEASE_ID']
           assert receipt['releaseId'] == int(release_id) and receipt['sha'] == sha
           endpoint = f'repos/{repo}/releases/{release_id}'
