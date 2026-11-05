@@ -3,7 +3,7 @@
 use super::super::ffi;
 use super::{
     contract::{Asset, Plan, Shader},
-    Source,
+    PerformancePhase, Source,
 };
 use base64::Engine;
 use sha2::{Digest, Sha256};
@@ -65,6 +65,7 @@ impl Store {
         })
     }
     pub fn publish(&mut self, assets: &HashMap<String, Asset>) -> Result<(), String> {
+        let phase = PerformancePhase::start("native.set.assets.publish", None);
         let mut next = HashMap::new();
         for (id, a) in assets {
             let fingerprint = format!("{:x}", Sha256::digest(a.data.as_bytes()));
@@ -142,6 +143,7 @@ impl Store {
         }
         self.assets.extend(next);
         self.files.retain(|_, f| f.strong_count() > 0);
+        phase.complete(true);
         Ok(())
     }
     // Keep the loaded package's bounded image manifest across live snapshots.
@@ -197,6 +199,10 @@ impl Store {
         versions.join("|")
     }
     pub unsafe fn open(&self, plan: &Plan) -> Result<Prepared, String> {
+        let phase = PerformancePhase::start(
+            "native.set.resources.open",
+            Some("native.set.resources.open.begin"),
+        );
         let mut out = Prepared {
             sources: HashMap::new(),
             files: Vec::new(),
@@ -220,6 +226,13 @@ impl Store {
             if out.sources.contains_key(resource) {
                 continue;
             }
+            let _resource = match n.kind.as_str() {
+                "scene3d" => Some(PerformancePhase::slow("native.set.resource.scene3d")),
+                "chart" => Some(PerformancePhase::slow("native.set.resource.chart")),
+                "shader" => Some(PerformancePhase::slow("native.set.resource.shader")),
+                "asset" => Some(PerformancePhase::slow("native.set.resource.asset")),
+                _ => None,
+            };
             if n.kind == "scene3d" {
                 let key = resource
                     .strip_prefix("scene3d:")
@@ -359,6 +372,7 @@ impl Store {
                 out.sources.insert(resource.clone(), source);
             }
         }
+        phase.complete(true);
         Ok(out)
     }
 }
@@ -413,10 +427,14 @@ impl Prepared {
         pending
     }
     pub unsafe fn ready(&self) -> bool {
-        if !self.scenes3d.values().all(|s| s.ready()) {
+        if !self.scenes3d.values().all(|s| {
+            let _probe = PerformancePhase::slow("native.set.probe.scene3d_ready");
+            s.ready()
+        }) {
             return false;
         }
         let sources: Vec<_> = self.sources.values().map(|s| s.0).collect();
+        let _probe = PerformancePhase::slow("native.set.probe.resources_warm");
         producer_set_v2_surfaces_warm(sources.as_ptr(), sources.len())
     }
 }
@@ -449,6 +467,7 @@ impl Prepared {
         }
     }
     pub fn presented3d(&self) -> bool {
+        let _probe = PerformancePhase::slow("native.set.probe.presented3d");
         self.scenes3d.values().all(|s| s.ready())
     }
     pub fn error3d(&self) -> Option<String> {

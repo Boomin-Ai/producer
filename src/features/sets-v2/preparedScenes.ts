@@ -19,7 +19,7 @@ export function sceneTransport<T extends {generation:number}>(send:(request:Reco
  let generation:number|undefined,epoch=0,discovery:Promise<number>|undefined;
  const observeGeneration=(next:number)=>{if(generation!==next){generation=next;++epoch;changed(next);}return next;};
  const discover=()=>discovery??=(async()=>{const before=epoch,next=await readGeneration();return before===epoch?observeGeneration(next):generation!;})().finally(()=>{discovery=undefined;});
- return {observeGeneration,refreshGeneration:discover,send:async(request:Record<string,unknown>)=>{
+ return {observeGeneration,refreshGeneration:discover,ensureGeneration:()=>generation===undefined?discover():Promise.resolve(generation),send:async(request:Record<string,unknown>)=>{
   const expected=generation??await discover(),before=epoch;
   try{
    const status=await send({...request,generation:expected});

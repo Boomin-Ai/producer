@@ -263,7 +263,10 @@ export function useRoomOutput(
       if(attempted)await request({op:'cancel',generation:takeGeneration,revision:attempted}).catch(()=>{});
     };
     try {
-      const roomGeneration = await transport.current!.refreshGeneration();
+      // Saved-canvas discovery and lifecycle changes refresh the generation.
+      // Reuse it for a take: every v2 action still rejects a stale generation
+      // natively before mutation, then refreshes without replaying the action.
+      const roomGeneration = await transport.current!.ensureGeneration();
       if (!stillTaking()) return false;
       takeGeneration = roomGeneration;
       generation.current = takeGeneration;

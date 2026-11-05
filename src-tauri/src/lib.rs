@@ -55,6 +55,9 @@ fn observe_command_dispatch<R: tauri::Runtime>(
         let stage = match invoke.message.command() {
             "live_engine_status" => Some("native.engine_status.received"),
             "live_rtc_start" => Some("native.rtc.start.received"),
+            "live_rtc_stop" => Some("native.rtc.stop.received"),
+            "live_home_glass" => Some("native.window.home_glass.received"),
+            "live_portrait_stop" => Some("native.portrait.stop.received"),
             _ => None,
         };
         if let Some(stage) = stage {

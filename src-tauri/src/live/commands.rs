@@ -551,12 +551,49 @@ pub async fn live_home_glass(app: tauri::AppHandle) -> EngineResult<()> {
     // is the way back when the user leaves a room.
     #[cfg(target_os = "macos")]
     {
-        use tauri::Manager;
-        if let Some(window) = app.get_webview_window("main") {
-            if let Ok(ns) = window.ns_window() {
-                crate::window::apply_vibrancy(ns);
+        let entered = std::time::Instant::now();
+        crate::performance_trace::native_stage(
+            "native.window.home_glass.entry",
+            std::time::Duration::ZERO,
+            None,
+        );
+        // Both native-window lookup and the AppKit operation can synchronously
+        // wait on main. Preserve their completion ordering without occupying
+        // an async scheduler worker during room retirement.
+        let result = tauri::async_runtime::spawn_blocking(move || {
+            use tauri::Manager;
+            crate::performance_trace::native_stage(
+                "native.window.home_glass.worker_wait",
+                entered.elapsed(),
+                None,
+            );
+            if let Some(window) = app.get_webview_window("main") {
+                let handle_started = std::time::Instant::now();
+                let ns = window.ns_window();
+                crate::performance_trace::native_stage(
+                    "native.window.home_glass.handle",
+                    handle_started.elapsed(),
+                    Some(ns.is_ok()),
+                );
+                if let Ok(ns) = ns {
+                    let apply_started = std::time::Instant::now();
+                    let applied = crate::window::apply_vibrancy(ns);
+                    crate::performance_trace::native_stage(
+                        "native.window.home_glass.apply",
+                        apply_started.elapsed(),
+                        Some(applied),
+                    );
+                }
             }
-        }
+        })
+        .await
+        .map_err(|error| EngineError::Other(error.to_string()));
+        crate::performance_trace::native_stage(
+            "native.window.home_glass.reply",
+            entered.elapsed(),
+            Some(result.is_ok()),
+        );
+        result?;
     }
     #[cfg(not(target_os = "macos"))]
     let _ = app;
@@ -1312,10 +1349,29 @@ pub async fn live_portrait_apply(
 #[tauri::command]
 pub async fn live_portrait_stop(app: tauri::AppHandle) -> EngineResult<()> {
     use tauri::Manager;
-    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().live.portrait_stop())
-        .await
-        .map_err(|error| EngineError::Other(error.to_string()))?
-        .map_err(EngineError::Other)
+    let entered = std::time::Instant::now();
+    crate::performance_trace::native_stage(
+        "native.portrait.stop.entry",
+        std::time::Duration::ZERO,
+        None,
+    );
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        crate::performance_trace::native_stage(
+            "native.portrait.stop.worker_wait",
+            entered.elapsed(),
+            None,
+        );
+        app.state::<AppState>().live.portrait_stop()
+    })
+    .await
+    .map_err(|error| EngineError::Other(error.to_string()))
+    .and_then(|result| result.map_err(EngineError::Other));
+    crate::performance_trace::native_stage(
+        "native.portrait.stop.reply",
+        entered.elapsed(),
+        Some(result.is_ok()),
+    );
+    result
 }
 #[tauri::command]
 pub async fn live_portrait_frame(app: tauri::AppHandle) -> EngineResult<String> {

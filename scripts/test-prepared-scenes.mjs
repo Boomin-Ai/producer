@@ -24,6 +24,30 @@ try {
   assert.equal(reads,1);assert.equal(calls,64);
   await transport.send({op:'retain',generation:99});assert.equal(reads,1);
  });
+ await test('warm takes reuse lifecycle generation while native rejection still fences mutations',async()=>{
+  let nativeGeneration=1,reads=0,mutations=0,requests=0;
+  const transport=sceneTransport(async request=>{
+   requests++;
+   if(request.generation!==nativeGeneration)throw Error('Room changed; prepare this v2 set again');
+   if(request.op==='activate')mutations++;
+   return status([],nativeGeneration);
+  },async()=>{reads++;return nativeGeneration;},()=>{});
+  await Promise.all(Array.from({length:32},()=>transport.ensureGeneration()));
+  for(let i=0;i<8;i++){
+   assert.equal(await transport.ensureGeneration(),1);
+   await transport.send({op:'activate'});
+  }
+  assert.equal(reads,1);assert.equal(mutations,8);
+  nativeGeneration=2;
+  assert.equal(await transport.ensureGeneration(),1,'warm lookup itself must not query legacy status');
+  await assert.rejects(transport.send({op:'activate'}),/Room changed/);
+  assert.equal(mutations,8,'stale activation mutated the new room');
+  assert.equal(requests,9,'rejected activation was silently replayed');
+  assert.equal(reads,2);assert.equal(await transport.ensureGeneration(),2);
+  // Explicit canvas/lifecycle refreshes remain real discovery boundaries.
+  nativeGeneration=3;assert.equal(await transport.refreshGeneration(),3);
+  assert.equal(await transport.ensureGeneration(),3);assert.equal(reads,3);
+ });
  await test('a delayed discovery cannot roll back a newer observed generation',async()=>{
   const pending=deferred();let requested;
   const transport=sceneTransport(async r=>{requested=r.generation;return status([],r.generation);},()=>pending.promise,()=>{});

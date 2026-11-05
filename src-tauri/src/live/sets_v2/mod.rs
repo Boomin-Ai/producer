@@ -11,6 +11,47 @@ use std::{
     ptr,
     rc::Rc,
 };
+
+// Static, payload-free timings only. A slow probe is observed after it returns;
+// readiness=false is normal and must not be reported as a failed operation.
+pub(super) struct PerformancePhase {
+    name: &'static str,
+    started: std::time::Instant,
+    success: Option<bool>,
+    minimum: std::time::Duration,
+}
+impl PerformancePhase {
+    fn start(name: &'static str, begin: Option<&'static str>) -> Self {
+        if let Some(begin) = begin {
+            crate::performance_trace::native_stage(begin, std::time::Duration::ZERO, None);
+        }
+        Self {
+            name,
+            started: std::time::Instant::now(),
+            success: Some(false),
+            minimum: std::time::Duration::ZERO,
+        }
+    }
+    fn slow(name: &'static str) -> Self {
+        Self {
+            name,
+            started: std::time::Instant::now(),
+            success: None,
+            minimum: std::time::Duration::from_millis(20),
+        }
+    }
+    fn complete(mut self, success: bool) {
+        self.success = Some(success);
+    }
+}
+impl Drop for PerformancePhase {
+    fn drop(&mut self) {
+        let elapsed = self.started.elapsed();
+        if elapsed >= self.minimum {
+            crate::performance_trace::native_stage(self.name, elapsed, self.success);
+        }
+    }
+}
 #[repr(C)]
 struct NativeNode {
     id: *const c_char,
@@ -310,6 +351,7 @@ impl<'a> Arena<'a> {
         nodes: &[&Node],
         palette: &HashMap<String, String>,
     ) -> Result<NativeNode, String> {
+        let _materialize = PerformancePhase::slow("native.set.graphics.materialize");
         let x = nodes
             .iter()
             .map(|n| n.bounds.x)
@@ -362,6 +404,7 @@ impl<'a> Arena<'a> {
             *last_used = used;
             layer.clone()
         } else {
+            let _create = PerformancePhase::slow("native.set.graphics.create");
             let url = format!(
                 "data:text/html;charset=utf-8,{}",
                 html.as_bytes()
@@ -752,6 +795,23 @@ impl RoomProgram {
     pub unsafe fn dispatch(
         &mut self,
         action: Action,
+        resolve: impl FnMut(&str) -> Result<*mut ffi::obs_source_t, String>,
+    ) -> Result<Status, String> {
+        let preload = matches!(&action, Action::Preload { .. }).then(|| {
+            PerformancePhase::start(
+                "native.set.preload.dispatch",
+                Some("native.set.preload.begin"),
+            )
+        });
+        let result = self.dispatch_inner(action, resolve);
+        if let Some(preload) = preload {
+            preload.complete(result.is_ok());
+        }
+        result
+    }
+    unsafe fn dispatch_inner(
+        &mut self,
+        action: Action,
         mut resolve: impl FnMut(&str) -> Result<*mut ffi::obs_source_t, String>,
     ) -> Result<Status, String> {
         if action.generation() != self.generation {
@@ -796,7 +856,9 @@ impl RoomProgram {
                 plan,
                 ..
             } => {
+                let validation = PerformancePhase::start("native.set.plan.validate", None);
                 contract::validate(&plan)?;
+                validation.complete(true);
                 self.resources.publish(&plan.assets)?;
                 let signature = self.identity(&plan)?;
                 let draft = self
@@ -916,6 +978,7 @@ impl RoomProgram {
         self.poll()
     }
     fn identity(&self, plan: &Plan) -> Result<String, String> {
+        let _identity = PerformancePhase::slow("native.set.plan.identity");
         let mut value = serde_json::to_value(plan).map_err(|e| e.to_string())?;
         let o = value.as_object_mut().unwrap();
         o.remove("clock");
@@ -950,7 +1013,9 @@ impl RoomProgram {
         plan: &Plan,
         resolve: &mut impl FnMut(&str) -> Result<*mut ffi::obs_source_t, String>,
     ) -> Result<(), String> {
+        let validation = PerformancePhase::start("native.set.plan.validate", None);
         contract::validate(plan)?;
+        validation.complete(true);
         self.preparing_key = None;
         if revision == 0
             || revision > 9_007_199_254_740_991
@@ -965,6 +1030,7 @@ impl RoomProgram {
         }
         self.resources.publish(&plan.assets)?;
         let prepared = self.resources.open(plan)?;
+        let captures_phase = PerformancePhase::start("native.set.capture.resolve", None);
         let mut captures = HashMap::new();
         for resource in &plan.resources {
             if resource.starts_with("graphic:")
@@ -984,6 +1050,7 @@ impl RoomProgram {
             ffi::obs_source_inc_showing(source);
             captures.insert(resource.clone(), Capture(Source(source)));
         }
+        captures_phase.complete(true);
         if self.draft.take().is_some() {
             producer_set_v2_program_cancel(self.program.0, self.draft_revision);
         }
@@ -1000,6 +1067,10 @@ impl RoomProgram {
         Ok(())
     }
     unsafe fn finish_build(&mut self, b: Building) -> Result<Rc<Draft>, String> {
+        let phase = PerformancePhase::start(
+            "native.set.finish_build",
+            Some("native.set.finish_build.begin"),
+        );
         for capture in b.captures.values() {
             let source = capture.0 .0;
             if let std::collections::hash_map::Entry::Vacant(entry) =
@@ -1085,9 +1156,12 @@ impl RoomProgram {
             return Err(error);
         }
         self.draft_revision = b.revision;
-        Ok(Rc::new(draft))
+        let draft = Rc::new(draft);
+        phase.complete(true);
+        Ok(draft)
     }
     unsafe fn register(&mut self, draft: &Draft, plan: &Plan, revision: u64) -> Result<(), String> {
+        let _register = PerformancePhase::slow("native.set.timeline.register");
         // Register the complete pending timeline as one graphics transaction.
         // Inner native calls can nest this context without waiting a frame
         // between individual tracks; no queued graphics probe occurs here.
@@ -1269,7 +1343,11 @@ impl RoomProgram {
             if let Some(error) = building.resources.error3d() {
                 return Err(error);
             }
-            if building.resources.ready()
+            let resources_ready = {
+                let _probe = PerformancePhase::slow("native.set.probe.resources_ready");
+                building.resources.ready()
+            };
+            if resources_ready
                 && building.captures.values().all(|s| {
                     ffi::obs_source_get_width(s.0 .0) > 0 && ffi::obs_source_get_height(s.0 .0) > 0
                 })
@@ -1315,6 +1393,7 @@ impl RoomProgram {
             // waiting for that callback via normal output activity can deadlock
             // the first take. The painted browser markers remain mandatory.
             if native.prepared_revision == self.draft_revision && !native.warmed {
+                let _probe = PerformancePhase::slow("native.set.probe.program_warm");
                 producer_set_v2_surface_warm(self.program.0);
                 producer_set_v2_program_status(self.program.0, &mut native);
             }
@@ -1329,14 +1408,18 @@ impl RoomProgram {
                 .collect();
             let marker_sources: Vec<_> = pending_markers.iter().map(|((s, _), _)| s.0).collect();
             let marker_rows: Vec<_> = pending_markers.iter().map(|((_, y), _)| *y).collect();
-            if native.prepared_revision == self.draft_revision
-                && !native.ready
-                && producer_set_v2_surface_markers(
+            let markers_ready = if native.prepared_revision == self.draft_revision && !native.ready
+            {
+                let _probe = PerformancePhase::slow("native.set.probe.graphics_markers");
+                producer_set_v2_surface_markers(
                     marker_sources.as_ptr(),
                     marker_rows.as_ptr(),
                     marker_sources.len(),
                 )
-            {
+            } else {
+                false
+            };
+            if markers_ready {
                 for (_, layer) in pending_markers {
                     layer.painted.set(true);
                 }

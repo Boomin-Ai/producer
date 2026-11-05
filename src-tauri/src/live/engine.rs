@@ -947,6 +947,7 @@ pub enum Command {
         reply: mpsc::Sender<Result<(), String>>,
     },
     PortraitStop {
+        queued_at: Instant,
         reply: mpsc::Sender<()>,
     },
     PortraitFrame {
@@ -963,6 +964,7 @@ pub enum Command {
     },
     SetsV2 {
         action: super::sets_v2::contract::Action,
+        queued_at: Instant,
         reply: mpsc::Sender<Result<super::sets_v2::contract::Status, String>>,
     },
     PresentationWarm {
@@ -1450,7 +1452,10 @@ impl LiveHandle {
     pub fn portrait_stop(&self) -> Result<(), String> {
         let (tx, rx) = mpsc::channel();
         self.cmd
-            .send(Command::PortraitStop { reply: tx })
+            .send(Command::PortraitStop {
+                queued_at: Instant::now(),
+                reply: tx,
+            })
             .map_err(|e| e.to_string())?;
         rx.recv_timeout(Duration::from_secs(10))
             .map_err(|e| e.to_string())
@@ -1495,7 +1500,11 @@ impl LiveHandle {
     ) -> Result<super::sets_v2::contract::Status, String> {
         let (tx, rx) = mpsc::channel();
         self.cmd
-            .send(Command::SetsV2 { action, reply: tx })
+            .send(Command::SetsV2 {
+                action,
+                queued_at: Instant::now(),
+                reply: tx,
+            })
             .map_err(|e| e.to_string())?;
         rx.recv_timeout(Duration::from_secs(10))
             .map_err(|_| "Sets v2 engine did not answer".to_string())?
@@ -3382,15 +3391,38 @@ pub fn start(
                         let result={let _=(token,placements);Err("Portrait preview is currently a Mac dev capability".into())};
                         let _=reply.send(result);
                     }
-                    Ok(Command::PortraitStop{reply})=>{if portrait_recorder.is_some()||selected_portrait{let _=reply.send(());continue;}if let Some(p)=portrait_preview.take(){p.detach();}#[cfg(any(target_os = "macos", target_os = "windows"))]if let Some(g)=scene.as_mut(){g.portrait_stop();}let _=reply.send(());}
+                    Ok(Command::PortraitStop{queued_at,reply})=>{
+                        performance_stage("native.portrait.stop.engine_wait",queued_at.elapsed(),None);
+                        let service=Instant::now();
+                        if portrait_recorder.is_some()||selected_portrait{
+                            performance_stage("native.portrait.stop.output_retained",service.elapsed(),Some(true));
+                            let _=reply.send(());continue;
+                        }
+                        if let Some(p)=portrait_preview.take(){p.detach();}
+                        #[cfg(any(target_os = "macos", target_os = "windows"))]
+                        if let Some(g)=scene.as_mut(){g.portrait_stop();}
+                        performance_stage("native.portrait.stop.engine_complete",service.elapsed(),Some(true));
+                        let _=reply.send(());
+                    }
                     Ok(Command::PortraitFrame{reply})=>{#[cfg(any(target_os = "macos", target_os = "windows"))]let frame=scene.as_ref().map(|g|g.portrait_frame()).unwrap_or_default();#[cfg(not(any(target_os = "macos", target_os = "windows")))]let frame=String::new();let _=reply.send(frame);}
                     Ok(Command::SetSourceCreate{id,label,spec,reply})=>{
                         let result=scene.as_mut().ok_or("Room unavailable".to_string()).and_then(|g|g.create_set_source(&id,&label,&spec));
                         if let Ok(sources)=&result{snap.lock().unwrap().sources=sources.clone();sink(&LiveEvent::SourcesChanged{sources:sources.clone()});}
                         let _=reply.send(result);
                     }
-                    Ok(Command::SetsV2 {action,reply}) => {
+                    Ok(Command::SetsV2 {action,queued_at,reply}) => {
+                        use super::sets_v2::contract::Action as SetAction;
+                        let stages=match &action {
+                            SetAction::Preload{..}=>Some(("native.set.preload.engine_wait","native.set.preload.engine_complete")),
+                            SetAction::Activate{..}=>Some(("native.set.activate.engine_wait","native.set.activate.engine_complete")),
+                            SetAction::Retain{..}=>Some(("native.set.retain.engine_wait","native.set.retain.engine_complete")),
+                            SetAction::Take{..}|SetAction::TakePair{..}=>Some(("native.set.take.engine_wait","native.set.take.engine_complete")),
+                            _=>None,
+                        };
+                        if let Some((queued,_))=stages{performance_stage(queued,queued_at.elapsed(),None);}
+                        let service=Instant::now();
                         let result=scene.as_mut().ok_or_else(||"The dev room is not running".to_string()).and_then(|g|g.sets_v2(action));
+                        if let Some((_,complete))=stages{performance_stage(complete,service.elapsed(),Some(result.is_ok()));}
                         let _=reply.send(result);
                     }
                     Ok(Command::PresentationStatus {reply})=> {let _=reply.send(scene.as_ref().map_or(super::presentation::Status{generation:0,lease:None,revision:0},|g|g.presentation_status()));}

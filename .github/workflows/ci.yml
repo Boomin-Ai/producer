@@ -38,6 +38,7 @@ jobs:
       - run: bun run test:scene-restoration
       - run: bun run test:manager-cache
       - run: bun run test:prepared-scenes
+      - run: bun run test:roster-poll
       - run: node scripts/test-preview-session.mjs
       - run: node scripts/test-room-session.mjs
       - run: node scripts/test-room-control.mjs

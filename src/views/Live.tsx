@@ -180,6 +180,7 @@ import { activeRoomVote, mergeRoomVote, newestVotes } from "../lib/roomVotes";
 import { DEFAULT_MOD_BOARD, MOD_BOARD_PREF, normalizeModBoard, seatFeeds, throwUpState, type ModBoardLayout } from "../lib/modBoard";
 import { PREFS_EVENT, prefGet, prefSet } from "../lib/prefs";
 import { team } from "../lib/access";
+import { createRosterPollCoordinator } from "../lib/rosterPoll";
 import type { Member } from "../lib/accessDiff";
 import { canSeat, memberLabel, seatCandidates } from "../lib/seatPick";
 import { studioToggleTarget } from "../lib/studioOutput";
@@ -6603,7 +6604,8 @@ export function LiveView({
   }, [room?.id]);
 
   const nativeRtcLifetime = useRef({ closed: false, serverRoom: null as string | null, converted: new Set<string>() });
-  const rosterTickBusy = useRef(false);
+  const rosterPollRef = useRef<ReturnType<typeof createRosterPollCoordinator> | null>(null);
+  if (!rosterPollRef.current) rosterPollRef.current = createRosterPollCoordinator();
   const rosterFailure = useRef<string | null>(null);
   const [guestTransportStopped, setGuestTransportStopped] = useState(false);
   useEffect(() => {
@@ -6622,10 +6624,8 @@ export function LiveView({
   useEffect(() => {
     if (!room?.id || !cfg.server_room_id || seat) return;
     let alive = true;
-    const tick = async () => {
-      if (rosterTickBusy.current) return;
-      rosterTickBusy.current = true;
-      try {
+    const poll = rosterPollRef.current!.generation(
+      async () => {
         const epId = await ensureEndpoint();
         if (!alive || !epId) return;
         if (!accessAsked.current) {
@@ -7035,25 +7035,23 @@ export function LiveView({
         // A successful roster HTTP response alone does not restore a stopped SDK.
         dismissKey("guests");
         rosterFailure.current = null;
-      } catch (e) {
+      },
+      (e) => {
         const message = errText(e);
         if (alive && message.includes("Native guest connection stopped")) setGuestTransportStopped(true);
         if (alive && rosterFailure.current !== message) {
           rosterFailure.current = message;
           notifyError(e, { key: "guests" });
         }
-      } finally {
-        rosterTickBusy.current = false;
-        // A render can replace this poll while an access request is pending.
-        // Let the replacement continue access immediately after the old one drains.
-        if (!alive && !accessAsked.current) rosterTickRef.current?.();
-      }
-    };
+      },
+    );
+    const tick = poll.tick;
     rosterTickRef.current = () => void tick();
     tick();
     const t = setInterval(tick, 3000);
     return () => {
       alive = false;
+      poll.close();
       rosterTickRef.current = null;
       clearInterval(t);
     };

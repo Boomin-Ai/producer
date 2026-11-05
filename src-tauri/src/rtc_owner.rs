@@ -17,6 +17,10 @@ fn phase(name: &'static str, started: std::time::Instant, success: bool) {
     native_stage(name, started.elapsed(), Some(success));
 }
 
+fn trace_failure(stage: &'static str) {
+    native_stage(stage, Duration::ZERO, Some(false));
+}
+
 async fn startup_step<T>(
     begin: &'static str,
     complete: &'static str,
@@ -95,6 +99,7 @@ impl AuthorityReader {
                     _ = &mut stopped => break,
                     result = pending.join_next(), if !pending.is_empty() => {
                         let result = result.unwrap().unwrap_or(Err("Native authority read task failed"));
+                        let read_failed = result.is_err();
                         match result.and_then(|snapshot| updater.publish(snapshot)) {
                             Ok(_) => failures = 0,
                             Err(error) => {
@@ -102,6 +107,11 @@ impl AuthorityReader {
                                 if failures >= 3 || !matches!(error,
                                     "RTC request failed" | "RTC request timed out" | "RTC response failed" |
                                     "RTC authority temporarily unavailable" | "Native guest authority response expired") {
+                                    trace_failure(if read_failed {
+                                        "native.rtc.owner.failure.authority_read"
+                                    } else {
+                                        "native.rtc.owner.failure.authority_handoff"
+                                    });
                                     let _ = failure.send(Some(error)); break;
                                 }
                             }
@@ -450,8 +460,8 @@ impl HostOwner {
                         if !connection.healthy() {
                             let instant=std::time::Instant::now();
                             while transport_recoveries.front().is_some_and(|at| instant.duration_since(*at)>=Duration::from_secs(60)){transport_recoveries.pop_front();}
-                            let Some(factory)=recovery_media else {failure=Some("Native RTC transport stopped");break;};
-                            if transport_recoveries.len()>=3 || control.lease_expires_at_ms().unwrap_or(0)<=now(){failure=Some("Native RTC transport recovery exhausted");break;}
+                            let Some(factory)=recovery_media else {trace_failure("native.rtc.owner.failure.transport_stopped");failure=Some("Native RTC transport stopped");break;};
+                            if transport_recoveries.len()>=3 || control.lease_expires_at_ms().unwrap_or(0)<=now(){trace_failure("native.rtc.owner.failure.transport_recovery_exhausted");failure=Some("Native RTC transport recovery exhausted");break;}
                             transport_recoveries.push_back(instant);
                             // The old permission reader must join before a new SDK
                             // owner can receive authority. Capture queues and media
@@ -488,7 +498,7 @@ impl HostOwner {
                             }.await;
                             match recovered {
                                 Ok(next)=>connection=next,
-                                Err(error)=>{failure=Some(error);break;}
+                                Err(error)=>{trace_failure("native.rtc.owner.failure.transport_recovery");failure=Some(error);break;}
                             }
                             #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
                             if program_requested {
@@ -511,15 +521,26 @@ impl HostOwner {
                             while program_recoveries.front().is_some_and(|at| instant.duration_since(*at) >= Duration::from_secs(60)) {
                                 program_recoveries.pop_front();
                             }
-                            if !program.as_ref().is_some_and(|publisher| publisher.recoverable()) || program_recoveries.len() >= 3 || !connection.healthy() || control.lease_expires_at_ms().unwrap_or(0) <= now() {
+                            let program_failure = if !program.as_ref().is_some_and(|publisher| publisher.recoverable()) {
+                                Some("native.rtc.owner.failure.program_unrecoverable")
+                            } else if program_recoveries.len() >= 3 {
+                                Some("native.rtc.owner.failure.program_recovery_budget")
+                            } else if !connection.healthy() {
+                                Some("native.rtc.owner.failure.program_transport_unhealthy")
+                            } else if control.lease_expires_at_ms().unwrap_or(0) <= now() {
+                                Some("native.rtc.owner.failure.program_lease_expired")
+                            } else { None };
+                            if let Some(stage) = program_failure {
+                                trace_failure(stage);
                                 failure = Some("Native program capture or publication stopped"); break;
                             }
                             // Stop capture and discard pending samples before removing
                             // only our own publications. Never replay late audio.
                             if close_program(&mut program).await != Err("Native program audio publication deadline missed") {
+                                trace_failure("native.rtc.owner.failure.program_recovery_teardown");
                                 failure = Some("Native program recovery teardown failed"); break;
                             }
-                            let recovered = tokio::time::timeout(Duration::from_secs(8), async {
+                            let recovery = tokio::time::timeout(Duration::from_secs(8), async {
                                 ensure_open()?;
                                 let first = control.media_authority().await;
                                 let snapshot = match first {
@@ -543,16 +564,22 @@ impl HostOwner {
                                 let sources = connection.publish_program().await?;
                                 ensure_open()?;
                                 crate::live::rtc_program::Publisher::start(sources, control.lease_expires_at_ms().unwrap_or(0))
-                            }).await.unwrap_or(Err("Native program recovery timed out"));
+                            }).await;
+                            if recovery.is_err() {
+                                trace_failure("native.rtc.owner.failure.program_recovery_timeout");
+                            }
+                            let recovered = recovery.unwrap_or(Err("Native program recovery timed out"));
                             match recovered {
                                 Ok(publisher) => { crate::live::rtc_program::note_recovery(); program = Some(publisher); program_recoveries.push_back(instant); }
-                                Err(error) => { failure = Some(error); break; }
+                                Err(error) => { trace_failure("native.rtc.owner.failure.program_recovery"); failure = Some(error); break; }
                             }
                         }
                         if !connection.healthy() {
+                            trace_failure("native.rtc.owner.failure.transport_unhealthy");
                             failure = Some("Native RTC transport stopped"); break;
                         }
                         if control.lease_expires_at_ms().unwrap_or(0) <= now() {
+                            trace_failure("native.rtc.owner.failure.host_lease_expired");
                             failure = Some("Native RTC host lease expired"); break;
                         }
                     }
@@ -566,6 +593,7 @@ impl HostOwner {
                         }).await;
                         let result=match renewed {Mutation::Completed(result)=>result,Mutation::NotStarted|Mutation::Closing(_)=>break};
                         if let Err(error) = result {
+                            trace_failure("native.rtc.owner.failure.renew");
                             failure = Some(error); break;
                         }
                         authority_reader.update(&control);
@@ -616,6 +644,7 @@ impl HostOwner {
                     }
                     changed = authority_reader.failed.changed() => {
                         if !connection.healthy() {continue;}
+                        trace_failure("native.rtc.owner.failure.authority_reader");
                         failure = Some(if changed.is_err() { "Native authority reader stopped" }
                             else { authority_reader.failed.borrow().unwrap_or("Native authority reader stopped") });
                         break;

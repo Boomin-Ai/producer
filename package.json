@@ -1,7 +1,7 @@
 {
   "name": "producer",
   "private": true,
-  "version": "0.4.84-performance.2",
+  "version": "0.4.84-performance.3",
   "description": "Producer by Boomin \u2014 the open-source studio for creators: post everywhere, stream everywhere.",
   "license": "AGPL-3.0-only",
   "repository": {
@@ -66,7 +66,8 @@
     "mcp:sets": "node tools/producer-mcp/server.mjs",
     "test:mcp": "node tools/producer-mcp/test.mjs",
     "test:authoring-visual": "node scripts/test-authoring-visual.mjs",
-    "test:visual-review-browser": "node scripts/test-visual-review-browser.mjs"
+    "test:visual-review-browser": "node scripts/test-visual-review-browser.mjs",
+    "test:roster-poll": "node scripts/test-roster-poll.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.0",
