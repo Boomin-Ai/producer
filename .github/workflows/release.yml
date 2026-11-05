@@ -42,18 +42,16 @@ jobs:
     if: ${{ inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) }}
     runs-on: ubuntu-latest
     permissions:
-      actions: read
       contents: read
     env:
-      GH_TOKEN: ${{ github.token }}
       RELEASE_EVENT: ${{ github.event_name }}
       NATIVE_GUEST: ${{ inputs.native_guest }}
     steps:
       - uses: actions/checkout@v4
-      - name: Require stable version, native guest runtime and exact-source CI
+      - name: Require stable version and native guest runtime
         run: |
           python3 - <<'PY'
-          import json, os, re, subprocess
+          import json, os, re
           from pathlib import Path
           config = json.loads(Path('src-tauri/tauri.conf.json').read_text())
           version = config['version']
@@ -67,11 +65,7 @@ jobs:
               assert os.environ['GITHUB_REF'] == 'refs/tags/v' + version, 'Tag does not match the packaged version'
           else:
               assert os.environ['NATIVE_GUEST'] == 'true', 'Public dispatch must set native_guest=true'
-          repo, sha = os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_SHA']
-          runs = json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/actions/workflows/ci.yml/runs?head_sha={sha}&per_page=100']))['workflow_runs']
-          green = [run for run in runs if run['name'] == 'CI' and run['head_sha'] == sha and run['status'] == 'completed' and run['conclusion'] == 'success']
-          assert green, 'No successful CI workflow exists for the exact release commit; finish CI before publishing'
-          print(f'Validated stable {version} at {sha}; CI run {green[0]["id"]}')
+          print(f'Validated stable {version} at {os.environ["GITHUB_SHA"]}')
           PY
   promote-signed-candidate:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.promote_run != '' }}
@@ -583,6 +577,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Parse Windows qualification scripts before building
+        if: ${{ github.event_name == 'push' || inputs.publish }}
         run: |
           foreach ($script in @('scripts/build-windows.ps1','scripts/test-windows-installed.ps1','scripts/test-windows-engine.ps1')) {
             $tokens = $null
@@ -641,7 +636,15 @@ jobs:
       # refuses to continue if the exe does not import obs.dll. Updater .sig is
       # emitted because TAURI_SIGNING_PRIVATE_KEY is set.
       - name: Build NSIS installer (engine linked + staged beside producer.exe)
-        run: .\scripts\build-windows.ps1 -Smoke -SmokeOutputDir "$env:RUNNER_TEMP\producer-windows-installed-proof"
+        run: .\scripts\build-windows.ps1
+
+      - name: Qualify installed Windows engine
+        if: ${{ github.event_name == 'push' || inputs.publish }}
+        timeout-minutes: 6
+        run: |
+          $version = (Get-Content src-tauri\tauri.conf.json -Raw | ConvertFrom-Json).version
+          $installer = "src-tauri\target\release\bundle\nsis\Producer_${version}_x64-setup.exe"
+          .\scripts\test-windows-installed.ps1 -Installer $installer -ExpectedExecutable src-tauri\target\release\producer.exe -OutputDir "$env:RUNNER_TEMP\producer-windows-installed-proof"
 
       # Hosted Windows runners do not guarantee a D3D11 adapter. Still compile
       # and link the same native pixel probe used on a Windows GPU workstation.
@@ -652,6 +655,7 @@ jobs:
       # test then owns its own libobs/CEF process; an absent/zero-test match
       # or unavailable D3D11 adapter cannot be reported as a runtime pass.
       - name: Ensure recording inspection prerequisite
+        if: ${{ github.event_name == 'push' || inputs.publish }}
         timeout-minutes: 6
         run: |
           if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
@@ -662,15 +666,17 @@ jobs:
           ffprobe -version | Select-Object -First 1
 
       - name: Prepare Windows native runtime qualification
+        if: ${{ github.event_name == 'push' || inputs.publish }}
         timeout-minutes: 30
         run: .\scripts\test-windows-engine.ps1 -EngineDir $env:PRODUCER_ENGINE_DIR -OutputDir "$env:RUNNER_TEMP\producer-windows-runtime-proof" -PrepareOnly
 
       - name: Qualify Windows native runtime
+        if: ${{ github.event_name == 'push' || inputs.publish }}
         timeout-minutes: 25
         run: .\scripts\test-windows-engine.ps1 -EngineDir $env:PRODUCER_ENGINE_DIR -OutputDir "$env:RUNNER_TEMP\producer-windows-runtime-proof" -RunOnly -MaxRuntimeSeconds 1200
 
       - name: Preserve Windows installed and runtime evidence
-        if: always()
+        if: ${{ always() && (github.event_name == 'push' || inputs.publish) }}
         uses: actions/upload-artifact@v4
         with:
           name: producer-windows-qualification-${{ github.sha }}
@@ -743,11 +749,22 @@ jobs:
     needs: [validate-public-source, build, build-macos-arm64-live, build-windows-live]
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+      - name: Require successful CI for this exact release commit
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          repo, sha = os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_SHA']
+          runs = json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/actions/workflows/ci.yml/runs?head_sha={sha}&per_page=100']))['workflow_runs']
+          green = [r for r in runs if r['name'] == 'CI' and r['head_sha'] == sha and r['status'] == 'completed' and r['conclusion'] == 'success']
+          assert green, 'No successful CI workflow exists for the exact release commit; finish CI before publishing'
+          print(f'Validated release source {sha} against CI run {green[0]["id"]}')
+          PY
       - name: Verify all updater payload signatures before public promotion
         run: |
           set -euo pipefail
