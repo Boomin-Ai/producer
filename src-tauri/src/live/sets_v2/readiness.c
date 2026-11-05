@@ -211,6 +211,7 @@ static void warm_on_graphics(void *data){
  for(size_t i=0;i<batch->count;i++)if(!surface_warm(batch->sources[i])){batch->ready=false;break;}
 }
 bool producer_set_v2_surfaces_warm(obs_source_t *const *sources,size_t count){
- if(count>64||(count&&!sources))return false;if(!count)return true;
+ if(count>64||(count&&!sources))return false;
+ if(!count)return true;
  struct warm_batch batch={sources,count,false};obs_queue_task(1,warm_on_graphics,&batch,true);return batch.ready;
 }
