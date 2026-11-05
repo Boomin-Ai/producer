@@ -35,6 +35,7 @@ jobs:
       - run: npm ci --prefix tools/producer-streamdeck/ai.boomin.producer.sounds.sdPlugin
       - run: node tools/producer-streamdeck/test.mjs
       - run: cc -std=c11 -Wall -Wextra -fsanitize=address,undefined scripts/test-soundboard-native.c -o /tmp/soundboard-test -lpthread -lm && /tmp/soundboard-test
+      - run: node scripts/test-sets-v2-readiness-progress.mjs
       - run: bun run test:scene-restoration
       - run: bun run test:manager-cache
       - run: bun run test:prepared-scenes

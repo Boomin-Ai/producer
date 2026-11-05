@@ -194,10 +194,11 @@ extern "C" {
         y: u32,
         expected: *const u8,
     ) -> bool;
-    fn producer_set_v2_surface_markers(
+    fn producer_set_v2_surface_marker_progress(
         sources: *const *mut ffi::obs_source_t,
         rows: *const u32,
         count: usize,
+        verified_prefix: *mut usize,
     ) -> bool;
 }
 pub unsafe fn register() {
@@ -1099,6 +1100,7 @@ impl RoomProgram {
             .map(|t| t.target.clone())
             .chain(b.plan.retained_targets.iter().cloned())
             .collect();
+        let arena_phase = PerformancePhase::start("native.set.finish_build.arena_node", None);
         let root = arena.node(&b.plan.root, &palette(), &mut |id| {
             b.resources
                 .sources
@@ -1112,7 +1114,9 @@ impl RoomProgram {
                 })
                 .ok_or_else(|| format!("Source {id} is unavailable"))
         })?;
+        arena_phase.complete(true);
         let mut error = [0 as c_char; 200];
+        let scene_phase = PerformancePhase::start("native.set.finish_build.scene_prepare", None);
         let scene = producer_set_v2_scene_prepare(
             &root,
             self.width,
@@ -1127,6 +1131,7 @@ impl RoomProgram {
                 .to_string_lossy()
                 .into_owned());
         }
+        scene_phase.complete(true);
         let bytes = producer_set_v2_scene_texture_bytes(scene)
             + (arena.browser_pixels + arena.intermediate_pixels) * 4
             + arena.markers.len() * 1024 * 1024
@@ -1408,23 +1413,28 @@ impl RoomProgram {
                 .collect();
             let marker_sources: Vec<_> = pending_markers.iter().map(|((s, _), _)| s.0).collect();
             let marker_rows: Vec<_> = pending_markers.iter().map(|((_, y), _)| *y).collect();
-            let markers_ready = if native.prepared_revision == self.draft_revision && !native.ready
-            {
+            if native.prepared_revision == self.draft_revision && !native.ready {
                 let _probe = PerformancePhase::slow("native.set.probe.graphics_markers");
-                producer_set_v2_surface_markers(
+                let mut verified_prefix = 0;
+                let valid = producer_set_v2_surface_marker_progress(
                     marker_sources.as_ptr(),
                     marker_rows.as_ptr(),
                     marker_sources.len(),
-                )
-            } else {
-                false
-            };
-            if markers_ready {
-                for (_, layer) in pending_markers {
-                    layer.painted.set(true);
+                    &mut verified_prefix,
+                );
+                if valid && verified_prefix <= pending_markers.len() {
+                    // Retain only actual successful pixels. A later unpainted
+                    // layer must not make us recheck this immutable prefix.
+                    for (_, layer) in pending_markers.iter().take(verified_prefix) {
+                        layer.painted.set(true);
+                    }
+                    if draft.markers.len() == draft._graphics.len()
+                        && draft._graphics.iter().all(|layer| layer.painted.get())
+                    {
+                        producer_set_v2_program_ready(self.program.0, self.draft_revision);
+                        producer_set_v2_program_status(self.program.0, &mut native);
+                    }
                 }
-                producer_set_v2_program_ready(self.program.0, self.draft_revision);
-                producer_set_v2_program_status(self.program.0, &mut native);
             }
             if native.ready && native.warmed {
                 if let Some((key, signature)) = self.preparing_key.take() {

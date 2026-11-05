@@ -36,6 +36,7 @@ static void shader_program_proof(void){
  obs_source_release(again);obs_wait_for_destroy_queue();
 }
 static NSDictionary *graphics_cache_proof(NSString *app,NSString *out){
+ size_t group_programs_before=producer_set_v2_group_effect_compilations();
  shader_program_proof();
  require(producer_set_v2_surfaces_warm(NULL,0),"empty warm batch");
  require(!producer_set_v2_surfaces_warm(NULL,1),"missing warm batch sources rejected");
@@ -46,6 +47,19 @@ static NSDictionary *graphics_cache_proof(NSString *app,NSString *out){
  require(!producer_set_v2_surface_markers(NULL,NULL,1),"missing marker batch arrays rejected");
  require(!producer_set_v2_surface_markers(marker_sources,marker_rows,17),"oversized marker batch rejected");
  require(!producer_set_v2_surface_markers(marker_sources,marker_rows,1),"unpainted marker pixels rejected");
+ // Exercise actual GPU pixel receipts independently of browser dimensions.
+ obs_source_t *painted=solid(2,2,1.f/255.f,254.f/255.f,3.f/255.f,false);
+ obs_source_t *progress_sources[]={painted,camera,painted};uint32_t progress_rows[]={0,0,0};size_t verified=99;
+ require(producer_set_v2_surface_marker_progress(progress_sources,progress_rows,3,&verified)&&verified==1,"retain actual marker prefix before an unpainted source");
+ obs_source_t *ready_suffix[]={painted,painted};
+ require(producer_set_v2_surface_marker_progress(ready_suffix,progress_rows+1,2,&verified)&&verified==2,"remaining actual marker suffix can complete independently");
+ require(producer_set_v2_surface_markers(ready_suffix,progress_rows+1,2),"legacy marker API still requires the complete batch");
+ verified=99;require(!producer_set_v2_surface_marker_progress(NULL,NULL,1,&verified)&&verified==0,"invalid progress arrays produce no receipts");
+ verified=99;require(!producer_set_v2_surface_marker_progress(progress_sources,progress_rows,17,&verified)&&verified==0,"oversized progress request produces no receipts");
+ obs_source_t *invalid_progress[]={painted,NULL};verified=99;
+ require(!producer_set_v2_surface_marker_progress(invalid_progress,progress_rows,2,&verified)&&verified==0,"later missing source invalidates all progress");
+ require(producer_set_v2_surface_marker_progress(NULL,NULL,0,&verified)&&verified==0,"empty progress batch needs no pixel receipt");
+ obs_source_release(painted);
  obs_set_output_source(0,source);void *owner=sets_v2_rust_attach(room,640,360);require(owner!=NULL,"cache owner");
  NSMutableArray *counts=[NSMutableArray array];
  for(int i=0;i<3;i++){
@@ -118,7 +132,7 @@ static NSDictionary *graphics_cache_proof(NSString *app,NSString *out){
  }
  require([pressure[@"graphicsLayers"] intValue]<11,"old unleased paint evicted under pressure");
  NSData *stillLive=capture(source,640,360,640,360);color(stillLive,640,450,120,0,255,0,255,"live source survives spare paint eviction");
- require(producer_set_v2_group_effect_compilations()==1,"all simultaneous groups share one compositor shader program");
+ require(producer_set_v2_group_effect_compilations()==group_programs_before+1,"all simultaneous groups share one compositor shader program");
  sets_v2_rust_release(owner);obs_set_output_source(0,NULL);obs_source_release(camera);obs_scene_release(room);
  for(int i=0;i<300&&producer_set_v2_live_groups();i++)usleep(10000);require(!producer_set_v2_live_groups(),"pooled graphics ownership released");
  return @{@"ok":@YES,@"sharedSnapshotCount":@45,@"sharedSnapshotBytes":@(residentBytes),@"standaloneSnapshotBytes":@(standaloneBytes),@"graphicsLayerCounts":counts,@"rehydrateMs":rehydrate,@"peakSpareGraphicsBytes":@(peakSpare),@"lruEvictionVerified":@YES,@"cameraPreserved":@YES,@"switches":@60,@"outputFrames":@(atomic_load(&samples.frames)),@"missingGraphicsFrames":@(atomic_load(&samples.missing)),@"remainingGroups":@(producer_set_v2_live_groups())};
