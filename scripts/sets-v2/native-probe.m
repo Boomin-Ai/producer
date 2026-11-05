@@ -48,7 +48,15 @@ OBS_IMPORT void obs_source_inc_showing(obs_source_t *);
 OBS_IMPORT bool obs_source_showing(const obs_source_t *);
 OBS_IMPORT bool obs_source_active(const obs_source_t *);
 OBS_IMPORT void obs_source_dec_showing(obs_source_t *);
+OBS_IMPORT void obs_add_tick_callback(void (*)(void *, float), void *);
+OBS_IMPORT void obs_remove_tick_callback(void (*)(void *, float), void *);
+OBS_IMPORT void obs_queue_task(int,void (*)(void *),void *,bool);
+OBS_IMPORT bool obs_in_task_thread(int);
 OBS_IMPORT void gs_matrix_scale3f(float, float, float);
+OBS_IMPORT void gs_matrix_translate3f(float, float, float);
+OBS_IMPORT void obs_source_filter_add(obs_source_t *, obs_source_t *);
+OBS_IMPORT const char *gs_get_device_name(void);
+OBS_IMPORT int gs_get_device_type(void);
 struct video_info {
   const char *graphics_module;
   uint32_t fps_num, fps_den, base_width, base_height, output_width,
@@ -66,7 +74,7 @@ struct probe_audio_info {
 OBS_IMPORT bool obs_reset_audio(const struct probe_audio_info *);
 struct test_source {
   uint32_t w, h;
-  float r, g, b, time;
+  float r, g, b, time, alpha;
   bool animated;
   gs_effect_t *effect;
 };
@@ -99,6 +107,7 @@ static void *test_create(obs_data_t *s, obs_source_t *source) {
   t->r = obs_data_get_double(s, "r");
   t->g = obs_data_get_double(s, "g");
   t->b = obs_data_get_double(s, "b");
+  t->alpha = obs_data_get_double(s, "alpha_set") ? obs_data_get_double(s, "alpha") : 1;
   t->animated = obs_data_get_double(s, "live") > 0;
   char *e = NULL;
   obs_enter_graphics();
@@ -129,7 +138,7 @@ static void test_tick(void *x, float seconds) {
 static void test_draw(void *x, gs_effect_t *unused) {
   (void)unused;
   struct test_source *t = x;
-  struct vec4 tint = {t->r, t->g, t->b, 1};
+  struct vec4 tint = {t->r*t->alpha, t->g*t->alpha, t->b*t->alpha, t->alpha};
   gs_effect_set_vec4(gs_effect_get_param_by_name(t->effect, "tint"), &tint);
   gs_effect_set_float(gs_effect_get_param_by_name(t->effect, "phase"), t->time);
   gs_effect_set_float(gs_effect_get_param_by_name(t->effect, "live"),
@@ -178,6 +187,12 @@ static bool add(obs_source_t *g, obs_source_t *s, float x, float y, float w,
                 float h) {
   return producer_set_v2_group_add(g, s, x, y, w, h, false);
 }
+static obs_source_t *solid_alpha(uint32_t w,uint32_t h,float r,float g,float b,float alpha){
+  char json[240];snprintf(json,sizeof(json),"{\"width\":%u,\"height\":%u,\"r\":%g,\"g\":%g,\"b\":%g,\"alpha_set\":1,\"alpha\":%g}",w,h,r,g,b,alpha);
+  obs_data_t *settings=obs_data_create_from_json(json);
+  obs_source_t *source=obs_source_create_private("sets_v2_probe_color","Premultiplied color proof",settings);
+  obs_data_release(settings);return source;
+}
 static void require(bool condition, const char *message) {
   if (!condition) {
     fprintf(stderr, "FAIL: %s\n", message);
@@ -185,24 +200,47 @@ static void require(bool condition, const char *message) {
   }
 }
 static bool capture_linear=false;
+static int capture_framebuffer=-1;
+static enum gs_color_space capture_space=GS_CS_SRGB;
+static bool capture_transform=false;
+static obs_source_t *capture_blend_sentinel,*capture_matrix_sentinel;
+#ifdef PRODUCER_SET_V2_PROBE
+static obs_source_t *capture_groups[4];static size_t capture_group_count;
+static struct producer_set_v2_group_probe_stats capture_group_stats[4];
+#endif
 static NSData *capture(obs_source_t *source, uint32_t designW, uint32_t designH,
                        uint32_t outW, uint32_t outH) {
   obs_enter_graphics();
-  gs_texrender_t *target = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
-  gs_stagesurf_t *stage = gs_stagesurface_create(outW, outH, GS_RGBA);
+  enum gs_color_format format=capture_space==GS_CS_SRGB?GS_RGBA:GS_RGBA16F;
+  uint32_t bytesPerPixel=format==GS_RGBA?4:8;
+  gs_texrender_t *target = gs_texrender_create(format, GS_ZS_NONE);
+  gs_stagesurf_t *stage = gs_stagesurface_create(outW, outH, format);
   require(target && stage, "allocate readback");
-  require(gs_texrender_begin(target, outW, outH), "begin readback");
+  require(capture_space==GS_CS_SRGB?gs_texrender_begin(target,outW,outH):gs_texrender_begin_with_color_space(target,outW,outH,capture_space), "begin readback");
   struct vec4 clear = {0, 0, 0, 0};
   gs_clear(GS_CLEAR_COLOR, &clear, 0, 0);
   gs_ortho(0, designW, 0, designH, -100, 100);
   gs_matrix_push();
   gs_matrix_identity();
+  if(capture_transform){gs_matrix_translate3f(7,9,0);gs_matrix_scale3f(.8125f,.75f,1);}
   gs_blend_state_push();
-  gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
+  gs_blend_function(capture_blend_sentinel?GS_BLEND_ZERO:GS_BLEND_ONE,capture_blend_sentinel?GS_BLEND_ONE:GS_BLEND_INVSRCALPHA);
   bool prev_linear=gs_set_linear_srgb(capture_linear);
-  bool prev_fb=gs_framebuffer_srgb_enabled();gs_enable_framebuffer_srgb(capture_linear);
+  bool expected_fb=capture_framebuffer<0?capture_linear:capture_framebuffer;
+  bool prev_fb=gs_framebuffer_srgb_enabled();gs_enable_framebuffer_srgb(expected_fb);
+#ifdef PRODUCER_SET_V2_PROBE
+  for(size_t i=0;i<capture_group_count;i++)producer_set_v2_group_probe_reset(capture_groups[i]);
+#endif
   obs_source_video_render(source);
-  require(gs_get_linear_srgb()==capture_linear && gs_framebuffer_srgb_enabled()==capture_linear,"source restores inherited color state");
+  require(gs_get_linear_srgb()==capture_linear && gs_framebuffer_srgb_enabled()==expected_fb,"source restores inherited color state");
+#ifdef PRODUCER_SET_V2_PROBE
+  for(size_t i=0;i<capture_group_count;i++)capture_group_stats[i]=producer_set_v2_group_probe_stats(capture_groups[i]);
+#endif
+  if(capture_blend_sentinel){
+    gs_matrix_push();gs_matrix_translate3f(designW-12,4,0);obs_source_video_render(capture_blend_sentinel);gs_matrix_pop();
+    gs_blend_function(GS_BLEND_ONE,GS_BLEND_INVSRCALPHA);
+    gs_matrix_push();gs_matrix_translate3f(designW-12,designH-12,0);obs_source_video_render(capture_matrix_sentinel);gs_matrix_pop();
+  }
   gs_enable_framebuffer_srgb(prev_fb);gs_set_linear_srgb(prev_linear);
   gs_blend_state_pop();
   gs_matrix_pop();
@@ -211,10 +249,10 @@ static NSData *capture(obs_source_t *source, uint32_t designW, uint32_t designH,
   uint8_t *p = NULL;
   uint32_t stride = 0;
   require(gs_stagesurface_map(stage, &p, &stride), "map readback");
-  NSMutableData *data = [NSMutableData dataWithLength:outW * outH * 4];
+  NSMutableData *data = [NSMutableData dataWithLength:outW * outH * bytesPerPixel];
   for (uint32_t y = 0; y < outH; y++)
-    memcpy((uint8_t *)data.mutableBytes + y * outW * 4, p + y * stride,
-           outW * 4);
+    memcpy((uint8_t *)data.mutableBytes + y * outW * bytesPerPixel, p + y * stride,
+           outW * bytesPerPixel);
   gs_stagesurface_unmap(stage);
   gs_stagesurface_destroy(stage);
   gs_texrender_destroy(target);
@@ -913,6 +951,180 @@ static NSDictionary *color_context_proof(NSString *out) {
   return @{@"checks":checks,@"scope":@"known midtone in direct, clipped, masked, program and three transition paths; both linear/nonlinear canvas state; inherited state restored"};
 }
 
+
+#ifdef PRODUCER_SET_V2_PROBE
+struct identity_frame_capture {
+  atomic_bool tick_seen, finished;
+  obs_source_t *source;
+  uint32_t width, height;
+  CFTypeRef frame;
+};
+static void identity_capture_after_tick(void *data){
+  struct identity_frame_capture *request=data;
+  @autoreleasepool {
+    request->frame=CFBridgingRetain(capture(request->source,request->width+40,request->height+40,request->width+40,request->height+40));
+  }
+  atomic_store(&request->finished,true);
+}
+static void identity_capture_tick(void *data,float seconds){
+  (void)seconds;
+  struct identity_frame_capture *request=data;
+  atomic_store(&request->tick_seen,true);
+}
+static NSData *identity_fresh_frame(obs_source_t *source,uint32_t w,uint32_t h){
+  struct identity_frame_capture request={.source=source,.width=w,.height=h};
+  // Public tick callbacks precede source ticks; graphics tasks run after all
+  // source ticks/output rendering. Filter texrenders are reset by those normal
+  // ticks. Each off-output fixture therefore really renders on a fresh frame,
+  // including the forced-isolation reference, instead of reusing its filter's
+  // first render in the same frame. Queue from runProbe's background thread:
+  // obs_queue_task would execute inline if called by the tick callback itself.
+  // Never manually tick a source or sleep while holding the graphics context.
+  require(!obs_in_task_thread(1),"identity frame barrier runs outside OBS graphics thread");
+  obs_add_tick_callback(identity_capture_tick,&request);
+  for(int i=0;i<5000&&!atomic_load(&request.tick_seen);i++)usleep(1000);
+  obs_remove_tick_callback(identity_capture_tick,&request);
+  require(atomic_load(&request.tick_seen),"identity fixture observes a real OBS tick");
+  obs_queue_task(1,identity_capture_after_tick,&request,true); // OBS_TASK_GRAPHICS
+  require(atomic_load(&request.finished)&&request.frame,"identity readback completes after a real OBS source-tick boundary");
+  return CFBridgingRelease(request.frame);
+}
+static obs_source_t *identity_wrapper(obs_source_t *child,uint32_t w,uint32_t h,float density){
+  obs_source_t *group=producer_set_v2_group_create(w,h,0,1);
+  require(group&&producer_set_v2_group_density(group,density),"identity wrapper allocation");
+  require(add(group,child,0,0,w,h)&&producer_set_v2_group_seal(group),"identity wrapper seal");return group;
+}
+static void identity_appearance(obs_source_t *group){
+  obs_data_t *settings=obs_data_create_from_json("{\"shape\":\"rectangle\",\"opacity\":1}");
+  obs_source_t *filter=obs_source_create_private("producer_source_appearance","Identity filter guard",settings);
+  obs_data_release(settings);require(filter!=NULL,"identity filter allocation");
+  obs_source_filter_add(group,filter);obs_source_release(filter);
+}
+static NSDictionary *identity_compare(obs_source_t *source,NSArray<NSValue *> *tracked,
+                                      size_t wrapperCount,int expectedBypass,uint32_t w,uint32_t h,NSString *label){
+  require(tracked.count<=4,"bounded identity counter observations");
+  capture_group_count=tracked.count;
+  for(size_t i=0;i<tracked.count;i++){
+    capture_groups[i]=tracked[i].pointerValue;
+    obs_enter_graphics();producer_set_v2_group_probe_force_isolation(capture_groups[i],false);obs_leave_graphics();
+  }
+  NSData *actual=identity_fresh_frame(source,w,h);
+  struct producer_set_v2_group_probe_stats observed[4];memcpy(observed,capture_group_stats,sizeof(observed));
+  for(size_t i=0;i<tracked.count;i++){obs_enter_graphics();producer_set_v2_group_probe_force_isolation(capture_groups[i],true);obs_leave_graphics();}
+  NSData *reference=identity_fresh_frame(source,w,h);
+  for(size_t i=0;i<tracked.count;i++){obs_enter_graphics();producer_set_v2_group_probe_force_isolation(capture_groups[i],false);obs_leave_graphics();}
+  require(actual.length==reference.length,"identity reference dimensions");
+  unsigned delta=0;
+  if(capture_space==GS_CS_SRGB){
+    const uint8_t *a=actual.bytes,*b=reference.bytes;
+    for(size_t i=0;i<actual.length;i++){unsigned d=abs((int)a[i]-(int)b[i]);if(d>delta)delta=d;}
+    if(delta>3)fprintf(stderr,"IDENTITY %s: max RGBA difference %u\n",label.UTF8String,delta);
+    require(delta<=3,"identity pixels match forced encoded isolation within existing three-value tolerance");
+    float sx=capture_transform?.8125f:1,sy=capture_transform?.75f:1,tx=capture_transform?7:0,ty=capture_transform?9:0;
+    color(actual,w+40,(int)(tx+(w+32)*sx),(int)(ty+8*sy),0,0,0,0,"caller blend state remains ZERO/ONE after source");
+    color(actual,w+40,(int)(tx+(w+32)*sx),(int)(ty+(h+32)*sy),0,255,0,255,"caller matrix/viewport survives child render");
+  }else{
+    require([actual isEqualToData:reference],"16F/HDR capture matches forced isolation without tolerance relaxation");
+  }
+  NSMutableArray *counters=[NSMutableArray array];
+  for(size_t i=0;i<tracked.count;i++){
+    if(i<wrapperCount&&expectedBypass>=0){
+      require(observed[i].identity_bypasses==(uint64_t)expectedBypass,"exact identity branch eligibility");
+      require(expectedBypass?observed[i].intermediate_passes==0:observed[i].intermediate_passes>=1,"identity removes only eligible wrapper texture pass");
+    }
+    if(i<wrapperCount&&expectedBypass<0&&capture_space==GS_CS_SRGB&&!capture_linear&&!capture_framebuffer)
+      require(observed[i].nonlinear_bypasses==1&&observed[i].intermediate_passes==0,"original nonlinear bypass remains unchanged");
+    require(capture_group_stats[i].identity_bypasses==0&&capture_group_stats[i].intermediate_passes>=1,"forced isolation reference actually takes intermediate path");
+    [counters addObject:@{@"identityBypasses":@(observed[i].identity_bypasses),@"nonlinearBypasses":@(observed[i].nonlinear_bypasses),@"intermediatePasses":@(observed[i].intermediate_passes),@"referenceIntermediatePasses":@(capture_group_stats[i].intermediate_passes)}];
+  }
+  capture_group_count=0;
+  return @{@"case":label,@"linear":@(capture_linear),@"framebufferSrgb":@(capture_framebuffer),@"colorSpace":@(capture_space),@"transformedCaller":@(capture_transform),@"freshObsTickBoundary":@YES,@"maxRgba8Delta":@(delta),@"counters":counters};
+}
+static NSDictionary *identity_group_proof(NSString *out){
+  (void)out;
+  NSMutableArray *checks=[NSMutableArray array];
+  capture_blend_sentinel=solid(8,8,1,0,0,false);capture_matrix_sentinel=solid(8,8,0,1,0,false);
+  for(int portrait=0;portrait<2;portrait++)for(int density=1;density<=2;density++){
+    uint32_t w=portrait?120:160,h=portrait?160:120;
+    obs_source_t *amber=solid(w,h,136./255.,96./255.,46./255.,false);
+    obs_source_t *alpha=solid_alpha(w,h,50./255.,90./255.,130./255.,.5);
+    obs_source_t *pane=producer_set_v2_group_create(w/4,h/3,6,.65);
+    require(pane&&add(pane,amber,0,0,w/4,h/3)&&producer_set_v2_group_seal(pane),"encoded masked/translucent descendant");
+    obs_source_t *content=producer_set_v2_group_create(w,h,0,1);
+    require(content&&producer_set_v2_group_density(content,density),"clipped content density");
+    require(add(content,amber,0,-1,w,h+2)&&add(content,alpha,w/2,0,w/2,h)&&add(content,pane,4,4,w/4,h/3)&&producer_set_v2_group_seal(content),"retained clipped/multiple-child encoded compositor");
+    obs_source_t *inner=identity_wrapper(content,w,h,density),*outer=identity_wrapper(inner,w,h,density);
+    NSArray *tracked=@[[NSValue valueWithPointer:outer],[NSValue valueWithPointer:inner],[NSValue valueWithPointer:content]];
+    for(int linear=0;linear<2;linear++)for(int framebuffer=0;framebuffer<2;framebuffer++){
+      capture_linear=linear;capture_framebuffer=framebuffer;capture_transform=density==2;
+      // The original nonlinear bypass also remains valid; its identity counter
+      // stays zero. Linear/mismatched contexts must now remove both wrappers.
+      int expected=linear||framebuffer?1:-1;
+      [checks addObject:identity_compare(outer,tracked,2,expected,w,h,[NSString stringWithFormat:@"identity-chain-%d-%dx",portrait,density])];
+      require(capture_group_stats[2].intermediate_passes==1,"clipping retains deepest encoded intermediate");
+    }
+    // Dynamic geometry must be checked each frame, not cached at seal time.
+    capture_linear=true;capture_framebuffer=1;capture_transform=false;
+    obs_enter_graphics();producer_set_v2_group_layer_frame(outer,0,-1,0,w,h,true);obs_leave_graphics();
+    [checks addObject:identity_compare(outer,@[[NSValue valueWithPointer:outer]],1,0,w,h,@"animated-overflow")];
+    obs_enter_graphics();producer_set_v2_group_layer_frame(outer,0,0,0,w,h,true);
+    producer_set_v2_group_layer_transform(outer,0,7,1,1);obs_leave_graphics();
+    [checks addObject:identity_compare(outer,@[[NSValue valueWithPointer:outer]],1,0,w,h,@"animated-rotation")];
+    obs_enter_graphics();producer_set_v2_group_layer_transform(outer,0,0,1,1);obs_leave_graphics();
+    [checks addObject:identity_compare(outer,@[[NSValue valueWithPointer:outer]],1,1,w,h,@"restored-identity")];
+    obs_source_release(outer);obs_source_release(inner);obs_source_release(content);obs_source_release(pane);obs_source_release(alpha);obs_source_release(amber);
+  }
+  capture_linear=true;capture_framebuffer=1;capture_transform=false;
+  obs_source_t *raw=solid(160,120,136./255.,96./255.,46./255.,false);
+  obs_source_t *base=producer_set_v2_group_create(160,120,0,1);
+  require(add(base,raw,0,-1,160,122)&&producer_set_v2_group_seal(base),"negative-case clipped child");
+  for(NSString *kind in @[@"raw",@"two-children",@"hidden",@"contain",@"offset",@"scale",@"density",@"radius",@"opacity",@"mask",@"viewport",@"backdrop",@"child-opacity",@"child-radius",@"child-mask",@"child-filter",@"parent-filter"]){
+    obs_source_t *child=base,*ownedChild=NULL;
+    if([kind isEqual:@"raw"])child=raw;
+    if([kind hasPrefix:@"child-"]){ownedChild=identity_wrapper(base,160,120,1);child=ownedChild;}
+    obs_enter_graphics();
+    if([kind isEqual:@"child-opacity"])producer_set_v2_group_frame(child,0,.65);
+    if([kind isEqual:@"child-radius"])producer_set_v2_group_frame(child,8,1);
+    obs_leave_graphics();
+    // Mask parameters are pre-seal only: construct this negative child separately.
+    if([kind isEqual:@"child-mask"]){obs_source_release(ownedChild);ownedChild=producer_set_v2_group_create(160,120,0,1);child=ownedChild;require(producer_set_v2_group_effects(child,2,.5,.5,.5,1,false,0,0)&&add(child,base,0,0,160,120)&&producer_set_v2_group_seal(child),"masked child guard");}
+    if([kind isEqual:@"child-filter"])identity_appearance(child);
+    obs_source_t *group=producer_set_v2_group_create(160,120,[kind isEqual:@"radius"]?8:0,[kind isEqual:@"opacity"]?.65:1);
+    require(group!=NULL,"negative identity group");
+    if([kind isEqual:@"density"])require(producer_set_v2_group_density(group,2),"unequal density guard");
+    if([kind isEqual:@"mask"])require(producer_set_v2_group_effects(group,2,.5,.5,.5,1,false,0,0),"mask guard");
+    if([kind isEqual:@"backdrop"])require(producer_set_v2_group_effects(group,0,1,.5,.5,0,false,0,1),"backdrop guard");
+    if([kind isEqual:@"viewport"])require(producer_set_v2_group_viewport_inset(group,.1,.1),"viewport guard");
+    require(producer_set_v2_group_add(group,child,[kind isEqual:@"offset"]?1:0,0,[kind isEqual:@"offset"]?159:160,120,[kind isEqual:@"contain"]),"negative identity placement");
+    if([kind isEqual:@"two-children"])require(add(group,raw,0,0,1,1),"second visible child guard");
+    require(producer_set_v2_group_seal(group),"negative identity seal");
+    obs_enter_graphics();
+    if([kind isEqual:@"scale"])require(producer_set_v2_group_layer_transform(group,0,0,.9,1),"scale guard");
+    if([kind isEqual:@"hidden"])require(producer_set_v2_group_layer_frame(group,0,0,0,160,120,false),"hidden child guard");
+    obs_leave_graphics();
+    if([kind isEqual:@"parent-filter"])identity_appearance(group);
+    [checks addObject:identity_compare(group,@[[NSValue valueWithPointer:group]],1,0,160,120,kind)];
+    obs_source_release(group);if(ownedChild)obs_source_release(ownedChild);
+  }
+  obs_source_t *wrapper=identity_wrapper(base,160,120,1);
+  capture_space=GS_CS_SRGB_16F;
+  [checks addObject:identity_compare(wrapper,@[[NSValue valueWithPointer:wrapper]],1,0,160,120,@"16f-fallback")];
+  // libOBS owns the outer HDR conversion and may render the SDR group inside
+  // an SDR conversion surface. Compare the entire HDR result to forced isolation.
+  capture_space=GS_CS_709_SCRGB;
+  [checks addObject:identity_compare(wrapper,@[[NSValue valueWithPointer:wrapper]],0,-1,160,120,@"hdr-conversion-retained")];
+  capture_space=GS_CS_SRGB;capture_linear=false;capture_framebuffer=-1;capture_transform=false;
+  obs_source_t *blendSentinel=capture_blend_sentinel,*matrixSentinel=capture_matrix_sentinel;
+  capture_group_count=0;capture_blend_sentinel=NULL;capture_matrix_sentinel=NULL;
+  obs_source_release(wrapper);obs_source_release(base);obs_source_release(raw);obs_source_release(blendSentinel);obs_source_release(matrixSentinel);
+  for(int i=0;i<300&&producer_set_v2_live_groups();i++)usleep(10000);
+  obs_wait_for_destroy_queue();
+  require(!producer_set_v2_live_groups(),"identity fixtures release group leases");
+  require(!atomic_load(&source_live),"identity fixtures release synthetic sources before combined cache proof");
+  return @{@"scope":@"owned identity wrappers only; exact forced-isolation references, premultiplied alpha, clipping, masks, color/blend/matrix state, SDR/16F/HDR and dynamic fallback",@"checks":checks};
+}
+#endif
+
 static struct producer_set_v2_program_status program_status(obs_source_t *p) {
   struct producer_set_v2_program_status status = {0};
   require(producer_set_v2_program_status(p, &status), "native program status");
@@ -925,7 +1137,6 @@ static void wait_program(obs_source_t *p, uint64_t revision) {
   require(program_status(p).rendered_revision == revision,
           "candidate endpoint rendered receipt");
 }
-OBS_IMPORT void obs_queue_task(int,void (*)(void *),void *,bool);
 struct graphics_hold {atomic_bool entered,finished;};
 static void hold_graphics_for_status_proof(void *data){
  struct graphics_hold *hold=data;obs_enter_graphics();atomic_store(&hold->entered,true);usleep(200000);obs_leave_graphics();atomic_store(&hold->finished,true);
@@ -1524,8 +1735,10 @@ static int runProbe(int argc, char **argv) {
                                                attributes:nil
                                                     error:nil];
 
-    NSString *graphics = [app stringByAppendingPathComponent:
-                                  @"Contents/Frameworks/libobs-metal.dylib"];
+    NSString *backend=getenv("PRODUCER_PROBE_GRAPHICS_BACKEND")?@(getenv("PRODUCER_PROBE_GRAPHICS_BACKEND")):@"metal";
+    require([backend isEqual:@"metal"]||[backend isEqual:@"opengl"],"explicit supported probe backend");
+    NSString *graphics=[app stringByAppendingPathComponent:[NSString stringWithFormat:@"Contents/Frameworks/libobs-%@.dylib",backend]];
+    require([[NSFileManager defaultManager] fileExistsAtPath:graphics],"requested backend module exists");
     struct video_info v = {graphics.UTF8String,
                            30,
                            1,
@@ -1540,14 +1753,26 @@ static int runProbe(int argc, char **argv) {
                            1,
                            3};
     int rc = obs_reset_video(&v);
-    require(rc == 0, "video init Metal");
+    require(rc == 0, "video init requested backend");
+    obs_enter_graphics();int deviceType=gs_get_device_type();const char *deviceName=gs_get_device_name();NSString *confirmedName=deviceName?@(deviceName):@"";obs_leave_graphics();
+    require(deviceType==([backend isEqual:@"metal"]?3:1),"actual graphics device matches requested backend without fallback");
+    NSDictionary *backendReport=@{@"requested":backend,@"confirmedDeviceType":@(deviceType),@"confirmedDeviceName":confirmedName,@"module":graphics,@"obsVersion":@(obs_get_version_string())};
+    require([[NSJSONSerialization dataWithJSONObject:backendReport options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:@"backend-proof.json"] atomically:YES],"write confirmed backend report");
     const struct probe_audio_info audio = {48000, 2};
     require(obs_reset_audio(&audio),
             "initialize isolated audio mixer without capture/output");
-    shaderDiagnostics();
+    if([backend isEqual:@"metal"])shaderDiagnostics();
     producer_source_appearance_register();
     sets_v2_rust_register();
     register_test();
+#ifdef PRODUCER_SET_V2_PROBE
+    if(getenv("PRODUCER_PROBE_GROUP_IDENTITY")||getenv("PRODUCER_PROBE_GROUP_IDENTITY_ONLY")){
+      NSDictionary *colorReport=color_context_proof(out),*identityReport=identity_group_proof(out);
+      NSDictionary *report=@{@"backend":backendReport,@"color":colorReport,@"identity":identityReport};
+      require([[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:@"group-identity-proof.json"] atomically:YES],"write identity and inherited-state proof");
+      if(getenv("PRODUCER_PROBE_GROUP_IDENTITY_ONLY")){obs_shutdown();puts("PASS: native identity wrappers, encoded color and fallback contracts");return 0;}
+    }
+#endif
     if(getenv("PRODUCER_PROBE_PAIR_ONLY")){
       NSDictionary *report=paired_program_proof();
       [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:@"paired-output-proof.json"] atomically:YES];
@@ -1714,7 +1939,8 @@ static int runProbe(int argc, char **argv) {
     NSArray *authored = real_room_proof(out);
     NSDictionary *sharpness = sharpness_proof(out);
     NSDictionary *report = @{
-      @"backend" : @"Metal",
+      @"backend" : [backend isEqual:@"metal"]?@"Metal":@"OpenGL",
+      @"backendConfirmation" : backendReport,
       @"obsVersion" : @(obs_get_version_string()),
       @"checks" : checks,
       @"media" : media,

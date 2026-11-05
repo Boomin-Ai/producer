@@ -23,8 +23,9 @@ function cleanName(platform, assetName) {
 }
 
 async function latestRelease() {
-  // /releases/latest excludes prereleases, so list and take the newest non-draft.
-  const res = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=10`, {
+  // Public downloads follow the stable channel; private/performance candidates
+  // must not replace its installers merely because they were published later.
+  const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
     headers: {
       "user-agent": "producer-site",
       "accept": "application/vnd.github+json",
@@ -32,8 +33,8 @@ async function latestRelease() {
     cf: { cacheTtl: 300, cacheEverything: true },
   });
   if (!res.ok) return null;
-  const list = await res.json();
-  return Array.isArray(list) ? list.find((r) => !r.draft && r.assets && r.assets.length) : null;
+  const release = await res.json();
+  return release && !release.draft && !release.prerelease && Array.isArray(release.assets) && release.assets.length ? release : null;
 }
 
 export default {

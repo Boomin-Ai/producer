@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   frontend:
@@ -15,6 +16,8 @@ jobs:
           bun-version: latest
       - run: bun install --frozen-lockfile
       - run: bun run build
+      - run: bun run test:performance-trace
+      - run: python3 scripts/profile-production.py --self-test
       - run: bun run test:presentation
       - run: bun run test:module-push
       - run: bun run test:set-control
@@ -33,8 +36,11 @@ jobs:
       - run: npm ci --prefix tools/producer-streamdeck/ai.boomin.producer.sounds.sdPlugin
       - run: node tools/producer-streamdeck/test.mjs
       - run: cc -std=c11 -Wall -Wextra -fsanitize=address,undefined scripts/test-soundboard-native.c -o /tmp/soundboard-test -lpthread -lm && /tmp/soundboard-test
+      - run: node scripts/test-sets-v2-readiness-progress.mjs
       - run: bun run test:scene-restoration
       - run: bun run test:manager-cache
+      - run: bun run test:prepared-scenes
+      - run: bun run test:roster-poll
       - run: node scripts/test-preview-session.mjs
       - run: node scripts/test-room-session.mjs
       - run: node scripts/test-room-control.mjs

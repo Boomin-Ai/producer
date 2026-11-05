@@ -7,7 +7,7 @@ import type { ModLink } from "./lib/modSeat";
 import { setActiveEndpointId } from "./lib/workspace";
 import { FirstLight, firstLightDone } from "./views/FirstLight";
 import { Home } from "./views/Home";
-import {invoke} from "@tauri-apps/api/core";
+import {invoke} from "./lib/nativeInvoke";
 import {SetsDevelopmentRoom} from "./views/SetsDevelopmentRoom";
 
 type View = "loading" | "onboarding" | "onboarding-server" | "signin" | "home" | { kind: "modseat"; link: ModLink; from: "onboarding" | "signin" };

@@ -26,13 +26,16 @@ function Get-LockHash {
 
 function Get-EngineName { "producer-libobs-windows-x64-$(Get-LockHash)" }
 
-function Get-EngineDir {
+function Get-EngineDir([string]$RunId = '') {
   $name = Get-EngineName
   $dir = Join-Path $RepoRoot "engine\artifacts\$name"
-  if (Test-Path (Join-Path $dir "bin\obs.dll")) { return $dir }
+  if (-not $RunId -and (Test-Path (Join-Path $dir "bin\obs.dll"))) { return $dir }
 
   Write-Host "engine $name not on disk; fetching from the newest green engine.yml run that carries it"
-  $runs = gh run list --workflow=engine.yml --status success --limit 10 --json databaseId -q '.[].databaseId'
+  $runs = if ($RunId) {
+    if ($RunId -notmatch '^[1-9][0-9]{0,19}$') { throw 'Invalid pinned engine run ID' }
+    $RunId
+  } else { gh run list --workflow=engine.yml --status success --limit 10 --json databaseId -q '.[].databaseId' }
   if (-not $runs) { throw "no green engine.yml runs found (gh auth?)" }
   $tmp = Join-Path $env:TEMP "producer-engine-dl"
   foreach ($run in $runs) {

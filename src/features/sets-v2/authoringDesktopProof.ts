@@ -1,5 +1,5 @@
 /** Explicit, isolated desktop acceptance. Never enabled in normal dev or release. */
-import {invoke} from '@tauri-apps/api/core';
+import {invoke} from '../../lib/nativeInvoke';
 import {getVersion} from '@tauri-apps/api/app';
 import {ipc,devices,listenLiveEvents,setSourceAudio} from '../../lib/ipc';
 import {defaultConfig,type RoomConfig} from '../../lib/roomConfig';

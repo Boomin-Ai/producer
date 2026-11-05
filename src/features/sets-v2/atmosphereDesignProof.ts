@@ -1,5 +1,5 @@
 /** Opt-in acceptance for authored Atmosphere motion; never runs in normal Dev. */
-import {invoke} from '@tauri-apps/api/core';
+import {invoke} from '../../lib/nativeInvoke';
 const sleep=(ms:number)=>new Promise<void>(r=>setTimeout(r,ms));
 async function until<T>(read:()=>T|Promise<T>,label:string):Promise<NonNullable<T>>{for(let i=0;i<900;i++){const v=await read();if(v)return v as NonNullable<T>;await sleep(100);}throw Error('Timed out: '+label);}
 export async function atmosphereDesignProof(){

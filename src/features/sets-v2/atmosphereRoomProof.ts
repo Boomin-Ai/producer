@@ -1,6 +1,6 @@
 import {preparationDebug} from './preparedScenes';
 /** Opt-in native acceptance against a separate Atmosphere dev room. */
-import {invoke} from '@tauri-apps/api/core';
+import {invoke} from '../../lib/nativeInvoke';
 const sleep=(ms:number)=>new Promise<void>(r=>setTimeout(r,ms));
 async function until<T>(read:()=>T|Promise<T>,label:string):Promise<NonNullable<T>>{for(let i=0;i<1200;i++){const v=await read();if(v)return v as NonNullable<T>;await sleep(100);}throw Error('Timed out: '+label);}
 const button=(label:string,root:ParentNode=document)=>Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(b=>b.getClientRects().length&&!b.disabled&&(b.textContent?.trim()===label||b.getAttribute('aria-label')===label));

@@ -1,0 +1,72 @@
+Producer performance diagnostics candidate
+
+This change adds measurement and opt-in sharing. It changes no room, device,
+rendering, source, Set or panel behavior. Capture and sharing are initially off.
+
+In Settings > App, local capture records metadata-only action/IPC timings,
+room milestones, engine stages and freshness-aware engine counters. Export
+capture remains available after stopping capture. Separate sharing consent
+explicitly enrolls the signed-in Boomin account. A changed consent scope fails
+closed. Re-enrollment excludes earlier captures; an environment flag cannot
+permit sharing. No UI values, names, media, URLs, clipboard contents, command
+arguments/results, authentication tokens or raw error messages are recorded.
+
+Local files live in app data/performance-traces. JSONL storage has two bounded
+4 MiB files. Frontend queue, native stage queue, writers and request sizes are
+bounded. Loss, uncertain acknowledgements, truncation and stale samples are
+reported. Shared delivery keeps an atomic private spool, original session
+metadata, per-session consent cutoffs, and validated acknowledgement cursors.
+It first attempts after five seconds and then once per minute, with a common
+four-attempt budget. Bursts can exceed delivery capacity; local exports remain
+necessary for detailed short baselines. File rotation and capacity limits mean
+this is not a guarantee that every event will be retained or delivered.
+
+First-party WebView clicks have structural targets; collapse, layout toggle
+and guest-link copy also have explicit action names. Native OS menus/dialogs
+and embedded CEF/iframe interactions are not intercepted. Room instrumentation
+covers access/restore/readiness/release; native stages cover bootstrap/video
+reset, room restore/release and microphone preparation through first packet.
+Panel-drop and edit-mode spans end at React layout commit. An animation callback
+is a presentation opportunity, not proof of paint. Source has_frame and Set
+render milestones do not prove pixels reached the physical display.
+
+Remaining coverage includes individual camera setup/frame callbacks, deeper
+Metal GPU execution/presentation, CEF load/decode/paint, per-source/filter internals,
+and a shared causal token spanning every asynchronous/native room operation.
+Early bootstrap before initialization or consent is explicitly unknown. Cached
+engine CPU/FPS/render metrics are omitted when unavailable or stale.
+
+The API collector is a separate Boomin-Ai/api change. It is default-off and
+requires its migration, configuration and authenticated scope validation.
+Operator fleet access requires an explicit account allowlist; it is not granted
+to every signed-in user. Do not enable sharing service before its readiness
+checks. No production endpoint was changed while preparing this candidate.
+
+Checks:
+  node scripts/test-performance-trace.mjs
+  python3 scripts/profile-production.py --self-test
+  cargo test --manifest-path src-tauri/Cargo.toml --lib performance_
+  cargo check --manifest-path src-tauri/Cargo.toml
+
+Read-only local production resource capture:
+  python3 scripts/profile-production.py --out /private/tmp/producer-profile --duration 3600 --interval 5 --follow-restarts --hash-binary
+  python3 scripts/profile-production.py --out /private/tmp/producer-profile --status
+
+The external collector never edits/attaches to the signed application. Its
+CPU percentages use cumulative process time; 100% is one logical core. CEF
+GPU-process CPU is not GPU utilization. RSS sums are not unique footprint.
+It cannot reconstruct past clicks or room timings in an uninstrumented DMG.
+
+Release CI includes source revision and retains matching line-symbol artifacts
+for 90 days. These symbols are separate from the distributed app. Existing
+signed/notarized production hardening remains in force. Native SDK integration,
+Windows/Linux, signed candidate runtime, and a production capture-on/off overhead
+comparison remain release validation gates.
+
+Pilot build: 0.4.84-diagnostics.1. The bundle identifier remains ai.boomin.producer.
+Diagnostics initialization and serialized persistence run off app-critical threads.
+Clock calibration uses one ready-state resample only when capture is enabled.
+Native sign-in fences and private credential-context proofs cover new/changed
+credentials and the normal single-Boomin-account UI. Unsupported mixed-account
+native IPC using already-approved identical credentials is outside this pilot
+guarantee. No universal account-session isolation claim is made.

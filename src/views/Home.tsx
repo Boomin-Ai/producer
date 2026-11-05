@@ -1,7 +1,8 @@
 import {notify,dismissKey} from "../lib/notices";
 import {DataIntegrations} from "../components/DataIntegrations";
+import { PerformanceDiagnostics } from "../components/PerformanceDiagnostics";
 import { ShareDomainSettings } from "../components/ShareDomainSettings";
-import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { StoragePanel } from "../components/StoragePanel";
 import { PullPostsButton } from "../components/PullPostsButton";
 import { Select } from "../components/Select";
@@ -9,7 +10,7 @@ import { ChannelPostSettings, DEFAULT_CHANNEL_PARAMS, buildChannelOverrides, typ
 import { cached, reconcile, remember, swr } from "../lib/fetchCache";
 import { sortRooms } from "../lib/roomOrder";
 import { createPortal } from "react-dom";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc } from "../lib/nativeInvoke";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ConsoleHost } from "./Console";
@@ -26,7 +27,7 @@ import { PREF_WALKTHROUGH_OFF, PREF_WALKTHROUGH_ROOM, PREF_WALKTHROUGH_STEP } fr
 import { FEATURE_FLAGS, FLAG_CONTACT } from "../lib/featureFlags";
 import { useFeatureFlags } from "../lib/useFeatureFlags";
 import { copyText, ensureRoomJoinLink } from "../lib/roomLink";
-import { afterPreviewWork } from "../lib/previewSession";
+import { afterPreviewWork, previewExit, type PreviewExitState } from "../lib/previewSession";
 import { ipc,
   guests,
   firewall,
@@ -179,6 +180,15 @@ export function Home({
   onEndpointsChanged?: () => void;
 }) {
   const [view, setView] = useState<MainView>({ kind: "home" });
+  const [exitState,setExitState]=useState<PreviewExitState>('idle');
+  const roomExit=useRef<ReturnType<typeof previewExit>|null>(null);
+  if(!roomExit.current)roomExit.current=previewExit(()=>ipc.liveDetachPreview(),setExitState);
+  useEffect(()=>()=>roomExit.current?.dispose(),[]);
+  const exitCover=exitState==='idle'?null:createPortal(
+    <div className="room-exit-cover" role="status" aria-live="polite">
+      {exitState==='error'?<><span>Could not finish closing the room.</span><button onClick={()=>void roomExit.current!.retry()}>Try again</button></>:<span>Returning to rooms…</span>}
+    </div>,document.body);
+  const withExitCover=(content:ReactNode)=><>{content}{exitCover}</>;
   useEffect(() => {
     if (view.kind !== "opening") return;
     const opening = view;
@@ -417,6 +427,7 @@ export function Home({
     snapshot?.session_state === "stopping";
 
   const openRoom = (room: LiveRoom) => {
+    roomExit.current!.cancel();
     markRoomClick();
     const endpoint = endpoints.find((candidate) => candidate.id === activeEndpointId());
     const serverRoomId = roomMetadata(room).server_room_id;
@@ -432,8 +443,10 @@ export function Home({
     setView({ kind: "opening", room, access });
   };
   const back = () => {
-    setView({ kind: "home" });
-    void loadLive();
+    void roomExit.current!.close(()=>{
+      setView({ kind: "home" });
+      void loadLive();
+    });
   };
 
   /** Take a seat in someone else's room, natively: open OUR room (the
@@ -441,20 +454,22 @@ export function Home({
    * first) in guest mode with the seat's green room over it. No browser,
    * no popout window. Room-less when this workspace has no rooms yet. */
   const enterSeat = useCallback((seat: GuestSeatSpec) => {
+    roomExit.current!.cancel();
+    markRoomClick();
     const own = [...roomsRef.current].sort((a, b) => (b.last_live_at ?? "").localeCompare(a.last_live_at ?? ""))[0];
     setView({ kind: "seat", room: own, seat });
   }, []);
 
 
-  if (view.kind === "opening") return <RoomOpening name={view.room.name} onLeave={back} />;
+  if (view.kind === "opening") return withExitCover(<RoomOpening name={view.room.name} onLeave={back} />);
 
   if (view.kind === "modseat") {
-    return <ModSeat link={view.link} onLeave={back} />;
+    return withExitCover(<ModSeat link={view.link} onLeave={back} />);
   }
 
   // The room owns the entire window, its own top bar included (mock-faithful).
   if (view.kind === "room") {
-    return (
+    return withExitCover(
       <>
         <LiveView
           key={view.room.id}
@@ -479,7 +494,7 @@ export function Home({
     );
   }
   if (view.kind === "seat") {
-    return (
+    return withExitCover(
       <LiveView
         key={`seat:${view.seat.joinUrl}`}
         room={view.room}
@@ -489,7 +504,7 @@ export function Home({
     );
   }
 
-  return (
+  return withExitCover(
     // The vibrant ground is what makes the rail read as glass — every view
     // that keeps the rail keeps the ground under it.
     <div
@@ -1143,6 +1158,7 @@ function SettingsPanel({
             {appTab === "general" && (
               <>
         <ShareDomainSettings />
+        <PerformanceDiagnostics />
         <FeatureFlagsSection />
 
         <div className="cr-label set-gap">GUIDANCE</div>

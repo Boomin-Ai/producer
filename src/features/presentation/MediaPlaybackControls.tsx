@@ -1,4 +1,4 @@
-import {invoke,isTauri} from '@tauri-apps/api/core';
+import {invoke,isTauri} from '../../lib/nativeInvoke';
 import {importAsset,type MediaAsset} from './assets';
 import {useState,useSyncExternalStore} from 'react';
 import type {RehearsalSession} from './rehearsal';

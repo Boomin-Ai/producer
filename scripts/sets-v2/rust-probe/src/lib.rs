@@ -1,4 +1,10 @@
 //! Compile and exercise the exact app adapter without pulling in the Tauri app.
+// This standalone adapter has no diagnostic session or writer. Keep the same
+// profiling call surface while exercising the production adapter with tracing
+// disabled, as it is in an ordinary non-diagnostic installation.
+mod performance_trace {
+    pub fn native_stage(_: &'static str, _: std::time::Duration, _: Option<bool>) {}
+}
 #[path = "../../../../src-tauri/src/live/ffi.rs"]
 mod ffi;
 // Windows raw-dylib declarations name the room's opaque OBS canvas. The

@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
 fn main() {
+    // Release traces must identify the exact source that produced the binary.
+    println!("cargo:rerun-if-env-changed=PRODUCER_SOURCE_SHA");
     if std::env::var_os("CARGO_FEATURE_GUEST_RTC_PILOT").is_some()
         && std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos")
     {

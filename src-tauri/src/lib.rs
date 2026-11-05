@@ -5,9 +5,12 @@ mod client;
 mod dj;
 mod error;
 mod firewall;
+mod http_transport;
 mod ipc;
 mod live;
 mod outbox;
+mod performance_share;
+mod performance_trace;
 mod recordings;
 #[cfg(feature = "guest-rtc-pilot")]
 mod rtc_control;
@@ -31,7 +34,9 @@ use tauri::Manager;
 
 pub struct AppState {
     #[cfg(feature = "guest-rtc-pilot")]
-    pub rtc_host: tokio::sync::Mutex<Option<rtc_owner::HostOwner>>,
+    pub rtc_host: std::sync::Arc<tokio::sync::Mutex<Option<rtc_owner::HostOwner>>>,
+    #[cfg(feature = "guest-rtc-pilot")]
+    pub rtc_host_epoch: std::sync::Arc<std::sync::atomic::AtomicU64>,
     pub db: Mutex<rusqlite::Connection>,
     /// Mid-sign-in hosted auth (api_root, token) held engine-side between
     /// OTP verification and workspace selection — never enters the webview.
@@ -41,6 +46,25 @@ pub struct AppState {
     pub live: live::Live,
     /// Platform chat readers (host-side sockets; see chat::mod docs).
     pub chat: chat::ChatHub,
+}
+
+fn observe_command_dispatch<R: tauri::Runtime>(
+    handler: impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static,
+) -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static {
+    move |invoke| {
+        let stage = match invoke.message.command() {
+            "live_engine_status" => Some("native.engine_status.received"),
+            "live_rtc_start" => Some("native.rtc.start.received"),
+            "live_rtc_stop" => Some("native.rtc.stop.received"),
+            "live_home_glass" => Some("native.window.home_glass.received"),
+            "live_portrait_stop" => Some("native.portrait.stop.received"),
+            _ => None,
+        };
+        if let Some(stage) = stage {
+            performance_trace::native_stage(stage, std::time::Duration::ZERO, None);
+        }
+        handler(invoke)
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -219,7 +243,9 @@ pub fn run() {
 
             app.manage(AppState {
                 #[cfg(feature = "guest-rtc-pilot")]
-                rtc_host: tokio::sync::Mutex::new(None),
+                rtc_host: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
+                #[cfg(feature = "guest-rtc-pilot")]
+                rtc_host_epoch: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
                 db: Mutex::new(conn),
                 pending_auth: Mutex::new(None),
                 live,
@@ -231,6 +257,12 @@ pub fn run() {
                 live::portrait_camera_probe::start(app.handle().clone(), report.into());
             }
 
+            if let Err(error) = performance_trace::init(app.handle()) {
+                eprintln!("Performance diagnostics unavailable: {error}");
+            }
+            if let Err(error) = performance_share::init(app.handle()) {
+                eprintln!("Performance sharing unavailable: {error}");
+            }
             soundboard_remote::start(app.handle().clone());
 
             // Resume any submissions a crash left unacknowledged.
@@ -243,7 +275,15 @@ pub fn run() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(observe_command_dispatch(tauri::generate_handler![
+            performance_trace::performance_trace_config,
+            performance_trace::performance_trace_set_consent,
+            performance_trace::performance_trace_write,
+            performance_trace::performance_trace_export,
+            performance_share::performance_trace_save_export,
+            performance_share::performance_trace_upload,
+            performance_share::performance_trace_configure_sharing,
+            performance_share::performance_trace_revoke,
             rtc_ipc::live_rtc_start,
             rtc_ipc::live_rtc_enabled,
             rtc_ipc::live_rtc_stop,
@@ -429,7 +469,7 @@ pub fn run() {
             chat::commands::chat_disconnect,
             chat::commands::chat_status,
             chat::commands::kick_resolve_chatroom,
-        ])
+        ]))
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {

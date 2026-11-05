@@ -11,13 +11,14 @@
 use std::ffi::CString;
 use std::os::raw::c_void;
 use std::ptr;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
 use super::ffi;
+use crate::performance_trace::{SyncMicPacketObservation, SyncMicTrace};
 
 /// Remote voices reach the host's playback device and the program mix.
 /// Bus 1 is the stage return: keeping remotes off it prevents self-return.
@@ -63,14 +64,15 @@ extern "C" fn audio_cb(
 }
 
 /// Per-extra audio peaks, keyed by source pointer. Fixed atomic slots — the
-/// audio thread must never take a lock (§5.1); 16 covers room cap with room
-/// to spare.
-const PEAK_SLOT: (std::sync::atomic::AtomicUsize, std::sync::atomic::AtomicU64) = (
-    std::sync::atomic::AtomicUsize::new(0),
-    std::sync::atomic::AtomicU64::new(0),
+/// audio thread must never take a lock (§5.1). Reuse the existing 16 slots
+/// for optional mic packet timing; report unavailable coverage when full.
+type PeakSlot = (AtomicUsize, AtomicU64, SyncMicPacketObservation);
+const PEAK_SLOT: PeakSlot = (
+    AtomicUsize::new(0),
+    AtomicU64::new(0),
+    SyncMicPacketObservation::new(),
 );
-static EXTRA_PEAKS: [(std::sync::atomic::AtomicUsize, std::sync::atomic::AtomicU64); 16] =
-    [PEAK_SLOT; 16];
+static EXTRA_PEAKS: [PeakSlot; 16] = [PEAK_SLOT; 16];
 
 extern "C" fn extra_audio_cb(
     _param: *mut c_void,
@@ -99,31 +101,42 @@ extern "C" fn extra_audio_cb(
     unsafe {
         super::transcription::capture(key, plane, audio.frames as usize);
     }
-    for (slot_src, slot_peak) in EXTRA_PEAKS.iter() {
+    for (slot_src, slot_peak, mic_packet) in EXTRA_PEAKS.iter() {
         if slot_src.load(Ordering::Relaxed) == key {
             slot_peak.fetch_max((peak * 1_000_000.0) as u64, Ordering::Relaxed);
+            // Existing muted/null/plane guards stay unchanged. This measures
+            // the first valid UNMUTED packet observed after callback registration,
+            // not device startup or the first packet produced inside creation.
+            mic_packet.observe_valid_unmuted(audio.frames);
             return;
         }
     }
 }
 
-fn peak_slot_register(src: *mut ffi::obs_source_t) {
+fn peak_slot_register(src: *mut ffi::obs_source_t, trace: Option<SyncMicTrace>) -> bool {
     let key = src as usize;
-    for (slot_src, slot_peak) in EXTRA_PEAKS.iter() {
+    for (slot_src, slot_peak, mic_packet) in EXTRA_PEAKS.iter() {
         if slot_src
             .compare_exchange(0, key, Ordering::Relaxed, Ordering::Relaxed)
             .is_ok()
         {
             slot_peak.store(0, Ordering::Relaxed);
-            return;
+            // No extra_audio_cb is registered for this source until this returns.
+            mic_packet.arm(trace);
+            return true;
         }
     }
+    false
 }
 
-fn peak_slot_release(src: *mut ffi::obs_source_t) {
+fn peak_slot_release(src: *mut ffi::obs_source_t, trace: Option<SyncMicTrace>) {
     let key = src as usize;
-    for (slot_src, slot_peak) in EXTRA_PEAKS.iter() {
+    for (slot_src, slot_peak, mic_packet) in EXTRA_PEAKS.iter() {
         if slot_src.load(Ordering::Relaxed) == key {
+            // Removal already synchronized with the existing OBS callback.
+            // Drain even a short-lived mic that closed before the next meter tick.
+            mic_packet.emit_if_ready(trace);
+            mic_packet.arm(None);
             slot_src.store(0, Ordering::Relaxed);
             slot_peak.store(0, Ordering::Relaxed);
         }
@@ -706,6 +719,7 @@ struct ExtraItem {
     item: *mut ffi::obs_sceneitem_t,
     src: *mut ffi::obs_source_t,
     room_mic: Option<DetachedRoomMic>,
+    sync_mic_trace: Option<SyncMicTrace>,
     /// Capture kinds only: the device the source is on.
     device: Option<String>,
     #[cfg(feature = "guest-rtc-pilot")]
@@ -1621,15 +1635,23 @@ impl SceneGraph {
         if id == "overlay" || self.extras.iter().any(|e| e.id == id) {
             return Err(format!("an item named {id} already exists"));
         }
-        let (src, kind, device) = Self::create_extra_source(id, spec, visible)?;
-        self.attach_extra(id, label, spec, visible, src, kind, device)
+        let (src, kind, device, trace) = Self::create_extra_source(id, spec, visible)?;
+        self.attach_extra(id, label, spec, visible, src, kind, device, trace)
     }
 
     fn create_extra_source(
         id: &str,
         spec: &ExtraSpec,
         visible: bool,
-    ) -> Result<(*mut ffi::obs_source_t, &'static str, Option<String>), String> {
+    ) -> Result<
+        (
+            *mut ffi::obs_source_t,
+            &'static str,
+            Option<String>,
+            Option<SyncMicTrace>,
+        ),
+        String,
+    > {
         let name = CString::new(id).map_err(|_| "bad id")?;
         let mut device: Option<String> = None;
         unsafe {
@@ -1833,9 +1855,20 @@ impl SceneGraph {
                 }
             };
             let tid = CString::new(type_id).unwrap();
+            let mic_trace = (kind == "mic").then(SyncMicTrace::begin).flatten();
+            if let Some(trace) = mic_trace {
+                trace.stage("native.mic.sync.create.start", Duration::ZERO, None);
+            }
             let create_started = Instant::now();
             let src =
                 ffi::obs_source_create(tid.as_ptr(), name.as_ptr(), settings, ptr::null_mut());
+            if let Some(trace) = mic_trace {
+                trace.stage(
+                    "native.mic.sync.create.complete",
+                    create_started.elapsed(),
+                    Some(!src.is_null()),
+                );
+            }
             if !visible && std::env::var_os("PRODUCER_TRACE_ROOM_OPEN").is_some() {
                 eprintln!(
                     "[room-open] obs_source_create kind={kind} ms={}",
@@ -1848,7 +1881,7 @@ impl SceneGraph {
                     "{type_id} creation failed — is its module in this engine?"
                 ));
             }
-            Ok((src, kind, device))
+            Ok((src, kind, device, mic_trace))
         }
     }
 
@@ -1861,6 +1894,33 @@ impl SceneGraph {
         src: *mut ffi::obs_source_t,
         kind: &'static str,
         device: Option<String>,
+        trace: Option<SyncMicTrace>,
+    ) -> Result<(), String> {
+        let started = trace.map(|_| Instant::now());
+        if let Some(trace) = trace {
+            trace.stage("native.mic.sync.attach.start", Duration::ZERO, None);
+        }
+        let result = self.attach_extra_inner(id, label, spec, visible, src, kind, device, trace);
+        if let (Some(trace), Some(started)) = (trace, started) {
+            trace.stage(
+                "native.mic.sync.attach.complete",
+                started.elapsed(),
+                Some(result.is_ok()),
+            );
+        }
+        result
+    }
+
+    fn attach_extra_inner(
+        &mut self,
+        id: &str,
+        label: &str,
+        spec: &ExtraSpec,
+        visible: bool,
+        src: *mut ffi::obs_source_t,
+        kind: &'static str,
+        device: Option<String>,
+        trace: Option<SyncMicTrace>,
     ) -> Result<(), String> {
         unsafe {
             let remote = matches!(spec, ExtraSpec::Guest { .. } | ExtraSpec::Mod { .. });
@@ -1925,7 +1985,15 @@ impl SceneGraph {
             };
             // Meter every audio-bearing extra the mixer shows a strip for.
             if metered(kind) {
-                peak_slot_register(src);
+                if !peak_slot_register(src, trace) {
+                    if let Some(trace) = trace {
+                        trace.stage(
+                            "native.mic.sync.packet_probe_unavailable",
+                            Duration::ZERO,
+                            Some(false),
+                        );
+                    }
+                }
                 if kind == "mic" {
                     super::audio_reactive::register(
                         src as usize,
@@ -1942,6 +2010,7 @@ impl SceneGraph {
                 item,
                 src,
                 room_mic: None,
+                sync_mic_trace: trace,
                 device,
                 #[cfg(feature = "guest-rtc-pilot")]
                 native_rtc,
@@ -1999,7 +2068,7 @@ impl SceneGraph {
             .map(super::filters::list)
             .unwrap_or_default();
         let old = self.extras.iter().position(|item| item.id == id);
-        let (source, kind, device) = Self::create_extra_source(id, spec, false)?;
+        let (source, kind, device, trace) = Self::create_extra_source(id, spec, false)?;
         if let Err(error) = super::filters::restore(source, &saved_filters) {
             unsafe {
                 ffi::obs_source_release(source);
@@ -2008,7 +2077,7 @@ impl SceneGraph {
         }
         // The old source stays attached until its replacement is created,
         // configured and attached hidden. An invalid edit leaves it intact.
-        self.attach_extra(id, label, spec, false, source, kind, device)?;
+        self.attach_extra(id, label, spec, false, source, kind, device, trace)?;
         self.return_legacy_for_source_edit()?;
         if let Some(old) = old {
             self.remove_extra_at(old, Some(source));
@@ -2055,6 +2124,7 @@ impl SceneGraph {
             src,
             "mic",
             device.clone(),
+            None,
         )?;
         let packet = source.packet.clone();
         let added = self.extras.last_mut().expect("attach_extra adds an item");
@@ -2239,7 +2309,7 @@ impl SceneGraph {
                 );
             }
             super::audio_reactive::unregister(e.src as usize);
-            peak_slot_release(e.src);
+            peak_slot_release(e.src, e.sync_mic_trace);
         }
         drop(e.room_mic.take());
         unsafe {
@@ -2646,7 +2716,7 @@ impl SceneGraph {
                     return false;
                 }
             }
-            EXTRA_PEAKS.iter().any(|(src, peak)| {
+            EXTRA_PEAKS.iter().any(|(src, peak, _)| {
                 src.load(Ordering::Relaxed) == e.src as usize
                     && peak.load(Ordering::Relaxed) > 45000
             })
@@ -2665,8 +2735,9 @@ impl SceneGraph {
                 continue;
             }
             let key = e.src as usize;
-            for (slot_src, slot_peak) in EXTRA_PEAKS.iter() {
+            for (slot_src, slot_peak, mic_packet) in EXTRA_PEAKS.iter() {
                 if slot_src.load(Ordering::Relaxed) == key {
+                    mic_packet.emit_if_ready(e.sync_mic_trace);
                     let v = slot_peak.swap(0, Ordering::Relaxed) as f64 / 1_000_000.0;
                     out.push((e.id.clone(), v));
                 }

@@ -5914,6 +5914,27 @@ textarea::placeholder {
 #root > * {
   background: var(--bg);
 }
+/* Home's glass must never expose a retiring native room behind the webview.
+   Kept outside the room subtree until BOTH native views acknowledge removal. */
+.room-exit-cover {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  background: #010610;
+  color: var(--fg-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  pointer-events: auto;
+}
+.room-exit-cover button {
+  border: 1px solid var(--border);
+  border-radius: var(--r-ctl);
+  padding: 8px 12px;
+  background: var(--card);
+  color: var(--fg);
+}
 /* The one exception: home's glass column — flush full height at x 0..68.
    The content's curved left edge is a REAL fixed element with border-radius
    (WebKit demotes background-attachment:fixed on composited layers, so
@@ -11289,3 +11310,8 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
   pointer-events: none;
 }
 .set-update-error { color: #fca5a5; overflow-wrap: anywhere; }
+
+.set-diagnostics { margin-block: 24px; }
+.set-diagnostics label { display:flex; align-items:center; gap:10px; margin-block:12px; }
+.set-diagnostics p { max-width:72ch; color:var(--muted); font-size:13px; line-height:1.5; }
+.set-diagnostics-actions { display:flex; gap:10px; flex-wrap:wrap; margin-block:16px; }

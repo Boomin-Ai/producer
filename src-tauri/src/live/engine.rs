@@ -12,6 +12,7 @@ use std::os::raw::{c_char, c_void};
 use std::ptr;
 use std::sync::mpsc;
 
+use crate::performance_trace::native_stage as performance_stage;
 use serde::Serialize;
 
 use super::ffi;
@@ -211,6 +212,17 @@ fn reset_video(module: &str, height: u32, fps: u32) -> Result<(), i32> {
     };
     let started = Instant::now();
     let rc = unsafe { ffi::obs_reset_video(&mut ovi) };
+    performance_stage(
+        if module.contains("metal") {
+            "native.video.reset.metal"
+        } else if module.contains("d3d11") {
+            "native.video.reset.d3d11"
+        } else {
+            "native.video.reset.opengl"
+        },
+        started.elapsed(),
+        Some(rc == 0),
+    );
     if std::env::var_os("PRODUCER_TRACE_ROOM_OPEN").is_some() {
         eprintln!(
             "[room-open] video_reset module={module} ms={} rc={rc}",
@@ -359,7 +371,20 @@ fn bootstrap_inner(
     };
     let mut phase_t = Instant::now();
     let mut phase = |report: &mut EngineReport, name: &str| {
-        let ms = phase_t.elapsed().as_millis() as u64;
+        let elapsed = phase_t.elapsed();
+        let ms = elapsed.as_millis() as u64;
+        performance_stage(
+            match name {
+                "startup" => "native.bootstrap.startup",
+                "reset_video" => "native.bootstrap.reset_video",
+                "reset_audio" => "native.bootstrap.reset_audio",
+                "load_modules" => "native.bootstrap.load_modules",
+                "post_load" => "native.bootstrap.post_load",
+                _ => "native.bootstrap.phase",
+            },
+            elapsed,
+            None,
+        );
         report.boot_phases_ms.push((name.to_string(), ms));
         eprintln!("[live] boot phase {name}: {ms} ms");
         phase_t = Instant::now();
@@ -922,6 +947,7 @@ pub enum Command {
         reply: mpsc::Sender<Result<(), String>>,
     },
     PortraitStop {
+        queued_at: Instant,
         reply: mpsc::Sender<()>,
     },
     PortraitFrame {
@@ -938,6 +964,7 @@ pub enum Command {
     },
     SetsV2 {
         action: super::sets_v2::contract::Action,
+        queued_at: Instant,
         reply: mpsc::Sender<Result<super::sets_v2::contract::Status, String>>,
     },
     PresentationWarm {
@@ -1117,7 +1144,9 @@ pub enum Command {
     SetPreviewHidden(bool),
     /// Rects (CSS px, window client coords) the preview must not cover.
     SetPreviewCutouts(Vec<PreviewRect>),
-    DetachPreview,
+    DetachPreview {
+        reply: mpsc::Sender<()>,
+    },
     Shutdown,
 }
 
@@ -1425,7 +1454,10 @@ impl LiveHandle {
     pub fn portrait_stop(&self) -> Result<(), String> {
         let (tx, rx) = mpsc::channel();
         self.cmd
-            .send(Command::PortraitStop { reply: tx })
+            .send(Command::PortraitStop {
+                queued_at: Instant::now(),
+                reply: tx,
+            })
             .map_err(|e| e.to_string())?;
         rx.recv_timeout(Duration::from_secs(10))
             .map_err(|e| e.to_string())
@@ -1470,7 +1502,11 @@ impl LiveHandle {
     ) -> Result<super::sets_v2::contract::Status, String> {
         let (tx, rx) = mpsc::channel();
         self.cmd
-            .send(Command::SetsV2 { action, reply: tx })
+            .send(Command::SetsV2 {
+                action,
+                queued_at: Instant::now(),
+                reply: tx,
+            })
             .map_err(|e| e.to_string())?;
         rx.recv_timeout(Duration::from_secs(10))
             .map_err(|_| "Sets v2 engine did not answer".to_string())?
@@ -1571,6 +1607,7 @@ impl LiveHandle {
         restore: graph::RoomRestore,
     ) -> Result<graph::RoomRestoreResult, String> {
         let (tx, rx) = mpsc::channel();
+        performance_stage("native.room.restore.queued", Duration::ZERO, None);
         self.cmd
             .send(Command::RestoreRoom {
                 queued_at: Instant::now(),
@@ -1851,12 +1888,17 @@ impl LiveHandle {
     }
 
     pub fn detach_preview(&self) -> Result<(), String> {
+        let (tx, rx) = mpsc::channel();
         self.cmd
-            .send(Command::DetachPreview)
-            .map_err(|e| e.to_string())
+            .send(Command::DetachPreview { reply: tx })
+            .map_err(|e| e.to_string())?;
+        // A send receipt does not mean the native views have disappeared.
+        rx.recv_timeout(Duration::from_secs(10))
+            .map_err(|_| "the native preview did not close in time".to_string())
     }
     pub fn release_idle_room(&self) -> Result<bool, String> {
         let (tx, rx) = mpsc::channel();
+        performance_stage("native.room.release.queued", Duration::ZERO, None);
         self.cmd
             .send(Command::ReleaseIdleRoom { reply: tx })
             .map_err(|e| e.to_string())?;
@@ -2525,7 +2567,16 @@ impl Preview {
         }
     }
 
+    fn conceal(&self) {
+        let view = self.view as usize;
+        on_window_thread(move || unsafe {
+            ffi::producer_preview_set_hidden(view as *mut std::os::raw::c_void, 1);
+        });
+    }
     fn detach(self) {
+        // Hide the retained last frame before graphics callbacks or a
+        // platform swapchain can delay destruction on the UI thread.
+        self.conceal();
         unsafe {
             #[cfg(any(target_os = "macos", target_os = "windows"))]
             if !self.canvas.is_null() {
@@ -2730,7 +2781,9 @@ pub fn start(
     std::thread::Builder::new()
         .name("live-engine".into())
         .spawn(move || {
+            let bootstrap_started = Instant::now();
             let report = bootstrap_with_config(&module_config_dir);
+            performance_stage("native.bootstrap.complete", bootstrap_started.elapsed(), Some(report.ok));
             // The real boot leaves its report on disk (beside the legacy
             // harness's), phases included — readable without a debugger.
             if let Some(dir) = module_config_dir.parent() {
@@ -3106,6 +3159,7 @@ pub fn start(
                         sn.skipped_frames = skipped;
                         sn.cpu = cpu;
                         sn.render_time_us = render_time_us;
+                        crate::performance_trace::engine_metrics_updated();
                     }
                 }
 
@@ -3114,6 +3168,9 @@ pub fn start(
                     let (token, worker) = mic_worker.take().unwrap();
                     let result = worker.join().unwrap_or_else(|_| Err("Microphone setup failed".into()));
                     if let Some(mic) = microphones.iter_mut().find(|mic| Arc::ptr_eq(&mic.cancelled, &token)) {
+                        let will_attach = result.is_ok();
+                        let attach_started = Instant::now();
+                        if will_attach { performance_stage("native.mic.attach.start", Duration::ZERO, None); }
                         let result = result.and_then(|source| {
                             let graph = scene.as_mut().ok_or("Room scene is unavailable")?;
                             let packet = graph.attach_prepared_room_mic(mic.extra.clone(), source, Some(mic.change.clone()))?;
@@ -3122,9 +3179,11 @@ pub fn start(
                             }
                             Ok(packet)
                         });
+                        if will_attach { performance_stage("native.mic.attach.complete", attach_started.elapsed(), Some(result.is_ok())); }
                         match result {
                             Ok(packet) => {
                                 mic.stage = RoomMicStage::Attached(packet);
+                                performance_stage("native.mic.attached", mic.started.elapsed(), Some(true));
                                 if trace_room_open {
                                     eprintln!("[room-open] mic_attached_ms={}", mic.started.elapsed().as_millis());
                                 }
@@ -3140,26 +3199,34 @@ pub fn start(
                             }
                             Err(message) => {
                                 mic.stage = RoomMicStage::Failed;
+                                performance_stage("native.mic.failed", mic.started.elapsed(), Some(false));
                                 sink(&LiveEvent::EngineError { message });
                             }
                         }
-                    } else if trace_room_open {
-                        eprintln!("[room-open] dropped stale microphone completion");
+                    } else {
+                        performance_stage("native.mic.stale_completion", Duration::ZERO, None);
+                        if trace_room_open { eprintln!("[room-open] dropped stale microphone completion"); }
                     }
                 }
                 if mic_worker.is_none() {
                     if let Some(mic) = microphones.iter_mut().find(|mic| matches!(mic.stage, RoomMicStage::Queued)) {
                         let extra = mic.extra.clone();
                         let cancelled = mic.cancelled.clone();
+                        performance_stage("native.mic.prepare.queue_wait", mic.started.elapsed(), None);
                         let worker = std::thread::Builder::new().name("room-mic-prepare".into()).spawn(move || {
+                            let prepare_started = Instant::now();
+                            performance_stage("native.mic.prepare.start", Duration::ZERO, None);
                             if mic_proof_delay > 0 {
                                 std::thread::sleep(Duration::from_millis(mic_proof_delay));
                             }
                             if cancelled.load(AtomicOrdering::Acquire) {
+                                performance_stage("native.mic.prepare.cancelled", prepare_started.elapsed(), None);
                                 return Err("Microphone setup cancelled".into());
                             }
                             let source = graph::DetachedRoomMic::prepare(&extra);
+                            performance_stage("native.mic.worker.ready", prepare_started.elapsed(), Some(source.is_ok()));
                             if cancelled.load(AtomicOrdering::Acquire) {
+                                performance_stage("native.mic.prepare.cancelled", prepare_started.elapsed(), None);
                                 return Err("Microphone setup cancelled".into());
                             }
                             source
@@ -3171,6 +3238,7 @@ pub fn start(
                             }
                             Err(error) => {
                                 mic.stage = RoomMicStage::Failed;
+                                performance_stage("native.mic.worker.spawn_failed", mic.started.elapsed(), Some(false));
                                 sink(&LiveEvent::EngineError { message: error.to_string() });
                             }
                         }
@@ -3179,6 +3247,7 @@ pub fn start(
                 microphones.retain(|mic| {
                     let RoomMicStage::Attached(packet) = &mic.stage else { return true; };
                     let Some(first) = packet.first_packet() else { return true; };
+                    crate::performance_trace::native_stage_at("native.mic.first_packet", first, first.duration_since(mic.started), Some(true));
                     if trace_room_open {
                         eprintln!("[room-open] mic_first_packet_ms={}", first.duration_since(mic.started).as_millis());
                     }
@@ -3337,15 +3406,38 @@ pub fn start(
                         let result={let _=(token,placements);Err("Portrait preview is currently a Mac dev capability".into())};
                         let _=reply.send(result);
                     }
-                    Ok(Command::PortraitStop{reply})=>{if portrait_recorder.is_some()||selected_portrait{let _=reply.send(());continue;}if let Some(p)=portrait_preview.take(){p.detach();}#[cfg(any(target_os = "macos", target_os = "windows"))]if let Some(g)=scene.as_mut(){g.portrait_stop();}let _=reply.send(());}
+                    Ok(Command::PortraitStop{queued_at,reply})=>{
+                        performance_stage("native.portrait.stop.engine_wait",queued_at.elapsed(),None);
+                        let service=Instant::now();
+                        if portrait_recorder.is_some()||selected_portrait{
+                            performance_stage("native.portrait.stop.output_retained",service.elapsed(),Some(true));
+                            let _=reply.send(());continue;
+                        }
+                        if let Some(p)=portrait_preview.take(){p.detach();}
+                        #[cfg(any(target_os = "macos", target_os = "windows"))]
+                        if let Some(g)=scene.as_mut(){g.portrait_stop();}
+                        performance_stage("native.portrait.stop.engine_complete",service.elapsed(),Some(true));
+                        let _=reply.send(());
+                    }
                     Ok(Command::PortraitFrame{reply})=>{#[cfg(any(target_os = "macos", target_os = "windows"))]let frame=scene.as_ref().map(|g|g.portrait_frame()).unwrap_or_default();#[cfg(not(any(target_os = "macos", target_os = "windows")))]let frame=String::new();let _=reply.send(frame);}
                     Ok(Command::SetSourceCreate{id,label,spec,reply})=>{
                         let result=scene.as_mut().ok_or("Room unavailable".to_string()).and_then(|g|g.create_set_source(&id,&label,&spec));
                         if let Ok(sources)=&result{snap.lock().unwrap().sources=sources.clone();sink(&LiveEvent::SourcesChanged{sources:sources.clone()});}
                         let _=reply.send(result);
                     }
-                    Ok(Command::SetsV2 {action,reply}) => {
+                    Ok(Command::SetsV2 {action,queued_at,reply}) => {
+                        use super::sets_v2::contract::Action as SetAction;
+                        let stages=match &action {
+                            SetAction::Preload{..}=>Some(("native.set.preload.engine_wait","native.set.preload.engine_complete")),
+                            SetAction::Activate{..}=>Some(("native.set.activate.engine_wait","native.set.activate.engine_complete")),
+                            SetAction::Retain{..}=>Some(("native.set.retain.engine_wait","native.set.retain.engine_complete")),
+                            SetAction::Take{..}|SetAction::TakePair{..}=>Some(("native.set.take.engine_wait","native.set.take.engine_complete")),
+                            _=>None,
+                        };
+                        if let Some((queued,_))=stages{performance_stage(queued,queued_at.elapsed(),None);}
+                        let service=Instant::now();
                         let result=scene.as_mut().ok_or_else(||"The dev room is not running".to_string()).and_then(|g|g.sets_v2(action));
+                        if let Some((_,complete))=stages{performance_stage(complete,service.elapsed(),Some(result.is_ok()));}
                         let _=reply.send(result);
                     }
                     Ok(Command::PresentationStatus {reply})=> {let _=reply.send(scene.as_ref().map_or(super::presentation::Status{generation:0,lease:None,revision:0},|g|g.presentation_status()));}
@@ -3669,6 +3761,9 @@ pub fn start(
                         let _ = reply.send(result);
                     }
                     Ok(Command::RestoreRoom { queued_at, mut restore, reply }) => {
+                        performance_stage("native.room.restore.queue_wait", queued_at.elapsed(), None);
+                        performance_stage("native.room.restore.start", Duration::ZERO, None);
+                        let restore_started = Instant::now();
                         if trace_room_open {
                             eprintln!("[room-open] engine_queue_ms={}", queued_at.elapsed().as_millis());
                         }
@@ -3709,6 +3804,7 @@ pub fn start(
                             snap.lock().unwrap().sources = sources.clone();
                             sink(&LiveEvent::SourcesChanged { sources });
                         }
+                        performance_stage("native.room.restore.complete", restore_started.elapsed(), Some(result.is_ok()));
                         let _ = reply.send(result);
                     }
                     Ok(Command::AddExtra { id, label, spec }) => {
@@ -3923,9 +4019,17 @@ pub fn start(
                         let _ = rects;
                     }
                     Ok(Command::ReleaseIdleRoom { reply }) => {
+                        let release_started = Instant::now();
+                        performance_stage("native.room.release.start", Duration::ZERO, None);
+                        // Presentation-only: active outputs keep their source
+                        // graph, but no visible preview may expose the camera
+                        // underneath a Set while that graph is being cleared.
+                        if let Some(p)=preview.as_ref(){p.conceal();}
+                        if let Some(p)=portrait_preview.as_ref(){p.conceal();}
                         // Evaluate on the engine thread, so an output starting
                         // during navigation cannot lose its capture sources.
                         if session.is_some() || recorder.is_some() || portrait_recorder.is_some() {
+                            performance_stage("native.room.release.skipped", release_started.elapsed(), None);
                             let _ = reply.send(Ok(false));
                         } else {
                             microphones.clear();
@@ -3947,15 +4051,25 @@ pub fn start(
                             } else { Ok(true) };
                             // No SourcesChanged: unloading must not rewrite the
                             // saved room document or the next mounted room.
+                            performance_stage("native.room.release.complete", release_started.elapsed(), Some(result.is_ok()));
                             let _ = reply.send(result);
                         }
                     }
-                    Ok(Command::DetachPreview) => {
+                    Ok(Command::DetachPreview { reply }) => {
+                        let started=Instant::now();
+                        performance_stage("native.preview.detach.start",Duration::ZERO,None);
+                        // Conceal BOTH siblings before either destruction can
+                        // wait for graphics. Reply only after native removal.
+                        if let Some(p)=preview.as_ref(){p.conceal();}
+                        if let Some(p)=portrait_preview.as_ref(){p.conceal();}
+                        performance_stage("native.preview.detach.hidden",started.elapsed(),Some(true));
                         if let Some(p)=portrait_preview.take(){p.detach();}
                         if let Some(p) = preview.take() {
                             p.detach();
                             snap.lock().unwrap().preview_attached = false;
                         }
+                        performance_stage("native.preview.detach.complete",started.elapsed(),Some(true));
+                        let _=reply.send(());
                     }
                     Ok(Command::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => {
                         microphones.clear();

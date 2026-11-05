@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from 'react';
-import {invoke} from '@tauri-apps/api/core';
+import {invoke} from '../../lib/nativeInvoke';
 import {listen} from '@tauri-apps/api/event';
 import {notifyError} from '../../lib/notices';
 type Update={session:number;state:string;text:string;is_final:boolean;message?:string};

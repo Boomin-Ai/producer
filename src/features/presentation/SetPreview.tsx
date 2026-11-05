@@ -1,4 +1,4 @@
-import {invoke} from '@tauri-apps/api/core';
+import {invoke} from '../../lib/nativeInvoke';
 import {listenLiveEvents} from '../../lib/ipc';
 import type {SetOutputControls} from './useSetOutput';
 import {AssetTransport} from './assetTransport';

@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./nativeInvoke";
 export type DJTrack = {
   id: string;
   path: string;

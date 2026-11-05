@@ -9,6 +9,8 @@
 OBS_IMPORT void gs_matrix_translate3f(float x, float y, float z);
 OBS_IMPORT void gs_matrix_scale3f(float x, float y, float z);
 OBS_IMPORT void gs_matrix_rotaa4f(float x, float y, float z, float angle);
+OBS_IMPORT enum gs_color_space gs_get_color_space(void);
+OBS_IMPORT size_t obs_source_filter_count(const obs_source_t *source);
 
 #define GROUP_ID "producer_set_v2_group"
 #define GROUP_CHILD_LIMIT 128
@@ -37,6 +39,10 @@ struct group {
   struct layer layers[GROUP_CHILD_LIMIT];
   size_t count;
   bool sealed;
+#ifdef PRODUCER_SET_V2_PROBE
+  bool force_isolation;
+  struct producer_set_v2_group_probe_stats probe;
+#endif
 };
 static atomic_size_t live_groups = 0;
 static _Thread_local unsigned render_depth = 0;
@@ -194,6 +200,30 @@ static bool direct(const struct group *g) {
   }
   return true;
 }
+/* An unfiltered identity wrapper around our own SDR compositor adds no blend,
+ * clip or raster-resolution boundary. Let the deepest required group retain
+ * encoded-SDR isolation and decode once. The child's final shader must also be
+ * an identity: encoded opacity/masks do not commute with sRGB decoding.
+ * Raw/plugin sources and filtered placements keep their intermediate pass. */
+static bool identity_group_child(const struct group *g) {
+  if (g->count != 1 || g->backdrop_blur != 0 ||
+      gs_get_color_space() != GS_CS_SRGB || obs_source_filter_count(g->source))
+    return false;
+  const struct layer *l = &g->layers[0];
+  const struct group *child = get(l->source);
+  return l->visible && child && child->sealed &&
+         child->radius == 0 && child->opacity == 1 && !child->mask_kind &&
+         !child->mask_invert && child->viewport_inset.x == 0 &&
+         child->viewport_inset.y == 0 && child->backdrop_blur == 0 &&
+         !obs_source_filter_count(l->source) && !l->contain &&
+         l->x == 0 && l->y == 0 && l->rotation == 0 &&
+         l->scale_x == 1 && l->scale_y == 1 &&
+         l->width == g->width && l->height == g->height &&
+         child->width == g->width && child->height == g->height &&
+         obs_source_get_width(l->source) == g->width &&
+         obs_source_get_height(l->source) == g->height &&
+         child->density == g->density;
+}
 static void draw_children_range(struct group *g,size_t from,size_t to) {
   for (size_t i = from; i < to; i++) {
     const struct layer *l = &g->layers[i];
@@ -271,7 +301,17 @@ static void render(void *data, gs_effect_t *unused) {
   render_depth++;
   const bool linear=gs_get_linear_srgb();
   const bool framebuffer=gs_framebuffer_srgb_enabled();
-  if (direct(g) && !linear && !framebuffer) {
+  const bool nonlinear = !linear && !framebuffer;
+  const bool identity = !nonlinear && direct(g) && identity_group_child(g);
+  bool bypass = identity || (nonlinear && direct(g));
+#ifdef PRODUCER_SET_V2_PROBE
+  bypass = bypass && !g->force_isolation;
+#endif
+  if (bypass) {
+#ifdef PRODUCER_SET_V2_PROBE
+    if (identity) g->probe.identity_bypasses++;
+    else g->probe.nonlinear_bypasses++;
+#endif
     gs_blend_state_push();
     gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
     draw_children_range(g,0,g->count);
@@ -289,6 +329,9 @@ static void render(void *data, gs_effect_t *unused) {
   gs_blend_state_pop();
   gs_texrender_reset(g->texture);
   if (gs_texrender_begin(g->texture, (uint32_t)ceilf(g->width*g->density), (uint32_t)ceilf(g->height*g->density))) {
+#ifdef PRODUCER_SET_V2_PROBE
+    g->probe.intermediate_passes++;
+#endif
     const struct vec4 clear = {0, 0, 0, 0};
     gs_clear(GS_CLEAR_COLOR, &clear, 0, 0);
     gs_ortho(0, (float)g->width, 0, (float)g->height, -100, 100);
@@ -408,6 +451,22 @@ bool producer_set_v2_group_frame(obs_source_t *s, float radius, float opacity) {
   return true;
 }
 size_t producer_set_v2_live_groups(void) { return atomic_load(&live_groups); }
+#ifdef PRODUCER_SET_V2_PROBE
+/* Probe-only controls; callers hold the graphics context. Absent from shipped
+ * builds, so frame counters and forced-reference state add no runtime work. */
+void producer_set_v2_group_probe_reset(obs_source_t *source) {
+  struct group *g = get(source);
+  if (g) g->probe = (struct producer_set_v2_group_probe_stats){0};
+}
+struct producer_set_v2_group_probe_stats producer_set_v2_group_probe_stats(obs_source_t *source) {
+  struct group *g = get(source);
+  return g ? g->probe : (struct producer_set_v2_group_probe_stats){0};
+}
+void producer_set_v2_group_probe_force_isolation(obs_source_t *source, bool force) {
+  struct group *g = get(source);
+  if (g) g->force_isolation = force;
+}
+#endif
 bool producer_set_v2_group_layer_transform(obs_source_t *s, size_t index,
                                            float rotation, float sx, float sy) {
   struct group *g = get(s);

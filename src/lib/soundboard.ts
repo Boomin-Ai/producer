@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from './nativeInvoke';
 export type SoundPad={id:string;name:string;color:string;mode:'restart'|'toggle'|'overlap'|'loop';volume:number;fade_ms:number};
 export type SoundBoard={pads:SoundPad[];volume:number;monitor:boolean};
 export type SoundLibrary={sounds:{id:string;name:string;path:string}[];board:SoundBoard};

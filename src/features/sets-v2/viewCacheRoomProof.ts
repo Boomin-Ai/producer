@@ -1,5 +1,5 @@
 /** Explicit dev-only timing proof; uses normal operator controls and receipts. */
-import {invoke} from '@tauri-apps/api/core';
+import {invoke} from '../../lib/nativeInvoke';
 import {preparationDebug} from './preparedScenes';
 const sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
 async function until<T>(read:()=>T|Promise<T>,label:string):Promise<NonNullable<T>>{for(let i=0;i<1200;i++){const value=await read();if(value)return value as NonNullable<T>;await sleep(100);}throw Error('Timed out: '+label);}

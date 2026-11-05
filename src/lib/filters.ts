@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./nativeInvoke";
 
 /** One filter in a source's chain, as the engine reports it. */
 export interface FilterState {

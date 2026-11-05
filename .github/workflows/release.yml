@@ -13,6 +13,10 @@ on:
         description: "Include the native LiveKit guest runtime in the Apple Silicon candidate"
         type: boolean
         default: false
+      resume_windows_run:
+        description: "Resume only after a prior public build passed Windows install and failed the FFmpeg prerequisite"
+        type: string
+        default: ""
       promote_run:
         description: "Completed Release run to promote without rebuilding (blank = normal build)"
         type: string
@@ -26,17 +30,87 @@ on:
         type: string
         default: ""
 
-# One release run at a time, newest wins. Re-pushing a tag otherwise leaves
-# TWO complete runs racing as writers on the same release — v0.4.0 shipped a
-# latest.json whose darwin-aarch64 signature came from run A over run B's
-# tar.gz, and every updater correctly refused the mismatch.
+# Public writers stay serialized: a manifest and its signed bytes must come
+# from the same run. Private Actions-only candidates have a separate queue so
+# a production release cannot cancel the Mac performance test track. Legacy
+# promotion also writes releases, even when its publish input is false.
 concurrency:
-  group: release
+  group: release-${{ (github.event_name == 'push' || inputs.publish || inputs.promote_run != '' || inputs.resume_windows_run != '') && 'public' || 'private' }}
   cancel-in-progress: true
 
+env:
+  PRODUCER_SOURCE_SHA: ${{ github.sha }}
+
 jobs:
+  validate-public-source:
+    if: ${{ inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish || inputs.resume_windows_run != '') }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_EVENT: ${{ github.event_name }}
+      NATIVE_GUEST: ${{ inputs.native_guest }}
+      PUBLISH_RELEASE: ${{ inputs.publish }}
+      RESUME_WINDOWS_RUN: ${{ inputs.resume_windows_run }}
+    outputs:
+      release_id: ${{ steps.draft.outputs.release_id }}
+      source_sha: ${{ steps.draft.outputs.source_sha }}
+      installer_artifact: ${{ steps.draft.outputs.installer_artifact }}
+      installer_digest: ${{ steps.draft.outputs.installer_digest }}
+      proof_artifact: ${{ steps.draft.outputs.proof_artifact }}
+      proof_digest: ${{ steps.draft.outputs.proof_digest }}
+      engine_run: ${{ steps.draft.outputs.engine_run }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate stable source and reserve one release draft
+        id: draft
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          from pathlib import Path
+          config = json.loads(Path('src-tauri/tauri.conf.json').read_text())
+          version = config['version']
+          assert re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', version), 'Public builds require a stable version; performance candidates stay private'
+          assert json.loads(Path('package.json').read_text())['version'] == version, 'Frontend/native version mismatch'
+          package = Path('src-tauri/Cargo.toml').read_text().split('[package]', 1)[1].split('\n[', 1)[0]
+          assert re.search(r'^version\s*=\s*"' + re.escape(version) + '"\s*$', package, re.M), 'Cargo package version mismatch'
+          locked = next(block for block in Path('src-tauri/Cargo.lock').read_text().split('[[package]]') if re.search(r'^name = "producer"$', block, re.M))
+          assert re.search(r'^version = "' + re.escape(version) + '"$', locked, re.M), 'Cargo lock version mismatch'
+          if os.environ['RELEASE_EVENT'] == 'push':
+              assert os.environ['GITHUB_REF'] == 'refs/tags/v' + version, 'Tag does not match the packaged version'
+          else:
+              assert os.environ['NATIVE_GUEST'] == 'true', 'Public dispatch must set native_guest=true'
+          repo, sha = os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_SHA']
+          resume = os.environ.get('RESUME_WINDOWS_RUN', '')
+          if resume:
+              assert os.environ['RELEASE_EVENT'] == 'workflow_dispatch' and os.environ['PUBLISH_RELEASE'] == 'true'
+              proof = json.loads(subprocess.check_output(['python3', 'scripts/validate-staged-release.py'], env=dict(os.environ, RELEASE_VERSION=version)))
+              sha = proof['source']
+              assert re.fullmatch(r'[0-9a-f]{40}', sha)
+          tag = 'v' + version
+          endpoint = f'repos/{repo}/releases'
+          pages = json.loads(subprocess.check_output(['gh', 'api', '--paginate', '--slurp', endpoint + '?per_page=100']))
+          matches = [r for page in pages for r in page if r['tag_name'] == tag]
+          assert len(matches) <= 1, 'Multiple drafts for this version; reconcile them before starting platform jobs'
+          if matches:
+              release = matches[0]
+          else:
+              assert not resume, 'The original stable draft is missing'
+              body = dict(tag_name=tag, target_commitish=sha, name='Producer ' + tag, draft=True, prerelease=False, make_latest='false')
+              release = json.loads(subprocess.check_output(['gh', 'api', '--method', 'POST', endpoint, '--input', '-'], input=json.dumps(body), text=True))
+          assert release['draft'] and not release['prerelease'] and release['target_commitish'] == sha, 'Release draft belongs to another source or channel'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              print(f'release_id={release["id"]}', file=out)
+              print(f'source_sha={sha}', file=out)
+              if resume:
+                  for key, field in (('installer_artifact', 'artifactId'), ('installer_digest', 'artifactDigest'), ('proof_artifact', 'proofArtifactId'), ('proof_digest', 'proofArtifactDigest'), ('engine_run', 'engineRunId')):
+                      print(f'{key}={proof[field]}', file=out)
+          print(f'Validated stable {version} at {sha}; reserved draft {release["id"]}')
+          PY
   promote-signed-candidate:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.promote_run != '' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.promote_run != '' && inputs.resume_windows_run == '' }}
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -96,7 +170,8 @@ jobs:
   # Windows exe here would race the live one for the same asset names, and
   # tauri-action's latest.json entry would point updaters at a stub build.
   build:
-    if: ${{ inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) }}
+    if: ${{ inputs.promote_run == '' && inputs.resume_windows_run == '' && (github.event_name == 'push' || inputs.publish) }}
+    needs: [validate-public-source]
     permissions:
       contents: write
     strategy:
@@ -146,24 +221,14 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Auto-update: tauri-action emits .sig files + latest.json for this
-          # matrix's platforms; the arm64 job merges its own entry afterwards.
+          # Tauri emits signed payloads. The final verifier is the only writer
+          # of latest.json, after all platform jobs finish.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
+          releaseId: ${{ needs.validate-public-source.outputs.release_id }}
           tagName: v__VERSION__
-          releaseName: "Producer v__VERSION__"
-          releaseCommitish: ${{ github.sha }}
-          releaseBody: |
-            Adds saved, independent minimized and expanded Set control arrangements.
-            Adds Claude-powered text/camera Set drafts with validation, private preview and explicit preparation loading.
-            Adds shared room layout, basic Show and field controls, plus output confirmation and failure reporting.
-            Improves authoring error messages and timeouts and aligns the native room preview frame.
-            Atmosphere remains the sole production built-in Set. Advanced generated effects and complete remote Set preparation are still in development.
-            Preserves the native guest runtime on Apple Silicon. Windows retains its Live engine; Intel macOS and Linux retain their engine-less scope.
-
-          releaseDraft: true
-          prerelease: false
+          includeUpdaterJson: false
           args: ${{ matrix.args }}
 
       - name: Notarize and staple Intel installer image
@@ -187,7 +252,8 @@ jobs:
   #     absent artifact = silent stub build — guarded below with otool)
   #   engine inside the .app BEFORE notarization    (Apple scans nested Mach-Os)
   build-macos-arm64-live:
-    if: ${{ inputs.promote_run == '' }}
+    if: ${{ !cancelled() && inputs.promote_run == '' && inputs.resume_windows_run == '' && (needs.validate-public-source.result == 'success' || (github.event_name == 'workflow_dispatch' && !inputs.publish)) }}
+    needs: [validate-public-source]
     permissions:
       contents: write
     runs-on: macos-latest
@@ -315,12 +381,47 @@ jobs:
       - name: Build app (engine linked, unsigned)
         env:
           INCLUDE_NATIVE_GUEST: ${{ (github.event_name == 'push' || inputs.native_guest) && '1' || '0' }}
+          # Keep release optimization and archive line symbols separately.
+          CARGO_PROFILE_RELEASE_DEBUG: line-tables-only
+          CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO: packed
         run: |
           if [ "$INCLUDE_NATIVE_GUEST" = "1" ]; then
             bun run tauri build --target aarch64-apple-darwin --features guest-rtc-production
           else
             bun run tauri build --target aarch64-apple-darwin
           fi
+
+      - name: Archive matching production symbols
+        run: |
+          set -euo pipefail
+          APP="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Producer.app"
+          SYMBOLS="src-tauri/target/aarch64-apple-darwin/release/producer.dSYM"
+          # Cargo preserves its artifact hash in the inner DWARF filename.
+          # Validate the actual file; the binary/dSYM UUID check below remains authoritative.
+          python3 - "$SYMBOLS" <<'PY'
+          import pathlib, sys
+          files = [p for p in (pathlib.Path(sys.argv[1]) / 'Contents/Resources/DWARF').glob('*') if p.is_file()]
+          assert len(files) == 1 and files[0].stat().st_size > 0, 'Missing or ambiguous release DWARF file'
+          PY
+          mkdir -p /tmp/producer-symbols
+          ditto "$SYMBOLS" /tmp/producer-symbols/Producer.app.dSYM
+          xcrun dwarfdump --uuid "$APP/Contents/MacOS/Producer" > /tmp/producer-symbols/binary-uuid.txt
+          xcrun dwarfdump --uuid /tmp/producer-symbols/Producer.app.dSYM > /tmp/producer-symbols/symbol-uuid.txt
+          python3 - <<'PY'
+          import pathlib, re
+          root = pathlib.Path('/tmp/producer-symbols')
+          uuids = lambda name: set(re.findall(r'UUID: ([A-Fa-f0-9-]+)', (root / name).read_text()))
+          binary, symbols = uuids('binary-uuid.txt'), uuids('symbol-uuid.txt')
+          assert binary and binary == symbols, 'Release symbol UUID mismatch'
+          PY
+          printf '%s\n' "$PRODUCER_SOURCE_SHA" > /tmp/producer-symbols/source-revision.txt
+
+      - name: Retain production symbols for diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: producer-macos-symbols-${{ github.sha }}
+          path: /tmp/producer-symbols
+          retention-days: 90
 
       - name: Guard — refuse stub build
         run: |
@@ -394,19 +495,16 @@ jobs:
           name: Producer-macos-arm64-live
           path: ${{ env.DMG }}
 
-      - name: Publish to GitHub release
+      - name: Stage Apple Silicon installer in the release draft
         if: ${{ github.event_name == 'push' || inputs.publish }}
         run: |
           set -euo pipefail
-          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Producer v$VERSION" --draft --notes "Producer v$VERSION" 2>/dev/null || true
           gh release upload "v$VERSION" "$DMG" --clobber
 
       # Auto-update leg: the updater archive must contain the ASSEMBLED,
       # notarized app (tauri's auto-generated one is the engine-less
-      # intermediate — never ship that). This job is the single writer of the
-      # published latest.json: it merges its darwin-aarch64 entry into the
-      # manifest tauri-action uploaded for the other platforms.
-      - name: Updater artifact + manifest merge
+      # intermediate — never ship that).
+      - name: Stage notarized Apple Silicon updater archive
         if: ${{ github.event_name == 'push' || inputs.publish }}
         run: |
           set -euo pipefail
@@ -415,66 +513,6 @@ jobs:
           bun run tauri signer sign "$UPD" --password "" >/dev/null
           test -f "$UPD.sig" || { echo "FATAL: updater signature not produced" >&2; exit 1; }
           gh release upload "v$VERSION" "$UPD" "$UPD.sig" --clobber
-
-          # Single-writer guarantee: wait until every other job in this run is
-          # done, so nothing (tauri-action's own latest.json upload included)
-          # can land after our merged manifest.
-          for i in $(seq 1 120); do
-            PENDING="$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs" --paginate \
-              --jq '[.jobs[] | select(.name != "build-macos-arm64-live" and .name != "publish-verified-release") | select(.status != "completed")] | length')"
-            [ "$PENDING" = "0" ] && break
-            echo "waiting on $PENDING sibling job(s)… ($i)"
-            sleep 30
-          done
-
-          MANIFEST=/tmp/latest.json
-          if ! gh release download "v$VERSION" -p "latest.json" -O "$MANIFEST" --clobber 2>/dev/null; then
-            echo "WARN: matrix latest.json missing — publishing manifest without linux/intel-mac entries" >&2
-            printf '{"version":"%s","platforms":{}}' "$VERSION" > "$MANIFEST"
-          fi
-          SIG="$(cat "$UPD.sig")" REPO="${{ github.repository }}" \
-            python3 scripts/merge-update-manifest.py "$MANIFEST" "$VERSION" "$UPD"
-
-          # Windows leg: build-windows-live (waited on above) uploaded the
-          # engine-bundled installer(s) + .sig; since windows-latest left the
-          # tauri-action matrix, its updater entries are written HERE, from
-          # those sigs, with the same key names tauri-action used to emit
-          # (windows-x86_64 + -nsis, and -msi when the MSI was produced).
-          rm -rf /tmp/winsig && mkdir -p /tmp/winsig
-          WIN_EXE="Producer_${VERSION}_x64-setup.exe"
-          WIN_MSI="Producer_${VERSION}_x64_en-US.msi"
-          for A in "$WIN_EXE" "$WIN_MSI"; do
-            gh release download "v$VERSION" -p "$A.sig" -D /tmp/winsig --clobber 2>/dev/null || true
-          done
-          REPO="${{ github.repository }}" VERSION="$VERSION" WIN_EXE="$WIN_EXE" WIN_MSI="$WIN_MSI" \
-            python3 - "$MANIFEST" <<'EOF'
-          import json, os, sys
-          path = sys.argv[1]
-          repo, version = os.environ["REPO"], os.environ["VERSION"]
-          m = json.load(open(path))
-          plats = m.setdefault("platforms", {})
-          def entry(asset):
-              sig = f"/tmp/winsig/{asset}.sig"
-              if not os.path.exists(sig):
-                  return None
-              return {"signature": open(sig).read().strip(),
-                      "url": f"https://github.com/{repo}/releases/download/v{version}/{asset}"}
-          exe = entry(os.environ["WIN_EXE"])
-          msi = entry(os.environ["WIN_MSI"])
-          for k in [k for k in plats if k.startswith("windows-")]:
-              del plats[k]
-          if exe:
-              plats["windows-x86_64"] = exe
-              plats["windows-x86_64-nsis"] = exe
-          else:
-              print("::warning::Windows installer .sig not on the release — build-windows-live failed? "
-                    "latest.json ships WITHOUT a windows-x86_64 entry (Windows updaters see no update).")
-          if msi:
-              plats["windows-x86_64-msi"] = msi
-          json.dump(m, open(path, "w"), indent=2)
-          print("manifest platforms:", sorted(plats))
-          EOF
-          gh release upload "v$VERSION" "$MANIFEST" --clobber
 
   # ── Windows x64 + Live engine (Producer Live) ──────────────────────────────
   # Mirror of build-macos-arm64-live for the Windows engine. Same rule set:
@@ -489,13 +527,16 @@ jobs:
   # + scripts/build-windows.ps1) so CI ships exactly what that box verified.
   # There is no Windows code-signing certificate wired; the installer is unsigned.
   build-windows-live:
-    if: ${{ inputs.promote_run == '' }}
+    if: ${{ !cancelled() && inputs.promote_run == '' && (needs.validate-public-source.result == 'success' || (github.event_name == 'workflow_dispatch' && !inputs.publish && inputs.resume_windows_run == '')) }}
+    needs: [validate-public-source]
     permissions:
+      actions: read
       contents: write
     runs-on: windows-2022
     timeout-minutes: 120
     env:
       GH_TOKEN: ${{ github.token }}
+      PRODUCER_SOURCE_SHA: ${{ needs.validate-public-source.outputs.source_sha || github.sha }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     defaults:
@@ -505,6 +546,26 @@ jobs:
         shell: powershell
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-public-source.outputs.source_sha || github.sha }}
+
+      - name: Check out qualification tooling
+        if: ${{ inputs.resume_windows_run != '' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: release-control
+          sparse-checkout: scripts
+
+      - name: Parse Windows qualification scripts before building
+        if: ${{ github.event_name == 'push' || inputs.publish }}
+        run: |
+          foreach ($script in @('scripts/build-windows.ps1','scripts/test-windows-installed.ps1','scripts/test-windows-engine.ps1')) {
+            $tokens = $null
+            $parseErrors = $null
+            $null = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd $script), [ref]$tokens, [ref]$parseErrors)
+            if ($parseErrors.Count -ne 0) { throw ($parseErrors | Out-String) }
+          }
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -524,17 +585,22 @@ jobs:
       # throws "no engine artifact matches the current obs.lock (...)" on a
       # miss - run engine.yml for this lock first, then re-run the release.
       - name: Fetch engine artifact (current obs.lock hash - fail hard on miss)
+        env:
+          RESUME_ENGINE_RUN: ${{ needs.validate-public-source.outputs.engine_run }}
         run: |
           # The script probes `python -c "import zstandard"`; under
           # $ErrorActionPreference=Stop a missing module's traceback on stderr
           # is a terminating NativeCommandError. Satisfy the probe up front.
           python -m pip install --quiet zstandard
-          . .\scripts\windows-engine.ps1
+          if ($env:RESUME_ENGINE_RUN) {
+            . .\release-control\scripts\windows-engine.ps1
+            $RepoRoot = $env:GITHUB_WORKSPACE
+          } else { . .\scripts\windows-engine.ps1 }
           $name = Get-EngineName
           Write-Host "want: $name"
           # Last pipeline element: pip/extract output from inside the function
           # must not turn the path into an array.
-          $dir = @(Get-EngineDir)[-1]
+          $dir = if ($env:RESUME_ENGINE_RUN) { @(Get-EngineDir -RunId $env:RESUME_ENGINE_RUN)[-1] } else { @(Get-EngineDir)[-1] }
           if (-not (Test-Path (Join-Path $dir "bin\obs.dll"))) {
             throw "FATAL: engine artifact missing after fetch - refusing to ship a stub build"
           }
@@ -556,18 +622,107 @@ jobs:
       # refuses to continue if the exe does not import obs.dll. Updater .sig is
       # emitted because TAURI_SIGNING_PRIVATE_KEY is set.
       - name: Build NSIS installer (engine linked + staged beside producer.exe)
+        if: ${{ inputs.resume_windows_run == '' }}
         run: .\scripts\build-windows.ps1
+
+      - name: Restore exact retained Windows installer
+        if: ${{ inputs.resume_windows_run != '' }}
+        timeout-minutes: 12
+        env:
+          INSTALLER_ARTIFACT: ${{ needs.validate-public-source.outputs.installer_artifact }}
+          INSTALLER_DIGEST: ${{ needs.validate-public-source.outputs.installer_digest }}
+          PROOF_ARTIFACT: ${{ needs.validate-public-source.outputs.proof_artifact }}
+          PROOF_DIGEST: ${{ needs.validate-public-source.outputs.proof_digest }}
+        run: |
+          python .\release-control\scripts\restore-staged-artifact.py $env:INSTALLER_ARTIFACT $env:INSTALLER_DIGEST src-tauri\target\release\bundle\nsis
+          if ($LASTEXITCODE -ne 0) { throw 'Could not restore the exact installer' }
+          python .\release-control\scripts\restore-staged-artifact.py $env:PROOF_ARTIFACT $env:PROOF_DIGEST "$env:RUNNER_TEMP\producer-previous-proof"
+          if ($LASTEXITCODE -ne 0) { throw 'Could not restore the original installed proof' }
+
+      - name: Build frontend assets for resumed native tests
+        if: ${{ inputs.resume_windows_run != '' }}
+        run: bun run build
+
+      # Preserve the exact installer for diagnosis if the hosted qualification
+      # environment fails. It is not staged on the public release draft here.
+      - name: Preserve Windows installer before runtime checks
+        if: ${{ inputs.resume_windows_run == '' && (github.event_name == 'push' || inputs.publish) }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Producer-windows-x64-unqualified-${{ github.sha }}
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.exe.sig
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Qualify installed Windows engine
+        if: ${{ inputs.resume_windows_run == '' && (github.event_name == 'push' || inputs.publish) }}
+        timeout-minutes: 6
+        run: |
+          $version = (Get-Content src-tauri\tauri.conf.json -Raw | ConvertFrom-Json).version
+          $installer = "src-tauri\target\release\bundle\nsis\Producer_${version}_x64-setup.exe"
+          .\scripts\test-windows-installed.ps1 -Installer $installer -ExpectedExecutable src-tauri\target\release\producer.exe -OutputDir "$env:RUNNER_TEMP\producer-windows-installed-proof"
 
       # Hosted Windows runners do not guarantee a D3D11 adapter. Still compile
       # and link the same native pixel probe used on a Windows GPU workstation.
       - name: Check Windows native compositor linkage
+        if: ${{ inputs.resume_windows_run == '' }}
         run: .\scripts\test-windows-native.ps1 -EngineDir .\src-tauri\windows-bundle -CompileOnly
+
+      # Compile once before the bounded runtime window. Each exact native
+      # test then owns its own libobs/CEF process; an absent/zero-test match
+      # or unavailable D3D11 adapter cannot be reported as a runtime pass.
+      - name: Ensure recording inspection prerequisite
+        if: ${{ github.event_name == 'push' || inputs.publish }}
+        timeout-minutes: 6
+        run: |
+          if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress --limit-output --execution-timeout=300
+            if ($LASTEXITCODE -ne 0) { throw 'ffmpeg prerequisite failed' }
+          }
+          if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) { throw 'ffprobe unavailable' }
+          Write-Host 'ffprobe is available for the recording tests'
+
+      - name: Prepare Windows native runtime qualification
+        if: ${{ github.event_name == 'push' || inputs.publish }}
+        timeout-minutes: 30
+        run: .\scripts\test-windows-engine.ps1 -EngineDir $env:PRODUCER_ENGINE_DIR -OutputDir "$env:RUNNER_TEMP\producer-windows-runtime-proof" -PrepareOnly
+
+      - name: Qualify Windows native runtime
+        if: ${{ github.event_name == 'push' || inputs.publish }}
+        timeout-minutes: 25
+        run: .\scripts\test-windows-engine.ps1 -EngineDir $env:PRODUCER_ENGINE_DIR -OutputDir "$env:RUNNER_TEMP\producer-windows-runtime-proof" -RunOnly -MaxRuntimeSeconds 1200
+
+      - name: Qualify retained Windows installer from its installed directory
+        if: ${{ inputs.resume_windows_run != '' }}
+        timeout-minutes: 6
+        run: |
+          $proofFile = Join-Path $env:RUNNER_TEMP 'producer-previous-proof\producer-windows-installed-proof\installed-proof.json'
+          $proof = Get-Content -LiteralPath $proofFile -Raw | ConvertFrom-Json
+          if ($proof.source -ne $env:PRODUCER_SOURCE_SHA -or $proof.status -ne 'passed' -or -not $proof.installedBinaryMatches -or $proof.graphicsBackend -ne 'd3d11' -or $proof.executableSha256 -ne $proof.expectedPackagedExecutableSha256) { throw 'Original installed proof does not match the retained installer' }
+          $version = (Get-Content src-tauri\tauri.conf.json -Raw | ConvertFrom-Json).version
+          $installer = "src-tauri\target\release\bundle\nsis\Producer_${version}_x64-setup.exe"
+          .\release-control\scripts\test-windows-installed.ps1 -Installer $installer -ExpectedPackagedSha256 $proof.expectedPackagedExecutableSha256 -Headless -OutputDir "$env:RUNNER_TEMP\producer-windows-installed-proof"
+
+      - name: Preserve Windows installed and runtime evidence
+        if: ${{ always() && (github.event_name == 'push' || inputs.publish) }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: producer-windows-qualification-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/producer-windows-installed-proof/*.json
+            ${{ runner.temp }}/producer-windows-installed-proof/*.log
+            ${{ runner.temp }}/producer-windows-runtime-proof/**
+          if-no-files-found: warn
+          retention-days: 90
 
       # The MSI is a courtesy asset (the updater leg is the NSIS exe); the
       # Windows session has only ever verified the NSIS path, so a WiX failure
       # must not sink the release. Same build-only config the script wrote, so
       # the resources map identically; cargo sees no change and just re-bundles.
       - name: Build MSI installer (best-effort)
+        if: ${{ inputs.resume_windows_run == '' }}
         id: msi
         continue-on-error: true
         run: |
@@ -601,15 +756,11 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-      # build-macos-arm64-live is the single writer of latest.json; it waits
-      # for this job, then reads the .sig files uploaded here to write the
-      # windows-x86_64 entries. Only the installers + sigs are published here.
-      - name: Publish to GitHub release
+      - name: Stage Windows installers in the release draft
         if: ${{ github.event_name == 'push' || inputs.publish }}
         shell: bash
         run: |
           set -euo pipefail
-          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Producer v$VERSION" --draft --notes "Producer v$VERSION" 2>/dev/null || true
           # Only the installers and their updater signatures. `dist/` is the
           # web bundle's own output dir too (index.html, assets/), and a
           # directory in the upload list fails the whole step.
@@ -621,23 +772,57 @@ jobs:
 
   # Keep the previous public release current until every new platform passes.
   publish-verified-release:
-    if: ${{ inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) }}
-    needs: [build, build-macos-arm64-live, build-windows-live]
+    if: ${{ !cancelled() && inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) && needs.validate-public-source.result == 'success' && needs.build-windows-live.result == 'success' && ((inputs.resume_windows_run == '' && needs.build.result == 'success' && needs.build-macos-arm64-live.result == 'success') || (inputs.resume_windows_run != '' && needs.build.result == 'skipped' && needs.build-macos-arm64-live.result == 'skipped')) }}
+    needs: [validate-public-source, build, build-macos-arm64-live, build-windows-live]
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
+      PRODUCER_RELEASE_ID: ${{ needs.validate-public-source.outputs.release_id }}
+      PRODUCER_SOURCE_SHA: ${{ needs.validate-public-source.outputs.source_sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-public-source.outputs.source_sha }}
+      - name: Require successful CI for this exact release commit
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          repo, sha = os.environ['GITHUB_REPOSITORY'], os.environ['PRODUCER_SOURCE_SHA']
+          runs = json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/actions/workflows/ci.yml/runs?head_sha={sha}&per_page=100']))['workflow_runs']
+          green = [r for r in runs if r['name'] == 'CI' and r['head_sha'] == sha and r['status'] == 'completed' and r['conclusion'] == 'success']
+          assert green, 'No successful CI workflow exists for the exact release commit; finish CI before publishing'
+          print(f'Validated release source {sha} against CI run {green[0]["id"]}')
+          PY
       - name: Verify all updater payload signatures before public promotion
         run: |
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y minisign
-          python3 scripts/verify-release-payloads.py
+          GITHUB_SHA="$PRODUCER_SOURCE_SHA" python3 scripts/verify-release-payloads.py
       - name: Publish the verified release
         run: |
-          set -euo pipefail
-          VERSION="$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")"
-          gh release edit "v$VERSION" --draft=false --latest --notes-file /tmp/producer-release-verification/release-notes.md
+          python3 - <<'PY'
+          import hashlib, json, os, subprocess
+          from pathlib import Path
+          out = Path('/tmp/producer-release-verification')
+          receipt = json.loads((out / 'verification.json').read_text())
+          repo, sha = os.environ['GITHUB_REPOSITORY'], os.environ['PRODUCER_SOURCE_SHA']
+          release_id = os.environ['PRODUCER_RELEASE_ID']
+          assert receipt['releaseId'] == int(release_id) and receipt['sha'] == sha
+          endpoint = f'repos/{repo}/releases/{release_id}'
+          draft = json.loads(subprocess.check_output(['gh', 'api', endpoint]))
+          assert draft['draft'] and not draft['prerelease'] and draft['target_commitish'] == sha
+          assert draft['tag_name'] == 'v' + receipt['version']
+          assets = {a['name']: a for a in draft['assets'] if a['state'] == 'uploaded'}
+          for name in ('latest.json', 'verification.json'):
+              data = (out / name).read_bytes()
+              assert assets[name]['size'] == len(data)
+              assert assets[name]['digest'] == 'sha256:' + hashlib.sha256(data).hexdigest(), f'{name} was not staged on the reserved draft'
+          body = dict(draft=False, make_latest='true', body=(out / 'release-notes.md').read_text())
+          release = json.loads(subprocess.check_output(['gh', 'api', '--method', 'PATCH', endpoint, '--input', '-'], input=json.dumps(body), text=True))
+          assert not release['draft'] and not release['prerelease']
+          print(release['html_url'])
+          PY

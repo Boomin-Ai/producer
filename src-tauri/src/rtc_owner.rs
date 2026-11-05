@@ -8,6 +8,71 @@ use tokio::{
     sync::{mpsc, oneshot, watch},
     task::{JoinHandle, JoinSet},
 };
+#[path = "rtc_shutdown.rs"]
+pub(crate) mod shutdown;
+use crate::performance_trace::native_stage;
+use shutdown::Mutation;
+
+fn phase(name: &'static str, started: std::time::Instant, success: bool) {
+    native_stage(name, started.elapsed(), Some(success));
+}
+
+fn trace_failure(stage: &'static str) {
+    native_stage(stage, Duration::ZERO, Some(false));
+}
+
+async fn startup_step<T>(
+    begin: &'static str,
+    complete: &'static str,
+    work: impl std::future::Future<Output = Result<T, &'static str>>,
+) -> Result<T, &'static str> {
+    let started = std::time::Instant::now();
+    native_stage(begin, Duration::ZERO, None);
+    let result = work.await;
+    phase(complete, started, result.is_ok());
+    result
+}
+
+#[cfg(all(feature = "guest-rtc-pilot", have_engine))]
+async fn close_program(
+    program: &mut Option<crate::live::rtc_program::Publisher>,
+) -> Result<(), &'static str> {
+    let Some(mut program) = program.take() else {
+        return Ok(());
+    };
+    program.request_stop();
+    let queued = std::time::Instant::now();
+    tokio::task::spawn_blocking(move || {
+        phase("native.rtc.publisher.close.queue_wait", queued, true);
+        let started = std::time::Instant::now();
+        let result = program.close();
+        phase("native.rtc.publisher.close", started, result.is_ok());
+        result
+    })
+    .await
+    .map_err(|_| "Native program retirement worker failed")?
+}
+
+fn connection_close_phase(
+    phase: producer_guest_runtime::ClosePhase,
+    duration: Duration,
+    success: bool,
+) {
+    native_stage(
+        match phase {
+            producer_guest_runtime::ClosePhase::Receivers => "native.rtc.receivers.close",
+            producer_guest_runtime::ClosePhase::Sdk => "native.rtc.sdk.close",
+        },
+        duration,
+        Some(success),
+    );
+}
+async fn end_control(control: &mut Control) -> Result<(), &'static str> {
+    let started = std::time::Instant::now();
+    let result = control.end().await;
+    phase("native.rtc.authority.end", started, result.is_ok());
+    result
+}
 
 /// Permission reads do not share the mutation queue or renew its lease.
 /// At most two reads overlap; request-start expiry and monotonic revision
@@ -34,6 +99,7 @@ impl AuthorityReader {
                     _ = &mut stopped => break,
                     result = pending.join_next(), if !pending.is_empty() => {
                         let result = result.unwrap().unwrap_or(Err("Native authority read task failed"));
+                        let read_failed = result.is_err();
                         match result.and_then(|snapshot| updater.publish(snapshot)) {
                             Ok(_) => failures = 0,
                             Err(error) => {
@@ -41,6 +107,11 @@ impl AuthorityReader {
                                 if failures >= 3 || !matches!(error,
                                     "RTC request failed" | "RTC request timed out" | "RTC response failed" |
                                     "RTC authority temporarily unavailable" | "Native guest authority response expired") {
+                                    trace_failure(if read_failed {
+                                        "native.rtc.owner.failure.authority_read"
+                                    } else {
+                                        "native.rtc.owner.failure.authority_handoff"
+                                    });
                                     let _ = failure.send(Some(error)); break;
                                 }
                             }
@@ -65,13 +136,18 @@ impl AuthorityReader {
     fn update(&self, control: &Control) {
         let _ = self.updates.send(control.clone());
     }
-    async fn close(&mut self) {
+    fn request_stop(&mut self) {
         if let Some(stop) = self.stop.take() {
             let _ = stop.send(());
         }
+    }
+    async fn close(&mut self) {
+        let started = std::time::Instant::now();
+        self.request_stop();
         if let Some(task) = self.task.take() {
             let _ = task.await;
         }
+        phase("native.rtc.authority_reader.close", started, true);
     }
 }
 impl Drop for AuthorityReader {
@@ -90,7 +166,7 @@ struct RoomRequest {
 type MediaFactory = fn() -> Result<Box<dyn producer_guest_runtime::GuestMedia>, &'static str>;
 
 pub struct HostOwner {
-    stop: Option<oneshot::Sender<()>>,
+    stop: shutdown::CloseHandle,
     task: Option<JoinHandle<Result<(), &'static str>>>,
     lifetime: Weak<()>,
     room_id: String,
@@ -99,6 +175,27 @@ pub struct HostOwner {
     fault: Arc<std::sync::atomic::AtomicBool>,
     #[cfg(debug_assertions)]
     recoveries: Arc<std::sync::atomic::AtomicUsize>,
+}
+
+/// Captures only the old owner's queue; it never follows a replacement owner.
+#[derive(Clone)]
+pub struct CommandSender {
+    commands: mpsc::Sender<RoomRequest>,
+}
+impl CommandSender {
+    pub async fn room_command(
+        &self,
+        command: RoomCommand,
+    ) -> Result<serde_json::Value, &'static str> {
+        let (reply, result) = oneshot::channel();
+        self.commands
+            .try_send(RoomRequest { command, reply })
+            .map_err(|_| "Native RTC control queue unavailable")?;
+        tokio::time::timeout(Duration::from_secs(15), result)
+            .await
+            .map_err(|_| "Native room control response timed out; refresh room state")?
+            .map_err(|_| "Native RTC room owner stopped")?
+    }
 }
 fn now() -> u64 {
     SystemTime::now()
@@ -175,7 +272,8 @@ impl HostOwner {
         program_requested: bool,
         recovery_media: Option<MediaFactory>,
     ) -> (Self, oneshot::Receiver<Result<(), &'static str>>) {
-        let (stop, mut stopped) = oneshot::channel();
+        let (stop, mut stopped) = shutdown::channel();
+        let close_flag = stopped.flag();
         let (ready, connected) = oneshot::channel();
         let room_id = control.room_id().to_owned();
         let (commands, mut requests) = mpsc::channel::<RoomRequest>(8);
@@ -192,27 +290,86 @@ impl HostOwner {
         let recoveries = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         #[cfg(debug_assertions)]
         let recovered_count = recoveries.clone();
+        let startup_queued = std::time::Instant::now();
         let task = tokio::spawn(async move {
+            phase("native.rtc.start.owner_task_wait", startup_queued, true);
+            let startup_started = std::time::Instant::now();
             let _lifetime = lifetime;
             let mut control = control;
+            let ensure_open = || {
+                if close_flag.load(std::sync::atomic::Ordering::Acquire) {
+                    native_stage("native.rtc.stop.observed.owner_check", Duration::ZERO, None);
+                    Err("Native RTC room closing")
+                } else {
+                    Ok(())
+                }
+            };
             let started = async {
-                control.open().await?;
-                control.start_or_recover().await?;
-                let session = control.session().await?;
-                let mut connection = Connection::connect_with_media(&session, media).await?;
+                ensure_open()?;
+                startup_step(
+                    "native.rtc.start.ticket_open.begin",
+                    "native.rtc.start.ticket_open",
+                    control.open(),
+                )
+                .await?;
+                ensure_open()?;
+                startup_step(
+                    "native.rtc.start.control_start.begin",
+                    "native.rtc.start.control_start",
+                    control.start_or_recover(),
+                )
+                .await?;
+                ensure_open()?;
+                let session = startup_step(
+                    "native.rtc.start.session.begin",
+                    "native.rtc.start.session",
+                    control.session(),
+                )
+                .await?;
+                ensure_open()?;
+                let mut connection = startup_step(
+                    "native.rtc.start.sdk_connect.begin",
+                    "native.rtc.start.sdk_connect",
+                    Connection::connect_with_media(&session, media),
+                )
+                .await?;
+                if let Err(error) = ensure_open() {
+                    let _ = connection
+                        .close_observed(Some(connection_close_phase))
+                        .await;
+                    return Err(error);
+                }
                 if control.lease_expires_at_ms().unwrap_or(0) <= now() || !connection.healthy() {
-                    let _ = connection.close().await;
+                    let _ = connection
+                        .close_observed(Some(connection_close_phase))
+                        .await;
                     return Err("Native RTC authority expired during connection");
                 }
-                match control.media_authority().await {
+                match startup_step(
+                    "native.rtc.start.authority.begin",
+                    "native.rtc.start.authority",
+                    control.media_authority(),
+                )
+                .await
+                {
                     Ok(snapshot) => {
+                        if let Err(error) = ensure_open() {
+                            let _ = connection
+                                .close_observed(Some(connection_close_phase))
+                                .await;
+                            return Err(error);
+                        }
                         if connection.media_authority(snapshot).is_err() {
-                            let _ = connection.close().await;
+                            let _ = connection
+                                .close_observed(Some(connection_close_phase))
+                                .await;
                             return Err("Native media authority handoff failed");
                         }
                     }
                     Err(error) => {
-                        let _ = connection.close().await;
+                        let _ = connection
+                            .close_observed(Some(connection_close_phase))
+                            .await;
                         return Err(error);
                     }
                 }
@@ -222,7 +379,8 @@ impl HostOwner {
             let mut connection = match started {
                 Ok(connection) => connection,
                 Err(error) => {
-                    let _ = control.end().await;
+                    let _ = end_control(&mut control).await;
+                    phase("native.rtc.start.ready", startup_started, false);
                     let _ = ready.send(Err(error));
                     return Err(error);
                 }
@@ -230,20 +388,32 @@ impl HostOwner {
             #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
             let mut program = if program_requested {
                 crate::live::rtc_program::reset_diagnostics();
-                let started = tokio::time::timeout(Duration::from_secs(8), async {
-                    let sources = connection.publish_program().await?;
-                    crate::live::rtc_program::Publisher::start(
-                        sources,
-                        control.lease_expires_at_ms().unwrap_or(0),
-                    )
-                })
-                .await
-                .unwrap_or(Err("Native program publication timed out"));
+                let started = startup_step(
+                    "native.rtc.start.publisher.begin",
+                    "native.rtc.start.publisher",
+                    async {
+                        tokio::time::timeout(Duration::from_secs(8), async {
+                            ensure_open()?;
+                            let sources = connection.publish_program().await?;
+                            ensure_open()?;
+                            crate::live::rtc_program::Publisher::start(
+                                sources,
+                                control.lease_expires_at_ms().unwrap_or(0),
+                            )
+                        })
+                        .await
+                        .unwrap_or(Err("Native program publication timed out"))
+                    },
+                )
+                .await;
                 match started {
                     Ok(program) => Some(program),
                     Err(error) => {
-                        let _ = connection.close().await;
-                        let _ = control.end().await;
+                        let _ = connection
+                            .close_observed(Some(connection_close_phase))
+                            .await;
+                        let _ = end_control(&mut control).await;
+                        phase("native.rtc.start.ready", startup_started, false);
                         let _ = ready.send(Err(error));
                         return Err(error);
                     }
@@ -253,23 +423,22 @@ impl HostOwner {
             };
             #[cfg(not(all(feature = "guest-rtc-pilot", have_engine)))]
             let _ = program_requested;
-            if stopped.try_recv() != Err(oneshot::error::TryRecvError::Empty)
-                || ready.send(Ok(())).is_err()
-            {
+            if stopped.requested() || ready.send(Ok(())).is_err() {
+                phase("native.rtc.start.ready", startup_started, false);
                 #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
-                let program_closed = program
-                    .as_mut()
-                    .map(|program| program.close())
-                    .unwrap_or(Ok(()));
+                let program_closed = close_program(&mut program).await;
                 #[cfg(not(all(feature = "guest-rtc-pilot", have_engine)))]
                 let program_closed: Result<(), &'static str> = Ok(());
-                let closed = connection.close().await;
-                let ended = control.end().await;
+                let closed = connection
+                    .close_observed(Some(connection_close_phase))
+                    .await;
+                let ended = end_control(&mut control).await;
                 program_closed?;
                 closed?;
                 ended?;
                 return Ok(());
             }
+            phase("native.rtc.start.ready", startup_started, true);
             let mut heartbeat = tokio::time::interval(Duration::from_secs(10));
             heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             heartbeat.tick().await;
@@ -284,51 +453,66 @@ impl HostOwner {
             loop {
                 tokio::select! {
                     biased;
-                    _ = &mut stopped => break,
+                    _ = stopped.wait() => {
+                        native_stage("native.rtc.stop.observed.owner_select", Duration::ZERO, None);
+                        break;
+                    },
                     _ = safety.tick() => {
+                        if stopped.requested(){
+                            native_stage("native.rtc.stop.observed.safety", Duration::ZERO, None);
+                            break;
+                        }
                         #[cfg(debug_assertions)]
                         if fault_task.swap(false,std::sync::atomic::Ordering::AcqRel){connection.disconnect_for_test().await;}
                         if !connection.healthy() {
                             let instant=std::time::Instant::now();
                             while transport_recoveries.front().is_some_and(|at| instant.duration_since(*at)>=Duration::from_secs(60)){transport_recoveries.pop_front();}
-                            let Some(factory)=recovery_media else {failure=Some("Native RTC transport stopped");break;};
-                            if transport_recoveries.len()>=3 || control.lease_expires_at_ms().unwrap_or(0)<=now(){failure=Some("Native RTC transport recovery exhausted");break;}
+                            let Some(factory)=recovery_media else {trace_failure("native.rtc.owner.failure.transport_stopped");failure=Some("Native RTC transport stopped");break;};
+                            if transport_recoveries.len()>=3 || control.lease_expires_at_ms().unwrap_or(0)<=now(){trace_failure("native.rtc.owner.failure.transport_recovery_exhausted");failure=Some("Native RTC transport recovery exhausted");break;}
                             transport_recoveries.push_back(instant);
                             // The old permission reader must join before a new SDK
                             // owner can receive authority. Capture queues and media
                             // outputs retire before fresh session issuance.
                             authority_reader.close().await;
                             #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
-                            if let Some(mut retired)=program.take(){
-                                if let Err(error)=retired.close(){
+                            if program.is_some(){
+                                if let Err(error)=close_program(&mut program).await{
                                     if error!="Native program audio publication deadline missed"{failure=Some(error);break;}
                                 }
                             }
-                            if let Err(error)=connection.close().await{failure=Some(error);break;}
+                            if let Err(error)=connection.close_observed(Some(connection_close_phase)).await{failure=Some(error);break;}
                             let recovered=async {
+                                ensure_open()?;
                                 control.media_authority().await?;
-                                control.renew().await?;
+                                ensure_open()?;
+                                control.renew_guarded(||!close_flag.load(std::sync::atomic::Ordering::Acquire)).await?;
+                                ensure_open()?;
                                 let session=control.session().await?;
+                                ensure_open()?;
                                 // The owner awaits SDK initialization through its own
                                 // bounded connect timeout, including exit requests.
                                 let mut next=Connection::connect_with_media(&session,Some(factory()?)).await?;
                                 let checked=async {
+                                    ensure_open()?;
                                     let snapshot=control.media_authority().await?;
+                                    ensure_open()?;
                                     if control.lease_expires_at_ms().unwrap_or(0)<=now(){return Err("Native RTC recovery lease expired");}
                                     next.media_authority(snapshot)?;
                                     Ok(())
                                 }.await;
-                                if let Err(error)=checked{let _=next.close().await;return Err(error);}
+                                if let Err(error)=checked{let _=next.close_observed(Some(connection_close_phase)).await;return Err(error);}
                                 Ok(next)
                             }.await;
                             match recovered {
                                 Ok(next)=>connection=next,
-                                Err(error)=>{failure=Some(error);break;}
+                                Err(error)=>{trace_failure("native.rtc.owner.failure.transport_recovery");failure=Some(error);break;}
                             }
                             #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
                             if program_requested {
                                 let resumed=async {
+                                    ensure_open()?;
                                     let sources=connection.publish_program().await?;
+                                    ensure_open()?;
                                     crate::live::rtc_program::Publisher::start(sources,control.lease_expires_at_ms().unwrap_or(0))
                                 }.await;
                                 match resumed{Ok(publisher)=>program=Some(publisher),Err(error)=>{failure=Some(error);break;}}
@@ -344,16 +528,27 @@ impl HostOwner {
                             while program_recoveries.front().is_some_and(|at| instant.duration_since(*at) >= Duration::from_secs(60)) {
                                 program_recoveries.pop_front();
                             }
-                            if !program.as_ref().is_some_and(|publisher| publisher.recoverable()) || program_recoveries.len() >= 3 || !connection.healthy() || control.lease_expires_at_ms().unwrap_or(0) <= now() {
+                            let program_failure = if !program.as_ref().is_some_and(|publisher| publisher.recoverable()) {
+                                Some("native.rtc.owner.failure.program_unrecoverable")
+                            } else if program_recoveries.len() >= 3 {
+                                Some("native.rtc.owner.failure.program_recovery_budget")
+                            } else if !connection.healthy() {
+                                Some("native.rtc.owner.failure.program_transport_unhealthy")
+                            } else if control.lease_expires_at_ms().unwrap_or(0) <= now() {
+                                Some("native.rtc.owner.failure.program_lease_expired")
+                            } else { None };
+                            if let Some(stage) = program_failure {
+                                trace_failure(stage);
                                 failure = Some("Native program capture or publication stopped"); break;
                             }
                             // Stop capture and discard pending samples before removing
                             // only our own publications. Never replay late audio.
-                            let mut retired = program.take().unwrap();
-                            if retired.close() != Err("Native program audio publication deadline missed") {
+                            if close_program(&mut program).await != Err("Native program audio publication deadline missed") {
+                                trace_failure("native.rtc.owner.failure.program_recovery_teardown");
                                 failure = Some("Native program recovery teardown failed"); break;
                             }
-                            let recovered = tokio::time::timeout(Duration::from_secs(8), async {
+                            let recovery = tokio::time::timeout(Duration::from_secs(8), async {
+                                ensure_open()?;
                                 let first = control.media_authority().await;
                                 let snapshot = match first {
                                     Err("RTC request timed out" | "RTC request failed" | "RTC response failed" | "RTC authority temporarily unavailable" | "Native guest authority response expired") => {
@@ -361,32 +556,59 @@ impl HostOwner {
                                         // stay expired and no new publication starts
                                         // until a current response validates successfully.
                                         tokio::time::sleep(Duration::from_millis(100)).await;
+                                        ensure_open()?;
                                         control.media_authority().await?
                                     }
                                     result => result?,
                                 };
+                                ensure_open()?;
                                 connection.media_authority(snapshot)?;
                                 if control.lease_expires_at_ms().unwrap_or(0) <= now() {
                                     return Err("Native program recovery lease expired");
                                 }
                                 connection.retire_program().await?;
+                                ensure_open()?;
                                 let sources = connection.publish_program().await?;
+                                ensure_open()?;
                                 crate::live::rtc_program::Publisher::start(sources, control.lease_expires_at_ms().unwrap_or(0))
-                            }).await.unwrap_or(Err("Native program recovery timed out"));
+                            }).await;
+                            if recovery.is_err() {
+                                trace_failure("native.rtc.owner.failure.program_recovery_timeout");
+                            }
+                            let recovered = recovery.unwrap_or(Err("Native program recovery timed out"));
                             match recovered {
                                 Ok(publisher) => { crate::live::rtc_program::note_recovery(); program = Some(publisher); program_recoveries.push_back(instant); }
-                                Err(error) => { failure = Some(error); break; }
+                                Err(error) => { trace_failure("native.rtc.owner.failure.program_recovery"); failure = Some(error); break; }
                             }
                         }
                         if !connection.healthy() {
+                            trace_failure("native.rtc.owner.failure.transport_unhealthy");
                             failure = Some("Native RTC transport stopped"); break;
                         }
                         if control.lease_expires_at_ms().unwrap_or(0) <= now() {
+                            trace_failure("native.rtc.owner.failure.host_lease_expired");
                             failure = Some("Native RTC host lease expired"); break;
                         }
                     }
                     _ = heartbeat.tick() => {
-                        if let Err(error) = control.renew().await {
+                        let flag=close_flag.clone();
+                        let mut drain_started = None;
+                        let renewed=stopped.mutation(control.renew_guarded(move||!flag.load(std::sync::atomic::Ordering::Acquire)),||{
+                            native_stage("native.rtc.stop.observed.renew",Duration::ZERO,None);
+                            let quiescing = std::time::Instant::now();
+                            authority_reader.request_stop();
+                            connection.begin_close();
+                            #[cfg(all(feature="guest-rtc-pilot",have_engine))]
+                            if let Some(program)=program.as_ref(){program.request_stop();}
+                            phase("native.rtc.stop.quiesce.renew",quiescing,true);
+                            drain_started = Some(std::time::Instant::now());
+                        }).await;
+                        if let (Some(started), Mutation::Closing(result)) = (drain_started, &renewed) {
+                            phase("native.rtc.stop.drain.renew", started, result.is_ok());
+                        }
+                        let result=match renewed {Mutation::Completed(result)=>result,Mutation::NotStarted|Mutation::Closing(_)=>break};
+                        if let Err(error) = result {
+                            trace_failure("native.rtc.owner.failure.renew");
                             failure = Some(error); break;
                         }
                         authority_reader.update(&control);
@@ -401,27 +623,57 @@ impl HostOwner {
                         // Reuse only independently refreshed current authority; otherwise fetch.
                         // The same task owns commands, renewal and permission
                         // reads. No GUI request races a cached host revision.
-                        let result=async {
-                            let reused = connection.media_authority_updater().current_snapshot()
+                        let reused = connection.media_authority_updater().current_snapshot()
                                 .is_some_and(|snapshot| control.use_current_authority(&snapshot));
-                            if !reused {
-                                let before=control.media_authority().await?;
-                                connection.media_authority(before)?;
+                        if !reused {
+                            let before=match stopped.read(control.media_authority()).await {
+                                Some(result)=>result.and_then(|snapshot|connection.media_authority(snapshot)),
+                                None=>{
+                                    native_stage("native.rtc.stop.observed.command_read",Duration::ZERO,None);
+                                    let _=request.reply.send(Err("Native RTC room owner stopped"));break;
+                                }
+                            };
+                            if let Err(error)=before {
+                                let _=request.reply.send(Err(error));continue;
                             }
-                            let result=control.room_command(request.command).await;
+                        }
+                        let mut drain_started = None;
+                        let posted=stopped.mutation(control.room_command(request.command),||{
+                            native_stage("native.rtc.stop.observed.command",Duration::ZERO,None);
+                            native_stage("native.rtc.stop.in_flight_post",Duration::ZERO,None);
+                            let quiescing = std::time::Instant::now();
+                            authority_reader.request_stop();
+                            connection.begin_close();
+                            #[cfg(all(feature="guest-rtc-pilot",have_engine))]
+                            if let Some(program)=program.as_ref(){program.request_stop();}
+                            phase("native.rtc.stop.quiesce.command",quiescing,true);
+                            drain_started = Some(std::time::Instant::now());
+                        }).await;
+                        if let (Some(started), Mutation::Closing(result)) = (drain_started, &posted) {
+                            phase("native.rtc.stop.drain.command", started, result.is_ok());
+                        }
+                        let result=match posted {
+                            Mutation::Completed(result)=>result,
+                            Mutation::NotStarted|Mutation::Closing(_)=>{let _=request.reply.send(Err("Native RTC room owner stopped"));break;}
+                        };
                             // Even an ambiguous POST may have committed. Never
                             // extend old permits or blindly replay the POST.
                             // If this read fails, their independent expiry
                             // remains in force while the poll loop recovers.
-                            let after=control.media_authority().await?;
-                            connection.media_authority(after)?;
-                            result
-                        }.await;
+                        let after=match stopped.read(control.media_authority()).await {
+                            Some(result)=>result.and_then(|snapshot|connection.media_authority(snapshot)),
+                            None=>{
+                                native_stage("native.rtc.stop.observed.command_read_after",Duration::ZERO,None);
+                                let _=request.reply.send(Err("Native RTC room owner stopped"));break;
+                            }
+                        };
+                        let result=after.and(result);
                         authority_reader.update(&control);
                         let _=request.reply.send(result);
                     }
                     changed = authority_reader.failed.changed() => {
                         if !connection.healthy() {continue;}
+                        trace_failure("native.rtc.owner.failure.authority_reader");
                         failure = Some(if changed.is_err() { "Native authority reader stopped" }
                             else { authority_reader.failed.borrow().unwrap_or("Native authority reader stopped") });
                         break;
@@ -429,18 +681,26 @@ impl HostOwner {
 
                 }
             }
+            native_stage("native.rtc.owner.loop_exit", Duration::ZERO, None);
+            let quiescing = std::time::Instant::now();
+            authority_reader.request_stop();
+            connection.begin_close();
+            #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
+            if let Some(program) = program.as_ref() {
+                program.request_stop();
+            }
+            phase("native.rtc.owner.quiesce", quiescing, true);
             authority_reader.close().await;
             // Close SDK before ending authority; queue/media adapters must retire
             // before this boundary once they are installed. All normal exits join.
             #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
-            let program_closed = program
-                .as_mut()
-                .map(|program| program.close())
-                .unwrap_or(Ok(()));
+            let program_closed = close_program(&mut program).await;
             #[cfg(not(all(feature = "guest-rtc-pilot", have_engine)))]
             let program_closed: Result<(), &'static str> = Ok(());
-            let closed = connection.close().await;
-            let ended = control.end().await;
+            let closed = connection
+                .close_observed(Some(connection_close_phase))
+                .await;
+            let ended = end_control(&mut control).await;
             // Preserve the initiating failure even when publisher teardown
             // also reports its already-known deadline fault.
             if let Some(error) = failure {
@@ -457,7 +717,7 @@ impl HostOwner {
         });
         (
             Self {
-                stop: Some(stop),
+                stop,
                 task: Some(task),
                 lifetime: probe,
                 room_id,
@@ -480,32 +740,34 @@ impl HostOwner {
         &self,
         command: RoomCommand,
     ) -> Result<serde_json::Value, &'static str> {
-        let (reply, result) = oneshot::channel();
-        self.commands
-            .try_send(RoomRequest { command, reply })
-            .map_err(|_| "Native RTC control queue unavailable")?;
-        tokio::time::timeout(Duration::from_secs(15), result)
-            .await
-            .map_err(|_| "Native room control response timed out; refresh room state")?
-            .map_err(|_| "Native RTC room owner stopped")?
+        self.command_sender().room_command(command).await
+    }
+    pub fn command_sender(&self) -> CommandSender {
+        CommandSender {
+            commands: self.commands.clone(),
+        }
     }
     pub async fn close(&mut self) -> Result<(), &'static str> {
-        if let Some(stop) = self.stop.take() {
-            let _ = stop.send(());
-        }
-        if let Some(task) = self.task.take() {
-            task.await.map_err(|_| "Native RTC owner task failed")??;
-        }
-        Ok(())
+        native_stage("native.rtc.stop.requested", Duration::ZERO, None);
+        let started = std::time::Instant::now();
+        self.stop.request();
+        phase("native.rtc.stop.signal", started, true);
+        let result = if let Some(task) = self.task.take() {
+            task.await
+                .map_err(|_| "Native RTC owner task failed")
+                .and_then(|result| result)
+        } else {
+            Ok(())
+        };
+        phase("native.rtc.owner.close", started, result.is_ok());
+        result
     }
 }
 impl Drop for HostOwner {
     fn drop(&mut self) {
         // Dropping the control handle wakes the task. The task owns no handle
         // back-reference and completes SDK close/end even if its join is detached.
-        if let Some(stop) = self.stop.take() {
-            let _ = stop.send(());
-        }
+        self.stop.request();
     }
 }
 #[cfg(debug_assertions)]

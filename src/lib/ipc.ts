@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./nativeInvoke";
 
 /** What an endpoint IS, derived (Rust-side) from whether it carries a brand
  * scope: "boomin" = a Boomin workspace (network, deals, room visibility);

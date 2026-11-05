@@ -4,14 +4,14 @@ import {PresentationRelay} from "../features/presentation/presentationRelay";
 import {RoomSetControls} from "../features/presentation/RoomSetControls";
 import {modulePushPublisher} from '../features/presentation/modulePush';
 import {useSetModules} from '../features/presentation/useSetModules';
-import {invoke} from "@tauri-apps/api/core";
+import {invoke} from "../lib/nativeInvoke";
 import { admitGuestThroughTransport, revokeGuestAndConfirm } from "../lib/guestAdmission";
 import {PortraitCanvas} from '../features/presentation/PortraitCanvas';
 import { OutputSettings, RoomOutputView, type OutputView, type PortraitMonitor } from '../features/presentation/OutputSettings';
 import { fetchMe } from '../lib/access';
 import type { RoomSource, RoomAction } from "../../server/src/roomActions";
 import { formatGuestLink, hostedAudienceLink } from "../lib/hostedShare";
-import { previewSession, setPreviewTransparency } from "../lib/previewSession";
+import { afterPreviewWork, closePreviewSessions, previewSession, setPreviewTransparency } from "../lib/previewSession";
 import { useSetOutput } from "../features/presentation/useSetOutput";
 import { SetControlsPanel, type SetEditorTake } from "../features/presentation/SetControlsPanel";
 import { DEFAULT_SET } from "../features/presentation/catalog";
@@ -118,7 +118,8 @@ import {
   type RoomExtra,
   type CaptureKind,
 } from "../lib/room";
-import { homePaintedMs, takeRoomClick } from "../lib/perf";
+import { recordTraceEvent, setTraceContext, startTraceSpan, endTraceSpan, type TraceSpan } from "../lib/performanceTrace";
+import { currentRoomVisit, homePaintedMs, takeRoomClick } from "../lib/perf";
 import { RoomControlLink, type ControlFrame, type SceneCutFrame } from "../lib/roomControl";
 import { overlayBridge, type Contribution, type Interaction } from "../lib/ipc";
 import { copyText, mintJoinLink } from "../lib/roomLink";
@@ -179,6 +180,7 @@ import { activeRoomVote, mergeRoomVote, newestVotes } from "../lib/roomVotes";
 import { DEFAULT_MOD_BOARD, MOD_BOARD_PREF, normalizeModBoard, seatFeeds, throwUpState, type ModBoardLayout } from "../lib/modBoard";
 import { PREFS_EVENT, prefGet, prefSet } from "../lib/prefs";
 import { team } from "../lib/access";
+import { createRosterPollCoordinator } from "../lib/rosterPoll";
 import type { Member } from "../lib/accessDiff";
 import { canSeat, memberLabel, seatCandidates } from "../lib/seatPick";
 import { studioToggleTarget } from "../lib/studioOutput";
@@ -2675,6 +2677,7 @@ export function LiveView({
    * above it is the seat. Leaving the view leaves the seat. */
   seat?: GuestSeatSpec;
 }) {
+  const traceVisit = useRef(currentRoomVisit());
   // Windows float mode: popovers/toasts over the stage are punched out of
   // the native preview so they stay visible. No-op elsewhere.
   useEffect(() => {
@@ -2685,11 +2688,19 @@ export function LiveView({
   const deferredMicIds = useRef<string[]>([]);
   const entryAccessRef = useRef(entryAccess);
   const roomEngineRef = useRef<ReturnType<typeof roomSession> | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const session = roomSession();
     roomEngineRef.current = session;
     return () => {
-      void session.close(async () => {
+      // Conceal both native views before RTC/source teardown can reveal the
+      // camera underneath the Set. Home may already own this same receipt.
+      const previewClosed=closePreviewSessions(()=>ipc.liveDetachPreview());
+      void previewClosed.catch(()=>{});
+      const closeSpan = startTraceSpan("room.close", {}, { roomVisit: traceVisit.current });
+      const retired=session.close(async () => {
+        const releaseSpan = startTraceSpan("room.native_release", {}, { roomVisit: traceVisit.current });
+        try {
+        await previewClosed.catch(()=>{});
         const serverRoom = cfgRef.current.server_room_id;
         // An active output keeps its room engine and native guest owner.
         if (serverRoom && (await ipc.liveEngineStatus()).session_state === "idle") {
@@ -2702,7 +2713,17 @@ export function LiveView({
           localSetSkipped.current = false;
           studioApplied.current = false;
         }
-      }).catch((error) => console.warn("Room capture cleanup failed", error));
+        endTraceSpan(releaseSpan);
+        } catch (error) { endTraceSpan(releaseSpan, "error"); throw error; }
+      });
+      // A new room may mount while RTC retirement continues after conceal.
+      // Keep its preview attach behind the outgoing graph cleanup, otherwise
+      // the old release could conceal the new view or expose the old scene.
+      void afterPreviewWork(()=>retired).catch(()=>{});
+      void retired.then(() => endTraceSpan(closeSpan), (error) => {
+        endTraceSpan(closeSpan, "error");
+        console.warn("Room capture cleanup failed", error);
+      });
     };
   }, []);
   /** 60-sample render-PRESSURE history for the stats chart (1 Hz): mean
@@ -2738,8 +2759,19 @@ export function LiveView({
     home_painted: homePaintedMs() ?? -1,
   });
   const mark = (k: string) => {
-    if (mountMarks.current[k] == null) mountMarks.current[k] = Math.round(performance.now() - mountT0.current);
+    if (mountMarks.current[k] == null) {
+      mountMarks.current[k] = Math.round(performance.now() - mountT0.current);
+      recordTraceEvent(`room.${k}`, { elapsedMs: mountMarks.current[k] }, "room");
+    }
   };
+  useEffect(() => {
+    setTraceContext({ roomVisit: traceVisit.current });
+    recordTraceEvent("room.mounted", { elapsedMs: Math.round(performance.now() - mountT0.current) }, "room");
+    return () => {
+      recordTraceEvent("room.unmounted", {}, "room");
+      setTraceContext({});
+    };
+  }, []);
   const [mountMs, setMountMs] = useState<number | null>(null);
   /** Largest gap between 100ms ticks until the veil lifts — a ready room
    * that cannot paint for seconds is a MAIN-THREAD stall, not engine work. */
@@ -2802,6 +2834,11 @@ export function LiveView({
       setPendingFrames([]);
       mark("first_frames");
       const m = mountMarks.current;
+      recordTraceEvent("room.first_frames.finished", {
+        elapsedMs: Math.round(performance.now() - mountT0.current),
+        framedCount: Object.keys(seen).length, pendingCount: pending.length,
+        stallMaxMs: Math.round(stallMax.current),
+      }, "room");
       roomOpenReport({
         ...m,
         first_frame_by_item: seen,
@@ -2867,6 +2904,16 @@ export function LiveView({
   const [panelMenu, setPanelMenu] = useState<PanelId | null>(null);
   const [layoutMenu, setLayoutMenu] = useState(false);
   const [layoutEdit, setLayoutEdit] = useState(false);
+  const layoutToggleTrace = useRef<TraceSpan | undefined>(undefined);
+  const traceLayoutToggle = () => {
+    endTraceSpan(layoutToggleTrace.current, "cancelled");
+    layoutToggleTrace.current = startTraceSpan("layout.toggle_to_react_commit");
+  };
+  useLayoutEffect(() => {
+    endTraceSpan(layoutToggleTrace.current, "ok", { editing: layoutEdit });
+    layoutToggleTrace.current = undefined;
+  }, [layoutEdit]);
+  useEffect(() => () => endTraceSpan(layoutToggleTrace.current, "cancelled"), []);
   /** GATED CAPABILITIES (lib/featureFlags.ts). Guests and Mods are hidden
    *  from accounts that do not hold the flag: their panels, their rows in the
    *  Panels menu, their entries in Sources → +, and the room's guest Link.
@@ -2966,6 +3013,26 @@ export function LiveView({
   const cfgRef = useRef(cfg);
   cfgRef.current = cfg;
   const layout = cfg.layout;
+  // Measure the custom pointer drag through React's commit. An animation
+  // frame is only a presentation opportunity, never proof of visible paint.
+  const pendingDropTrace = useRef<{ span: TraceSpan; layout: typeof layout; sequence: number; dockIndex: number } | null>(null);
+  const dropTraceSequence = useRef(0);
+  const dropTraceFrame = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const pending = pendingDropTrace.current;
+    if (!pending || pending.layout !== layout) return;
+    pendingDropTrace.current = null;
+    endTraceSpan(pending.span, "ok", { reactCommitted: true, dropSequence: pending.sequence, dockIndex: pending.dockIndex });
+    const committedAt = performance.now();
+    dropTraceFrame.current = requestAnimationFrame(() => {
+      dropTraceFrame.current = null;
+      recordTraceEvent("panel.drop.presentation_opportunity", { afterCommitMs: performance.now() - committedAt, dropSequence: pending.sequence }, "presentation_opportunity");
+    });
+  }, [layout]);
+  useEffect(() => () => {
+    endTraceSpan(pendingDropTrace.current?.span, "cancelled");
+    if (dropTraceFrame.current !== null) cancelAnimationFrame(dropTraceFrame.current);
+  }, []);
   // Demand control (docs/THUMB-PIPELINE-V2.md): pay for preview frames only
   // while the guests panel is somewhere visible. 0 on hide and on unmount.
   const guestsDock = dockOf(layout, "guests");
@@ -4186,6 +4253,8 @@ export function LiveView({
    * panel's link button go through here — the panel button used to copy
    * silently (and swallow clipboard failures), which read as "doesn't work". */
   const copyRoomLink = async () => {
+    const trace = startTraceSpan("guest_link.copy");
+    let copied = false;
     let pending: number | undefined;
     const timer = window.setTimeout(() => {
       pending = notify("Copying guest link…", { key: "link-copy", sticky: true });
@@ -4193,7 +4262,8 @@ export function LiveView({
     try {
       const url = await ensureGuestLink();
       if (!url) return;
-      if (await copyText(url)) {
+      copied = await copyText(url);
+      if (copied) {
         dismissKey("guest-link-error");
         // Deals are a Boomin thing; a self-hosted room has none.
         notify(
@@ -4206,6 +4276,7 @@ export function LiveView({
         notify(url, { key: "banner", tone: "info", ttl: 8000 });
       }
     } finally {
+      endTraceSpan(trace, copied ? "ok" : "error", { copied });
       window.clearTimeout(timer);
       if (pending !== undefined) dismiss(pending);
     }
@@ -5594,6 +5665,7 @@ export function LiveView({
       // key nearest the thing it does. Any seat may rearrange its own panels.
       if (e.key.toLowerCase() === "e" && !e.shiftKey) {
         e.preventDefault();
+        traceLayoutToggle();
         setLayoutEdit((v) => !v);
         return;
       }
@@ -6542,7 +6614,8 @@ export function LiveView({
   }, [room?.id]);
 
   const nativeRtcLifetime = useRef({ closed: false, serverRoom: null as string | null, converted: new Set<string>() });
-  const rosterTickBusy = useRef(false);
+  const rosterPollRef = useRef<ReturnType<typeof createRosterPollCoordinator> | null>(null);
+  if (!rosterPollRef.current) rosterPollRef.current = createRosterPollCoordinator();
   const rosterFailure = useRef<string | null>(null);
   const [guestTransportStopped, setGuestTransportStopped] = useState(false);
   useEffect(() => {
@@ -6561,10 +6634,8 @@ export function LiveView({
   useEffect(() => {
     if (!room?.id || !cfg.server_room_id || seat) return;
     let alive = true;
-    const tick = async () => {
-      if (rosterTickBusy.current) return;
-      rosterTickBusy.current = true;
-      try {
+    const poll = rosterPollRef.current!.generation(
+      async () => {
         const epId = await ensureEndpoint();
         if (!alive || !epId) return;
         if (!accessAsked.current) {
@@ -6974,25 +7045,23 @@ export function LiveView({
         // A successful roster HTTP response alone does not restore a stopped SDK.
         dismissKey("guests");
         rosterFailure.current = null;
-      } catch (e) {
+      },
+      (e) => {
         const message = errText(e);
         if (alive && message.includes("Native guest connection stopped")) setGuestTransportStopped(true);
         if (alive && rosterFailure.current !== message) {
           rosterFailure.current = message;
           notifyError(e, { key: "guests" });
         }
-      } finally {
-        rosterTickBusy.current = false;
-        // A render can replace this poll while an access request is pending.
-        // Let the replacement continue access immediately after the old one drains.
-        if (!alive && !accessAsked.current) rosterTickRef.current?.();
-      }
-    };
+      },
+    );
+    const tick = poll.tick;
     rosterTickRef.current = () => void tick();
     tick();
     const t = setInterval(tick, 3000);
     return () => {
       alive = false;
+      poll.close();
       rosterTickRef.current = null;
       clearInterval(t);
     };
@@ -8287,6 +8356,9 @@ export function LiveView({
   const finishGrip = (e: React.PointerEvent, drop: boolean) => {
     const d = dragRef.current;
     if (!d || d.pointerId !== e.pointerId) return;
+    const dropSpan = drop && d.moved && layoutEdit
+      ? startTraceSpan("panel.drop_to_react_commit", { panelIndex: PANEL_ORDER.indexOf(d.id) })
+      : undefined;
     dragRef.current = null;
     if (ghostRef.current) ghostRef.current.style.visibility = "hidden";
     if (dragFrame.current !== null) {
@@ -8295,7 +8367,14 @@ export function LiveView({
     }
     if (drop && d.moved && layoutEdit) {
       const target = hitTest(e.clientX, e.clientY);
-      if (target) setLayout(movePanelTo(layout, d.id, target.dock, target.index), true);
+      if (target) {
+        const next = movePanelTo(layout, d.id, target.dock, target.index);
+        endTraceSpan(pendingDropTrace.current?.span, "cancelled");
+        if (dropTraceFrame.current !== null) cancelAnimationFrame(dropTraceFrame.current);
+        pendingDropTrace.current = dropSpan ? { span: dropSpan, layout: next, sequence: ++dropTraceSequence.current,
+          dockIndex: ["left", "right", "top", "bottom", "hidden"].indexOf(target.dock) } : null;
+        setLayout(next, true);
+      } else endTraceSpan(dropSpan, "cancelled", { targetFound: false });
     }
     setDragging(null);
     setDropHint(null);
@@ -8557,6 +8636,7 @@ export function LiveView({
           * from the transport cluster: collapse first, then edit. */}
         <button
           className="rm-leave"
+          data-perf-action="room.collapse"
           onClick={() => onLeave?.()}
           title={streaming ? "Collapse — the stream keeps running" : "Collapse room"}
         >
@@ -8567,9 +8647,11 @@ export function LiveView({
         {isHost && (
           <button
             data-walk="edit"
+            data-perf-action="layout.toggle"
             className={`rm-icon-chip rm-edit-trigger${layoutEdit ? " on" : ""}`}
             aria-pressed={layoutEdit}
             onClick={() => {
+              traceLayoutToggle();
               setLayoutEdit((e) => !e);
               setLayoutMenu(false);
             }}
@@ -8654,6 +8736,7 @@ export function LiveView({
           <span className="hd-link-group" hidden={!canGuests}>
             <button
               className="hd-chip hd-link"
+              data-perf-action="guest_link.copy"
               title="Copy this room's guest link"
               onClick={copyRoomLink}
             >

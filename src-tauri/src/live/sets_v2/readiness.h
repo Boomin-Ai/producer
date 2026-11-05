@@ -14,5 +14,12 @@ bool producer_set_v2_surface_fence(obs_source_t *source, uint32_t y, const uint8
 /* Validate one scene's immutable paint markers in one graphics task. */
 bool producer_set_v2_surface_markers(obs_source_t *const *sources,
                                    const uint32_t *rows, size_t count);
+/* Return actual verified prefix progress, stopping at the first unpainted
+ * marker. A true return validates the request, not the whole scene. On invalid
+ * input no task is queued and a nonnull output is reset to zero. The caller
+ * may retain each receipt only while that immutable source stays leased. */
+bool producer_set_v2_surface_marker_progress(obs_source_t *const *sources,
+                                            const uint32_t *rows, size_t count,
+                                            size_t *verified_prefix);
 bool producer_set_v2_surfaces_warm(obs_source_t *const *sources, size_t count);
 #endif
