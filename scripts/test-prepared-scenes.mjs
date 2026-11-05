@@ -30,12 +30,14 @@ try {
   const request=transport.send({op:'status'});transport.observeGeneration(2);pending.resolve(1);await request;assert.equal(requested,2);
   const refresh=transport.refreshGeneration();transport.observeGeneration(3);assert.equal(await refresh,3);
  });
- await test('native generation rejection refreshes once without replaying the action',async()=>{
-  let nativeGeneration=1,reads=0,actions=0;const transport=sceneTransport(async r=>{actions++;if(r.generation!==nativeGeneration)throw Error('Room generation changed; prepare the set again');return status([],nativeGeneration);},async()=>{reads++;return nativeGeneration;},()=>{});
-  await transport.send({op:'status'});nativeGeneration=2;
-  await assert.rejects(transport.send({op:'preload'}),/Room generation changed/);
-  assert.equal(actions,2);assert.equal(reads,2);
-  await transport.send({op:'status'});assert.equal(actions,3);assert.equal(reads,2);
+ await test('both native generation fences refresh once without replaying the mutation',async()=>{
+  for(const rejected of [Error('Room generation changed; prepare the set again'),'Room changed; prepare this v2 set again']){
+   let nativeGeneration=1,reads=0,actions=0;const transport=sceneTransport(async r=>{actions++;if(r.generation!==nativeGeneration)throw rejected;return status([],nativeGeneration);},async()=>{reads++;return nativeGeneration;},()=>{});
+   await transport.send({op:'status'});nativeGeneration=2;
+   await assert.rejects(transport.send({op:'preload'}),error=>error===rejected);
+   assert.equal(actions,2);assert.equal(reads,2);
+   await transport.send({op:'status'});assert.equal(actions,3);assert.equal(reads,2);
+  }
   const rejected=Error('Cached scene source was replaced');let checks=0;
   const invalid=sceneTransport(async()=>{throw rejected;},async()=>{checks++;return 1;},()=>{});
   await assert.rejects(invalid.send({op:'activate'}),e=>e===rejected);assert.equal(checks,1);

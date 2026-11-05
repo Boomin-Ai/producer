@@ -17,6 +17,18 @@ fn phase(name: &'static str, started: std::time::Instant, success: bool) {
     native_stage(name, started.elapsed(), Some(success));
 }
 
+async fn startup_step<T>(
+    begin: &'static str,
+    complete: &'static str,
+    work: impl std::future::Future<Output = Result<T, &'static str>>,
+) -> Result<T, &'static str> {
+    let started = std::time::Instant::now();
+    native_stage(begin, Duration::ZERO, None);
+    let result = work.await;
+    phase(complete, started, result.is_ok());
+    result
+}
+
 #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
 async fn close_program(
     program: &mut Option<crate::live::rtc_program::Publisher>,
@@ -268,7 +280,10 @@ impl HostOwner {
         let recoveries = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         #[cfg(debug_assertions)]
         let recovered_count = recoveries.clone();
+        let startup_queued = std::time::Instant::now();
         let task = tokio::spawn(async move {
+            phase("native.rtc.start.owner_task_wait", startup_queued, true);
+            let startup_started = std::time::Instant::now();
             let _lifetime = lifetime;
             let mut control = control;
             let ensure_open = || {
@@ -280,13 +295,33 @@ impl HostOwner {
             };
             let started = async {
                 ensure_open()?;
-                control.open().await?;
+                startup_step(
+                    "native.rtc.start.ticket_open.begin",
+                    "native.rtc.start.ticket_open",
+                    control.open(),
+                )
+                .await?;
                 ensure_open()?;
-                control.start_or_recover().await?;
+                startup_step(
+                    "native.rtc.start.control_start.begin",
+                    "native.rtc.start.control_start",
+                    control.start_or_recover(),
+                )
+                .await?;
                 ensure_open()?;
-                let session = control.session().await?;
+                let session = startup_step(
+                    "native.rtc.start.session.begin",
+                    "native.rtc.start.session",
+                    control.session(),
+                )
+                .await?;
                 ensure_open()?;
-                let mut connection = Connection::connect_with_media(&session, media).await?;
+                let mut connection = startup_step(
+                    "native.rtc.start.sdk_connect.begin",
+                    "native.rtc.start.sdk_connect",
+                    Connection::connect_with_media(&session, media),
+                )
+                .await?;
                 if let Err(error) = ensure_open() {
                     let _ = connection
                         .close_observed(Some(connection_close_phase))
@@ -299,7 +334,13 @@ impl HostOwner {
                         .await;
                     return Err("Native RTC authority expired during connection");
                 }
-                match control.media_authority().await {
+                match startup_step(
+                    "native.rtc.start.authority.begin",
+                    "native.rtc.start.authority",
+                    control.media_authority(),
+                )
+                .await
+                {
                     Ok(snapshot) => {
                         if let Err(error) = ensure_open() {
                             let _ = connection
@@ -328,6 +369,7 @@ impl HostOwner {
                 Ok(connection) => connection,
                 Err(error) => {
                     let _ = end_control(&mut control).await;
+                    phase("native.rtc.start.ready", startup_started, false);
                     let _ = ready.send(Err(error));
                     return Err(error);
                 }
@@ -335,17 +377,24 @@ impl HostOwner {
             #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
             let mut program = if program_requested {
                 crate::live::rtc_program::reset_diagnostics();
-                let started = tokio::time::timeout(Duration::from_secs(8), async {
-                    ensure_open()?;
-                    let sources = connection.publish_program().await?;
-                    ensure_open()?;
-                    crate::live::rtc_program::Publisher::start(
-                        sources,
-                        control.lease_expires_at_ms().unwrap_or(0),
-                    )
-                })
-                .await
-                .unwrap_or(Err("Native program publication timed out"));
+                let started = startup_step(
+                    "native.rtc.start.publisher.begin",
+                    "native.rtc.start.publisher",
+                    async {
+                        tokio::time::timeout(Duration::from_secs(8), async {
+                            ensure_open()?;
+                            let sources = connection.publish_program().await?;
+                            ensure_open()?;
+                            crate::live::rtc_program::Publisher::start(
+                                sources,
+                                control.lease_expires_at_ms().unwrap_or(0),
+                            )
+                        })
+                        .await
+                        .unwrap_or(Err("Native program publication timed out"))
+                    },
+                )
+                .await;
                 match started {
                     Ok(program) => Some(program),
                     Err(error) => {
@@ -353,6 +402,7 @@ impl HostOwner {
                             .close_observed(Some(connection_close_phase))
                             .await;
                         let _ = end_control(&mut control).await;
+                        phase("native.rtc.start.ready", startup_started, false);
                         let _ = ready.send(Err(error));
                         return Err(error);
                     }
@@ -363,6 +413,7 @@ impl HostOwner {
             #[cfg(not(all(feature = "guest-rtc-pilot", have_engine)))]
             let _ = program_requested;
             if stopped.requested() || ready.send(Ok(())).is_err() {
+                phase("native.rtc.start.ready", startup_started, false);
                 #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
                 let program_closed = close_program(&mut program).await;
                 #[cfg(not(all(feature = "guest-rtc-pilot", have_engine)))]
@@ -376,6 +427,7 @@ impl HostOwner {
                 ended?;
                 return Ok(());
             }
+            phase("native.rtc.start.ready", startup_started, true);
             let mut heartbeat = tokio::time::interval(Duration::from_secs(10));
             heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             heartbeat.tick().await;

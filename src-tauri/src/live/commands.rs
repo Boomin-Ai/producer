@@ -257,7 +257,19 @@ pub async fn live_stop(state: State<'_, AppState>) -> EngineResult<()> {
 // the engine while the engine waits on main = a room open frozen until the
 // timeout fires — measured 4.5s, on whichever command reached the hop first.
 pub async fn live_engine_status(state: State<'_, AppState>) -> EngineResult<serde_json::Value> {
-    Ok(state.live.status())
+    let started = std::time::Instant::now();
+    crate::performance_trace::native_stage(
+        "native.engine_status.entry",
+        std::time::Duration::ZERO,
+        None,
+    );
+    let status = state.live.status();
+    crate::performance_trace::native_stage(
+        "native.engine_status.reply",
+        started.elapsed(),
+        Some(true),
+    );
+    Ok(status)
 }
 
 #[tauri::command]
@@ -1224,10 +1236,12 @@ pub async fn live_program_audio_stop() {
 }
 
 #[tauri::command]
-pub async fn live_set_status(
-    state: State<'_, AppState>,
-) -> EngineResult<super::presentation::Status> {
-    state.live.presentation_status().map_err(EngineError::Other)
+pub async fn live_set_status(app: tauri::AppHandle) -> EngineResult<super::presentation::Status> {
+    use tauri::Manager;
+    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().live.presentation_status())
+        .await
+        .map_err(|error| EngineError::Other(error.to_string()))?
+        .map_err(EngineError::Other)
 }
 #[tauri::command]
 pub async fn live_set_warm(
@@ -1257,13 +1271,16 @@ pub async fn live_set_apply(
 }
 #[tauri::command]
 pub async fn live_set_return(
-    state: State<'_, AppState>,
+    app: tauri::AppHandle,
     lease: Option<String>,
 ) -> EngineResult<super::presentation::Status> {
-    state
-        .live
-        .presentation_return(lease)
-        .map_err(EngineError::Other)
+    use tauri::Manager;
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<AppState>().live.presentation_return(lease)
+    })
+    .await
+    .map_err(|error| EngineError::Other(error.to_string()))?
+    .map_err(EngineError::Other)
 }
 
 #[tauri::command]
@@ -1293,12 +1310,20 @@ pub async fn live_portrait_apply(
     .map_err(EngineError::Other)
 }
 #[tauri::command]
-pub async fn live_portrait_stop(state: State<'_, AppState>) -> EngineResult<()> {
-    state.live.portrait_stop().map_err(EngineError::Other)
+pub async fn live_portrait_stop(app: tauri::AppHandle) -> EngineResult<()> {
+    use tauri::Manager;
+    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().live.portrait_stop())
+        .await
+        .map_err(|error| EngineError::Other(error.to_string()))?
+        .map_err(EngineError::Other)
 }
 #[tauri::command]
-pub async fn live_portrait_frame(state: State<'_, AppState>) -> EngineResult<String> {
-    state.live.portrait_frame().map_err(EngineError::Other)
+pub async fn live_portrait_frame(app: tauri::AppHandle) -> EngineResult<String> {
+    use tauri::Manager;
+    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().live.portrait_frame())
+        .await
+        .map_err(|error| EngineError::Other(error.to_string()))?
+        .map_err(EngineError::Other)
 }
 
 #[tauri::command]

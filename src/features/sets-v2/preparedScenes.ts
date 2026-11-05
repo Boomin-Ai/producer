@@ -26,7 +26,7 @@ export function sceneTransport<T extends {generation:number}>(send:(request:Reco
    if(before!==epoch||status.generation!==expected)throw Error('Room generation changed; prepare the set again');
    return status;
   }catch(error){
-   if(/Room generation changed; prepare/.test(String(error)))await discover().catch(()=>{});
+   if(/Room generation changed; prepare|Room changed; prepare this v2 set again/.test(String(error)))await discover().catch(()=>{});
    throw error;
   }
  }};

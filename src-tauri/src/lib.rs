@@ -5,6 +5,7 @@ mod client;
 mod dj;
 mod error;
 mod firewall;
+mod http_transport;
 mod ipc;
 mod live;
 mod outbox;
@@ -45,6 +46,22 @@ pub struct AppState {
     pub live: live::Live,
     /// Platform chat readers (host-side sockets; see chat::mod docs).
     pub chat: chat::ChatHub,
+}
+
+fn observe_command_dispatch<R: tauri::Runtime>(
+    handler: impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static,
+) -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static {
+    move |invoke| {
+        let stage = match invoke.message.command() {
+            "live_engine_status" => Some("native.engine_status.received"),
+            "live_rtc_start" => Some("native.rtc.start.received"),
+            _ => None,
+        };
+        if let Some(stage) = stage {
+            performance_trace::native_stage(stage, std::time::Duration::ZERO, None);
+        }
+        handler(invoke)
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -255,7 +272,7 @@ pub fn run() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
+        .invoke_handler(observe_command_dispatch(tauri::generate_handler![
             performance_trace::performance_trace_config,
             performance_trace::performance_trace_set_consent,
             performance_trace::performance_trace_write,
@@ -449,7 +466,7 @@ pub fn run() {
             chat::commands::chat_disconnect,
             chat::commands::chat_status,
             chat::commands::kick_resolve_chatroom,
-        ])
+        ]))
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {

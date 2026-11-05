@@ -111,7 +111,6 @@ fn now() -> Result<u64, &'static str> {
 }
 #[derive(Clone)]
 pub struct Control {
-    http: reqwest::Client,
     api: String,
     operator: Operator,
     ticket: String,
@@ -184,13 +183,7 @@ impl Control {
         if operator.token.is_empty() {
             return Err("Missing staging authorization");
         }
-        let http = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .timeout(Duration::from_secs(5))
-            .build()
-            .map_err(|_| "HTTP setup failed")?;
         Ok(Self {
-            http,
             api: api.to_owned(),
             operator,
             ticket: String::new(),
@@ -214,8 +207,8 @@ impl Control {
         body: Value,
         permission_read: bool,
     ) -> Result<Vec<u8>, &'static str> {
-        let mut response = self
-            .http
+        let mut response = crate::http_transport::rtc_control()
+            .await?
             .post(format!("{}{route}", self.api))
             .bearer_auth(&self.operator.token)
             // A permission response must fit inside the receiver's 3.5-second
@@ -341,8 +334,8 @@ impl Control {
         Ok(())
     }
     async fn read_run(&self) -> Result<Receipt, &'static str> {
-        let mut response = self
-            .http
+        let mut response = crate::http_transport::rtc_control()
+            .await?
             .get(format!(
                 "{}/v1/app/live/rooms/{}/rtc-control",
                 self.api, self.operator.room_id
