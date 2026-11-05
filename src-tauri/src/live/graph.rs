@@ -3984,8 +3984,15 @@ impl SceneGraph {
         }
         self.portrait = None;
     }
-    pub fn portrait_frame(&self) -> String {
-        self.portrait.as_ref().map(|p| p.jpeg()).unwrap_or_default()
+    pub fn portrait_frame(&mut self) -> Result<String, String> {
+        self.portrait.as_mut().map_or_else(|| Ok(String::new()), |p| p.jpeg())
+    }
+    pub fn sync_portrait_jpeg(&mut self, now: Instant) {
+        if let Some(portrait) = self.portrait.as_mut() {
+            if let Err(error) = portrait.sync_jpeg_capture(now) {
+                eprintln!("[portrait] {error}");
+            }
+        }
     }
     pub fn presentation_status(&self) -> super::presentation::Status {
         super::presentation::Status {

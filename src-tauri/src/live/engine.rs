@@ -951,7 +951,7 @@ pub enum Command {
         reply: mpsc::Sender<()>,
     },
     PortraitFrame {
-        reply: mpsc::Sender<String>,
+        reply: mpsc::Sender<Result<String, String>>,
     },
     PresentationStatus {
         reply: mpsc::Sender<super::presentation::Status>,
@@ -1468,7 +1468,7 @@ impl LiveHandle {
             .send(Command::PortraitFrame { reply: tx })
             .map_err(|e| e.to_string())?;
         rx.recv_timeout(Duration::from_secs(5))
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?
     }
     pub fn presentation_status(&self) -> Result<super::presentation::Status, String> {
         let (tx, rx) = mpsc::channel();
@@ -3419,7 +3419,13 @@ pub fn start(
                         performance_stage("native.portrait.stop.engine_complete",service.elapsed(),Some(true));
                         let _=reply.send(());
                     }
-                    Ok(Command::PortraitFrame{reply})=>{#[cfg(any(target_os = "macos", target_os = "windows"))]let frame=scene.as_ref().map(|g|g.portrait_frame()).unwrap_or_default();#[cfg(not(any(target_os = "macos", target_os = "windows")))]let frame=String::new();let _=reply.send(frame);}
+                    Ok(Command::PortraitFrame { reply }) => {
+                        #[cfg(any(target_os = "macos", target_os = "windows"))]
+                        let frame = scene.as_mut().map_or_else(|| Ok(String::new()), |g| g.portrait_frame());
+                        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+                        let frame = Ok(String::new());
+                        let _ = reply.send(frame);
+                    }
                     Ok(Command::SetSourceCreate{id,label,spec,reply})=>{
                         let result=scene.as_mut().ok_or("Room unavailable".to_string()).and_then(|g|g.create_set_source(&id,&label,&spec));
                         if let Ok(sources)=&result{snap.lock().unwrap().sources=sources.clone();sink(&LiveEvent::SourcesChanged{sources:sources.clone()});}
@@ -4109,7 +4115,10 @@ pub fn start(
                 }
 
                 #[cfg(any(target_os = "macos", target_os = "windows"))]
-                if let Some(g)=scene.as_mut(){g.sync_portrait_room();}
+                if let Some(g) = scene.as_mut() {
+                    g.sync_portrait_room();
+                    g.sync_portrait_jpeg(Instant::now());
+                }
                 dj.tick(scene.as_ref().is_some_and(|g| g.dj_speaking()));
 
                 // Meter stream — while any metered extra (mic, guest, mod,

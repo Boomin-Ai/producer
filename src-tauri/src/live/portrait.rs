@@ -10,8 +10,10 @@ use std::{
     collections::HashMap,
     ffi::{c_void, CString},
     sync::{Arc, Mutex},
-    time::Instant,
+    time::{Duration, Instant},
 };
+const JPEG_REQUEST_IDLE: Duration = Duration::from_secs(2);
+const JPEG_START_RETRY: Duration = Duration::from_secs(1);
 static PROGRAM_SELECTED: AtomicBool = AtomicBool::new(false);
 static PROGRAM_WANTED: AtomicBool = AtomicBool::new(false);
 static PROGRAM_FRAME: Mutex<Vec<u8>> = Mutex::new(Vec::new());
@@ -31,8 +33,11 @@ pub fn want_program(on: bool) {
         }
     }
 }
+fn program_jpeg_requested() -> bool {
+    PROGRAM_SELECTED.load(Ordering::Relaxed) && PROGRAM_WANTED.load(Ordering::Relaxed)
+}
 pub fn program_frame() -> Vec<u8> {
-    if !PROGRAM_SELECTED.load(Ordering::Relaxed) {
+    if !program_jpeg_requested() {
         return Vec::new();
     }
     PROGRAM_FRAME.lock().map(|f| f.clone()).unwrap_or_default()
@@ -89,7 +94,7 @@ struct OutputInfo {
 }
 struct Capture {
     output: *mut ffi::obs_output_t,
-    param: *mut c_void,
+    frames: Option<Arc<Mutex<Frames>>>,
 }
 extern "C" fn output_name(_: *mut c_void) -> *const std::ffi::c_char {
     b"Producer portrait preview\0".as_ptr().cast()
@@ -100,7 +105,7 @@ extern "C" fn output_create(
 ) -> *mut c_void {
     Box::into_raw(Box::new(Capture {
         output,
-        param: std::ptr::null_mut(),
+        frames: None,
     }))
     .cast()
 }
@@ -119,9 +124,8 @@ extern "C" fn output_stop(data: *mut c_void, _: u64) {
 }
 extern "C" fn output_frame(data: *mut c_void, video: *mut ffi::video_data) {
     unsafe {
-        let param = (*(data as *mut Capture)).param;
-        if !param.is_null() {
-            frame(param, video);
+        if let Some(store) = &(*(data as *mut Capture)).frames {
+            frame(store, video);
         }
     }
 }
@@ -129,24 +133,18 @@ struct Frames {
     last: Instant,
     jpeg: String,
     calls: u64,
-    diagnostic: bool,
     width: u32,
     height: u32,
 }
-extern "C" fn frame(param: *mut c_void, data: *mut ffi::video_data) {
+unsafe fn frame(store: &Mutex<Frames>, data: *mut ffi::video_data) {
     unsafe {
         if data.is_null() || (*data).data[0].is_null() {
             return;
         }
-        let store = &*(param as *const Mutex<Frames>);
         let Ok(mut store) = store.try_lock() else {
             return;
         };
-        let program =
-            PROGRAM_SELECTED.load(Ordering::Relaxed) && PROGRAM_WANTED.load(Ordering::Relaxed);
-        if !store.diagnostic && !program {
-            return;
-        }
+        let program = program_jpeg_requested();
         store.calls += 1;
         if store.calls == 1 {
             eprintln!(
@@ -175,7 +173,9 @@ extern "C" fn frame(param: *mut c_void, data: *mut ffi::video_data) {
             Ok(()) => {
                 if program {
                     if let Ok(mut f) = PROGRAM_FRAME.lock() {
-                        *f = jpeg.clone();
+                        if program_jpeg_requested() {
+                            *f = jpeg.clone();
+                        }
                     }
                 }
                 store.jpeg = base64::engine::general_purpose::STANDARD.encode(jpeg)
@@ -194,7 +194,9 @@ pub struct Portrait {
     room_fingerprint: String,
     room_states: Vec<super::graph::ItemState>,
     output: *mut ffi::obs_output_t,
-    frames: Box<Mutex<Frames>>,
+    frames: Arc<Mutex<Frames>>,
+    jpeg_requested_until: Option<Instant>,
+    jpeg_retry_at: Option<Instant>,
     pub pending: Option<Composition>,
     pub spare: Option<Composition>,
     pub active: Option<Composition>,
@@ -230,8 +232,12 @@ impl Portrait {
         if canvas.is_null() {
             return Err("Private portrait canvas unavailable".into());
         }
-        let video = obs_canvas_get_video(canvas);
-        let mut result = Self {
+        if obs_canvas_get_video(canvas).is_null() {
+            obs_canvas_remove(canvas);
+            obs_canvas_release(canvas);
+            return Err("Portrait canvas video is unavailable".into());
+        }
+        Ok(Self {
             width,
             height,
             canvas,
@@ -241,21 +247,27 @@ impl Portrait {
             room_fingerprint: String::new(),
             room_states: Vec::new(),
             output: std::ptr::null_mut(),
-            frames: Box::new(Mutex::new(Frames {
+            frames: Arc::new(Mutex::new(Frames {
                 last: Instant::now(),
                 jpeg: String::new(),
                 calls: 0,
-                diagnostic: false,
                 width: preview_width,
                 height: preview_height,
             })),
+            jpeg_requested_until: None,
+            jpeg_retry_at: None,
             pending: None,
             spare: None,
             active: None,
             retiring: None,
             blend_scene: std::ptr::null_mut(),
             needs_prewarm: false,
-        };
+        })
+    }
+
+    // Native display, recording, streaming and virtual camera use the canvas
+    // directly. Starting this output enables a separate raw GPU readback.
+    unsafe fn start_jpeg_capture(&mut self) -> Result<(), String> {
         static REGISTER: std::sync::Once = std::sync::Once::new();
         REGISTER.call_once(|| {
             let info = OutputInfo {
@@ -271,30 +283,65 @@ impl Portrait {
             };
             obs_register_output_s(&info, std::mem::size_of::<OutputInfo>());
         });
-        result.output = ffi::obs_output_create(
+        let output = ffi::obs_output_create(
             b"producer_portrait_preview\0".as_ptr().cast(),
             b"Portrait preview\0".as_ptr().cast(),
             std::ptr::null_mut(),
             std::ptr::null_mut(),
         );
-        if video.is_null() || result.output.is_null() {
+        if output.is_null() {
             return Err("Portrait preview capture unavailable".into());
         }
-        let capture = obs_obj_get_data(result.output.cast()) as *mut Capture;
-        (*capture).param = &mut *result.frames as *mut _ as *mut _;
-        ffi::obs_output_set_media(result.output, video, std::ptr::null_mut());
+        let capture = obs_obj_get_data(output.cast()) as *mut Capture;
+        if capture.is_null() {
+            ffi::obs_output_release(output);
+            return Err("Portrait preview capture unavailable".into());
+        }
+        let (width, height) = {
+            let mut frames = self.frames.lock().unwrap_or_else(|error| error.into_inner());
+            frames.jpeg.clear();
+            (frames.width, frames.height)
+        };
+        (*capture).frames = Some(self.frames.clone());
+        ffi::obs_output_set_media(output, self.video(), std::ptr::null_mut());
         let scale = Scale {
             format: 7,
-            width: preview_width,
-            height: preview_height,
+            width,
+            height,
             range: 2,
             colorspace: 2,
         };
-        obs_output_set_video_conversion(result.output, &scale);
-        if !ffi::obs_output_start(result.output) {
+        obs_output_set_video_conversion(output, &scale);
+        if !ffi::obs_output_start(output) {
+            ffi::obs_output_release(output);
             return Err("Portrait preview capture could not start".into());
         }
-        Ok(result)
+        self.output = output;
+        Ok(())
+    }
+
+    unsafe fn stop_jpeg_capture(&mut self) {
+        let output = std::mem::replace(&mut self.output, std::ptr::null_mut());
+        if !output.is_null() {
+            ffi::obs_output_stop(output);
+            ffi::obs_output_release(output);
+        }
+    }
+
+    pub fn sync_jpeg_capture(&mut self, now: Instant) -> Result<(), String> {
+        let wanted = program_jpeg_requested()
+            || self.jpeg_requested_until.is_some_and(|until| now < until);
+        if !wanted {
+            self.jpeg_retry_at = None;
+            if !self.output.is_null() {
+                unsafe { self.stop_jpeg_capture() };
+            }
+        } else if self.output.is_null() && !self.jpeg_retry_at.is_some_and(|retry| now < retry) {
+            let result = unsafe { self.start_jpeg_capture() };
+            self.jpeg_retry_at = result.is_err().then_some(now + JPEG_START_RETRY);
+            return result;
+        }
+        Ok(())
     }
     pub unsafe fn room(&mut self) {
         self.finish_transition(true);
@@ -680,23 +727,20 @@ impl Portrait {
         }
         self.spare = self.retiring.take();
     }
-    pub fn jpeg(&self) -> String {
+    pub fn jpeg(&mut self) -> Result<String, String> {
+        let now = Instant::now();
+        self.jpeg_requested_until = Some(now + JPEG_REQUEST_IDLE);
+        self.sync_jpeg_capture(now)?;
         self.frames
             .lock()
-            .map(|mut f| {
-                f.diagnostic = true;
-                f.jpeg.clone()
-            })
-            .unwrap_or_default()
+            .map(|f| f.jpeg.clone())
+            .map_err(|_| "Portrait preview frame is unavailable".into())
     }
 }
 impl Drop for Portrait {
     fn drop(&mut self) {
         unsafe {
-            if !self.output.is_null() {
-                ffi::obs_output_stop(self.output);
-                ffi::obs_output_release(self.output);
-            }
+            self.stop_jpeg_capture();
             obs_canvas_set_channel(self.canvas, 0, std::ptr::null_mut());
             if !self.blend_scene.is_null() {
                 ffi::obs_scene_release(self.blend_scene);
