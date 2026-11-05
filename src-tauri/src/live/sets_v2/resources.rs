@@ -155,6 +155,86 @@ impl Store {
     pub fn graphics_count(&self) -> usize {
         self.graphics.borrow().len()
     }
+    pub fn graphics_painting(&self) -> usize {
+        self.graphics
+            .borrow()
+            .values()
+            .filter(|(_, layer)| layer.painting())
+            .count()
+    }
+    pub fn graphics_pending(&self) -> usize {
+        self.graphics
+            .borrow()
+            .values()
+            .filter(|(_, layer)| layer.pending())
+            .count()
+    }
+    pub fn graphics_snapshots(&self) -> usize {
+        self.graphics
+            .borrow()
+            .values()
+            .filter(|(_, layer)| layer.ready())
+            .count()
+    }
+    pub(super) fn prune_unleased_graphics(&self) {
+        // Check before making scheduler clones: the map's reference alone is
+        // not a scene lease. Dropping a queued descriptor frees its HTML;
+        // dropping an abandoned painter releases its active/showing source.
+        self.graphics
+            .borrow_mut()
+            .retain(|_, (_, layer)| std::rc::Rc::strong_count(layer) > 1 || layer.ready());
+    }
+    pub(super) unsafe fn poll_graphics(
+        &self,
+        required: &[std::rc::Rc<super::GraphicsLayer>],
+    ) -> Result<bool, String> {
+        const PAINTERS_PER_OUTPUT: usize = 2;
+        self.prune_unleased_graphics();
+        let leased = self
+            .graphics
+            .borrow()
+            .values()
+            .filter(|(_, layer)| std::rc::Rc::strong_count(layer) > 1)
+            .map(|(_, layer)| layer.clone())
+            .collect::<Vec<_>>();
+        // Finish/release existing producers before filling their slots. A
+        // draft with more layers than slots must keep progressing while its
+        // native snapshot sources already provide known logical dimensions.
+        if !super::producer_set_v2_raster_copy_blocked() {
+            for layer in &leased {
+                layer.progress();
+            }
+        }
+        if super::producer_set_v2_raster_copy_blocked() {
+            // C owns the one bounded safety quarantine and its active/showing
+            // lease. Retire our remaining producers immediately; immutable
+            // completed textures stay valid and can still be taken safely.
+            for layer in &leased {
+                layer.fail_copy_blocked();
+            }
+        } else {
+            let mut active = leased.iter().filter(|layer| layer.painting()).count();
+            let mut seen = HashSet::new();
+            for layer in required.iter().chain(leased.iter()) {
+                if !seen.insert(std::rc::Rc::as_ptr(layer)) {
+                    continue;
+                }
+                if active >= PAINTERS_PER_OUTPUT {
+                    break;
+                }
+                if layer.pending() && layer.start().is_ok() {
+                    active += 1;
+                    self.graphics_created.set(self.graphics_created.get() + 1);
+                }
+            }
+        }
+        for layer in required {
+            if let Some(error) = layer.error() {
+                return Err(error);
+            }
+        }
+        Ok(required.iter().all(|layer| layer.ready()))
+    }
     pub fn spare_graphics_bytes(&self) -> usize {
         self.graphics
             .borrow()
@@ -167,6 +247,7 @@ impl Store {
     /// Live/draft leases are never evicted. Spare bytes also count against the
     /// existing aggregate texture limit, not an additional unbounded allowance.
     pub fn trim_graphics(&self, available: usize) {
+        self.prune_unleased_graphics();
         let limit = available.min(64 * 1024 * 1024);
         let mut cache = self.graphics.borrow_mut();
         let mut unused: Vec<_> = cache

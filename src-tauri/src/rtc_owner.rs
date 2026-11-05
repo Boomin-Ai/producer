@@ -298,6 +298,7 @@ impl HostOwner {
             let mut control = control;
             let ensure_open = || {
                 if close_flag.load(std::sync::atomic::Ordering::Acquire) {
+                    native_stage("native.rtc.stop.observed.owner_check", Duration::ZERO, None);
                     Err("Native RTC room closing")
                 } else {
                     Ok(())
@@ -452,9 +453,15 @@ impl HostOwner {
             loop {
                 tokio::select! {
                     biased;
-                    _ = stopped.wait() => break,
+                    _ = stopped.wait() => {
+                        native_stage("native.rtc.stop.observed.owner_select", Duration::ZERO, None);
+                        break;
+                    },
                     _ = safety.tick() => {
-                        if stopped.requested(){break;}
+                        if stopped.requested(){
+                            native_stage("native.rtc.stop.observed.safety", Duration::ZERO, None);
+                            break;
+                        }
                         #[cfg(debug_assertions)]
                         if fault_task.swap(false,std::sync::atomic::Ordering::AcqRel){connection.disconnect_for_test().await;}
                         if !connection.healthy() {
@@ -585,12 +592,20 @@ impl HostOwner {
                     }
                     _ = heartbeat.tick() => {
                         let flag=close_flag.clone();
+                        let mut drain_started = None;
                         let renewed=stopped.mutation(control.renew_guarded(move||!flag.load(std::sync::atomic::Ordering::Acquire)),||{
+                            native_stage("native.rtc.stop.observed.renew",Duration::ZERO,None);
+                            let quiescing = std::time::Instant::now();
                             authority_reader.request_stop();
                             connection.begin_close();
                             #[cfg(all(feature="guest-rtc-pilot",have_engine))]
                             if let Some(program)=program.as_ref(){program.request_stop();}
+                            phase("native.rtc.stop.quiesce.renew",quiescing,true);
+                            drain_started = Some(std::time::Instant::now());
                         }).await;
+                        if let (Some(started), Mutation::Closing(result)) = (drain_started, &renewed) {
+                            phase("native.rtc.stop.drain.renew", started, result.is_ok());
+                        }
                         let result=match renewed {Mutation::Completed(result)=>result,Mutation::NotStarted|Mutation::Closing(_)=>break};
                         if let Err(error) = result {
                             trace_failure("native.rtc.owner.failure.renew");
@@ -613,19 +628,30 @@ impl HostOwner {
                         if !reused {
                             let before=match stopped.read(control.media_authority()).await {
                                 Some(result)=>result.and_then(|snapshot|connection.media_authority(snapshot)),
-                                None=>{let _=request.reply.send(Err("Native RTC room owner stopped"));break;}
+                                None=>{
+                                    native_stage("native.rtc.stop.observed.command_read",Duration::ZERO,None);
+                                    let _=request.reply.send(Err("Native RTC room owner stopped"));break;
+                                }
                             };
                             if let Err(error)=before {
                                 let _=request.reply.send(Err(error));continue;
                             }
                         }
+                        let mut drain_started = None;
                         let posted=stopped.mutation(control.room_command(request.command),||{
+                            native_stage("native.rtc.stop.observed.command",Duration::ZERO,None);
                             native_stage("native.rtc.stop.in_flight_post",Duration::ZERO,None);
+                            let quiescing = std::time::Instant::now();
                             authority_reader.request_stop();
                             connection.begin_close();
                             #[cfg(all(feature="guest-rtc-pilot",have_engine))]
                             if let Some(program)=program.as_ref(){program.request_stop();}
+                            phase("native.rtc.stop.quiesce.command",quiescing,true);
+                            drain_started = Some(std::time::Instant::now());
                         }).await;
+                        if let (Some(started), Mutation::Closing(result)) = (drain_started, &posted) {
+                            phase("native.rtc.stop.drain.command", started, result.is_ok());
+                        }
                         let result=match posted {
                             Mutation::Completed(result)=>result,
                             Mutation::NotStarted|Mutation::Closing(_)=>{let _=request.reply.send(Err("Native RTC room owner stopped"));break;}
@@ -636,7 +662,10 @@ impl HostOwner {
                             // remains in force while the poll loop recovers.
                         let after=match stopped.read(control.media_authority()).await {
                             Some(result)=>result.and_then(|snapshot|connection.media_authority(snapshot)),
-                            None=>{let _=request.reply.send(Err("Native RTC room owner stopped"));break;}
+                            None=>{
+                                native_stage("native.rtc.stop.observed.command_read_after",Duration::ZERO,None);
+                                let _=request.reply.send(Err("Native RTC room owner stopped"));break;
+                            }
                         };
                         let result=after.and(result);
                         authority_reader.update(&control);
@@ -653,12 +682,14 @@ impl HostOwner {
                 }
             }
             native_stage("native.rtc.owner.loop_exit", Duration::ZERO, None);
+            let quiescing = std::time::Instant::now();
             authority_reader.request_stop();
             connection.begin_close();
             #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
             if let Some(program) = program.as_ref() {
                 program.request_stop();
             }
+            phase("native.rtc.owner.quiesce", quiescing, true);
             authority_reader.close().await;
             // Close SDK before ending authority; queue/media adapters must retire
             // before this boundary once they are installed. All normal exits join.
@@ -720,6 +751,7 @@ impl HostOwner {
         native_stage("native.rtc.stop.requested", Duration::ZERO, None);
         let started = std::time::Instant::now();
         self.stop.request();
+        phase("native.rtc.stop.signal", started, true);
         let result = if let Some(task) = self.task.take() {
             task.await
                 .map_err(|_| "Native RTC owner task failed")

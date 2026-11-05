@@ -108,6 +108,17 @@ extern "C" {
         s: *mut ffi::obs_source_t,
     ) -> bool;
     fn producer_set_v2_program_register();
+    fn producer_set_v2_raster_register();
+    fn producer_set_v2_raster_create(w: u32, h: u32, density: f32) -> *mut ffi::obs_source_t;
+    fn producer_set_v2_raster_capture(
+        snapshot: *mut ffi::obs_source_t,
+        input: *mut ffi::obs_source_t,
+    ) -> bool;
+    fn producer_set_v2_raster_ready(snapshot: *mut ffi::obs_source_t) -> bool;
+    fn producer_set_v2_raster_texture_bytes(snapshot: *mut ffi::obs_source_t) -> usize;
+    fn producer_set_v2_raster_get_marker(snapshot: *mut ffi::obs_source_t, out: *mut u8) -> bool;
+    fn producer_set_v2_raster_copy_blocked() -> bool;
+    fn producer_set_v2_raster_quarantine_count() -> usize;
     fn producer_set_v2_program_track(
         p: *mut ffi::obs_source_t,
         r: u64,
@@ -194,18 +205,13 @@ extern "C" {
         y: u32,
         expected: *const u8,
     ) -> bool;
-    fn producer_set_v2_surface_marker_progress(
-        sources: *const *mut ffi::obs_source_t,
-        rows: *const u32,
-        count: usize,
-        verified_prefix: *mut usize,
-    ) -> bool;
 }
 pub unsafe fn register() {
     producer_set_v2_register();
     producer_chart_register();
     producer_set_v2_transition_register();
     producer_set_v2_program_register();
+    producer_set_v2_raster_register();
 }
 struct Source(*mut ffi::obs_source_t);
 struct GraphicsContext;
@@ -228,27 +234,147 @@ impl Drop for Source {
     }
 }
 struct GraphicsLayer {
-    painted: std::cell::Cell<bool>,
     bytes: usize,
-    browser: Source,
-    clip: Source,
+    snapshot: Source,
+    paint: std::cell::RefCell<GraphicsPaint>,
 }
-// Prepared HTML is immutable, but CEF visibility is asynchronous. Keep its
-// paint producer showing for the full cached-layer lease, not only while one
-// scene happens to be current/pending. A take must not trigger WasHidden /
-// texture invalidation after its first-paint receipt was already accepted.
-impl Drop for GraphicsLayer {
+const GRAPHICS_COPY_BLOCKED: &str = "Set graphics could not finish loading; current output retained. Restart Producer and try again.";
+enum GraphicsPaint {
+    Queued {
+        html: String,
+        width: u32,
+        height: u32,
+    },
+    Painting {
+        browser: Painter,
+        started: std::time::Instant,
+    },
+    Ready,
+    Failed(String),
+}
+// Only this transient lease owns a CEF source. Cached scenes own the immutable
+// native snapshot, never a browser or a marker-source reference.
+struct Painter(Source);
+impl Drop for Painter {
     fn drop(&mut self) {
         unsafe {
-            ffi::obs_source_dec_showing(self.browser.0);
-            ffi::obs_source_dec_active(self.browser.0);
+            ffi::obs_source_dec_showing(self.0 .0);
+            ffi::obs_source_dec_active(self.0 .0);
+        }
+    }
+}
+impl GraphicsLayer {
+    fn painting(&self) -> bool {
+        matches!(*self.paint.borrow(), GraphicsPaint::Painting { .. })
+    }
+    fn pending(&self) -> bool {
+        matches!(*self.paint.borrow(), GraphicsPaint::Queued { .. })
+    }
+    fn failed(&self) -> bool {
+        matches!(*self.paint.borrow(), GraphicsPaint::Failed(_))
+    }
+    fn ready(&self) -> bool {
+        matches!(*self.paint.borrow(), GraphicsPaint::Ready)
+    }
+    fn error(&self) -> Option<String> {
+        match &*self.paint.borrow() {
+            GraphicsPaint::Failed(error) => Some(error.clone()),
+            _ => None,
+        }
+    }
+    fn fail_copy_blocked(&self) {
+        let mut paint = self.paint.borrow_mut();
+        if !matches!(*paint, GraphicsPaint::Ready) {
+            *paint = GraphicsPaint::Failed(GRAPHICS_COPY_BLOCKED.into());
+        }
+    }
+    unsafe fn start(&self) -> Result<(), String> {
+        let mut paint = self.paint.borrow_mut();
+        let GraphicsPaint::Queued {
+            html,
+            width,
+            height,
+        } = &*paint
+        else {
+            return Ok(());
+        };
+        let result = (|| {
+            let _create = PerformancePhase::slow("native.set.graphics.create");
+            let mut marker = [0u8; 18];
+            if !producer_set_v2_raster_get_marker(self.snapshot.0, marker.as_mut_ptr()) {
+                return Err("V2 immutable graphics paint fence unavailable".to_owned());
+            }
+            let html = contract::graphics_painter_document(html, *width, *height, &marker)?;
+            let url = format!(
+                "data:text/html;charset=utf-8,{}",
+                html.as_bytes()
+                    .iter()
+                    .map(|c| format!("%{c:02X}"))
+                    .collect::<String>()
+            );
+            let config = serde_json::json!({"url":url,"is_local_file":false,"css":"","width":(*width).max(6),"height":height+1,"fps":30,"fps_custom":true,"shutdown":false,"restart_when_active":false,"reroute_audio":true,"webpage_control_level":0});
+            let settings =
+                ffi::obs_data_create_from_json(CString::new(config.to_string()).unwrap().as_ptr());
+            if settings.is_null() {
+                return Err("V2 graphics settings allocation failed".to_owned());
+            }
+            let browser = ffi::obs_source_create_private(
+                c"browser_source".as_ptr(),
+                c"V2 graphics painter".as_ptr(),
+                settings,
+            );
+            ffi::obs_data_release(settings);
+            if browser.is_null() {
+                return Err("V2 browser painter allocation failed".to_owned());
+            }
+            let browser = Source(browser);
+            ffi::obs_source_set_audio_mixers(browser.0, 0);
+            ffi::obs_source_inc_active(browser.0);
+            ffi::obs_source_inc_showing(browser.0);
+            Ok(Painter(browser))
+        })();
+        match result {
+            Ok(browser) => {
+                *paint = GraphicsPaint::Painting {
+                    browser,
+                    started: std::time::Instant::now(),
+                };
+                Ok(())
+            }
+            Err(error) => {
+                *paint = GraphicsPaint::Failed(error.clone());
+                Err(error)
+            }
+        }
+    }
+    unsafe fn progress(&self) {
+        let mut paint = self.paint.borrow_mut();
+        if let GraphicsPaint::Painting { browser, started } = &*paint {
+            // C verifies the reserved marker, copies visible pixels into its
+            // own GPU target and completes its readback fence before true.
+            // Caller holds no graphics lock while C queues that transaction.
+            let _copy = PerformancePhase::slow("native.set.graphics.snapshot");
+            if producer_set_v2_raster_capture(self.snapshot.0, browser.0 .0)
+                && producer_set_v2_raster_ready(self.snapshot.0)
+            {
+                let bytes = producer_set_v2_raster_texture_bytes(self.snapshot.0);
+                *paint = if bytes > 0 && bytes <= self.bytes {
+                    GraphicsPaint::Ready // Releases CEF only after the owned copy.
+                } else {
+                    GraphicsPaint::Failed("V2 immutable graphics texture budget exceeded".into())
+                };
+            } else if producer_set_v2_raster_copy_blocked() {
+                *paint = GraphicsPaint::Failed(GRAPHICS_COPY_BLOCKED.into());
+            } else if started.elapsed().as_secs() >= 12 {
+                *paint = GraphicsPaint::Failed("Set first-frame timeout (immutable graphics snapshot); current output retained".into());
+            }
         }
     }
 }
 struct Draft {
     scene: *mut NativeScene,
-    markers: Vec<(Source, u32)>,
     _graphics: Vec<Rc<GraphicsLayer>>,
+    graphics_warmed: std::cell::Cell<bool>,
     _resources: resources::Prepared,
     bytes: usize,
     captures: HashMap<String, usize>,
@@ -319,11 +445,16 @@ struct Arena<'a> {
     ids: Vec<CString>,
     children: Vec<Box<[NativeNode]>>,
     sources: Vec<Source>,
-    markers: Vec<(Source, u32)>,
     browser_pixels: usize,
     intermediate_pixels: usize,
     density: f32,
     motion_targets: std::collections::HashSet<String>,
+}
+impl Drop for Arena<'_> {
+    fn drop(&mut self) {
+        self.graphics.clear();
+        self.store.prune_unleased_graphics();
+    }
 }
 impl<'a> Arena<'a> {
     fn new(store: &'a resources::Store) -> Self {
@@ -333,7 +464,6 @@ impl<'a> Arena<'a> {
             ids: Vec::new(),
             children: Vec::new(),
             sources: Vec::new(),
-            markers: Vec::new(),
             browser_pixels: 0,
             intermediate_pixels: 0,
             density: 1.,
@@ -384,7 +514,7 @@ impl<'a> Arena<'a> {
             || ph >= 8192
             || pixels > 4096 * 4096
             || self.browser_pixels + pixels > 8 * 1024 * 1024
-            || self.markers.len() >= 16
+            || self.graphics.len() >= 16
         {
             return Err("V2 graphics surface budget exceeded".into());
         }
@@ -401,78 +531,46 @@ impl<'a> Arena<'a> {
         let mut cache = self.store.graphics.borrow_mut();
         let used = self.store.graphics_clock.get() + 1;
         self.store.graphics_clock.set(used);
+        // A failed attempt never poisons the immutable identity permanently.
+        // Existing failed drafts keep their own independent, unready lease.
+        if cache
+            .get(&identity)
+            .is_some_and(|(_, layer)| layer.failed())
+        {
+            cache.remove(&identity);
+        }
         let layer = if let Some((last_used, layer)) = cache.get_mut(&identity) {
             *last_used = used;
             layer.clone()
         } else {
-            let _create = PerformancePhase::slow("native.set.graphics.create");
-            let url = format!(
-                "data:text/html;charset=utf-8,{}",
-                html.as_bytes()
-                    .iter()
-                    .map(|c| format!("%{c:02X}"))
-                    .collect::<String>()
-            );
-            let config = serde_json::json!({"url":url,"is_local_file":false,"css":"","width":pw,"height":ph+1,"fps":30,"fps_custom":true,"shutdown":false,"restart_when_active":false,"reroute_audio":true,"webpage_control_level":0});
-            let settings =
-                ffi::obs_data_create_from_json(CString::new(config.to_string()).unwrap().as_ptr());
-            if settings.is_null() {
-                return Err("V2 graphics settings allocation failed".into());
+            if producer_set_v2_raster_copy_blocked() {
+                return Err(GRAPHICS_COPY_BLOCKED.into());
             }
-            let browser = ffi::obs_source_create_private(
-                c"browser_source".as_ptr(),
-                c"V2 graphics batch".as_ptr(),
-                settings,
-            );
-            ffi::obs_data_release(settings);
-            if browser.is_null() {
-                return Err("V2 browser surface allocation failed".into());
+            let snapshot = producer_set_v2_raster_create(w, h, self.density);
+            if snapshot.is_null() {
+                return Err("V2 immutable graphics allocation failed".into());
             }
-            let browser = Source(browser);
-            ffi::obs_source_set_audio_mixers(browser.0, 0);
-            let clip = producer_set_v2_group_create(w, h, 0., 1.);
-            if clip.is_null() {
-                return Err("V2 graphics crop allocation failed".into());
-            }
-            let clip = Source(clip);
-            if !producer_set_v2_group_density(clip.0, self.density) {
-                return Err("Graphics density exceeds texture budget".into());
-            }
-            if !producer_set_v2_group_add(
-                clip.0,
-                browser.0,
-                0.,
-                0.,
-                w as f32,
-                (ph + 1) as f32 * h as f32 / ph as f32,
-                false,
-            ) || !producer_set_v2_group_seal(clip.0)
-            {
-                return Err("V2 graphics crop attachment failed".into());
-            }
-            ffi::obs_source_inc_active(browser.0);
-            ffi::obs_source_inc_showing(browser.0);
-            self.store
-                .graphics_created
-                .set(self.store.graphics_created.get() + 1);
             let layer = Rc::new(GraphicsLayer {
-                painted: std::cell::Cell::new(false),
-                browser,
-                clip,
+                snapshot: Source(snapshot),
+                paint: std::cell::RefCell::new(GraphicsPaint::Queued {
+                    html,
+                    width: pw,
+                    height: ph,
+                }),
+                // Keep the old browser+crop estimate until a separate budget
+                // change is measured. No existing hard allowance increases.
                 bytes: (pixels + (pw as usize) * (ph as usize)) * 4 + 1024 * 1024,
             });
             cache.insert(identity, (used, layer.clone()));
             layer
         };
         // Keep the per-scene preflight conservative. The resident cache counts
-        // this immutable browser/crop lease once across its owning scenes.
+        // this immutable raster lease once across its owning scenes.
         self.intermediate_pixels += (pw as usize) * (ph as usize);
-        let surface = layer.clip.0;
-        self.markers
-            .push((Source(ffi::obs_source_get_ref(layer.browser.0)), ph));
+        let surface = layer.snapshot.0;
         self.graphics.push(layer);
         self.ids
-            .push(CString::new(format!("graphics-{}", self.markers.len())).unwrap());
+            .push(CString::new(format!("graphics-{}", self.graphics.len())).unwrap());
         Ok(NativeNode {
             id: self.ids.last().unwrap().as_ptr(),
             kind: 1,
@@ -1134,12 +1232,12 @@ impl RoomProgram {
         scene_phase.complete(true);
         let bytes = producer_set_v2_scene_texture_bytes(scene)
             + (arena.browser_pixels + arena.intermediate_pixels) * 4
-            + arena.markers.len() * 1024 * 1024
+            + arena.graphics.len() * 1024 * 1024
             - arena.graphics.iter().map(|g| g.bytes).sum::<usize>();
         let draft = Draft {
             scene,
-            markers: std::mem::take(&mut arena.markers),
             _graphics: std::mem::take(&mut arena.graphics),
+            graphics_warmed: std::cell::Cell::new(false),
             bytes,
             asset_versions: self.resources.versions(&b.plan.resources),
             captures: b
@@ -1149,6 +1247,10 @@ impl RoomProgram {
                 .collect(),
             _resources: b.resources,
         };
+        // The scene owns its native child refs and the draft now owns every
+        // graphics lease. Release the temporary arena's Store borrow before
+        // mutating the room program during timeline registration.
+        drop(arena);
         if !producer_set_v2_program_prepare(
             self.program.0,
             producer_set_v2_scene_source(scene),
@@ -1344,6 +1446,7 @@ impl RoomProgram {
         }
     }
     pub unsafe fn poll(&mut self) -> Result<Status, String> {
+        self.resources.prune_unleased_graphics();
         if let Some(building) = self.building.take() {
             if let Some(error) = building.resources.error3d() {
                 return Err(error);
@@ -1393,6 +1496,7 @@ impl RoomProgram {
             return Err("Native v2 program unavailable".into());
         }
         if let Some(draft) = &self.draft {
+            let graphics_ready = self.resources.poll_graphics(&draft._graphics)?;
             // Preparation must paint even before the program has a visible
             // parent/output. Its render callback warms pending scene children;
             // waiting for that callback via normal output activity can deadlock
@@ -1402,38 +1506,20 @@ impl RoomProgram {
                 producer_set_v2_surface_warm(self.program.0);
                 producer_set_v2_program_status(self.program.0, &mut native);
             }
-            // Paint producers are immutable and keep their active/showing
-            // lease for their entire cached lifetime. Validate their first
-            // actual pixels once; a new scene placement is not a new paint.
-            let pending_markers: Vec<_> = draft
-                .markers
-                .iter()
-                .zip(&draft._graphics)
-                .filter(|(_, layer)| !layer.painted.get())
-                .collect();
-            let marker_sources: Vec<_> = pending_markers.iter().map(|((s, _), _)| s.0).collect();
-            let marker_rows: Vec<_> = pending_markers.iter().map(|((_, y), _)| *y).collect();
             if native.prepared_revision == self.draft_revision && !native.ready {
-                let _probe = PerformancePhase::slow("native.set.probe.graphics_markers");
-                let mut verified_prefix = 0;
-                let valid = producer_set_v2_surface_marker_progress(
-                    marker_sources.as_ptr(),
-                    marker_rows.as_ptr(),
-                    marker_sources.len(),
-                    &mut verified_prefix,
-                );
-                if valid && verified_prefix <= pending_markers.len() {
-                    // Retain only actual successful pixels. A later unpainted
-                    // layer must not make us recheck this immutable prefix.
-                    for (_, layer) in pending_markers.iter().take(verified_prefix) {
-                        layer.painted.set(true);
-                    }
-                    if draft.markers.len() == draft._graphics.len()
-                        && draft._graphics.iter().all(|layer| layer.painted.get())
-                    {
-                        producer_set_v2_program_ready(self.program.0, self.draft_revision);
-                        producer_set_v2_program_status(self.program.0, &mut native);
-                    }
+                // Normal program rendering may have warmed its transparent
+                // placeholders earlier. Render the actual completed snapshot
+                // graph off air once before publishing readiness; an owned
+                // texture and completed GPU copy are mandatory for every layer.
+                if graphics_ready && !draft.graphics_warmed.get() {
+                    let _probe = PerformancePhase::slow("native.set.probe.graphics_snapshots");
+                    draft.graphics_warmed.set(producer_set_v2_surface_warm(
+                        producer_set_v2_scene_source(draft.scene),
+                    ));
+                }
+                if graphics_ready && draft.graphics_warmed.get() {
+                    producer_set_v2_program_ready(self.program.0, self.draft_revision);
+                    producer_set_v2_program_status(self.program.0, &mut native);
                 }
             }
             if native.ready && native.warmed {
@@ -1470,6 +1556,11 @@ impl RoomProgram {
             scene3d_contexts: scene3d::live_count(),
             graphics_layers: self.resources.graphics_count(),
             graphics_creations: self.resources.graphics_created.get(),
+            graphics_painting: self.resources.graphics_painting(),
+            graphics_pending: self.resources.graphics_pending(),
+            graphics_snapshots: self.resources.graphics_snapshots(),
+            copy_blocked: producer_set_v2_raster_copy_blocked(),
+            quarantine_count: producer_set_v2_raster_quarantine_count(),
             cached_keys: self.bank.keys().cloned().collect(),
             cached_bytes: self.cache_bytes(None),
             spare_graphics_bytes: self.resources.spare_graphics_bytes(),

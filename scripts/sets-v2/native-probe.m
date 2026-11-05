@@ -4,6 +4,7 @@
 #include "sets_v2/group.h"
 #include "sets_v2/program.h"
 #include "sets_v2/readiness.h"
+#include "sets_v2/raster.h"
 #include "sets_v2/scene.h"
 #include "sets_v2/transition.h"
 #import <AppKit/AppKit.h>
@@ -1724,6 +1725,7 @@ static void shaderDiagnostics(void) {
 }
 #include "visual-effects-proof.inc.m"
 #include "graphics-cache-proof.inc.m"
+#include "raster-proof.inc.m"
 #include "chart-proof.inc.m"
 static void uiTask(void (*task)(void *), void *param, bool wait);
 static int runProbe(int argc, char **argv) {
@@ -1766,6 +1768,11 @@ static int runProbe(int argc, char **argv) {
     sets_v2_rust_register();
     register_test();
 #ifdef PRODUCER_SET_V2_PROBE
+    if(getenv("PRODUCER_PROBE_RASTER_ONLY")){
+      NSDictionary *report=raster_proof(out);
+      require([[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[out stringByAppendingPathComponent:@"raster-proof.json"] atomically:YES],"write raster proof");
+      obs_shutdown();puts("PASS: immutable raster GPU ownership, unique receipts and failure lifetime fences");return 0;
+    }
     if(getenv("PRODUCER_PROBE_GROUP_IDENTITY")||getenv("PRODUCER_PROBE_GROUP_IDENTITY_ONLY")){
       NSDictionary *colorReport=color_context_proof(out),*identityReport=identity_group_proof(out);
       NSDictionary *report=@{@"backend":backendReport,@"color":colorReport,@"identity":identityReport};

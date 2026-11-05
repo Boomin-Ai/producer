@@ -101,6 +101,9 @@ jobs:
         with:
           workspaces: src-tauri
       - run: cargo check --manifest-path scripts/sets-v2/rust-probe/Cargo.toml
+      # Actual painter serializer/CSP tests only; no OBS or GPU link. The
+      # unrelated chart/3D resource stubs reject validation in this harness.
+      - run: cargo test --offline --locked --manifest-path scripts/sets-v2/rust-contract-probe/Cargo.toml --lib
       - run: cargo check --manifest-path src-tauri/Cargo.toml
         env:
           CXXFLAGS: ${{ runner.os == 'Linux' && '-fPIC' || '' }}
