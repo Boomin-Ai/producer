@@ -58,7 +58,7 @@ try {
   $report = $null
   while ([DateTime]::UtcNow -lt $deadline) {
     foreach ($profile in $profiles) {
-      $candidate = Join-Path $profile 'engine-report.json'
+      $candidate = Join-Path $profile 'live\engine-report.json'
       if ((Test-Path -LiteralPath $candidate) -and (Get-Item -LiteralPath $candidate).LastWriteTimeUtc -ge $started) {
         # The engine writes once, but a polling read can catch that write in
         # progress. Accept only a complete report, not merely file existence.
