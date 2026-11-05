@@ -25,7 +25,14 @@ $profiles = @(
 foreach ($profile in $profiles) {
   if (Test-Path -LiteralPath $profile) { throw 'Existing Producer profile: refusing installed smoke test' }
 }
-$receipt = [ordered]@{ schema='producer.windows-installed-proof/1'; status='failed'; source=$env:PRODUCER_SOURCE_SHA; engineReport=$false; installedBinaryMatches=$false }
+$receipt = [ordered]@{
+  schema = 'producer.windows-installed-proof/1'
+  status = 'failed'
+  stage = 'adapter_inventory'
+  source = $env:PRODUCER_SOURCE_SHA
+  engineReport = $false
+  installedBinaryMatches = $false
+}
 $app = $null
 $installed = $false
 function Wait-OwnedProcess($Process, [int]$Seconds, [string]$Label) {
@@ -39,20 +46,44 @@ function Wait-OwnedProcess($Process, [int]$Seconds, [string]$Label) {
 try {
   Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, AdapterCompatibility |
     ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $OutputDir 'adapters.json') -Encoding UTF8
+  $receipt.stage = 'install'
   $p = Start-Process -FilePath $Installer -ArgumentList @('/S', "/D=$installDir") -PassThru
   Wait-OwnedProcess $p 120 'NSIS install'
   $installed = $true
+  $receipt.stage = 'installed_files'
   foreach ($must in @('producer.exe','uninstall.exe','obs.dll','obs-plugins\64bit\obs-browser.dll','obs-plugins\64bit\Producer Helper.exe','data\obs-plugins\win-dshow\obs-virtualcam-module64.dll','data\obs-plugins\win-dshow\placeholder.png')) {
     if (-not (Test-Path -LiteralPath (Join-Path $installDir $must))) { throw "Installed engine payload missing $must" }
   }
   $exe = Join-Path $installDir 'producer.exe'
-  $expectedHash = (Get-FileHash -LiteralPath $ExpectedExecutable -Algorithm SHA256).Hash.ToLowerInvariant()
+  $receipt.stage = 'executable_identity'
   $installedHash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
-  if ($expectedHash -ne $installedHash) { throw 'Installer contains a different producer.exe from this build' }
-  $receipt.installedBinaryMatches = $true
   $receipt.executableSha256 = $installedHash
+  # Tauri CLI 2.11.4 patches the first UNK marker to NSS before bundling,
+  # then restores the original compiler output. Reproduce just that patch on
+  # our in-memory expected bytes before comparing the entire installed file.
+  $compilerMarker = '__TAURI_BUNDLE_TYPE_VAR_UNK'
+  $nsisMarker = [Text.Encoding]::ASCII.GetBytes('__TAURI_BUNDLE_TYPE_VAR_NSS')
+  $expectedBytes = [IO.File]::ReadAllBytes($ExpectedExecutable)
+  $sha256 = [Security.Cryptography.SHA256]::Create()
+  try {
+    $receipt.compilerExecutableSha256 = [BitConverter]::ToString($sha256.ComputeHash($expectedBytes)).Replace('-', '').ToLowerInvariant()
+    $offset = [Text.Encoding]::ASCII.GetString($expectedBytes).IndexOf($compilerMarker, [StringComparison]::Ordinal)
+    if ($offset -lt 0 -or $compilerMarker.Length -ne $nsisMarker.Length) {
+      throw 'Expected Tauri compiler bundle marker is missing or invalid'
+    }
+    [Array]::Copy($nsisMarker, 0, $expectedBytes, $offset, $nsisMarker.Length)
+    $receipt.expectedPackagedExecutableSha256 = [BitConverter]::ToString($sha256.ComputeHash($expectedBytes)).Replace('-', '').ToLowerInvariant()
+  } finally {
+    $sha256.Dispose()
+  }
+  if ($receipt.expectedPackagedExecutableSha256 -ne $installedHash) {
+    throw 'Installed producer.exe differs from the expected NSIS-patched executable'
+  }
+  $receipt.installedBinaryMatches = $true
+  $receipt.stage = 'launch'
   $started = [DateTime]::UtcNow
   $app = Start-Process -FilePath $exe -WorkingDirectory $installDir -PassThru -RedirectStandardOutput (Join-Path $OutputDir 'app.stdout.log') -RedirectStandardError (Join-Path $OutputDir 'app.stderr.log')
+  $receipt.stage = 'engine_report'
   $deadline = [DateTime]::UtcNow.AddSeconds(90)
   $reportFile = $null
   $report = $null
@@ -75,10 +106,12 @@ try {
   $receipt.engineReport = $true
   $receipt.graphicsBackend = $report.graphics_backend
   $receipt.hardwareEncoder = $report.hardware_encoder
+  $receipt.stage = 'engine_qualification'
   if ($report.ok -ne $true -or $report.graphics_backend -ne 'd3d11' -or @($report.failed_modules).Count -ne 0 -or @($report.missing_ids).Count -ne 0 -or -not ($report.sources -contains 'browser_source')) {
     $receipt.qualification = 'bootstrap_not_qualified'
     throw 'Installed engine did not qualify: require successful D3D11, all modules/IDs and browser_source; see engine-report.json'
   }
+  $receipt.stage = 'post_report_liveness'
   $aliveUntil = [DateTime]::UtcNow.AddSeconds(3)
   while ([DateTime]::UtcNow -lt $aliveUntil) {
     if ($app.HasExited) { throw "Installed app exited after engine report ($($app.ExitCode))" }
@@ -97,9 +130,11 @@ try {
     }
   } catch {
     $receipt.status = 'failed'
+    $receipt.stage = 'cleanup'
     $receipt.cleanup = 'failed'
     throw
   } finally {
+    if ($receipt.status -eq 'passed') { $receipt.stage = 'complete' }
     $receipt | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $OutputDir 'installed-proof.json') -Encoding UTF8
   }
 }

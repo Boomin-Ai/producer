@@ -42,16 +42,20 @@ jobs:
     if: ${{ inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     env:
+      GH_TOKEN: ${{ github.token }}
       RELEASE_EVENT: ${{ github.event_name }}
       NATIVE_GUEST: ${{ inputs.native_guest }}
+    outputs:
+      release_id: ${{ steps.draft.outputs.release_id }}
     steps:
       - uses: actions/checkout@v4
-      - name: Require stable version and native guest runtime
+      - name: Validate stable source and reserve one release draft
+        id: draft
         run: |
           python3 - <<'PY'
-          import json, os, re
+          import json, os, re, subprocess
           from pathlib import Path
           config = json.loads(Path('src-tauri/tauri.conf.json').read_text())
           version = config['version']
@@ -65,7 +69,21 @@ jobs:
               assert os.environ['GITHUB_REF'] == 'refs/tags/v' + version, 'Tag does not match the packaged version'
           else:
               assert os.environ['NATIVE_GUEST'] == 'true', 'Public dispatch must set native_guest=true'
-          print(f'Validated stable {version} at {os.environ["GITHUB_SHA"]}')
+          repo, sha = os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_SHA']
+          tag = 'v' + version
+          endpoint = f'repos/{repo}/releases'
+          pages = json.loads(subprocess.check_output(['gh', 'api', '--paginate', '--slurp', endpoint + '?per_page=100']))
+          matches = [r for page in pages for r in page if r['tag_name'] == tag]
+          assert len(matches) <= 1, 'Multiple drafts for this version; reconcile them before starting platform jobs'
+          if matches:
+              release = matches[0]
+          else:
+              body = dict(tag_name=tag, target_commitish=sha, name='Producer ' + tag, draft=True, prerelease=False, make_latest='false')
+              release = json.loads(subprocess.check_output(['gh', 'api', '--method', 'POST', endpoint, '--input', '-'], input=json.dumps(body), text=True))
+          assert release['draft'] and not release['prerelease'] and release['target_commitish'] == sha, 'Release draft belongs to another source or channel'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              print(f'release_id={release["id"]}', file=out)
+          print(f'Validated stable {version} at {sha}; reserved draft {release["id"]}')
           PY
   promote-signed-candidate:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.promote_run != '' }}
@@ -179,24 +197,14 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Auto-update: tauri-action emits .sig files + latest.json for this
-          # matrix's platforms; the arm64 job merges its own entry afterwards.
+          # Tauri emits signed payloads. The final verifier is the only writer
+          # of latest.json, after all platform jobs finish.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
+          releaseId: ${{ needs.validate-public-source.outputs.release_id }}
           tagName: v__VERSION__
-          releaseName: "Producer v__VERSION__"
-          releaseCommitish: ${{ github.sha }}
-          releaseBody: |
-            Adds saved, independent minimized and expanded Set control arrangements.
-            Adds Claude-powered text/camera Set drafts with validation, private preview and explicit preparation loading.
-            Adds shared room layout, basic Show and field controls, plus output confirmation and failure reporting.
-            Improves authoring error messages and timeouts and aligns the native room preview frame.
-            Atmosphere remains the sole production built-in Set. Advanced generated effects and complete remote Set preparation are still in development.
-            Preserves the native guest runtime on Apple Silicon. Windows retains its Live engine; Intel macOS and Linux retain their engine-less scope.
-
-          releaseDraft: true
-          prerelease: false
+          includeUpdaterJson: false
           args: ${{ matrix.args }}
 
       - name: Notarize and staple Intel installer image
@@ -463,19 +471,16 @@ jobs:
           name: Producer-macos-arm64-live
           path: ${{ env.DMG }}
 
-      - name: Publish to GitHub release
+      - name: Stage Apple Silicon installer in the release draft
         if: ${{ github.event_name == 'push' || inputs.publish }}
         run: |
           set -euo pipefail
-          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Producer v$VERSION" --draft --notes "Producer v$VERSION" 2>/dev/null || true
           gh release upload "v$VERSION" "$DMG" --clobber
 
       # Auto-update leg: the updater archive must contain the ASSEMBLED,
       # notarized app (tauri's auto-generated one is the engine-less
-      # intermediate — never ship that). This job is the single writer of the
-      # published latest.json: it merges its darwin-aarch64 entry into the
-      # manifest tauri-action uploaded for the other platforms.
-      - name: Updater artifact + manifest merge
+      # intermediate — never ship that).
+      - name: Stage notarized Apple Silicon updater archive
         if: ${{ github.event_name == 'push' || inputs.publish }}
         run: |
           set -euo pipefail
@@ -484,66 +489,6 @@ jobs:
           bun run tauri signer sign "$UPD" --password "" >/dev/null
           test -f "$UPD.sig" || { echo "FATAL: updater signature not produced" >&2; exit 1; }
           gh release upload "v$VERSION" "$UPD" "$UPD.sig" --clobber
-
-          # Single-writer guarantee: wait until every other job in this run is
-          # done, so nothing (tauri-action's own latest.json upload included)
-          # can land after our merged manifest.
-          for i in $(seq 1 120); do
-            PENDING="$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs" --paginate \
-              --jq '[.jobs[] | select(.name != "build-macos-arm64-live" and .name != "publish-verified-release") | select(.status != "completed")] | length')"
-            [ "$PENDING" = "0" ] && break
-            echo "waiting on $PENDING sibling job(s)… ($i)"
-            sleep 30
-          done
-
-          MANIFEST=/tmp/latest.json
-          if ! gh release download "v$VERSION" -p "latest.json" -O "$MANIFEST" --clobber 2>/dev/null; then
-            echo "WARN: matrix latest.json missing — publishing manifest without linux/intel-mac entries" >&2
-            printf '{"version":"%s","platforms":{}}' "$VERSION" > "$MANIFEST"
-          fi
-          SIG="$(cat "$UPD.sig")" REPO="${{ github.repository }}" \
-            python3 scripts/merge-update-manifest.py "$MANIFEST" "$VERSION" "$UPD"
-
-          # Windows leg: build-windows-live (waited on above) uploaded the
-          # engine-bundled installer(s) + .sig; since windows-latest left the
-          # tauri-action matrix, its updater entries are written HERE, from
-          # those sigs, with the same key names tauri-action used to emit
-          # (windows-x86_64 + -nsis, and -msi when the MSI was produced).
-          rm -rf /tmp/winsig && mkdir -p /tmp/winsig
-          WIN_EXE="Producer_${VERSION}_x64-setup.exe"
-          WIN_MSI="Producer_${VERSION}_x64_en-US.msi"
-          for A in "$WIN_EXE" "$WIN_MSI"; do
-            gh release download "v$VERSION" -p "$A.sig" -D /tmp/winsig --clobber 2>/dev/null || true
-          done
-          REPO="${{ github.repository }}" VERSION="$VERSION" WIN_EXE="$WIN_EXE" WIN_MSI="$WIN_MSI" \
-            python3 - "$MANIFEST" <<'EOF'
-          import json, os, sys
-          path = sys.argv[1]
-          repo, version = os.environ["REPO"], os.environ["VERSION"]
-          m = json.load(open(path))
-          plats = m.setdefault("platforms", {})
-          def entry(asset):
-              sig = f"/tmp/winsig/{asset}.sig"
-              if not os.path.exists(sig):
-                  return None
-              return {"signature": open(sig).read().strip(),
-                      "url": f"https://github.com/{repo}/releases/download/v{version}/{asset}"}
-          exe = entry(os.environ["WIN_EXE"])
-          msi = entry(os.environ["WIN_MSI"])
-          for k in [k for k in plats if k.startswith("windows-")]:
-              del plats[k]
-          if exe:
-              plats["windows-x86_64"] = exe
-              plats["windows-x86_64-nsis"] = exe
-          else:
-              print("::warning::Windows installer .sig not on the release — build-windows-live failed? "
-                    "latest.json ships WITHOUT a windows-x86_64 entry (Windows updaters see no update).")
-          if msi:
-              plats["windows-x86_64-msi"] = msi
-          json.dump(m, open(path, "w"), indent=2)
-          print("manifest platforms:", sorted(plats))
-          EOF
-          gh release upload "v$VERSION" "$MANIFEST" --clobber
 
   # ── Windows x64 + Live engine (Producer Live) ──────────────────────────────
   # Mirror of build-macos-arm64-live for the Windows engine. Same rule set:
@@ -638,6 +583,19 @@ jobs:
       - name: Build NSIS installer (engine linked + staged beside producer.exe)
         run: .\scripts\build-windows.ps1
 
+      # Preserve the exact installer for diagnosis if the hosted qualification
+      # environment fails. It is not staged on the public release draft here.
+      - name: Preserve Windows installer before runtime checks
+        if: ${{ github.event_name == 'push' || inputs.publish }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Producer-windows-x64-unqualified-${{ github.sha }}
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.exe.sig
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Qualify installed Windows engine
         if: ${{ github.event_name == 'push' || inputs.publish }}
         timeout-minutes: 6
@@ -725,15 +683,11 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-      # build-macos-arm64-live is the single writer of latest.json; it waits
-      # for this job, then reads the .sig files uploaded here to write the
-      # windows-x86_64 entries. Only the installers + sigs are published here.
-      - name: Publish to GitHub release
+      - name: Stage Windows installers in the release draft
         if: ${{ github.event_name == 'push' || inputs.publish }}
         shell: bash
         run: |
           set -euo pipefail
-          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "Producer v$VERSION" --draft --notes "Producer v$VERSION" 2>/dev/null || true
           # Only the installers and their updater signatures. `dist/` is the
           # web bundle's own output dir too (index.html, assets/), and a
           # directory in the upload list fails the whole step.
@@ -753,6 +707,7 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
+      PRODUCER_RELEASE_ID: ${{ needs.validate-public-source.outputs.release_id }}
     steps:
       - uses: actions/checkout@v4
       - name: Require successful CI for this exact release commit
@@ -773,6 +728,20 @@ jobs:
           python3 scripts/verify-release-payloads.py
       - name: Publish the verified release
         run: |
-          set -euo pipefail
-          VERSION="$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")"
-          gh release edit "v$VERSION" --draft=false --latest --notes-file /tmp/producer-release-verification/release-notes.md
+          python3 - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          out = Path('/tmp/producer-release-verification')
+          receipt = json.loads((out / 'verification.json').read_text())
+          repo, sha = os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_SHA']
+          release_id = os.environ['PRODUCER_RELEASE_ID']
+          assert receipt['releaseId'] == int(release_id) and receipt['sha'] == sha
+          endpoint = f'repos/{repo}/releases/{release_id}'
+          draft = json.loads(subprocess.check_output(['gh', 'api', endpoint]))
+          assert draft['draft'] and not draft['prerelease'] and draft['target_commitish'] == sha
+          assert draft['tag_name'] == 'v' + receipt['version']
+          body = dict(draft=False, make_latest='true', body=(out / 'release-notes.md').read_text())
+          release = json.loads(subprocess.check_output(['gh', 'api', '--method', 'PATCH', endpoint, '--input', '-'], input=json.dumps(body), text=True))
+          assert not release['draft'] and not release['prerelease']
+          print(release['html_url'])
+          PY
