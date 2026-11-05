@@ -26,18 +26,53 @@ on:
         type: string
         default: ""
 
-# One release run at a time, newest wins. Re-pushing a tag otherwise leaves
-# TWO complete runs racing as writers on the same release — v0.4.0 shipped a
-# latest.json whose darwin-aarch64 signature came from run A over run B's
-# tar.gz, and every updater correctly refused the mismatch.
+# Public writers stay serialized: a manifest and its signed bytes must come
+# from the same run. Private Actions-only candidates have a separate queue so
+# a production release cannot cancel the Mac performance test track. Legacy
+# promotion also writes releases, even when its publish input is false.
 concurrency:
-  group: release
+  group: release-${{ (github.event_name == 'push' || inputs.publish || inputs.promote_run != '') && 'public' || 'private' }}
   cancel-in-progress: true
 
 env:
   PRODUCER_SOURCE_SHA: ${{ github.sha }}
 
 jobs:
+  validate-public-source:
+    if: ${{ inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_EVENT: ${{ github.event_name }}
+      NATIVE_GUEST: ${{ inputs.native_guest }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require stable version, native guest runtime and exact-source CI
+        run: |
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          from pathlib import Path
+          config = json.loads(Path('src-tauri/tauri.conf.json').read_text())
+          version = config['version']
+          assert re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', version), 'Public builds require a stable version; performance candidates stay private'
+          assert json.loads(Path('package.json').read_text())['version'] == version, 'Frontend/native version mismatch'
+          package = Path('src-tauri/Cargo.toml').read_text().split('[package]', 1)[1].split('\n[', 1)[0]
+          assert re.search(r'^version\s*=\s*"' + re.escape(version) + '"\s*$', package, re.M), 'Cargo package version mismatch'
+          locked = next(block for block in Path('src-tauri/Cargo.lock').read_text().split('[[package]]') if re.search(r'^name = "producer"$', block, re.M))
+          assert re.search(r'^version = "' + re.escape(version) + '"$', locked, re.M), 'Cargo lock version mismatch'
+          if os.environ['RELEASE_EVENT'] == 'push':
+              assert os.environ['GITHUB_REF'] == 'refs/tags/v' + version, 'Tag does not match the packaged version'
+          else:
+              assert os.environ['NATIVE_GUEST'] == 'true', 'Public dispatch must set native_guest=true'
+          repo, sha = os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_SHA']
+          runs = json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/actions/workflows/ci.yml/runs?head_sha={sha}&per_page=100']))['workflow_runs']
+          green = [run for run in runs if run['name'] == 'CI' and run['head_sha'] == sha and run['status'] == 'completed' and run['conclusion'] == 'success']
+          assert green, 'No successful CI workflow exists for the exact release commit; finish CI before publishing'
+          print(f'Validated stable {version} at {sha}; CI run {green[0]["id"]}')
+          PY
   promote-signed-candidate:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.promote_run != '' }}
     runs-on: ubuntu-latest
@@ -100,6 +135,7 @@ jobs:
   # tauri-action's latest.json entry would point updaters at a stub build.
   build:
     if: ${{ inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) }}
+    needs: [validate-public-source]
     permissions:
       contents: write
     strategy:
@@ -190,7 +226,8 @@ jobs:
   #     absent artifact = silent stub build — guarded below with otool)
   #   engine inside the .app BEFORE notarization    (Apple scans nested Mach-Os)
   build-macos-arm64-live:
-    if: ${{ inputs.promote_run == '' }}
+    if: ${{ !cancelled() && inputs.promote_run == '' && (needs.validate-public-source.result == 'success' || (github.event_name == 'workflow_dispatch' && !inputs.publish)) }}
+    needs: [validate-public-source]
     permissions:
       contents: write
     runs-on: macos-latest
@@ -527,7 +564,8 @@ jobs:
   # + scripts/build-windows.ps1) so CI ships exactly what that box verified.
   # There is no Windows code-signing certificate wired; the installer is unsigned.
   build-windows-live:
-    if: ${{ inputs.promote_run == '' }}
+    if: ${{ !cancelled() && inputs.promote_run == '' && (needs.validate-public-source.result == 'success' || (github.event_name == 'workflow_dispatch' && !inputs.publish)) }}
+    needs: [validate-public-source]
     permissions:
       contents: write
     runs-on: windows-2022
@@ -543,6 +581,15 @@ jobs:
         shell: powershell
     steps:
       - uses: actions/checkout@v4
+
+      - name: Parse Windows qualification scripts before building
+        run: |
+          foreach ($script in @('scripts/build-windows.ps1','scripts/test-windows-installed.ps1','scripts/test-windows-engine.ps1')) {
+            $tokens = $null
+            $parseErrors = $null
+            $null = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $pwd $script), [ref]$tokens, [ref]$parseErrors)
+            if ($parseErrors.Count -ne 0) { throw ($parseErrors | Out-String) }
+          }
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -594,12 +641,45 @@ jobs:
       # refuses to continue if the exe does not import obs.dll. Updater .sig is
       # emitted because TAURI_SIGNING_PRIVATE_KEY is set.
       - name: Build NSIS installer (engine linked + staged beside producer.exe)
-        run: .\scripts\build-windows.ps1
+        run: .\scripts\build-windows.ps1 -Smoke -SmokeOutputDir "$env:RUNNER_TEMP\producer-windows-installed-proof"
 
       # Hosted Windows runners do not guarantee a D3D11 adapter. Still compile
       # and link the same native pixel probe used on a Windows GPU workstation.
       - name: Check Windows native compositor linkage
         run: .\scripts\test-windows-native.ps1 -EngineDir .\src-tauri\windows-bundle -CompileOnly
+
+      # Compile once before the bounded runtime window. Each exact native
+      # test then owns its own libobs/CEF process; an absent/zero-test match
+      # or unavailable D3D11 adapter cannot be reported as a runtime pass.
+      - name: Ensure recording inspection prerequisite
+        timeout-minutes: 6
+        run: |
+          if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress --limit-output --execution-timeout=300
+            if ($LASTEXITCODE -ne 0) { throw 'ffmpeg prerequisite failed' }
+          }
+          if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) { throw 'ffprobe unavailable' }
+          ffprobe -version | Select-Object -First 1
+
+      - name: Prepare Windows native runtime qualification
+        timeout-minutes: 30
+        run: .\scripts\test-windows-engine.ps1 -EngineDir $env:PRODUCER_ENGINE_DIR -OutputDir "$env:RUNNER_TEMP\producer-windows-runtime-proof" -PrepareOnly
+
+      - name: Qualify Windows native runtime
+        timeout-minutes: 25
+        run: .\scripts\test-windows-engine.ps1 -EngineDir $env:PRODUCER_ENGINE_DIR -OutputDir "$env:RUNNER_TEMP\producer-windows-runtime-proof" -RunOnly -MaxRuntimeSeconds 1200
+
+      - name: Preserve Windows installed and runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: producer-windows-qualification-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/producer-windows-installed-proof/*.json
+            ${{ runner.temp }}/producer-windows-installed-proof/*.log
+            ${{ runner.temp }}/producer-windows-runtime-proof/**
+          if-no-files-found: warn
+          retention-days: 90
 
       # The MSI is a courtesy asset (the updater leg is the NSIS exe); the
       # Windows session has only ever verified the NSIS path, so a WiX failure
@@ -660,7 +740,7 @@ jobs:
   # Keep the previous public release current until every new platform passes.
   publish-verified-release:
     if: ${{ inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) }}
-    needs: [build, build-macos-arm64-live, build-windows-live]
+    needs: [validate-public-source, build, build-macos-arm64-live, build-windows-live]
     runs-on: ubuntu-latest
     permissions:
       contents: write

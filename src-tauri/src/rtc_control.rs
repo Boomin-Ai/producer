@@ -1,9 +1,10 @@
 //! Native-only staging authority owner. Credentials never cross the IPC boundary.
 //! The native owner serializes control mutations, renewal and authority reads.
+use crate::performance_trace::native_stage;
 use producer_guest_session::{ExpectedAuthority, PublishSource, Role, Scope, Session};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 const API: &str = "https://boomin-rtc-pilot.kleveland-bishop.workers.dev";
 const ENDPOINT: &str = "wss://producer-boomin-6h2iz2sq.livekit.cloud";
 #[derive(Clone, Deserialize)]
@@ -207,8 +208,25 @@ impl Control {
         body: Value,
         permission_read: bool,
     ) -> Result<Vec<u8>, &'static str> {
-        let mut response = crate::http_transport::rtc_control()
-            .await?
+        // Only retirement requests emit these phases. No route, receipt or
+        // provider payload becomes part of a diagnostic event.
+        let trace_end = body
+            .get("command")
+            .and_then(|command| command.get("operation"))
+            .and_then(Value::as_str)
+            == Some("end");
+        let pool_started = trace_end.then(Instant::now);
+        let client = crate::http_transport::rtc_control().await;
+        if let Some(started) = pool_started {
+            native_stage(
+                "native.rtc.end.http.pool",
+                started.elapsed(),
+                Some(client.is_ok()),
+            );
+        }
+        let client = client?;
+        let headers_started = trace_end.then(Instant::now);
+        let response = client
             .post(format!("{}{route}", self.api))
             .bearer_auth(&self.operator.token)
             // A permission response must fit inside the receiver's 3.5-second
@@ -227,24 +245,57 @@ impl Control {
                 } else {
                     "RTC request failed"
                 }
-            })?;
+            });
+        if let Some(started) = headers_started {
+            native_stage(
+                "native.rtc.end.http.headers",
+                started.elapsed(),
+                Some(response.is_ok()),
+            );
+        }
+        let mut response = response?;
         if response.status() == reqwest::StatusCode::CONFLICT {
+            if trace_end {
+                native_stage("native.rtc.end.http.conflict", Duration::ZERO, Some(false));
+            }
             return Err("RTC authority changed");
         }
         if response.status().is_server_error()
             || response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS
         {
+            if trace_end {
+                native_stage(
+                    "native.rtc.end.http.unavailable",
+                    Duration::ZERO,
+                    Some(false),
+                );
+            }
             return Err("RTC authority temporarily unavailable");
         }
         if !response.status().is_success() {
+            if trace_end {
+                native_stage("native.rtc.end.http.rejected", Duration::ZERO, Some(false));
+            }
             return Err("RTC authority rejected request");
         }
+        let body_started = trace_end.then(Instant::now);
         let mut bytes = Vec::new();
-        while let Some(chunk) = response.chunk().await.map_err(|_| "RTC response failed")? {
+        while let Some(chunk) = response.chunk().await.map_err(|_| {
+            if let Some(started) = body_started {
+                native_stage("native.rtc.end.http.body", started.elapsed(), Some(false));
+            }
+            "RTC response failed"
+        })? {
             if bytes.len() + chunk.len() > 32768 {
+                if let Some(started) = body_started {
+                    native_stage("native.rtc.end.http.body", started.elapsed(), Some(false));
+                }
                 return Err("RTC response too large");
             }
             bytes.extend_from_slice(&chunk);
+        }
+        if let Some(started) = body_started {
+            native_stage("native.rtc.end.http.body", started.elapsed(), Some(true));
         }
         Ok(bytes)
     }
@@ -596,13 +647,37 @@ impl Control {
             .clone()
             .or(self.retirement_receipt.clone())
             .ok_or("No owned RTC run")?;
-        match self.command("end").await {
+        let started = Instant::now();
+        native_stage("native.rtc.end.first.begin", Duration::ZERO, None);
+        let ended = self.command("end").await;
+        native_stage(
+            "native.rtc.end.first",
+            started.elapsed(),
+            Some(ended.is_ok()),
+        );
+        match ended {
             Ok(_) => Ok(()),
             Err("RTC authority changed") => {
-                let snapshot = self.read_media_authority(&previous).await?;
+                let started = Instant::now();
+                native_stage("native.rtc.end.reconcile.begin", Duration::ZERO, None);
+                let snapshot = self.read_media_authority(&previous).await;
+                native_stage(
+                    "native.rtc.end.reconcile",
+                    started.elapsed(),
+                    Some(snapshot.is_ok()),
+                );
+                let snapshot = snapshot?;
                 self.receipt = None;
                 self.retirement_receipt = Some(snapshot.receipt().clone());
-                self.command("end").await.map(|_| ())
+                let started = Instant::now();
+                native_stage("native.rtc.end.retry.begin", Duration::ZERO, None);
+                let ended = self.command("end").await.map(|_| ());
+                native_stage(
+                    "native.rtc.end.retry",
+                    started.elapsed(),
+                    Some(ended.is_ok()),
+                );
+                ended
             }
             Err(error) => Err(error),
         }

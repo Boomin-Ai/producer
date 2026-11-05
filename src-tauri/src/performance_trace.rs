@@ -21,7 +21,9 @@ const MAX_FIELDS: usize = 24;
 const ACTIVE_LIMIT: u64 = 4 * 1024 * 1024;
 const MAX_EVENTS_PER_SECOND: usize = 512;
 const MAX_PENDING: usize = 8;
-const NATIVE_STAGE_CAPACITY: usize = 128;
+// Absorb short preparation bursts without increasing the writer's per-second
+// budget or allocating on the audio/capture threads. This remains a hard cap.
+const NATIVE_STAGE_CAPACITY: usize = 512;
 static NATIVE_STAGE_ENABLED: AtomicBool = AtomicBool::new(false);
 static NATIVE_CAPTURE_EPOCH: AtomicU64 = AtomicU64::new(0);
 static MIC_PROBE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -394,6 +396,23 @@ fn wall_ms() -> u64 {
         .unwrap_or_default()
         .as_millis()
         .min(u64::MAX as u128) as u64
+}
+// Keep a current wall/elapsed pair beside each native metric snapshot. A session's
+// initial Unix epoch alone cannot align external samples after sleep or a wall
+// clock adjustment. This samples clocks only; it never queries the engine.
+fn sample_clock(started: Instant) -> (f64, u64, f64) {
+    let before = Instant::now();
+    let unix_ms = wall_ms();
+    let after = Instant::now();
+    let interval = after.duration_since(before).as_secs_f64() * 1000.0;
+    let at_ms = before.duration_since(started).as_secs_f64() * 1000.0 + interval / 2.0;
+    (at_ms, unix_ms, interval / 2.0 + 1.0)
+}
+fn add_clock_fields(fields: &mut BTreeMap<String, Value>, started: Instant) -> f64 {
+    let (at_ms, unix_ms, uncertainty_ms) = sample_clock(started);
+    fields.insert("wallClockUnixMs".into(), json!(unix_ms));
+    fields.insert("clockUncertaintyMs".into(), json!(uncertainty_ms));
+    at_ms
 }
 fn valid_revision(value: &str) -> bool {
     (value.len() == 40 || value.len() == 64) && value.bytes().all(|b| b.is_ascii_hexdigit())
@@ -997,7 +1016,7 @@ fn initialize_trace(app: &tauri::AppHandle) -> Result<Arc<Inner>, String> {
             let mut events = Vec::with_capacity(MAX_BATCH);
             if let Some(queue) = NATIVE_STAGE_QUEUE.get() {
                 if let Ok(mut queue) = queue.try_lock() {
-                    let count = queue.len().min(MAX_BATCH - 1);
+                    let count = queue.len().min(MAX_BATCH - 2);
                     for stage in queue.drain(..count) {
                         events.push(TraceEvent {
                             seq: inner.native_seq.fetch_add(1, Ordering::Relaxed),
@@ -1021,9 +1040,11 @@ fn initialize_trace(app: &tauri::AppHandle) -> Result<Arc<Inner>, String> {
                     fields.insert("nativeStageQueued".into(), json!(queue.len()));
                 }
             }
+            let mut clock_fields = BTreeMap::new();
+            let snapshot_at_ms = add_clock_fields(&mut clock_fields, inner.started);
             events.push(TraceEvent {
                 seq: inner.native_seq.fetch_add(1, Ordering::Relaxed),
-                at_ms: inner.started.elapsed().as_secs_f64() * 1000.0,
+                at_ms: snapshot_at_ms,
                 kind: "native_metric".into(),
                 name: "engine.snapshot".into(),
                 span_id: None,
@@ -1031,6 +1052,19 @@ fn initialize_trace(app: &tauri::AppHandle) -> Result<Arc<Inner>, String> {
                 duration_ms: None,
                 status: None,
                 fields,
+            });
+            // A separate clock record keeps the existing per-event field
+            // bound and snapshot/export schema intact, including fleet readers.
+            events.push(TraceEvent {
+                seq: inner.native_seq.fetch_add(1, Ordering::Relaxed),
+                at_ms: snapshot_at_ms,
+                kind: "native_metric".into(),
+                name: "native.clock".into(),
+                span_id: None,
+                action_id: None,
+                duration_ms: None,
+                status: None,
+                fields: clock_fields,
             });
             let batch = TraceBatch {
                 schema: SCHEMA.into(),
@@ -1283,6 +1317,31 @@ mod tests {
         add_capture_health(&mut fields, inner, writer, Some(0));
         fields.insert("nativeStageQueued".into(), json!(0));
         fields
+    }
+    #[test]
+    fn snapshots_use_current_clock_pairs_instead_of_a_stale_session_epoch() {
+        let (inner, dir) = fixture();
+        // The fixture's initial epoch is intentionally 1, simulating an epoch
+        // which can no longer map this process's elapsed clock to wall time.
+        let earliest_elapsed = inner.started.elapsed().as_secs_f64() * 1000.0;
+        let earliest_wall = wall_ms();
+        let mut fields = BTreeMap::new();
+        let at_ms = add_clock_fields(&mut fields, inner.started);
+        let latest_wall = wall_ms();
+        let latest_elapsed = inner.started.elapsed().as_secs_f64() * 1000.0;
+        let wall = fields["wallClockUnixMs"].as_u64().unwrap();
+        assert!(wall >= earliest_wall && wall <= latest_wall);
+        assert!(at_ms >= earliest_elapsed && at_ms <= latest_elapsed);
+        assert!(wall > inner.metadata.started_unix_ms + at_ms as u64);
+        assert!(fields["clockUncertaintyMs"].as_f64().unwrap() >= 1.0);
+        let mut b = batch();
+        b.events[0].name = "native.clock".into();
+        b.events[0].kind = "native_metric".into();
+        b.events[0].at_ms = at_ms;
+        b.events[0].fields = fields;
+        assert!(validate(&b, "session-1").is_ok());
+        drop(inner);
+        fs::remove_dir_all(dir).unwrap();
     }
     #[test]
     fn full_snapshot_is_bounded_and_stale_metrics_are_omitted() {

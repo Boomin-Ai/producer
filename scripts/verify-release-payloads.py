@@ -6,12 +6,18 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import tomllib
 from urllib.parse import unquote, urlparse
 
 repo = os.environ['GITHUB_REPOSITORY']
 sha = os.environ['GITHUB_SHA']
 config = json.loads(Path('src-tauri/tauri.conf.json').read_text())
 version = config['version']
+assert '-' not in version, 'Public promotion requires a stable version'
+assert json.loads(Path('package.json').read_text())['version'] == version
+assert tomllib.loads(Path('src-tauri/Cargo.toml').read_text())['package']['version'] == version
+lock = tomllib.loads(Path('src-tauri/Cargo.lock').read_text())
+assert next(p['version'] for p in lock['package'] if p['name'] == 'producer') == version
 tag = 'v' + version
 out = Path('/tmp/producer-release-verification')
 out.mkdir(parents=True, exist_ok=True)
@@ -33,13 +39,28 @@ manifest = json.loads(download('latest.json').read_text())
 assert manifest['version'] == version
 pubkey = base64.b64decode(config['plugins']['updater']['pubkey']).decode().splitlines()[1]
 checks = []
-for platform in ['darwin-aarch64', 'darwin-x86_64', 'windows-x86_64', 'linux-x86_64']:
+platforms = ['darwin-aarch64', 'darwin-x86_64', 'windows-x86_64', 'windows-x86_64-nsis', 'linux-x86_64']
+if 'windows-x86_64-msi' in manifest['platforms']:
+    platforms.append('windows-x86_64-msi')
+assert manifest['platforms']['windows-x86_64'] == manifest['platforms']['windows-x86_64-nsis']
+for platform in platforms:
     item = manifest['platforms'][platform]
     url = urlparse(item['url'])
     prefix = f'/{repo}/releases/download/{tag}/'
     assert url.scheme == 'https' and url.netloc == 'github.com' and url.path.startswith(prefix)
     name = unquote(url.path[len(prefix):])
     assert name and '/' not in name and name in assets
+    # tauri-action's established Intel mac updater archive has no version in
+    # its filename. Its exact release URL, draft source SHA and pinned-key
+    # signature remain required above/below. Windows installers are versioned.
+    if platform == 'darwin-x86_64':
+        assert name == 'Producer_x64.app.tar.gz'
+    else:
+        assert name.startswith(f'Producer_{version}_'), 'Payload filename must match this release version'
+    if platform in ('windows-x86_64', 'windows-x86_64-nsis'):
+        assert name == f'Producer_{version}_x64-setup.exe'
+    if platform == 'windows-x86_64-msi':
+        assert name == f'Producer_{version}_x64_en-US.msi'
     payload = download(name)
     assert payload.stat().st_size == assets[name]['size']
     signature = out / (name + '.verification.sig')

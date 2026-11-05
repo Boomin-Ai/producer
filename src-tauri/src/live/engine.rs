@@ -1144,7 +1144,9 @@ pub enum Command {
     SetPreviewHidden(bool),
     /// Rects (CSS px, window client coords) the preview must not cover.
     SetPreviewCutouts(Vec<PreviewRect>),
-    DetachPreview,
+    DetachPreview {
+        reply: mpsc::Sender<()>,
+    },
     Shutdown,
 }
 
@@ -1886,9 +1888,13 @@ impl LiveHandle {
     }
 
     pub fn detach_preview(&self) -> Result<(), String> {
+        let (tx, rx) = mpsc::channel();
         self.cmd
-            .send(Command::DetachPreview)
-            .map_err(|e| e.to_string())
+            .send(Command::DetachPreview { reply: tx })
+            .map_err(|e| e.to_string())?;
+        // A send receipt does not mean the native views have disappeared.
+        rx.recv_timeout(Duration::from_secs(10))
+            .map_err(|_| "the native preview did not close in time".to_string())
     }
     pub fn release_idle_room(&self) -> Result<bool, String> {
         let (tx, rx) = mpsc::channel();
@@ -2561,7 +2567,16 @@ impl Preview {
         }
     }
 
+    fn conceal(&self) {
+        let view = self.view as usize;
+        on_window_thread(move || unsafe {
+            ffi::producer_preview_set_hidden(view as *mut std::os::raw::c_void, 1);
+        });
+    }
     fn detach(self) {
+        // Hide the retained last frame before graphics callbacks or a
+        // platform swapchain can delay destruction on the UI thread.
+        self.conceal();
         unsafe {
             #[cfg(any(target_os = "macos", target_os = "windows"))]
             if !self.canvas.is_null() {
@@ -4006,6 +4021,11 @@ pub fn start(
                     Ok(Command::ReleaseIdleRoom { reply }) => {
                         let release_started = Instant::now();
                         performance_stage("native.room.release.start", Duration::ZERO, None);
+                        // Presentation-only: active outputs keep their source
+                        // graph, but no visible preview may expose the camera
+                        // underneath a Set while that graph is being cleared.
+                        if let Some(p)=preview.as_ref(){p.conceal();}
+                        if let Some(p)=portrait_preview.as_ref(){p.conceal();}
                         // Evaluate on the engine thread, so an output starting
                         // during navigation cannot lose its capture sources.
                         if session.is_some() || recorder.is_some() || portrait_recorder.is_some() {
@@ -4035,12 +4055,21 @@ pub fn start(
                             let _ = reply.send(result);
                         }
                     }
-                    Ok(Command::DetachPreview) => {
+                    Ok(Command::DetachPreview { reply }) => {
+                        let started=Instant::now();
+                        performance_stage("native.preview.detach.start",Duration::ZERO,None);
+                        // Conceal BOTH siblings before either destruction can
+                        // wait for graphics. Reply only after native removal.
+                        if let Some(p)=preview.as_ref(){p.conceal();}
+                        if let Some(p)=portrait_preview.as_ref(){p.conceal();}
+                        performance_stage("native.preview.detach.hidden",started.elapsed(),Some(true));
                         if let Some(p)=portrait_preview.take(){p.detach();}
                         if let Some(p) = preview.take() {
                             p.detach();
                             snap.lock().unwrap().preview_attached = false;
                         }
+                        performance_stage("native.preview.detach.complete",started.elapsed(),Some(true));
+                        let _=reply.send(());
                     }
                     Ok(Command::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => {
                         microphones.clear();
