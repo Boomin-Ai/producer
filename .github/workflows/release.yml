@@ -729,7 +729,7 @@ jobs:
       - name: Publish the verified release
         run: |
           python3 - <<'PY'
-          import json, os, subprocess
+          import hashlib, json, os, subprocess
           from pathlib import Path
           out = Path('/tmp/producer-release-verification')
           receipt = json.loads((out / 'verification.json').read_text())
@@ -740,6 +740,11 @@ jobs:
           draft = json.loads(subprocess.check_output(['gh', 'api', endpoint]))
           assert draft['draft'] and not draft['prerelease'] and draft['target_commitish'] == sha
           assert draft['tag_name'] == 'v' + receipt['version']
+          assets = {a['name']: a for a in draft['assets'] if a['state'] == 'uploaded'}
+          for name in ('latest.json', 'verification.json'):
+              data = (out / name).read_bytes()
+              assert assets[name]['size'] == len(data)
+              assert assets[name]['digest'] == 'sha256:' + hashlib.sha256(data).hexdigest(), f'{name} was not staged on the reserved draft'
           body = dict(draft=False, make_latest='true', body=(out / 'release-notes.md').read_text())
           release = json.loads(subprocess.check_output(['gh', 'api', '--method', 'PATCH', endpoint, '--input', '-'], input=json.dumps(body), text=True))
           assert not release['draft'] and not release['prerelease']
