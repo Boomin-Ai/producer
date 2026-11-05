@@ -631,6 +631,7 @@ extern "C" {
     ) -> *mut obs_source_t;
     pub fn obs_source_filter_add(source: *mut obs_source_t, filter: *mut obs_source_t);
     pub fn obs_source_filter_remove(source: *mut obs_source_t, filter: *mut obs_source_t);
+    pub fn obs_source_filter_count(source: *const obs_source_t) -> usize;
     pub fn obs_source_get_filter_by_name(
         source: *mut obs_source_t,
         name: *const c_char,
