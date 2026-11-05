@@ -32,6 +32,15 @@ bool producer_set_v2_group_mask_progress(obs_source_t *group,float progress);
 size_t producer_set_v2_live_groups(void);
 /* Diagnostic: successful shared-program compilations in this process. */
 size_t producer_set_v2_group_effect_compilations(void);
+#ifdef PRODUCER_SET_V2_PROBE
+struct producer_set_v2_group_probe_stats {
+  uint64_t identity_bypasses, nonlinear_bypasses, intermediate_passes;
+};
+/* Isolated native probe only; callers hold the graphics context. */
+void producer_set_v2_group_probe_reset(obs_source_t *source);
+struct producer_set_v2_group_probe_stats producer_set_v2_group_probe_stats(obs_source_t *source);
+void producer_set_v2_group_probe_force_isolation(obs_source_t *source, bool force);
+#endif
 bool producer_set_v2_group_layer_transform(obs_source_t *group, size_t index,
                                            float rotation, float scale_x,
                                            float scale_y);

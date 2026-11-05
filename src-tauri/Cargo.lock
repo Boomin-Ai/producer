@@ -3687,7 +3687,7 @@ dependencies = [
 
 [[package]]
 name = "producer"
-version = "0.4.84-diagnostics.2"
+version = "0.4.84-performance.6"
 dependencies = [
  "base64 0.22.1",
  "cc",

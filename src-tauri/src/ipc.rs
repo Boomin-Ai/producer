@@ -48,26 +48,33 @@ fn normalize_base_url(raw: &str) -> EngineResult<String> {
 }
 
 #[tauri::command]
-pub fn list_endpoints(state: State<'_, AppState>) -> EngineResult<Vec<EndpointInfo>> {
-    let conn = state.db.lock().expect("db mutex poisoned");
-    let mut stmt = conn.prepare(
-        "SELECT id, kind, name, base_url, created_at, brand_slug FROM endpoints ORDER BY created_at",
-    )?;
-    let rows = stmt
-        .query_map([], |r| {
-            let brand_slug: Option<String> = r.get(5)?;
-            Ok(EndpointInfo {
-                id: r.get(0)?,
-                kind: r.get(1)?,
-                name: r.get(2)?,
-                base_url: r.get(3)?,
-                created_at: r.get(4)?,
-                endpoint_kind: endpoint_kind_of(brand_slug.as_deref()),
-                brand_slug,
-            })
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(rows)
+pub async fn list_endpoints(app: AppHandle) -> EngineResult<Vec<EndpointInfo>> {
+    // The native UI thread must not wait for another operation's DB guard.
+    // Return the same ordered rows after the owned worker completes.
+    tauri::async_runtime::spawn_blocking(move || -> EngineResult<Vec<EndpointInfo>> {
+        let state = app.state::<AppState>();
+        let conn = state.db.lock().expect("db mutex poisoned");
+        let mut stmt = conn.prepare(
+            "SELECT id, kind, name, base_url, created_at, brand_slug FROM endpoints ORDER BY created_at",
+        )?;
+        let rows = stmt
+            .query_map([], |r| {
+                let brand_slug: Option<String> = r.get(5)?;
+                Ok(EndpointInfo {
+                    id: r.get(0)?,
+                    kind: r.get(1)?,
+                    name: r.get(2)?,
+                    base_url: r.get(3)?,
+                    created_at: r.get(4)?,
+                    endpoint_kind: endpoint_kind_of(brand_slug.as_deref()),
+                    brand_slug,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    })
+    .await
+    .map_err(|error| EngineError::Other(error.to_string()))?
 }
 
 /// Validates the endpoint + token (GET /v1/session) before storing.
@@ -356,6 +363,34 @@ pub(crate) fn endpoint_access(
     Ok((base_url, brand_slug, token))
 }
 
+/// Keep fresh, scoped DB/Keychain lookup off the async runtime's workers.
+/// The task owns its app/endpoint and only reads credentials. It never sends
+/// HTTP or replays an operation independently of its awaiting caller.
+async fn endpoint_access_async(
+    app: AppHandle,
+    endpoint_id: String,
+) -> EngineResult<(String, Option<String>, String)> {
+    let queued = std::time::Instant::now();
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::performance_trace::native_stage(
+            "native.endpoint_access.worker_wait",
+            queued.elapsed(),
+            None,
+        );
+        let started = std::time::Instant::now();
+        let state = app.state::<AppState>();
+        let result = endpoint_access(&state, &endpoint_id);
+        crate::performance_trace::native_stage(
+            "native.endpoint_access.lookup",
+            started.elapsed(),
+            Some(result.is_ok()),
+        );
+        result
+    })
+    .await
+    .map_err(|error| EngineError::Other(error.to_string()))?
+}
+
 /// Begin channel authorization on an endpoint — returns the browser URL a
 /// human completes (the endpoint enforces primary-token-only).
 /// Register a local room server-side (idempotent by external_ref).
@@ -375,11 +410,8 @@ pub async fn room_register(
 
 /// The brand's server rooms, for Home's reconcile (see src/lib/roomSync.ts).
 #[tauri::command]
-pub async fn room_list_server(
-    state: State<'_, AppState>,
-    endpoint_id: String,
-) -> EngineResult<Value> {
-    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+pub async fn room_list_server(app: AppHandle, endpoint_id: String) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access_async(app, endpoint_id).await?;
     ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
         .list_rooms()
@@ -489,11 +521,11 @@ pub async fn room_set_stage(
 
 #[tauri::command]
 pub async fn room_guests(
-    state: State<'_, AppState>,
+    app: AppHandle,
     endpoint_id: String,
     room_id: String,
 ) -> EngineResult<Value> {
-    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    let (base_url, brand_slug, token) = endpoint_access_async(app, endpoint_id).await?;
     ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
         .room_guests(&room_id)
@@ -502,11 +534,11 @@ pub async fn room_guests(
 
 #[tauri::command]
 pub async fn room_access(
-    state: State<'_, AppState>,
+    app: AppHandle,
     endpoint_id: String,
     room_id: String,
 ) -> EngineResult<Value> {
-    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    let (base_url, brand_slug, token) = endpoint_access_async(app, endpoint_id).await?;
     ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
         .room_access(&room_id)
@@ -516,6 +548,7 @@ pub async fn room_access(
 /// The access surface's one door (see `ProducerClient::root_request`).
 #[tauri::command]
 pub async fn endpoint_request(
+    app: AppHandle,
     state: State<'_, AppState>,
     endpoint_id: String,
     method: String,
@@ -527,7 +560,7 @@ pub async fn endpoint_request(
             "endpoint_request: path must be an API route".into(),
         ));
     }
-    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    let (base_url, brand_slug, token) = endpoint_access_async(app, endpoint_id).await?;
     if method == "POST" {
         if let Some(guest) = path
             .strip_prefix("/v1/app/live/guests/")
@@ -796,11 +829,8 @@ pub async fn room_guest_invite(
 }
 
 #[tauri::command]
-pub async fn network_connections(
-    state: State<'_, AppState>,
-    endpoint_id: String,
-) -> EngineResult<Value> {
-    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+pub async fn network_connections(app: AppHandle, endpoint_id: String) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access_async(app, endpoint_id).await?;
     ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
         .network_connections()
@@ -808,11 +838,8 @@ pub async fn network_connections(
 }
 
 #[tauri::command]
-pub async fn network_status(
-    state: State<'_, AppState>,
-    endpoint_id: String,
-) -> EngineResult<Value> {
-    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+pub async fn network_status(app: AppHandle, endpoint_id: String) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access_async(app, endpoint_id).await?;
     ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
         .network_status()
@@ -821,11 +848,11 @@ pub async fn network_status(
 
 #[tauri::command]
 pub async fn network_invitations(
-    state: State<'_, AppState>,
+    app: AppHandle,
     endpoint_id: String,
     direction: String,
 ) -> EngineResult<Value> {
-    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+    let (base_url, brand_slug, token) = endpoint_access_async(app, endpoint_id).await?;
     ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
         .network_invitations(&direction)
@@ -911,11 +938,8 @@ pub async fn network_lookup(
 }
 
 #[tauri::command]
-pub async fn network_live_rooms(
-    state: State<'_, AppState>,
-    endpoint_id: String,
-) -> EngineResult<Value> {
-    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+pub async fn network_live_rooms(app: AppHandle, endpoint_id: String) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access_async(app, endpoint_id).await?;
     ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
         .network_live_rooms()
@@ -954,8 +978,8 @@ fn seat_result(mut res: Value, base_url: &str, producer_cam: bool) -> Value {
 }
 
 #[tauri::command]
-pub async fn network_deals(state: State<'_, AppState>, endpoint_id: String) -> EngineResult<Value> {
-    let (base_url, brand_slug, token) = endpoint_access(&state, &endpoint_id)?;
+pub async fn network_deals(app: AppHandle, endpoint_id: String) -> EngineResult<Value> {
+    let (base_url, brand_slug, token) = endpoint_access_async(app, endpoint_id).await?;
     ProducerClient::new(&base_url, &token)
         .with_brand(brand_slug)
         .network_deals()

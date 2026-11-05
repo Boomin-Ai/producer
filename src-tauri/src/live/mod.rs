@@ -479,8 +479,10 @@ impl Live {
     pub fn status(&self) -> serde_json::Value {
         match &self.handle {
             Some(h) => {
-                let mut v =
-                    serde_json::to_value(h.snapshot.lock().unwrap().clone()).unwrap_or_default();
+                // Copy one coherent snapshot, then release its writer lock
+                // before serializing source descriptions for the webview.
+                let snapshot = { h.snapshot.lock().unwrap().clone() };
+                let mut v = serde_json::to_value(snapshot).unwrap_or_default();
                 if let Some(obj) = v.as_object_mut() {
                     obj.insert(
                         "stage_transparent".into(),

@@ -222,6 +222,8 @@ OBS_IMPORT enum gs_color_space obs_source_get_color_space(obs_source_t *source, 
 							  const enum gs_color_space *preferred_spaces);
 OBS_IMPORT void obs_enter_graphics(void);
 OBS_IMPORT void obs_leave_graphics(void);
+OBS_IMPORT void *gs_get_context(void);
+OBS_IMPORT bool obs_in_task_thread(int type);
 OBS_IMPORT gs_effect_t *obs_get_base_effect(enum obs_base_effect effect);
 
 OBS_IMPORT const char *obs_data_get_string(obs_data_t *data, const char *name);

@@ -250,6 +250,7 @@ fn compile_sets_v2() {
         "transition",
         "program",
         "readiness",
+        "raster",
         "chart",
     ] {
         let file = format!("src/live/sets_v2/{name}.c");

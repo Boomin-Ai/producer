@@ -71,6 +71,7 @@ pub struct video_data {
 }
 
 pub enum obs_source_t {}
+pub enum obs_weak_source_t {}
 pub enum obs_data_t {}
 pub enum obs_encoder_t {}
 pub enum obs_service_t {}
@@ -189,6 +190,8 @@ extern "C" {
     pub fn gs_draw(mode: c_int, start: u32, count: u32);
     pub fn gs_color(color: u32);
     pub fn gs_get_linear_srgb() -> bool;
+    pub fn gs_get_context() -> *mut c_void;
+    pub fn obs_in_task_thread(kind: c_int) -> bool;
     pub fn gs_set_linear_srgb(linear: bool) -> bool;
     pub fn gs_matrix_rotaa4f(x: f32, y: f32, z: f32, angle: f32);
     pub fn gs_effect_set_texture_srgb(param: *mut c_void, texture: *mut c_void);
@@ -284,6 +287,9 @@ extern "C" {
         param: *mut c_void,
     );
     pub fn obs_source_get_ref(source: *mut obs_source_t) -> *mut obs_source_t;
+    pub fn obs_source_get_weak_source(source: *mut obs_source_t) -> *mut obs_weak_source_t;
+    pub fn obs_weak_source_expired(source: *mut obs_weak_source_t) -> bool;
+    pub fn obs_weak_source_release(source: *mut obs_weak_source_t);
     pub fn obs_source_inc_showing(source: *mut obs_source_t);
     pub fn obs_source_inc_active(source: *mut obs_source_t);
     pub fn obs_source_dec_active(source: *mut obs_source_t);
@@ -631,6 +637,7 @@ extern "C" {
     ) -> *mut obs_source_t;
     pub fn obs_source_filter_add(source: *mut obs_source_t, filter: *mut obs_source_t);
     pub fn obs_source_filter_remove(source: *mut obs_source_t, filter: *mut obs_source_t);
+    pub fn obs_source_filter_count(source: *const obs_source_t) -> usize;
     pub fn obs_source_get_filter_by_name(
         source: *mut obs_source_t,
         name: *const c_char,

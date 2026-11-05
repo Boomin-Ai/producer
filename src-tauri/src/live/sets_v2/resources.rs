@@ -3,7 +3,7 @@
 use super::super::ffi;
 use super::{
     contract::{Asset, Plan, Shader},
-    Source,
+    PerformancePhase, Source,
 };
 use base64::Engine;
 use sha2::{Digest, Sha256};
@@ -65,6 +65,7 @@ impl Store {
         })
     }
     pub fn publish(&mut self, assets: &HashMap<String, Asset>) -> Result<(), String> {
+        let phase = PerformancePhase::start("native.set.assets.publish", None);
         let mut next = HashMap::new();
         for (id, a) in assets {
             let fingerprint = format!("{:x}", Sha256::digest(a.data.as_bytes()));
@@ -142,6 +143,7 @@ impl Store {
         }
         self.assets.extend(next);
         self.files.retain(|_, f| f.strong_count() > 0);
+        phase.complete(true);
         Ok(())
     }
     // Keep the loaded package's bounded image manifest across live snapshots.
@@ -152,6 +154,86 @@ impl Store {
     }
     pub fn graphics_count(&self) -> usize {
         self.graphics.borrow().len()
+    }
+    pub fn graphics_painting(&self) -> usize {
+        self.graphics
+            .borrow()
+            .values()
+            .filter(|(_, layer)| layer.painting())
+            .count()
+    }
+    pub fn graphics_pending(&self) -> usize {
+        self.graphics
+            .borrow()
+            .values()
+            .filter(|(_, layer)| layer.pending())
+            .count()
+    }
+    pub fn graphics_snapshots(&self) -> usize {
+        self.graphics
+            .borrow()
+            .values()
+            .filter(|(_, layer)| layer.ready())
+            .count()
+    }
+    pub(super) fn prune_unleased_graphics(&self) {
+        // Check before making scheduler clones: the map's reference alone is
+        // not a scene lease. Dropping a queued descriptor frees its HTML;
+        // dropping an abandoned painter releases its active/showing source.
+        self.graphics
+            .borrow_mut()
+            .retain(|_, (_, layer)| std::rc::Rc::strong_count(layer) > 1 || layer.ready());
+    }
+    pub(super) unsafe fn poll_graphics(
+        &self,
+        required: &[std::rc::Rc<super::GraphicsLayer>],
+    ) -> Result<bool, String> {
+        const PAINTERS_PER_OUTPUT: usize = 2;
+        self.prune_unleased_graphics();
+        let leased = self
+            .graphics
+            .borrow()
+            .values()
+            .filter(|(_, layer)| std::rc::Rc::strong_count(layer) > 1)
+            .map(|(_, layer)| layer.clone())
+            .collect::<Vec<_>>();
+        // Finish/release existing producers before filling their slots. A
+        // draft with more layers than slots must keep progressing while its
+        // native snapshot sources already provide known logical dimensions.
+        if !super::producer_set_v2_raster_copy_blocked() {
+            for layer in &leased {
+                layer.progress();
+            }
+        }
+        if super::producer_set_v2_raster_copy_blocked() {
+            // C owns the one bounded safety quarantine and its active/showing
+            // lease. Retire our remaining producers immediately; immutable
+            // completed textures stay valid and can still be taken safely.
+            for layer in &leased {
+                layer.fail_copy_blocked();
+            }
+        } else {
+            let mut active = leased.iter().filter(|layer| layer.painting()).count();
+            let mut seen = HashSet::new();
+            for layer in required.iter().chain(leased.iter()) {
+                if !seen.insert(std::rc::Rc::as_ptr(layer)) {
+                    continue;
+                }
+                if active >= PAINTERS_PER_OUTPUT {
+                    break;
+                }
+                if layer.pending() && layer.start().is_ok() {
+                    active += 1;
+                    self.graphics_created.set(self.graphics_created.get() + 1);
+                }
+            }
+        }
+        for layer in required {
+            if let Some(error) = layer.error() {
+                return Err(error);
+            }
+        }
+        Ok(required.iter().all(|layer| layer.ready()))
     }
     pub fn spare_graphics_bytes(&self) -> usize {
         self.graphics
@@ -165,6 +247,7 @@ impl Store {
     /// Live/draft leases are never evicted. Spare bytes also count against the
     /// existing aggregate texture limit, not an additional unbounded allowance.
     pub fn trim_graphics(&self, available: usize) {
+        self.prune_unleased_graphics();
         let limit = available.min(64 * 1024 * 1024);
         let mut cache = self.graphics.borrow_mut();
         let mut unused: Vec<_> = cache
@@ -197,6 +280,10 @@ impl Store {
         versions.join("|")
     }
     pub unsafe fn open(&self, plan: &Plan) -> Result<Prepared, String> {
+        let phase = PerformancePhase::start(
+            "native.set.resources.open",
+            Some("native.set.resources.open.begin"),
+        );
         let mut out = Prepared {
             sources: HashMap::new(),
             files: Vec::new(),
@@ -220,6 +307,13 @@ impl Store {
             if out.sources.contains_key(resource) {
                 continue;
             }
+            let _resource = match n.kind.as_str() {
+                "scene3d" => Some(PerformancePhase::slow("native.set.resource.scene3d")),
+                "chart" => Some(PerformancePhase::slow("native.set.resource.chart")),
+                "shader" => Some(PerformancePhase::slow("native.set.resource.shader")),
+                "asset" => Some(PerformancePhase::slow("native.set.resource.asset")),
+                _ => None,
+            };
             if n.kind == "scene3d" {
                 let key = resource
                     .strip_prefix("scene3d:")
@@ -359,6 +453,7 @@ impl Store {
                 out.sources.insert(resource.clone(), source);
             }
         }
+        phase.complete(true);
         Ok(out)
     }
 }
@@ -413,10 +508,14 @@ impl Prepared {
         pending
     }
     pub unsafe fn ready(&self) -> bool {
-        if !self.scenes3d.values().all(|s| s.ready()) {
+        if !self.scenes3d.values().all(|s| {
+            let _probe = PerformancePhase::slow("native.set.probe.scene3d_ready");
+            s.ready()
+        }) {
             return false;
         }
         let sources: Vec<_> = self.sources.values().map(|s| s.0).collect();
+        let _probe = PerformancePhase::slow("native.set.probe.resources_warm");
         producer_set_v2_surfaces_warm(sources.as_ptr(), sources.len())
     }
 }
@@ -449,6 +548,7 @@ impl Prepared {
         }
     }
     pub fn presented3d(&self) -> bool {
+        let _probe = PerformancePhase::slow("native.set.probe.presented3d");
         self.scenes3d.values().all(|s| s.ready())
     }
     pub fn error3d(&self) -> Option<String> {

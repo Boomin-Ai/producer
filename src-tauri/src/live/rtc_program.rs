@@ -14,6 +14,12 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+// Fixed classifications at the failing branch, never provider/error text.
+// Called on publication workers only; capture callbacks remain atomics-only.
+fn trace_failure(stage: &'static str) {
+    crate::performance_trace::native_stage(stage, Duration::ZERO, Some(false));
+}
+
 // Leave scheduling headroom while retaining the strict stale-audio cutoff.
 const LEAD_NS: u64 = 400_000_000;
 // Covers the shared lead at up to 60 fps, with bounded scheduling headroom.
@@ -412,6 +418,7 @@ impl VideoLane {
                     }
                     let now = unsafe { os_gettime_ns() };
                     let Some(due) = frame.timestamp.checked_add(LEAD_NS) else {
+                        trace_failure("native.rtc.publisher.failure.video_timestamp");
                         fault.store(true, Ordering::Release);
                         return Err("Native program video timestamp overflow");
                     };
@@ -427,6 +434,7 @@ impl VideoLane {
                         }
                         Ok(false) => {}
                         Err(error) => {
+                            trace_failure("native.rtc.publisher.failure.video_sdk");
                             fault.store(true, Ordering::Release);
                             return Err(error);
                         }
@@ -816,11 +824,23 @@ impl Tap {
         let param = (&*self.shared as *const Shared).cast_mut().cast();
         unsafe {
             if self.video_connected {
+                let started = std::time::Instant::now();
                 ffi::obs_remove_raw_video_callback(video_callback, param);
+                crate::performance_trace::native_stage(
+                    "native.rtc.capture.video_detach",
+                    started.elapsed(),
+                    Some(true),
+                );
                 self.video_connected = false;
             }
             if self.audio_connected {
+                let started = std::time::Instant::now();
                 audio_output_disconnect(self.audio as *mut _, 1, audio_callback, param);
+                crate::performance_trace::native_stage(
+                    "native.rtc.capture.audio_detach",
+                    started.elapsed(),
+                    Some(true),
+                );
                 self.audio_connected = false;
             }
         }
@@ -846,7 +866,10 @@ pub struct Publisher {
 }
 impl Publisher {
     pub fn start(sources: Sources, deadline: u64) -> Result<Self, &'static str> {
-        let mut tap = Tap::start()?;
+        let mut tap = Tap::start().map_err(|error| {
+            trace_failure("native.rtc.publisher.failure.capture_setup");
+            error
+        })?;
         let stop = Arc::new(AtomicBool::new(false));
         let failed = Arc::new(AtomicBool::new(false));
         let recoverable = Arc::new(AtomicBool::new(false));
@@ -858,16 +881,19 @@ impl Publisher {
             .spawn(move || {
                 #[cfg(target_os = "windows")]
                 let _schedule = WindowsPublisherSchedule::start().map_err(|error| {
+                    trace_failure("native.rtc.publisher.failure.schedule");
                     fault.store(true, Ordering::Release);
                     error
                 })?;
                 #[cfg(target_os = "macos")]
                 if unsafe { pthread_set_qos_class_self_np(0x21, 0) } != 0 {
+                    trace_failure("native.rtc.publisher.failure.schedule");
                     fault.store(true, Ordering::Release);
                     return Err("Native program scheduling setup failed");
                 }
                 #[cfg(target_os = "macos")]
                 if let Err(error) = configure_publisher_schedule() {
+                    trace_failure("native.rtc.publisher.failure.schedule");
                     fault.store(true, Ordering::Release);
                     return Err(error);
                 }
@@ -875,12 +901,20 @@ impl Publisher {
                 // Audio produced while video registration/thread setup blocks is
                 // startup pre-roll, not queued live program audio.
                 tap.shared.ready.store(true, Ordering::Release);
-                let mut video_lane = VideoLane::start(sources.clone())?;
-                video_lane.capture(
-                    tap.video_frames
-                        .take()
-                        .ok_or("Native video capture receiver absent")?,
-                )?;
+                let mut video_lane = VideoLane::start(sources.clone()).map_err(|error| {
+                    trace_failure("native.rtc.publisher.failure.video_worker_setup");
+                    error
+                })?;
+                video_lane
+                    .capture(
+                        tap.video_frames
+                            .take()
+                            .ok_or("Native video capture receiver absent")?,
+                    )
+                    .map_err(|error| {
+                        trace_failure("native.rtc.publisher.failure.video_capture_setup");
+                        error
+                    })?;
                 let result = publish_loop(&tap, &sources, &video_lane, &done, &expires);
                 // Retire pending video and join its SDK call before clearing
                 // sources or releasing capture callbacks.
@@ -894,6 +928,7 @@ impl Publisher {
                     recovery_fault.store(true, Ordering::Release);
                 }
                 if let Err(error) = result {
+                    trace_failure("native.rtc.publisher.failure.worker_result");
                     #[cfg(debug_assertions)]
                     eprintln!(
                         "Native program publisher failed: {error}; timing={}",
@@ -927,13 +962,16 @@ impl Publisher {
         self.lease.store(deadline, Ordering::Release);
     }
     pub fn close(&mut self) -> Result<(), &'static str> {
-        self.stop.store(true, Ordering::Release);
+        self.request_stop();
         if let Some(worker) = self.worker.take() {
             worker
                 .join()
                 .map_err(|_| "Native program worker failed")??;
         }
         Ok(())
+    }
+    pub fn request_stop(&self) {
+        self.stop.store(true, Ordering::Release);
     }
 }
 impl Drop for Publisher {
@@ -1292,6 +1330,7 @@ impl AudioTimeline {
         }
         MAX_AUDIO_LATE.fetch_max(now - due, Ordering::Relaxed);
         if now - due > MAX_LATE_NS {
+            trace_failure("native.rtc.publisher.failure.audio_deadline");
             return Err("Native program audio publication deadline missed");
         }
         while audio
@@ -1314,6 +1353,7 @@ impl AudioTimeline {
         // stays absent for three seconds still fails closed, rather than hiding
         // a permanently broken audio device behind unbounded silence.
         if self.missing > 300 {
+            trace_failure("native.rtc.publisher.failure.audio_capture_absent");
             return Err("Native program audio capture remained absent");
         }
         self.next_due = Some(
@@ -1351,15 +1391,18 @@ fn publish_loop(
             thread::sleep(Duration::from_millis(120));
         }
         if video_lane.failed.load(Ordering::Acquire) {
+            trace_failure("native.rtc.publisher.failure.video_lane");
             return Err("Native program video publication stopped");
         }
         if wall_ms() >= lease.load(Ordering::Acquire) {
+            trace_failure("native.rtc.publisher.failure.lease_expired");
             return Err("Native program lease expired");
         }
         let loop_now = unsafe { os_gettime_ns() };
         MAX_LOOP_GAP.fetch_max(loop_now.saturating_sub(last_loop), Ordering::Relaxed);
         last_loop = loop_now;
         if tap.shared.failed.load(Ordering::Acquire) {
+            trace_failure("native.rtc.publisher.failure.capture_queue_or_format");
             return Err("Native program capture queue or format fault");
         }
         // The audio worker consumes inline fixed-size PCM directly. It never
@@ -1376,6 +1419,7 @@ fn publish_loop(
             MAX_CAPTURE_AGE.fetch_max(loop_now.saturating_sub(timestamp), Ordering::Relaxed);
             if let Some(end) = audio_end {
                 if timestamp + 2_000_000 < end {
+                    trace_failure("native.rtc.publisher.failure.audio_timestamp");
                     return Err("Native program audio timestamp discontinuity");
                 }
                 if timestamp > end + 2_000_000 {
@@ -1395,6 +1439,7 @@ fn publish_loop(
             carry.extend(samples[..frames].iter().copied());
             while carry.len() >= 480 {
                 if audio.len() >= 64 {
+                    trace_failure("native.rtc.publisher.failure.audio_queue_overflow");
                     return Err("Native program audio publication queue overflow");
                 }
                 let mut block = [0; 480];
@@ -1412,6 +1457,7 @@ fn publish_loop(
         }
         let now = unsafe { os_gettime_ns() };
         if timeline.next_due.is_none() && std::time::Instant::now() >= startup_deadline {
+            trace_failure("native.rtc.publisher.failure.audio_startup_stale");
             return Err("Native program audio startup remained stale");
         }
         if last_audio.is_none_or(|last| now - last >= 8_000_000) {
@@ -1429,7 +1475,10 @@ fn publish_loop(
                     break;
                 }
                 let call = std::time::Instant::now();
-                sources.audio(&block)?;
+                sources.audio(&block).map_err(|error| {
+                    trace_failure("native.rtc.publisher.failure.audio_sdk");
+                    error
+                })?;
                 MAX_AUDIO_CALL.fetch_max(call.elapsed().as_micros() as u64, Ordering::Relaxed);
                 if let Some(last) = last_audio {
                     MIN_AUDIO_SPACING.fetch_min(now - last, Ordering::Relaxed);

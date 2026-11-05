@@ -285,6 +285,13 @@ pub struct Status {
     pub scene3d_contexts: usize,
     pub graphics_layers: usize,
     pub graphics_creations: usize,
+    // Transient owned browser leases, not a hard OS process-count cap: CEF
+    // child shutdown can finish asynchronously after the source is released.
+    pub graphics_painting: usize,
+    pub graphics_pending: usize,
+    pub graphics_snapshots: usize,
+    pub copy_blocked: bool,
+    pub quarantine_count: usize,
     pub cached_keys: Vec<String>,
     pub cached_bytes: usize,
     pub spare_graphics_bytes: usize,
@@ -951,6 +958,90 @@ pub fn graphics_document_scaled(
     // is painted with the document but is never part of outgoing set pixels.
     html.push_str(&format!("<div style=\"position:absolute;left:0;top:{physical_height}px;width:1px;height:1px;background:#01fe03\"></div>"));
     Ok(html)
+}
+
+/// Add a private paint receipt only when a queued immutable document starts.
+/// The canonical document above remains the cache identity and retains its
+/// legacy marker for existing callers. No imported JavaScript is authorized.
+pub(super) fn graphics_painter_document(
+    canonical: &str,
+    physical_width: u32,
+    physical_height: u32,
+    marker: &[u8; 18],
+) -> Result<String, String> {
+    use base64::Engine;
+    use sha2::{Digest, Sha256};
+    if physical_width == 0
+        || physical_width > 8192
+        || physical_height == 0
+        || physical_height >= 8192
+    {
+        return Err("Invalid immutable graphics painter dimensions".into());
+    }
+    let old_marker = format!("<div style=\"position:absolute;left:0;top:{physical_height}px;width:1px;height:1px;background:#01fe03\"></div>");
+    let document = canonical
+        .strip_suffix(&old_marker)
+        .ok_or("Immutable graphics painter needs its canonical marker")?;
+    let old_viewport = format!(
+        "html,body{{margin:0;width:{physical_width}px;height:{}px;",
+        physical_height + 1
+    );
+    if !document.contains(&old_viewport) {
+        return Err("Immutable graphics painter viewport changed".into());
+    }
+    let pixels = marker
+        .chunks_exact(3)
+        .map(|rgb| format!("[{}, {}, {}]", rgb[0], rgb[1], rgb[2]))
+        .collect::<Vec<_>>()
+        .join(",");
+    // Append the receipt after fonts and two presentation opportunities. Six
+    // opaque physical pixels are outside authored visible content and bypass
+    // its logical-coordinate zoom. Literal numeric RGB bytes are the only
+    // per-painter input to this trusted, hash-authorized script.
+    let script = format!("document.fonts.ready.then(()=>requestAnimationFrame(()=>requestAnimationFrame(()=>{{const p=[{pixels}];for(let i=0;i<p.length;i++){{const e=document.createElement('div');e.style.cssText='position:fixed;left:'+i+'px;top:{physical_height}px;width:1px;height:1px;background:rgb('+p[i].join(',')+')';document.documentElement.appendChild(e);}}}})));");
+    let hash = base64::engine::general_purpose::STANDARD.encode(Sha256::digest(script.as_bytes()));
+    const POLICY: &str =
+        "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'";
+    if !document.contains(POLICY) {
+        return Err("Immutable graphics painter policy changed".into());
+    }
+    let mut document =
+        document.replacen(POLICY, &format!("{POLICY}; script-src 'sha256-{hash}'"), 1);
+    document.push_str("<script>");
+    document.push_str(&script);
+    document.push_str("</script>");
+    Ok(document)
+}
+
+#[cfg(test)]
+#[test]
+fn immutable_painter_receipt_is_private_and_preserves_canonical_identity() {
+    use base64::Engine;
+    use sha2::{Digest, Sha256};
+    let canonical = graphics_document_scaled(&[], 1, 7, (0., 0.), &HashMap::new(), 1.).unwrap();
+    let before = canonical.clone();
+    let a = graphics_painter_document(&canonical, 1, 7, &[1; 18]).unwrap();
+    let b = graphics_painter_document(&canonical, 1, 7, &[2; 18]).unwrap();
+    assert_eq!(canonical, before);
+    assert!(canonical.ends_with("background:#01fe03\"></div>"));
+    assert_ne!(a, b);
+    assert!(a.contains("html,body{margin:0;width:1px;height:8px;"));
+    assert!(a.contains("document.documentElement.appendChild(e)") && a.contains("position:fixed"));
+    assert!(a.contains(
+        "document.fonts.ready.then(()=>requestAnimationFrame(()=>requestAnimationFrame("
+    ));
+    assert!(a.contains("script-src 'sha256-") && !a.contains("script-src 'unsafe-inline'"));
+    let script = a
+        .split_once("<script>")
+        .unwrap()
+        .1
+        .strip_suffix("</script>")
+        .unwrap();
+    let hash = base64::engine::general_purpose::STANDARD.encode(Sha256::digest(script.as_bytes()));
+    assert!(a.contains(&format!("script-src 'sha256-{hash}'")));
+    assert!(!a.contains("background:#01fe03"));
+    assert!(graphics_painter_document(&canonical, 2, 7, &[1; 18]).is_err());
+    assert!(graphics_painter_document(&canonical, 1, 8, &[1; 18]).is_err());
 }
 
 pub fn clock_positions(clock: Option<&Clock>) -> (f64, f64, bool) {

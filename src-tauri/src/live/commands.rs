@@ -257,7 +257,19 @@ pub async fn live_stop(state: State<'_, AppState>) -> EngineResult<()> {
 // the engine while the engine waits on main = a room open frozen until the
 // timeout fires — measured 4.5s, on whichever command reached the hop first.
 pub async fn live_engine_status(state: State<'_, AppState>) -> EngineResult<serde_json::Value> {
-    Ok(state.live.status())
+    let started = std::time::Instant::now();
+    crate::performance_trace::native_stage(
+        "native.engine_status.entry",
+        std::time::Duration::ZERO,
+        None,
+    );
+    let status = state.live.status();
+    crate::performance_trace::native_stage(
+        "native.engine_status.reply",
+        started.elapsed(),
+        Some(true),
+    );
+    Ok(status)
 }
 
 #[tauri::command]
@@ -335,13 +347,48 @@ pub async fn live_move_preview(
 }
 
 #[tauri::command]
-pub async fn live_detach_preview(state: State<'_, AppState>) -> EngineResult<()> {
-    state.live.detach_preview().map_err(EngineError::Other)
+pub async fn live_detach_preview(app: tauri::AppHandle) -> EngineResult<()> {
+    // The real engine/UI receipt can wait for graphics retirement. Keep that
+    // synchronous wait off the runtime workers used by RTC and network I/O.
+    tauri::async_runtime::spawn_blocking(move || {
+        use tauri::Manager;
+        app.state::<AppState>()
+            .live
+            .detach_preview()
+            .map_err(EngineError::Other)
+    })
+    .await
+    .map_err(|error| EngineError::Other(error.to_string()))?
 }
 
 #[tauri::command]
-pub async fn live_release_idle_room(state: State<'_, AppState>) -> EngineResult<bool> {
-    state.live.release_idle_room().map_err(EngineError::Other)
+pub async fn live_release_idle_room(app: tauri::AppHandle) -> EngineResult<bool> {
+    use tauri::Manager;
+    let entered = std::time::Instant::now();
+    crate::performance_trace::native_stage(
+        "native.room.release.ipc_entry",
+        std::time::Duration::ZERO,
+        None,
+    );
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        crate::performance_trace::native_stage(
+            "native.room.release.worker_wait",
+            entered.elapsed(),
+            None,
+        );
+        app.state::<AppState>()
+            .live
+            .release_idle_room()
+            .map_err(EngineError::Other)
+    })
+    .await
+    .map_err(|_| EngineError::Other("Room release worker failed".into()))?;
+    crate::performance_trace::native_stage(
+        "native.room.release.ipc_reply",
+        entered.elapsed(),
+        Some(result.is_ok()),
+    );
+    result
 }
 
 #[tauri::command]
@@ -514,12 +561,49 @@ pub async fn live_home_glass(app: tauri::AppHandle) -> EngineResult<()> {
     // is the way back when the user leaves a room.
     #[cfg(target_os = "macos")]
     {
-        use tauri::Manager;
-        if let Some(window) = app.get_webview_window("main") {
-            if let Ok(ns) = window.ns_window() {
-                crate::window::apply_vibrancy(ns);
+        let entered = std::time::Instant::now();
+        crate::performance_trace::native_stage(
+            "native.window.home_glass.entry",
+            std::time::Duration::ZERO,
+            None,
+        );
+        // Both native-window lookup and the AppKit operation can synchronously
+        // wait on main. Preserve their completion ordering without occupying
+        // an async scheduler worker during room retirement.
+        let result = tauri::async_runtime::spawn_blocking(move || {
+            use tauri::Manager;
+            crate::performance_trace::native_stage(
+                "native.window.home_glass.worker_wait",
+                entered.elapsed(),
+                None,
+            );
+            if let Some(window) = app.get_webview_window("main") {
+                let handle_started = std::time::Instant::now();
+                let ns = window.ns_window();
+                crate::performance_trace::native_stage(
+                    "native.window.home_glass.handle",
+                    handle_started.elapsed(),
+                    Some(ns.is_ok()),
+                );
+                if let Ok(ns) = ns {
+                    let apply_started = std::time::Instant::now();
+                    let applied = crate::window::apply_vibrancy(ns);
+                    crate::performance_trace::native_stage(
+                        "native.window.home_glass.apply",
+                        apply_started.elapsed(),
+                        Some(applied),
+                    );
+                }
             }
-        }
+        })
+        .await
+        .map_err(|error| EngineError::Other(error.to_string()));
+        crate::performance_trace::native_stage(
+            "native.window.home_glass.reply",
+            entered.elapsed(),
+            Some(result.is_ok()),
+        );
+        result?;
     }
     #[cfg(not(target_os = "macos"))]
     let _ = app;
@@ -1199,10 +1283,12 @@ pub async fn live_program_audio_stop() {
 }
 
 #[tauri::command]
-pub async fn live_set_status(
-    state: State<'_, AppState>,
-) -> EngineResult<super::presentation::Status> {
-    state.live.presentation_status().map_err(EngineError::Other)
+pub async fn live_set_status(app: tauri::AppHandle) -> EngineResult<super::presentation::Status> {
+    use tauri::Manager;
+    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().live.presentation_status())
+        .await
+        .map_err(|error| EngineError::Other(error.to_string()))?
+        .map_err(EngineError::Other)
 }
 #[tauri::command]
 pub async fn live_set_warm(
@@ -1232,13 +1318,16 @@ pub async fn live_set_apply(
 }
 #[tauri::command]
 pub async fn live_set_return(
-    state: State<'_, AppState>,
+    app: tauri::AppHandle,
     lease: Option<String>,
 ) -> EngineResult<super::presentation::Status> {
-    state
-        .live
-        .presentation_return(lease)
-        .map_err(EngineError::Other)
+    use tauri::Manager;
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<AppState>().live.presentation_return(lease)
+    })
+    .await
+    .map_err(|error| EngineError::Other(error.to_string()))?
+    .map_err(EngineError::Other)
 }
 
 #[tauri::command]
@@ -1268,12 +1357,39 @@ pub async fn live_portrait_apply(
     .map_err(EngineError::Other)
 }
 #[tauri::command]
-pub async fn live_portrait_stop(state: State<'_, AppState>) -> EngineResult<()> {
-    state.live.portrait_stop().map_err(EngineError::Other)
+pub async fn live_portrait_stop(app: tauri::AppHandle) -> EngineResult<()> {
+    use tauri::Manager;
+    let entered = std::time::Instant::now();
+    crate::performance_trace::native_stage(
+        "native.portrait.stop.entry",
+        std::time::Duration::ZERO,
+        None,
+    );
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        crate::performance_trace::native_stage(
+            "native.portrait.stop.worker_wait",
+            entered.elapsed(),
+            None,
+        );
+        app.state::<AppState>().live.portrait_stop()
+    })
+    .await
+    .map_err(|error| EngineError::Other(error.to_string()))
+    .and_then(|result| result.map_err(EngineError::Other));
+    crate::performance_trace::native_stage(
+        "native.portrait.stop.reply",
+        entered.elapsed(),
+        Some(result.is_ok()),
+    );
+    result
 }
 #[tauri::command]
-pub async fn live_portrait_frame(state: State<'_, AppState>) -> EngineResult<String> {
-    state.live.portrait_frame().map_err(EngineError::Other)
+pub async fn live_portrait_frame(app: tauri::AppHandle) -> EngineResult<String> {
+    use tauri::Manager;
+    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().live.portrait_frame())
+        .await
+        .map_err(|error| EngineError::Other(error.to_string()))?
+        .map_err(EngineError::Other)
 }
 
 #[tauri::command]

@@ -1,7 +1,7 @@
 {
   "name": "producer",
   "private": true,
-  "version": "0.4.84-diagnostics.2",
+  "version": "0.4.84-performance.6",
   "description": "Producer by Boomin \u2014 the open-source studio for creators: post everywhere, stream everywhere.",
   "license": "AGPL-3.0-only",
   "repository": {
@@ -13,6 +13,7 @@
     "test:performance-trace": "node scripts/test-performance-trace.mjs",
     "test:updater": "node scripts/test-updater.mjs",
     "test:manager-cache": "node scripts/test-manager-cache.mjs",
+    "test:prepared-scenes": "node scripts/test-prepared-scenes.mjs",
     "dev": "vite",
     "dev:room": "bash scripts/dev-room.sh",
     "build": "tsc && vite build",
@@ -65,7 +66,8 @@
     "mcp:sets": "node tools/producer-mcp/server.mjs",
     "test:mcp": "node tools/producer-mcp/test.mjs",
     "test:authoring-visual": "node scripts/test-authoring-visual.mjs",
-    "test:visual-review-browser": "node scripts/test-visual-review-browser.mjs"
+    "test:visual-review-browser": "node scripts/test-visual-review-browser.mjs",
+    "test:roster-poll": "node scripts/test-roster-poll.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.0",

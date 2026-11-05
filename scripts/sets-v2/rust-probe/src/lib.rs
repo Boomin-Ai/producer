@@ -1,4 +1,17 @@
 //! Compile and exercise the exact app adapter without pulling in the Tauri app.
+// This standalone adapter has no diagnostic session or writer. Keep the same
+// profiling call surface while exercising the production adapter with tracing
+// disabled, as it is in an ordinary non-diagnostic installation.
+mod performance_trace {
+    pub fn native_stage(_: &'static str, _: std::time::Duration, _: Option<bool>) {}
+    pub fn native_stage_at(
+        _: &'static str,
+        _: std::time::Instant,
+        _: std::time::Duration,
+        _: Option<bool>,
+    ) {
+    }
+}
 #[path = "../../../../src-tauri/src/live/ffi.rs"]
 mod ffi;
 // Windows raw-dylib declarations name the room's opaque OBS canvas. The
@@ -91,13 +104,35 @@ mod set_media {
 
 // Probe-only bridge to the shipped graphics serializer; no new app IPC/API.
 #[no_mangle]
-pub unsafe extern "C" fn sets_v2_rust_graphics_document(json:*const c_char,density:f32,output:*mut c_char,capacity:usize)->bool{
- let result=(||->Result<String,String>{
-  let node:sets_v2::contract::Node=serde_json::from_str(CStr::from_ptr(json).to_str().map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
-  sets_v2::contract::graphics_document_scaled(&[&node],1760,800,(0.,0.),&Default::default(),density)
- })();
- match result{
-  Ok(html) if html.len()<capacity=>{std::ptr::copy_nonoverlapping(html.as_ptr(),output as *mut u8,html.len());*output.add(html.len())=0;true},
-  Err(e)=>{eprintln!("Probe document: {e}");false},_=>false,
- }
+pub unsafe extern "C" fn sets_v2_rust_graphics_document(
+    json: *const c_char,
+    density: f32,
+    output: *mut c_char,
+    capacity: usize,
+) -> bool {
+    let result = (|| -> Result<String, String> {
+        let node: sets_v2::contract::Node =
+            serde_json::from_str(CStr::from_ptr(json).to_str().map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
+        sets_v2::contract::graphics_document_scaled(
+            &[&node],
+            1760,
+            800,
+            (0., 0.),
+            &Default::default(),
+            density,
+        )
+    })();
+    match result {
+        Ok(html) if html.len() < capacity => {
+            std::ptr::copy_nonoverlapping(html.as_ptr(), output as *mut u8, html.len());
+            *output.add(html.len()) = 0;
+            true
+        }
+        Err(e) => {
+            eprintln!("Probe document: {e}");
+            false
+        }
+        _ => false,
+    }
 }

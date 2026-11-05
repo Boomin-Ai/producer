@@ -35,8 +35,11 @@ jobs:
       - run: npm ci --prefix tools/producer-streamdeck/ai.boomin.producer.sounds.sdPlugin
       - run: node tools/producer-streamdeck/test.mjs
       - run: cc -std=c11 -Wall -Wextra -fsanitize=address,undefined scripts/test-soundboard-native.c -o /tmp/soundboard-test -lpthread -lm && /tmp/soundboard-test
+      - run: node scripts/test-sets-v2-readiness-progress.mjs
       - run: bun run test:scene-restoration
       - run: bun run test:manager-cache
+      - run: bun run test:prepared-scenes
+      - run: bun run test:roster-poll
       - run: node scripts/test-preview-session.mjs
       - run: node scripts/test-room-session.mjs
       - run: node scripts/test-room-control.mjs
@@ -98,6 +101,9 @@ jobs:
         with:
           workspaces: src-tauri
       - run: cargo check --manifest-path scripts/sets-v2/rust-probe/Cargo.toml
+      # Actual painter serializer/CSP tests only; no OBS or GPU link. The
+      # unrelated chart/3D resource stubs reject validation in this harness.
+      - run: cargo test --offline --locked --manifest-path scripts/sets-v2/rust-contract-probe/Cargo.toml --lib
       - run: cargo check --manifest-path src-tauri/Cargo.toml
         env:
           CXXFLAGS: ${{ runner.os == 'Linux' && '-fPIC' || '' }}

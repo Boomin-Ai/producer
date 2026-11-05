@@ -7,7 +7,6 @@ use serde_json::Value;
 use crate::error::{EngineError, EngineResult};
 
 pub struct ProducerClient {
-    http: reqwest::Client,
     base_url: String,
     token: String,
     /// Hosted-backend workspace scope, appended as ?brandSlug= to every
@@ -52,11 +51,16 @@ fn error_message(body: &Value, status: u16) -> String {
 impl ProducerClient {
     pub fn new(base_url: &str, token: &str) -> Self {
         Self {
-            http: reqwest::Client::new(),
             base_url: base_url.trim_end_matches('/').to_string(),
             token: token.to_string(),
             brand_slug: None,
         }
+    }
+
+    async fn http(&self) -> EngineResult<reqwest::Client> {
+        crate::http_transport::general()
+            .await
+            .map_err(|error| EngineError::Other(error.into()))
     }
 
     pub fn with_brand(mut self, brand_slug: Option<String>) -> Self {
@@ -112,7 +116,8 @@ impl ProducerClient {
         body: Option<&Value>,
     ) -> EngineResult<Value> {
         let mut req = self
-            .http
+            .http()
+            .await?
             .request(method, self.root_url(path))
             .bearer_auth(&self.token);
         if let Some(b) = body {
@@ -130,7 +135,8 @@ impl ProducerClient {
     /// Validate the token and learn its class + the server identity.
     pub async fn get_session(&self) -> EngineResult<Session> {
         let resp = self
-            .http
+            .http()
+            .await?
             .get(self.url("/v1/session"))
             .bearer_auth(&self.token)
             .send()
@@ -159,7 +165,8 @@ impl ProducerClient {
 
     async fn get_json(&self, path: &str) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .get(self.url(path))
             .bearer_auth(&self.token)
             .send()
@@ -186,7 +193,8 @@ impl ProducerClient {
     /// working offline and streaming to RTMP without a Boomin session.
     pub async fn register_room(&self, title: &str, external_ref: &str) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url("/v1/app/live/rooms"))
             .bearer_auth(&self.token)
             .json(&serde_json::json!({ "title": title, "external_ref": external_ref }))
@@ -206,7 +214,8 @@ impl ProducerClient {
     /// hostable from any machine.
     pub async fn list_rooms(&self) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .get(self.root_url("/v1/app/live/rooms"))
             .bearer_auth(&self.token)
             .send()
@@ -222,7 +231,8 @@ impl ProducerClient {
     /// Rename a SERVER room (the title the web, deals and the network show).
     pub async fn room_set_title(&self, room_id: &str, title: &str) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .patch(self.root_url(&format!("/v1/app/live/rooms/{room_id}")))
             .bearer_auth(&self.token)
             .json(&serde_json::json!({ "title": title }))
@@ -243,7 +253,8 @@ impl ProducerClient {
     /// why. Anything else non-2xx is an error (offline, missing route, 404).
     pub async fn delete_room(&self, room_id: &str) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .delete(self.root_url(&format!("/v1/app/live/rooms/{room_id}")))
             .bearer_auth(&self.token)
             .send()
@@ -275,7 +286,8 @@ impl ProducerClient {
     /// own, so the roster is the only way to learn about them.
     pub async fn room_guests(&self, room_id: &str) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .get(self.root_url(&format!("/v1/app/live/rooms/{room_id}/guests")))
             .bearer_auth(&self.token)
             .send()
@@ -295,7 +307,8 @@ impl ProducerClient {
     /// exactly as it did before the route existed: as the host.
     pub async fn room_access(&self, room_id: &str) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .get(self.root_url(&format!("/v1/app/live/rooms/{room_id}/access")))
             .bearer_auth(&self.token)
             .send()
@@ -339,10 +352,10 @@ impl ProducerClient {
     ) -> EngineResult<Value> {
         let url = self.root_url(path);
         let mut req = match method {
-            "POST" => self.http.post(&url),
-            "PATCH" => self.http.patch(&url),
-            "DELETE" => self.http.delete(&url),
-            _ => self.http.get(&url),
+            "POST" => self.http().await?.post(&url),
+            "PATCH" => self.http().await?.patch(&url),
+            "DELETE" => self.http().await?.delete(&url),
+            _ => self.http().await?.get(&url),
         }
         .bearer_auth(&self.token);
         if let Some(b) = body {
@@ -369,7 +382,8 @@ impl ProducerClient {
         display_name: Option<&str>,
     ) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/mod-link")))
             .bearer_auth(&self.token)
             .json(&serde_json::json!({ "display_name": display_name }))
@@ -398,7 +412,8 @@ impl ProducerClient {
             }));
         }
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/control-session")))
             .bearer_auth(&self.token)
             .json(&serde_json::json!({}))
@@ -459,7 +474,8 @@ impl ProducerClient {
         run_id: Option<&str>,
     ) -> EngineResult<Value> {
         let mut req = self
-            .http
+            .http()
+            .await?
             .get(self.root_url(&format!("/v1/app/live/rooms/{room_id}/contributions")))
             .bearer_auth(&self.token);
         if let Some(r) = run_id {
@@ -507,7 +523,8 @@ impl ProducerClient {
             }));
         }
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/runs")))
             .bearer_auth(&self.token)
             .json(&serde_json::json!({ "action": action }))
@@ -558,7 +575,8 @@ impl ProducerClient {
                 .await;
         }
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/overlays")))
             .bearer_auth(&self.token)
             .json(&serde_json::json!({ "source_id": source_id, "binding": binding, "shown": shown, "label": label }))
@@ -575,7 +593,8 @@ impl ProducerClient {
     /// The room's interactions, projected for the host (#51).
     pub async fn room_interactions(&self, room_id: &str) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .get(self.root_url(&format!("/v1/app/live/rooms/{room_id}/interactions")))
             .bearer_auth(&self.token)
             .send()
@@ -596,7 +615,8 @@ impl ProducerClient {
         body: &Value,
     ) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/interactions")))
             .bearer_auth(&self.token)
             .json(body)
@@ -638,7 +658,8 @@ impl ProducerClient {
             };
         }
         let resp = self
-            .http
+            .http()
+            .await?
             .patch(self.root_url(&format!(
                 "/v1/app/live/rooms/{room_id}/interactions/{interaction_id}"
             )))
@@ -666,7 +687,8 @@ impl ProducerClient {
             ));
         }
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/audience-link")))
             .bearer_auth(&self.token)
             .json(&serde_json::json!({ "rotate": rotate }))
@@ -683,7 +705,8 @@ impl ProducerClient {
     /// Host-controlled slot order — the FULL list of guest ids, first on top.
     pub async fn room_guest_order(&self, room_id: &str, order: &[String]) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/guest-order")))
             .bearer_auth(&self.token)
             .json(&serde_json::json!({ "order": order }))
@@ -702,7 +725,8 @@ impl ProducerClient {
     /// way to ask for it again without invalidating everyone using it.
     pub async fn room_join_link(&self, room_id: &str, rotate: bool) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/guest-link")))
             .bearer_auth(&self.token)
             .json(&serde_json::json!({ "enabled": true, "rotate": rotate }))
@@ -718,7 +742,8 @@ impl ProducerClient {
 
     pub async fn admit_guest(&self, _room_id: &str, guest_id: &str) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url(&format!("/v1/app/live/guests/{guest_id}/admit")))
             .bearer_auth(&self.token)
             .json(&serde_json::json!({}))
@@ -734,7 +759,8 @@ impl ProducerClient {
 
     pub async fn revoke_guest(&self, guest_id: &str) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url(&format!("/v1/app/live/guests/{guest_id}/revoke")))
             .bearer_auth(&self.token)
             .json(&serde_json::json!({}))
@@ -755,7 +781,8 @@ impl ProducerClient {
     /// reconnecting guest reads back.
     pub async fn set_stage(&self, room_id: &str, on_stage: &[String]) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/stage")))
             .bearer_auth(&self.token)
             .json(&serde_json::json!({ "on_stage": on_stage }))
@@ -788,7 +815,8 @@ impl ProducerClient {
             body.insert("display_name".into(), Value::String(n));
         }
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url(&format!("/v1/app/live/rooms/{room_id}/guests")))
             .bearer_auth(&self.token)
             .json(&Value::Object(body))
@@ -805,7 +833,8 @@ impl ProducerClient {
     /// Network status: membership, live-now count, member count.
     pub async fn network_status(&self) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .get(self.root_url("/v1/app/network"))
             .bearer_auth(&self.token)
             .send()
@@ -820,7 +849,8 @@ impl ProducerClient {
 
     pub async fn network_invitations(&self, direction: &str) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .get(self.root_url(&format!(
                 "/v1/app/network/invitations?direction={direction}"
             )))
@@ -849,7 +879,8 @@ impl ProducerClient {
             body.insert("message".into(), Value::String(m));
         }
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url("/v1/app/network/invitations"))
             .bearer_auth(&self.token)
             .json(&Value::Object(body))
@@ -878,7 +909,8 @@ impl ProducerClient {
             body.insert("message".into(), Value::String(m));
         }
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url("/v1/app/network/invitations"))
             .bearer_auth(&self.token)
             .json(&Value::Object(body))
@@ -894,7 +926,8 @@ impl ProducerClient {
 
     pub async fn network_invitation_action(&self, id: &str, action: &str) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url(&format!("/v1/app/network/invitations/{id}/{action}")))
             .bearer_auth(&self.token)
             .send()
@@ -911,7 +944,8 @@ impl ProducerClient {
     /// decides whether this side may make the move.
     pub async fn network_deal_action(&self, id: &str, action: &str) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url(&format!("/v1/app/network/deals/{id}/{action}")))
             .bearer_auth(&self.token)
             .send()
@@ -927,7 +961,8 @@ impl ProducerClient {
     /// Brands this brand is connected to — the "pick a connected brand" path.
     pub async fn network_connections(&self) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .get(self.root_url("/v1/app/network/connections"))
             .bearer_auth(&self.token)
             .send()
@@ -949,7 +984,8 @@ impl ProducerClient {
             None => serde_json::json!({}),
         };
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url("/v1/app/auth/handoff"))
             .bearer_auth(&self.token)
             .json(&body)
@@ -965,7 +1001,8 @@ impl ProducerClient {
 
     pub async fn network_join(&self, rejoin: bool) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url("/v1/app/network/join"))
             .bearer_auth(&self.token)
             .json(&serde_json::json!({ "rejoin": rejoin }))
@@ -994,7 +1031,8 @@ impl ProducerClient {
             .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
             .collect();
         let resp = self
-            .http
+            .http()
+            .await?
             .get(self.root_url(&format!("/v1/app/network/lookup?slug={slug}")))
             .bearer_auth(&self.token)
             .send()
@@ -1010,7 +1048,8 @@ impl ProducerClient {
     /// Open stages visible to this brand: connections' rooms + public rooms.
     pub async fn network_live_rooms(&self) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .get(self.root_url("/v1/app/network/rooms/live"))
             .bearer_auth(&self.token)
             .send()
@@ -1027,7 +1066,8 @@ impl ProducerClient {
     /// returns a guest join URL to open in the browser.
     pub async fn network_enter_room(&self, room_id: &str) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url(&format!("/v1/app/network/rooms/{room_id}/enter")))
             .bearer_auth(&self.token)
             .send()
@@ -1046,7 +1086,8 @@ impl ProducerClient {
     /// is surfaced with the code intact so the UI can say "not open yet".
     pub async fn network_deal_enter(&self, id: &str) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url(&format!("/v1/app/network/deals/{id}/enter")))
             .bearer_auth(&self.token)
             .send()
@@ -1073,7 +1114,8 @@ impl ProducerClient {
     /// Every deal this brand is party to (client or beneficiary), newest first.
     pub async fn network_deals(&self) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .get(self.root_url("/v1/app/network/deals"))
             .bearer_auth(&self.token)
             .send()
@@ -1119,7 +1161,8 @@ impl ProducerClient {
             }
         }
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.root_url("/v1/app/network/deals"))
             .bearer_auth(&self.token)
             .json(&body)
@@ -1140,7 +1183,8 @@ impl ProducerClient {
         visibility: &str,
     ) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .patch(self.root_url(&format!("/v1/app/live/rooms/{room_id}")))
             .bearer_auth(&self.token)
             .json(&serde_json::json!({ "visibility": visibility }))
@@ -1158,7 +1202,8 @@ impl ProducerClient {
     /// deals land in). The API moves the flag; a brand always has exactly one.
     pub async fn room_set_default(&self, room_id: &str) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .patch(self.root_url(&format!("/v1/app/live/rooms/{room_id}")))
             .bearer_auth(&self.token)
             .json(&serde_json::json!({ "is_default": true }))
@@ -1174,7 +1219,8 @@ impl ProducerClient {
 
     pub async fn create_connect_session(&self, platform: &str) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.url(&format!("/v1/channels/{platform}/connect-session")))
             .bearer_auth(&self.token)
             .send()
@@ -1192,7 +1238,8 @@ impl ProducerClient {
     /// lands, and the message says where to do it instead.
     pub async fn disconnect_channel(&self, channel_id: &str) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .delete(self.url(&format!("/v1/channels/{channel_id}")))
             .bearer_auth(&self.token)
             .send()
@@ -1213,7 +1260,8 @@ impl ProducerClient {
         size_bytes: u64,
     ) -> EngineResult<Value> {
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.url("/v1/media/uploads"))
             .bearer_auth(&self.token)
             .json(&serde_json::json!({
@@ -1240,7 +1288,8 @@ impl ProducerClient {
         bytes: Vec<u8>,
     ) -> EngineResult<()> {
         let resp = self
-            .http
+            .http()
+            .await?
             .put(put_url)
             .header("Content-Type", content_type)
             .body(bytes)
@@ -1266,7 +1315,8 @@ impl ProducerClient {
         let body: Value = serde_json::from_str(request_json)
             .map_err(|e| EngineError::Other(format!("corrupt outbox request: {e}")))?;
         let resp = self
-            .http
+            .http()
+            .await?
             .post(self.url("/v1/posts"))
             .bearer_auth(&self.token)
             .header("Idempotency-Key", idempotency_key)

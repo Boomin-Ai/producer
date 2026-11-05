@@ -11,7 +11,7 @@ import { OutputSettings, RoomOutputView, type OutputView, type PortraitMonitor }
 import { fetchMe } from '../lib/access';
 import type { RoomSource, RoomAction } from "../../server/src/roomActions";
 import { formatGuestLink, hostedAudienceLink } from "../lib/hostedShare";
-import { previewSession, setPreviewTransparency } from "../lib/previewSession";
+import { afterPreviewWork, closePreviewSessions, previewSession, setPreviewTransparency } from "../lib/previewSession";
 import { useSetOutput } from "../features/presentation/useSetOutput";
 import { SetControlsPanel, type SetEditorTake } from "../features/presentation/SetControlsPanel";
 import { DEFAULT_SET } from "../features/presentation/catalog";
@@ -180,6 +180,7 @@ import { activeRoomVote, mergeRoomVote, newestVotes } from "../lib/roomVotes";
 import { DEFAULT_MOD_BOARD, MOD_BOARD_PREF, normalizeModBoard, seatFeeds, throwUpState, type ModBoardLayout } from "../lib/modBoard";
 import { PREFS_EVENT, prefGet, prefSet } from "../lib/prefs";
 import { team } from "../lib/access";
+import { createRosterPollCoordinator } from "../lib/rosterPoll";
 import type { Member } from "../lib/accessDiff";
 import { canSeat, memberLabel, seatCandidates } from "../lib/seatPick";
 import { studioToggleTarget } from "../lib/studioOutput";
@@ -2687,14 +2688,19 @@ export function LiveView({
   const deferredMicIds = useRef<string[]>([]);
   const entryAccessRef = useRef(entryAccess);
   const roomEngineRef = useRef<ReturnType<typeof roomSession> | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const session = roomSession();
     roomEngineRef.current = session;
     return () => {
+      // Conceal both native views before RTC/source teardown can reveal the
+      // camera underneath the Set. Home may already own this same receipt.
+      const previewClosed=closePreviewSessions(()=>ipc.liveDetachPreview());
+      void previewClosed.catch(()=>{});
       const closeSpan = startTraceSpan("room.close", {}, { roomVisit: traceVisit.current });
-      void session.close(async () => {
+      const retired=session.close(async () => {
         const releaseSpan = startTraceSpan("room.native_release", {}, { roomVisit: traceVisit.current });
         try {
+        await previewClosed.catch(()=>{});
         const serverRoom = cfgRef.current.server_room_id;
         // An active output keeps its room engine and native guest owner.
         if (serverRoom && (await ipc.liveEngineStatus()).session_state === "idle") {
@@ -2709,7 +2715,12 @@ export function LiveView({
         }
         endTraceSpan(releaseSpan);
         } catch (error) { endTraceSpan(releaseSpan, "error"); throw error; }
-      }).then(() => endTraceSpan(closeSpan), (error) => {
+      });
+      // A new room may mount while RTC retirement continues after conceal.
+      // Keep its preview attach behind the outgoing graph cleanup, otherwise
+      // the old release could conceal the new view or expose the old scene.
+      void afterPreviewWork(()=>retired).catch(()=>{});
+      void retired.then(() => endTraceSpan(closeSpan), (error) => {
         endTraceSpan(closeSpan, "error");
         console.warn("Room capture cleanup failed", error);
       });
@@ -6603,7 +6614,8 @@ export function LiveView({
   }, [room?.id]);
 
   const nativeRtcLifetime = useRef({ closed: false, serverRoom: null as string | null, converted: new Set<string>() });
-  const rosterTickBusy = useRef(false);
+  const rosterPollRef = useRef<ReturnType<typeof createRosterPollCoordinator> | null>(null);
+  if (!rosterPollRef.current) rosterPollRef.current = createRosterPollCoordinator();
   const rosterFailure = useRef<string | null>(null);
   const [guestTransportStopped, setGuestTransportStopped] = useState(false);
   useEffect(() => {
@@ -6622,10 +6634,8 @@ export function LiveView({
   useEffect(() => {
     if (!room?.id || !cfg.server_room_id || seat) return;
     let alive = true;
-    const tick = async () => {
-      if (rosterTickBusy.current) return;
-      rosterTickBusy.current = true;
-      try {
+    const poll = rosterPollRef.current!.generation(
+      async () => {
         const epId = await ensureEndpoint();
         if (!alive || !epId) return;
         if (!accessAsked.current) {
@@ -7035,25 +7045,23 @@ export function LiveView({
         // A successful roster HTTP response alone does not restore a stopped SDK.
         dismissKey("guests");
         rosterFailure.current = null;
-      } catch (e) {
+      },
+      (e) => {
         const message = errText(e);
         if (alive && message.includes("Native guest connection stopped")) setGuestTransportStopped(true);
         if (alive && rosterFailure.current !== message) {
           rosterFailure.current = message;
           notifyError(e, { key: "guests" });
         }
-      } finally {
-        rosterTickBusy.current = false;
-        // A render can replace this poll while an access request is pending.
-        // Let the replacement continue access immediately after the old one drains.
-        if (!alive && !accessAsked.current) rosterTickRef.current?.();
-      }
-    };
+      },
+    );
+    const tick = poll.tick;
     rosterTickRef.current = () => void tick();
     tick();
     const t = setInterval(tick, 3000);
     return () => {
       alive = false;
+      poll.close();
       rosterTickRef.current = null;
       clearInterval(t);
     };

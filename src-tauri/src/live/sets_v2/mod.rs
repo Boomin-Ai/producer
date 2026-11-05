@@ -11,6 +11,47 @@ use std::{
     ptr,
     rc::Rc,
 };
+
+// Static, payload-free timings only. A slow probe is observed after it returns;
+// readiness=false is normal and must not be reported as a failed operation.
+pub(super) struct PerformancePhase {
+    name: &'static str,
+    started: std::time::Instant,
+    success: Option<bool>,
+    minimum: std::time::Duration,
+}
+impl PerformancePhase {
+    fn start(name: &'static str, begin: Option<&'static str>) -> Self {
+        if let Some(begin) = begin {
+            crate::performance_trace::native_stage(begin, std::time::Duration::ZERO, None);
+        }
+        Self {
+            name,
+            started: std::time::Instant::now(),
+            success: Some(false),
+            minimum: std::time::Duration::ZERO,
+        }
+    }
+    fn slow(name: &'static str) -> Self {
+        Self {
+            name,
+            started: std::time::Instant::now(),
+            success: None,
+            minimum: std::time::Duration::from_millis(20),
+        }
+    }
+    fn complete(mut self, success: bool) {
+        self.success = Some(success);
+    }
+}
+impl Drop for PerformancePhase {
+    fn drop(&mut self) {
+        let elapsed = self.started.elapsed();
+        if elapsed >= self.minimum {
+            crate::performance_trace::native_stage(self.name, elapsed, self.success);
+        }
+    }
+}
 #[repr(C)]
 struct NativeNode {
     id: *const c_char,
@@ -57,6 +98,48 @@ struct NativeKeyframe {
     at_ms: f64,
     value: f32,
 }
+#[repr(C)]
+#[derive(Default)]
+struct RasterCreationStats {
+    elapsed_ns: u64,
+    graphics_wait_offset_ns: u64,
+    graphics_wait_ns: u64,
+    effect_compile_offset_ns: u64,
+    effect_compile_ns: u64,
+    texrender_create_offset_ns: u64,
+    texrender_create_ns: u64,
+    effect_compiled: u64,
+}
+impl RasterCreationStats {
+    fn phase_end(
+        &self,
+        started: std::time::Instant,
+        offset_ns: u64,
+        duration_ns: u64,
+    ) -> Option<std::time::Instant> {
+        let end_ns = offset_ns.checked_add(duration_ns)?;
+        if end_ns > self.elapsed_ns {
+            return None;
+        }
+        started.checked_add(std::time::Duration::from_nanos(end_ns))
+    }
+}
+#[cfg(test)]
+#[test]
+fn raster_creation_phase_receipts_stay_inside_construction() {
+    let started = std::time::Instant::now();
+    let stats = RasterCreationStats {
+        elapsed_ns: 100,
+        ..Default::default()
+    };
+    assert_eq!(std::mem::size_of::<RasterCreationStats>(), 64);
+    assert_eq!(
+        stats.phase_end(started, 20, 30),
+        started.checked_add(std::time::Duration::from_nanos(50))
+    );
+    assert_eq!(stats.phase_end(started, 99, 2), None);
+    assert_eq!(stats.phase_end(started, u64::MAX, 1), None);
+}
 enum NativeScene {}
 extern "C" {
     fn producer_set_v2_register();
@@ -67,6 +150,21 @@ extern "C" {
         s: *mut ffi::obs_source_t,
     ) -> bool;
     fn producer_set_v2_program_register();
+    fn producer_set_v2_raster_register();
+    fn producer_set_v2_raster_create(w: u32, h: u32, density: f32) -> *mut ffi::obs_source_t;
+    fn producer_set_v2_raster_take_creation_stats(
+        snapshot: *mut ffi::obs_source_t,
+        out: *mut RasterCreationStats,
+    ) -> bool;
+    fn producer_set_v2_raster_capture(
+        snapshot: *mut ffi::obs_source_t,
+        input: *mut ffi::obs_source_t,
+    ) -> bool;
+    fn producer_set_v2_raster_ready(snapshot: *mut ffi::obs_source_t) -> bool;
+    fn producer_set_v2_raster_texture_bytes(snapshot: *mut ffi::obs_source_t) -> usize;
+    fn producer_set_v2_raster_get_marker(snapshot: *mut ffi::obs_source_t, out: *mut u8) -> bool;
+    fn producer_set_v2_raster_copy_blocked() -> bool;
+    fn producer_set_v2_raster_quarantine_count() -> usize;
     fn producer_set_v2_program_track(
         p: *mut ffi::obs_source_t,
         r: u64,
@@ -153,17 +251,13 @@ extern "C" {
         y: u32,
         expected: *const u8,
     ) -> bool;
-    fn producer_set_v2_surface_markers(
-        sources: *const *mut ffi::obs_source_t,
-        rows: *const u32,
-        count: usize,
-    ) -> bool;
 }
 pub unsafe fn register() {
     producer_set_v2_register();
     producer_chart_register();
     producer_set_v2_transition_register();
     producer_set_v2_program_register();
+    producer_set_v2_raster_register();
 }
 struct Source(*mut ffi::obs_source_t);
 struct GraphicsContext;
@@ -186,27 +280,147 @@ impl Drop for Source {
     }
 }
 struct GraphicsLayer {
-    painted: std::cell::Cell<bool>,
     bytes: usize,
-    browser: Source,
-    clip: Source,
+    snapshot: Source,
+    paint: std::cell::RefCell<GraphicsPaint>,
 }
-// Prepared HTML is immutable, but CEF visibility is asynchronous. Keep its
-// paint producer showing for the full cached-layer lease, not only while one
-// scene happens to be current/pending. A take must not trigger WasHidden /
-// texture invalidation after its first-paint receipt was already accepted.
-impl Drop for GraphicsLayer {
+const GRAPHICS_COPY_BLOCKED: &str = "Set graphics could not finish loading; current output retained. Restart Producer and try again.";
+enum GraphicsPaint {
+    Queued {
+        html: String,
+        width: u32,
+        height: u32,
+    },
+    Painting {
+        browser: Painter,
+        started: std::time::Instant,
+    },
+    Ready,
+    Failed(String),
+}
+// Only this transient lease owns a CEF source. Cached scenes own the immutable
+// native snapshot, never a browser or a marker-source reference.
+struct Painter(Source);
+impl Drop for Painter {
     fn drop(&mut self) {
         unsafe {
-            ffi::obs_source_dec_showing(self.browser.0);
-            ffi::obs_source_dec_active(self.browser.0);
+            ffi::obs_source_dec_showing(self.0 .0);
+            ffi::obs_source_dec_active(self.0 .0);
+        }
+    }
+}
+impl GraphicsLayer {
+    fn painting(&self) -> bool {
+        matches!(*self.paint.borrow(), GraphicsPaint::Painting { .. })
+    }
+    fn pending(&self) -> bool {
+        matches!(*self.paint.borrow(), GraphicsPaint::Queued { .. })
+    }
+    fn failed(&self) -> bool {
+        matches!(*self.paint.borrow(), GraphicsPaint::Failed(_))
+    }
+    fn ready(&self) -> bool {
+        matches!(*self.paint.borrow(), GraphicsPaint::Ready)
+    }
+    fn error(&self) -> Option<String> {
+        match &*self.paint.borrow() {
+            GraphicsPaint::Failed(error) => Some(error.clone()),
+            _ => None,
+        }
+    }
+    fn fail_copy_blocked(&self) {
+        let mut paint = self.paint.borrow_mut();
+        if !matches!(*paint, GraphicsPaint::Ready) {
+            *paint = GraphicsPaint::Failed(GRAPHICS_COPY_BLOCKED.into());
+        }
+    }
+    unsafe fn start(&self) -> Result<(), String> {
+        let mut paint = self.paint.borrow_mut();
+        let GraphicsPaint::Queued {
+            html,
+            width,
+            height,
+        } = &*paint
+        else {
+            return Ok(());
+        };
+        let result = (|| {
+            let _create = PerformancePhase::slow("native.set.graphics.create");
+            let mut marker = [0u8; 18];
+            if !producer_set_v2_raster_get_marker(self.snapshot.0, marker.as_mut_ptr()) {
+                return Err("V2 immutable graphics paint fence unavailable".to_owned());
+            }
+            let html = contract::graphics_painter_document(html, *width, *height, &marker)?;
+            let url = format!(
+                "data:text/html;charset=utf-8,{}",
+                html.as_bytes()
+                    .iter()
+                    .map(|c| format!("%{c:02X}"))
+                    .collect::<String>()
+            );
+            let config = serde_json::json!({"url":url,"is_local_file":false,"css":"","width":(*width).max(6),"height":height+1,"fps":30,"fps_custom":true,"shutdown":false,"restart_when_active":false,"reroute_audio":true,"webpage_control_level":0});
+            let settings =
+                ffi::obs_data_create_from_json(CString::new(config.to_string()).unwrap().as_ptr());
+            if settings.is_null() {
+                return Err("V2 graphics settings allocation failed".to_owned());
+            }
+            let browser = ffi::obs_source_create_private(
+                c"browser_source".as_ptr(),
+                c"V2 graphics painter".as_ptr(),
+                settings,
+            );
+            ffi::obs_data_release(settings);
+            if browser.is_null() {
+                return Err("V2 browser painter allocation failed".to_owned());
+            }
+            let browser = Source(browser);
+            ffi::obs_source_set_audio_mixers(browser.0, 0);
+            ffi::obs_source_inc_active(browser.0);
+            ffi::obs_source_inc_showing(browser.0);
+            Ok(Painter(browser))
+        })();
+        match result {
+            Ok(browser) => {
+                *paint = GraphicsPaint::Painting {
+                    browser,
+                    started: std::time::Instant::now(),
+                };
+                Ok(())
+            }
+            Err(error) => {
+                *paint = GraphicsPaint::Failed(error.clone());
+                Err(error)
+            }
+        }
+    }
+    unsafe fn progress(&self) {
+        let mut paint = self.paint.borrow_mut();
+        if let GraphicsPaint::Painting { browser, started } = &*paint {
+            // C verifies the reserved marker, copies visible pixels into its
+            // own GPU target and completes its readback fence before true.
+            // Caller holds no graphics lock while C queues that transaction.
+            let _copy = PerformancePhase::slow("native.set.graphics.snapshot");
+            if producer_set_v2_raster_capture(self.snapshot.0, browser.0 .0)
+                && producer_set_v2_raster_ready(self.snapshot.0)
+            {
+                let bytes = producer_set_v2_raster_texture_bytes(self.snapshot.0);
+                *paint = if bytes > 0 && bytes <= self.bytes {
+                    GraphicsPaint::Ready // Releases CEF only after the owned copy.
+                } else {
+                    GraphicsPaint::Failed("V2 immutable graphics texture budget exceeded".into())
+                };
+            } else if producer_set_v2_raster_copy_blocked() {
+                *paint = GraphicsPaint::Failed(GRAPHICS_COPY_BLOCKED.into());
+            } else if started.elapsed().as_secs() >= 12 {
+                *paint = GraphicsPaint::Failed("Set first-frame timeout (immutable graphics snapshot); current output retained".into());
+            }
         }
     }
 }
 struct Draft {
     scene: *mut NativeScene,
-    markers: Vec<(Source, u32)>,
     _graphics: Vec<Rc<GraphicsLayer>>,
+    graphics_warmed: std::cell::Cell<bool>,
     _resources: resources::Prepared,
     bytes: usize,
     captures: HashMap<String, usize>,
@@ -277,11 +491,78 @@ struct Arena<'a> {
     ids: Vec<CString>,
     children: Vec<Box<[NativeNode]>>,
     sources: Vec<Source>,
-    markers: Vec<(Source, u32)>,
     browser_pixels: usize,
     intermediate_pixels: usize,
     density: f32,
     motion_targets: std::collections::HashSet<String>,
+}
+unsafe fn record_raster_creation(
+    source: *mut ffi::obs_source_t,
+    started: std::time::Instant,
+    finished: std::time::Instant,
+) {
+    let duration = finished.duration_since(started);
+    let mut stats = RasterCreationStats::default();
+    let measured =
+        !source.is_null() && producer_set_v2_raster_take_creation_stats(source, &mut stats);
+    // Only new immutable layers reach this path. Omit fast reused-shader
+    // constructors rather than add several records to every cache fill.
+    if duration < std::time::Duration::from_millis(20) && !(measured && stats.effect_compiled == 1)
+    {
+        return;
+    }
+    crate::performance_trace::native_stage_at(
+        "native.set.graphics.raster_create",
+        finished,
+        duration,
+        Some(!source.is_null()),
+    );
+    if !measured
+        || stats.effect_compiled > 1
+        || std::time::Duration::from_nanos(stats.elapsed_ns) > duration
+    {
+        return;
+    }
+    // C offsets are anchored to the Instant taken immediately before its FFI
+    // call, not to a presumed common wall-clock epoch. The tiny FFI-entry skew
+    // is included in raster_create, and every component must fit inside it.
+    for (name, offset, ns, include) in [
+        (
+            "native.set.raster.graphics_wait",
+            stats.graphics_wait_offset_ns,
+            stats.graphics_wait_ns,
+            true,
+        ),
+        (
+            "native.set.raster.effect_compile",
+            stats.effect_compile_offset_ns,
+            stats.effect_compile_ns,
+            stats.effect_compiled == 1,
+        ),
+        (
+            "native.set.raster.texrender_create",
+            stats.texrender_create_offset_ns,
+            stats.texrender_create_ns,
+            true,
+        ),
+    ] {
+        if include {
+            if let Some(end) = stats.phase_end(started, offset, ns) {
+                crate::performance_trace::native_stage_at(
+                    name,
+                    end,
+                    std::time::Duration::from_nanos(ns),
+                    None,
+                );
+            }
+        }
+    }
+}
+impl Drop for Arena<'_> {
+    fn drop(&mut self) {
+        self.graphics.clear();
+        self.store.prune_unleased_graphics();
+    }
 }
 impl<'a> Arena<'a> {
     fn new(store: &'a resources::Store) -> Self {
@@ -291,7 +572,6 @@ impl<'a> Arena<'a> {
             ids: Vec::new(),
             children: Vec::new(),
             sources: Vec::new(),
-            markers: Vec::new(),
             browser_pixels: 0,
             intermediate_pixels: 0,
             density: 1.,
@@ -310,6 +590,7 @@ impl<'a> Arena<'a> {
         nodes: &[&Node],
         palette: &HashMap<String, String>,
     ) -> Result<NativeNode, String> {
+        let _materialize = PerformancePhase::slow("native.set.graphics.materialize");
         let x = nodes
             .iter()
             .map(|n| n.bounds.x)
@@ -341,94 +622,71 @@ impl<'a> Arena<'a> {
             || ph >= 8192
             || pixels > 4096 * 4096
             || self.browser_pixels + pixels > 8 * 1024 * 1024
-            || self.markers.len() >= 16
+            || self.graphics.len() >= 16
         {
             return Err("V2 graphics surface budget exceeded".into());
         }
         self.browser_pixels += pixels;
-        let html = contract::graphics_document_scaled(nodes, w, h, (x, y), palette, self.density)?;
+        let html = {
+            let _html = PerformancePhase::slow("native.set.graphics.html");
+            contract::graphics_document_scaled(nodes, w, h, (x, y), palette, self.density)?
+        };
         use sha2::{Digest, Sha256};
         // Exact trusted raster content and dimensions, scoped to this output
         // owner. A pooled layer is immutable; a value edit creates a new layer
         // while unchanged headers/art remain shared with the live scene.
-        let identity = format!(
-            "{}:{pw}:{ph}",
-            format!("{:x}", Sha256::digest(html.as_bytes()))
-        );
+        let identity = {
+            let _identity = PerformancePhase::slow("native.set.graphics.identity");
+            format!(
+                "{}:{pw}:{ph}",
+                format!("{:x}", Sha256::digest(html.as_bytes()))
+            )
+        };
         let mut cache = self.store.graphics.borrow_mut();
         let used = self.store.graphics_clock.get() + 1;
         self.store.graphics_clock.set(used);
+        // A failed attempt never poisons the immutable identity permanently.
+        // Existing failed drafts keep their own independent, unready lease.
+        if cache
+            .get(&identity)
+            .is_some_and(|(_, layer)| layer.failed())
+        {
+            cache.remove(&identity);
+        }
         let layer = if let Some((last_used, layer)) = cache.get_mut(&identity) {
             *last_used = used;
             layer.clone()
         } else {
-            let url = format!(
-                "data:text/html;charset=utf-8,{}",
-                html.as_bytes()
-                    .iter()
-                    .map(|c| format!("%{c:02X}"))
-                    .collect::<String>()
-            );
-            let config = serde_json::json!({"url":url,"is_local_file":false,"css":"","width":pw,"height":ph+1,"fps":30,"fps_custom":true,"shutdown":false,"restart_when_active":false,"reroute_audio":true,"webpage_control_level":0});
-            let settings =
-                ffi::obs_data_create_from_json(CString::new(config.to_string()).unwrap().as_ptr());
-            if settings.is_null() {
-                return Err("V2 graphics settings allocation failed".into());
+            if producer_set_v2_raster_copy_blocked() {
+                return Err(GRAPHICS_COPY_BLOCKED.into());
             }
-            let browser = ffi::obs_source_create_private(
-                c"browser_source".as_ptr(),
-                c"V2 graphics batch".as_ptr(),
-                settings,
-            );
-            ffi::obs_data_release(settings);
-            if browser.is_null() {
-                return Err("V2 browser surface allocation failed".into());
+            let started = std::time::Instant::now();
+            let snapshot = producer_set_v2_raster_create(w, h, self.density);
+            record_raster_creation(snapshot, started, std::time::Instant::now());
+            if snapshot.is_null() {
+                return Err("V2 immutable graphics allocation failed".into());
             }
-            let browser = Source(browser);
-            ffi::obs_source_set_audio_mixers(browser.0, 0);
-            let clip = producer_set_v2_group_create(w, h, 0., 1.);
-            if clip.is_null() {
-                return Err("V2 graphics crop allocation failed".into());
-            }
-            let clip = Source(clip);
-            if !producer_set_v2_group_density(clip.0, self.density) {
-                return Err("Graphics density exceeds texture budget".into());
-            }
-            if !producer_set_v2_group_add(
-                clip.0,
-                browser.0,
-                0.,
-                0.,
-                w as f32,
-                (ph + 1) as f32 * h as f32 / ph as f32,
-                false,
-            ) || !producer_set_v2_group_seal(clip.0)
-            {
-                return Err("V2 graphics crop attachment failed".into());
-            }
-            ffi::obs_source_inc_active(browser.0);
-            ffi::obs_source_inc_showing(browser.0);
-            self.store
-                .graphics_created
-                .set(self.store.graphics_created.get() + 1);
             let layer = Rc::new(GraphicsLayer {
-                painted: std::cell::Cell::new(false),
-                browser,
-                clip,
+                snapshot: Source(snapshot),
+                paint: std::cell::RefCell::new(GraphicsPaint::Queued {
+                    html,
+                    width: pw,
+                    height: ph,
+                }),
+                // Keep the old browser+crop estimate until a separate budget
+                // change is measured. No existing hard allowance increases.
                 bytes: (pixels + (pw as usize) * (ph as usize)) * 4 + 1024 * 1024,
             });
             cache.insert(identity, (used, layer.clone()));
             layer
         };
         // Keep the per-scene preflight conservative. The resident cache counts
-        // this immutable browser/crop lease once across its owning scenes.
+        // this immutable raster lease once across its owning scenes.
         self.intermediate_pixels += (pw as usize) * (ph as usize);
-        let surface = layer.clip.0;
-        self.markers
-            .push((Source(ffi::obs_source_get_ref(layer.browser.0)), ph));
+        let surface = layer.snapshot.0;
         self.graphics.push(layer);
         self.ids
-            .push(CString::new(format!("graphics-{}", self.markers.len())).unwrap());
+            .push(CString::new(format!("graphics-{}", self.graphics.len())).unwrap());
         Ok(NativeNode {
             id: self.ids.last().unwrap().as_ptr(),
             kind: 1,
@@ -752,6 +1010,23 @@ impl RoomProgram {
     pub unsafe fn dispatch(
         &mut self,
         action: Action,
+        resolve: impl FnMut(&str) -> Result<*mut ffi::obs_source_t, String>,
+    ) -> Result<Status, String> {
+        let preload = matches!(&action, Action::Preload { .. }).then(|| {
+            PerformancePhase::start(
+                "native.set.preload.dispatch",
+                Some("native.set.preload.begin"),
+            )
+        });
+        let result = self.dispatch_inner(action, resolve);
+        if let Some(preload) = preload {
+            preload.complete(result.is_ok());
+        }
+        result
+    }
+    unsafe fn dispatch_inner(
+        &mut self,
+        action: Action,
         mut resolve: impl FnMut(&str) -> Result<*mut ffi::obs_source_t, String>,
     ) -> Result<Status, String> {
         if action.generation() != self.generation {
@@ -787,7 +1062,7 @@ impl RoomProgram {
                 if self.bank.len() >= 64 {
                     return Err("Loaded set scene count budget reached".into());
                 }
-                self.prepare(revision, &plan, &mut resolve)?;
+                self.prepare_inner(revision, &plan, &mut resolve, true)?;
                 self.preparing_key = Some((key, signature));
             }
             Action::Activate {
@@ -796,7 +1071,9 @@ impl RoomProgram {
                 plan,
                 ..
             } => {
+                let validation = PerformancePhase::start("native.set.plan.validate", None);
                 contract::validate(&plan)?;
+                validation.complete(true);
                 self.resources.publish(&plan.assets)?;
                 let signature = self.identity(&plan)?;
                 let draft = self
@@ -916,6 +1193,7 @@ impl RoomProgram {
         self.poll()
     }
     fn identity(&self, plan: &Plan) -> Result<String, String> {
+        let _identity = PerformancePhase::slow("native.set.plan.identity");
         let mut value = serde_json::to_value(plan).map_err(|e| e.to_string())?;
         let o = value.as_object_mut().unwrap();
         o.remove("clock");
@@ -950,7 +1228,18 @@ impl RoomProgram {
         plan: &Plan,
         resolve: &mut impl FnMut(&str) -> Result<*mut ffi::obs_source_t, String>,
     ) -> Result<(), String> {
+        self.prepare_inner(revision, plan, resolve, false)
+    }
+    unsafe fn prepare_inner(
+        &mut self,
+        revision: u64,
+        plan: &Plan,
+        resolve: &mut impl FnMut(&str) -> Result<*mut ffi::obs_source_t, String>,
+        assets_published: bool,
+    ) -> Result<(), String> {
+        let validation = PerformancePhase::start("native.set.plan.validate", None);
         contract::validate(plan)?;
+        validation.complete(true);
         self.preparing_key = None;
         if revision == 0
             || revision > 9_007_199_254_740_991
@@ -963,8 +1252,13 @@ impl RoomProgram {
         if current.transitioning || current.queued || revision <= self.latest_revision {
             return Err("V2 prepare is stale or a take is still rendering".into());
         }
-        self.resources.publish(&plan.assets)?;
+        // Preload published this exact plan before the identity/cache lookup.
+        // Direct Prepare still validates and publishes its own assets here.
+        if !assets_published {
+            self.resources.publish(&plan.assets)?;
+        }
         let prepared = self.resources.open(plan)?;
+        let captures_phase = PerformancePhase::start("native.set.capture.resolve", None);
         let mut captures = HashMap::new();
         for resource in &plan.resources {
             if resource.starts_with("graphic:")
@@ -984,6 +1278,7 @@ impl RoomProgram {
             ffi::obs_source_inc_showing(source);
             captures.insert(resource.clone(), Capture(Source(source)));
         }
+        captures_phase.complete(true);
         if self.draft.take().is_some() {
             producer_set_v2_program_cancel(self.program.0, self.draft_revision);
         }
@@ -1000,6 +1295,10 @@ impl RoomProgram {
         Ok(())
     }
     unsafe fn finish_build(&mut self, b: Building) -> Result<Rc<Draft>, String> {
+        let phase = PerformancePhase::start(
+            "native.set.finish_build",
+            Some("native.set.finish_build.begin"),
+        );
         for capture in b.captures.values() {
             let source = capture.0 .0;
             if let std::collections::hash_map::Entry::Vacant(entry) =
@@ -1028,6 +1327,7 @@ impl RoomProgram {
             .map(|t| t.target.clone())
             .chain(b.plan.retained_targets.iter().cloned())
             .collect();
+        let arena_phase = PerformancePhase::start("native.set.finish_build.arena_node", None);
         let root = arena.node(&b.plan.root, &palette(), &mut |id| {
             b.resources
                 .sources
@@ -1041,7 +1341,9 @@ impl RoomProgram {
                 })
                 .ok_or_else(|| format!("Source {id} is unavailable"))
         })?;
+        arena_phase.complete(true);
         let mut error = [0 as c_char; 200];
+        let scene_phase = PerformancePhase::start("native.set.finish_build.scene_prepare", None);
         let scene = producer_set_v2_scene_prepare(
             &root,
             self.width,
@@ -1056,14 +1358,15 @@ impl RoomProgram {
                 .to_string_lossy()
                 .into_owned());
         }
+        scene_phase.complete(true);
         let bytes = producer_set_v2_scene_texture_bytes(scene)
             + (arena.browser_pixels + arena.intermediate_pixels) * 4
-            + arena.markers.len() * 1024 * 1024
+            + arena.graphics.len() * 1024 * 1024
             - arena.graphics.iter().map(|g| g.bytes).sum::<usize>();
         let draft = Draft {
             scene,
-            markers: std::mem::take(&mut arena.markers),
             _graphics: std::mem::take(&mut arena.graphics),
+            graphics_warmed: std::cell::Cell::new(false),
             bytes,
             asset_versions: self.resources.versions(&b.plan.resources),
             captures: b
@@ -1073,6 +1376,10 @@ impl RoomProgram {
                 .collect(),
             _resources: b.resources,
         };
+        // The scene owns its native child refs and the draft now owns every
+        // graphics lease. Release the temporary arena's Store borrow before
+        // mutating the room program during timeline registration.
+        drop(arena);
         if !producer_set_v2_program_prepare(
             self.program.0,
             producer_set_v2_scene_source(scene),
@@ -1085,9 +1392,12 @@ impl RoomProgram {
             return Err(error);
         }
         self.draft_revision = b.revision;
-        Ok(Rc::new(draft))
+        let draft = Rc::new(draft);
+        phase.complete(true);
+        Ok(draft)
     }
     unsafe fn register(&mut self, draft: &Draft, plan: &Plan, revision: u64) -> Result<(), String> {
+        let _register = PerformancePhase::slow("native.set.timeline.register");
         // Register the complete pending timeline as one graphics transaction.
         // Inner native calls can nest this context without waiting a frame
         // between individual tracks; no queued graphics probe occurs here.
@@ -1265,11 +1575,16 @@ impl RoomProgram {
         }
     }
     pub unsafe fn poll(&mut self) -> Result<Status, String> {
+        self.resources.prune_unleased_graphics();
         if let Some(building) = self.building.take() {
             if let Some(error) = building.resources.error3d() {
                 return Err(error);
             }
-            if building.resources.ready()
+            let resources_ready = {
+                let _probe = PerformancePhase::slow("native.set.probe.resources_ready");
+                building.resources.ready()
+            };
+            if resources_ready
                 && building.captures.values().all(|s| {
                     ffi::obs_source_get_width(s.0 .0) > 0 && ffi::obs_source_get_height(s.0 .0) > 0
                 })
@@ -1310,38 +1625,31 @@ impl RoomProgram {
             return Err("Native v2 program unavailable".into());
         }
         if let Some(draft) = &self.draft {
+            let graphics_ready = self.resources.poll_graphics(&draft._graphics)?;
             // Preparation must paint even before the program has a visible
             // parent/output. Its render callback warms pending scene children;
             // waiting for that callback via normal output activity can deadlock
             // the first take. The painted browser markers remain mandatory.
             if native.prepared_revision == self.draft_revision && !native.warmed {
+                let _probe = PerformancePhase::slow("native.set.probe.program_warm");
                 producer_set_v2_surface_warm(self.program.0);
                 producer_set_v2_program_status(self.program.0, &mut native);
             }
-            // Paint producers are immutable and keep their active/showing
-            // lease for their entire cached lifetime. Validate their first
-            // actual pixels once; a new scene placement is not a new paint.
-            let pending_markers: Vec<_> = draft
-                .markers
-                .iter()
-                .zip(&draft._graphics)
-                .filter(|(_, layer)| !layer.painted.get())
-                .collect();
-            let marker_sources: Vec<_> = pending_markers.iter().map(|((s, _), _)| s.0).collect();
-            let marker_rows: Vec<_> = pending_markers.iter().map(|((_, y), _)| *y).collect();
-            if native.prepared_revision == self.draft_revision
-                && !native.ready
-                && producer_set_v2_surface_markers(
-                    marker_sources.as_ptr(),
-                    marker_rows.as_ptr(),
-                    marker_sources.len(),
-                )
-            {
-                for (_, layer) in pending_markers {
-                    layer.painted.set(true);
+            if native.prepared_revision == self.draft_revision && !native.ready {
+                // Normal program rendering may have warmed its transparent
+                // placeholders earlier. Render the actual completed snapshot
+                // graph off air once before publishing readiness; an owned
+                // texture and completed GPU copy are mandatory for every layer.
+                if graphics_ready && !draft.graphics_warmed.get() {
+                    let _probe = PerformancePhase::slow("native.set.probe.graphics_snapshots");
+                    draft.graphics_warmed.set(producer_set_v2_surface_warm(
+                        producer_set_v2_scene_source(draft.scene),
+                    ));
                 }
-                producer_set_v2_program_ready(self.program.0, self.draft_revision);
-                producer_set_v2_program_status(self.program.0, &mut native);
+                if graphics_ready && draft.graphics_warmed.get() {
+                    producer_set_v2_program_ready(self.program.0, self.draft_revision);
+                    producer_set_v2_program_status(self.program.0, &mut native);
+                }
             }
             if native.ready && native.warmed {
                 if let Some((key, signature)) = self.preparing_key.take() {
@@ -1377,6 +1685,11 @@ impl RoomProgram {
             scene3d_contexts: scene3d::live_count(),
             graphics_layers: self.resources.graphics_count(),
             graphics_creations: self.resources.graphics_created.get(),
+            graphics_painting: self.resources.graphics_painting(),
+            graphics_pending: self.resources.graphics_pending(),
+            graphics_snapshots: self.resources.graphics_snapshots(),
+            copy_blocked: producer_set_v2_raster_copy_blocked(),
+            quarantine_count: producer_set_v2_raster_quarantine_count(),
             cached_keys: self.bank.keys().cloned().collect(),
             cached_bytes: self.cache_bytes(None),
             spare_graphics_bytes: self.resources.spare_graphics_bytes(),
