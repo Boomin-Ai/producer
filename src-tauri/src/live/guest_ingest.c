@@ -29,12 +29,7 @@ struct obs_source_frame {
     float color_range_min[3], color_range_max[3]; bool flip; uint8_t flags, trc;
     volatile long refs; bool prev_frame;
 };
-struct obs_source_audio {
-    const uint8_t *data[MAX_AV_PLANES]; uint32_t frames;
-    int speakers, format; uint32_t samples_per_sec; uint64_t timestamp;
-};
 OBS_IMPORT void obs_source_output_video(obs_source_t *, const struct obs_source_frame *);
-OBS_IMPORT void obs_source_output_audio(obs_source_t *, const struct obs_source_audio *);
 OBS_IMPORT bool video_format_get_parameters(int, int, float[16], float[3], float[3]);
 /* OBS pulls a continuous clock from each guest, including silence during
  * packet gaps. Guest push timestamps never control the shared mixer clock. */
@@ -50,7 +45,6 @@ struct guest_state {
     uint64_t anchor, rendered;
 };
 struct guest_audio_plane { float *data[8]; };
-struct guest_audio_mix { struct guest_audio_plane output[6]; };
 OBS_IMPORT void *obs_obj_get_data(void *);
 OBS_IMPORT uint64_t os_gettime_ns(void);
 static const char *name(void *unused) { (void)unused; return "Producer guest"; }
@@ -66,9 +60,13 @@ static void destroy(void *data) {
     if (state) { guest_mutex_destroy(&state->lock); free(state); }
 }
 static uint64_t frames_ns(uint64_t frames) { return frames / 48000 * 1000000000ULL + frames % 48000 * 1000000000ULL / 48000; }
-static bool render_audio(void *data, uint64_t *ts, void *output, uint32_t mixers, size_t channels, size_t rate) {
+/* Pull one source block at the OBS audio cadence. audio_mix routes that
+ * block through the ordinary source output path, including host monitoring
+ * and monitor-only isolation. audio_render writes buses directly and skips
+ * the source capture callbacks that feed OBS's monitoring device. */
+static bool mix_audio(void *data, uint64_t *ts, void *output, size_t channels, size_t rate) {
     struct guest_state *state = data;
-    struct guest_audio_mix *mix = output;
+    struct guest_audio_plane *mix = output;
     if (!state || !ts || !mix || rate != 48000 || !channels || channels > 8) return false;
     uint64_t now = os_gettime_ns();
     uint64_t base = now > GUEST_RENDER_DELAY_NS ? now - GUEST_RENDER_DELAY_NS : 1;
@@ -78,9 +76,8 @@ static bool render_audio(void *data, uint64_t *ts, void *output, uint32_t mixers
     *ts = state->anchor + frames_ns(state->rendered);
     state->rendered += GUEST_RENDER_FRAMES;
     /* No allocation, blocking locks, or SDK calls on the OBS audio thread. */
-    for (size_t m = 0; m < 6; m++) if (mixers & (1U << m))
-        for (size_t c = 0; c < channels; c++) if (mix->output[m].data[c])
-            memset(mix->output[m].data[c], 0, GUEST_RENDER_FRAMES * sizeof(float));
+    for (size_t c = 0; c < channels; c++) if (mix->data[c])
+        memset(mix->data[c], 0, GUEST_RENDER_FRAMES * sizeof(float));
     if (guest_mutex_trylock(&state->lock)) return true;
     for (size_t i = 0; i < GUEST_RENDER_FRAMES; i++) {
         uint64_t at = *ts + frames_ns(i);
@@ -94,12 +91,11 @@ static bool render_audio(void *data, uint64_t *ts, void *output, uint32_t mixers
         if (at < block->timestamp) continue;
         size_t frame = (size_t)(((at - block->timestamp) * 48000 + 500000000ULL) / 1000000000ULL);
         if (frame >= block->frames) continue;
-        for (size_t m = 0; m < 6; m++) if (mixers & (1U << m))
-            for (size_t c = 0; c < channels; c++) if (mix->output[m].data[c]) {
-                float value = block->pcm[frame * block->channels + (block->channels == 2 && c == 1 ? 1 : 0)] / 32768.0f;
-                if (channels == 1 && block->channels == 2) value = (block->pcm[frame*2] + block->pcm[frame*2+1]) / 65536.0f;
-                mix->output[m].data[c][i] = c < 2 ? value : 0.0f;
-            }
+        for (size_t c = 0; c < channels && c < 2; c++) if (mix->data[c]) {
+            float value = block->pcm[frame * block->channels + (block->channels == 2 && c == 1 ? 1 : 0)] / 32768.0f;
+            if (channels == 1 && block->channels == 2) value = (block->pcm[frame*2] + block->pcm[frame*2+1]) / 65536.0f;
+            mix->data[c][i] = value;
+        }
     }
     guest_mutex_unlock(&state->lock);
     return true;
@@ -113,7 +109,7 @@ void producer_guest_ingest_register(void) {
     struct obs_source_info info = {0};
     info.id = PRODUCER_GUEST_INGEST_ID; info.type = OBS_SOURCE_TYPE_INPUT;
     info.output_flags = (1 << 0) | (1 << 1) | (1 << 2); /* video, audio, async */
-    info.get_name = name; info.create = create; info.destroy = destroy; info.audio_render = render_audio;
+    info.get_name = name; info.create = create; info.destroy = destroy; info.audio_mix = mix_audio;
     obs_register_source_s(&info, sizeof(info));
 }
 static bool plane_ok(const uint8_t *p, size_t length, uint32_t stride,
