@@ -1,0 +1,146 @@
+diff --git a/libobs/graphics/graphics-imports.c b/libobs/graphics/graphics-imports.c
+--- a/libobs/graphics/graphics-imports.c
++++ b/libobs/graphics/graphics-imports.c
+@@ -93,6 +93,7 @@
+ 	GRAPHICS_IMPORT(device_copy_texture_region);
+ 	GRAPHICS_IMPORT(device_copy_texture);
+ 	GRAPHICS_IMPORT(device_stage_texture);
++	GRAPHICS_IMPORT_OPTIONAL(device_stage_textures);
+ 	GRAPHICS_IMPORT(device_begin_frame);
+ 	GRAPHICS_IMPORT(device_begin_scene);
+ 	GRAPHICS_IMPORT(device_draw);
+diff --git a/libobs/graphics/graphics-internal.h b/libobs/graphics/graphics-internal.h
+--- a/libobs/graphics/graphics-internal.h
++++ b/libobs/graphics/graphics-internal.h
+@@ -95,6 +95,8 @@
+ 					   gs_texture_t *src, uint32_t src_x, uint32_t src_y, uint32_t src_w,
+ 					   uint32_t src_h);
+ 	void (*device_stage_texture)(gs_device_t *device, gs_stagesurf_t *dst, gs_texture_t *src);
++	bool (*device_stage_textures)(gs_device_t *device, gs_stagesurf_t *const *destinations,
++				      gs_texture_t *const *sources, size_t count);
+ 	void (*device_begin_frame)(gs_device_t *device);
+ 	void (*device_begin_scene)(gs_device_t *device);
+ 	void (*device_draw)(gs_device_t *device, enum gs_draw_mode draw_mode, uint32_t start_vert, uint32_t num_verts);
+@@ -284,6 +286,11 @@
+ #endif
+ };
+ 
++/* For packed, non-null plane pairs. Success means staging was scheduled;
++ * gs_stagesurface_map fences the copy. Failure must leave no new copies in
++ * flight so callers can restage all pairs with gs_stage_texture. */
++bool gs_try_stage_textures(gs_stagesurf_t *const *destinations, gs_texture_t *const *sources, size_t count);
++
+ /* ========================================================================= *
+  * Graphics Subsystem Data                                                   *
+  * ========================================================================= */
+diff --git a/libobs/graphics/graphics.c b/libobs/graphics/graphics.c
+--- a/libobs/graphics/graphics.c
++++ b/libobs/graphics/graphics.c
+@@ -1909,6 +1909,16 @@
+ 	graphics->exports.device_stage_texture(graphics->device, dst, src);
+ }
+ 
++bool gs_try_stage_textures(gs_stagesurf_t *const *destinations, gs_texture_t *const *sources, size_t count)
++{
++	graphics_t *graphics = thread_graphics;
++
++	if (count < 2 || !gs_valid("gs_try_stage_textures") || !graphics->exports.device_stage_textures)
++		return false;
++
++	return graphics->exports.device_stage_textures(graphics->device, destinations, sources, count);
++}
++
+ void gs_begin_frame(void)
+ {
+ 	graphics_t *graphics = thread_graphics;
+diff --git a/libobs/obs-internal.h b/libobs/obs-internal.h
+--- a/libobs/obs-internal.h
++++ b/libobs/obs-internal.h
+@@ -344,6 +344,7 @@
+ 	enum gs_color_space render_space;
+ 	bool texture_rendered;
+ 	bool textures_copied[NUM_TEXTURES];
++	bool raw_copy_deferred[NUM_TEXTURES];
+ 	bool texture_converted;
+ 	bool using_nv12_tex;
+ 	bool using_p010_tex;
+diff --git a/libobs/obs-video.c b/libobs/obs-video.c
+--- a/libobs/obs-video.c
++++ b/libobs/obs-video.c
+@@ -20,6 +20,7 @@
+ 
+ #include "obs.h"
+ #include "obs-internal.h"
++#include "graphics/graphics-internal.h"
+ #include "graphics/vec4.h"
+ #include "media-io/format-conversion.h"
+ #include "media-io/video-frame.h"
+@@ -411,6 +412,7 @@
+ 	profile_start(stage_output_texture_name);
+ 
+ 	unmap_last_surface(video);
++	video->raw_copy_deferred[cur_texture] = false;
+ 
+ 	if (!video->gpu_conversion) {
+ 		gs_stagesurf_t *copy = copy_surfaces[0];
+@@ -423,11 +425,23 @@
+ 
+ 		video->textures_copied[cur_texture] = true;
+ 	} else if (video->texture_converted) {
++		gs_stagesurf_t *destinations[NUM_CHANNELS];
++		gs_texture_t *sources[NUM_CHANNELS];
++		size_t plane_count = 0;
++
+ 		for (size_t i = 0; i < channel_count; i++) {
+ 			gs_stagesurf_t *copy = copy_surfaces[i];
+-			if (copy)
+-				gs_stage_texture(copy, convert_textures[i]);
+ 			video->active_copy_surfaces[cur_texture][i] = copy;
++			if (copy) {
++				destinations[plane_count] = copy;
++				sources[plane_count++] = convert_textures[i];
++			}
++		}
++
++		video->raw_copy_deferred[cur_texture] = gs_try_stage_textures(destinations, sources, plane_count);
++		if (!video->raw_copy_deferred[cur_texture]) {
++			for (size_t i = 0; i < plane_count; i++)
++				gs_stage_texture(destinations[i], sources[i]);
+ 		}
+ 
+ 		for (size_t i = channel_count; i < NUM_CHANNELS; ++i)
+@@ -901,14 +915,19 @@
+ 	gs_leave_context();
+ 	profile_end(output_frame_gs_context_name);
+ 
+-	if (raw_active && frame_ready) {
++	/* A failed deferred map still consumes the staged slot's metadata. */
++	const bool deferred_slot = video->textures_copied[prev_texture] && video->raw_copy_deferred[prev_texture];
++	if (raw_active && (frame_ready || deferred_slot) &&
++	    video->vframe_info_buffer.size >= sizeof(struct obs_vframe_info)) {
+ 		struct obs_vframe_info vframe_info;
+-		deque_pop_front(&video->vframe_info_buffer, &vframe_info, sizeof(vframe_info));
+-
+-		frame.timestamp = vframe_info.timestamp;
+-		profile_start(output_frame_output_video_data_name);
+-		output_video_data(video, &frame, vframe_info.count);
+-		profile_end(output_frame_output_video_data_name);
++		deque_pop_front(&video->vframe_info_buffer, frame_ready ? &vframe_info : NULL, sizeof(vframe_info));
++
++		if (frame_ready) {
++			frame.timestamp = vframe_info.timestamp;
++			profile_start(output_frame_output_video_data_name);
++			output_video_data(video, &frame, vframe_info.count);
++			profile_end(output_frame_output_video_data_name);
++		}
+ 	}
+ 
+ 	if (++video->cur_texture == NUM_TEXTURES)
+@@ -946,6 +965,7 @@
+ static void clear_raw_frame_data(struct obs_core_video_mix *video)
+ {
+ 	memset(video->textures_copied, 0, sizeof(video->textures_copied));
++	memset(video->raw_copy_deferred, 0, sizeof(video->raw_copy_deferred));
+ 	deque_free(&video->vframe_info_buffer);
+ }
+ 

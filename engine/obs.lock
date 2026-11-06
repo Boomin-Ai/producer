@@ -22,8 +22,9 @@
     "url": "https://github.com/obsproject/obs-studio/releases/download/32.1.2/OBS-Studio-32.1.2-macOS-Apple.dmg",
     "sha256": "2aeb3aaa99544fefd557f10ac6550e73df71540dd57528b2a1e6f39a55ebacfb"
   },
-  "artifact_rev": 11,
+  "artifact_rev": 12,
   "artifact_adds": [
+    "rev 12: batch converted video plane staging on Metal and fence the previous raw slot at map",
     "rev 11: clear the display render target before queued Metal offscreen rendering",
     "rev 10: synchronize Metal swapchain target ownership and display-link snapshots during preview navigation/resize",
     "rev 9: current-frame asynchronous Metal texture copy API for responsive Apple Vision cutout",
@@ -51,8 +52,14 @@
     {
       "dir": "engine/patches/metal",
       "target": "libobs-metal",
-      "sha256": "65aee1af9e6e1233d0eb7f65aadfee562f46f86679853a98658c0e34c2693a1d",
-      "note": "Serialize Swift ARC target ownership between CVDisplayLink and graphics, and snapshot the swapchain array under its writer queue."
+      "sha256": "3f31bbeb7e7bc2550e5e298ac1ecb3401134bdd5a9c035b9ec9045eaa4f23cfd",
+      "note": "Serialize Swift ARC target ownership between CVDisplayLink and graphics, and snapshot the swapchain array under its writer queue. Batch converted video plane copies in one retained Metal command and fence each slot before CPU access."
+    },
+    {
+      "dir": "engine/patches/libobs",
+      "target": ".",
+      "sha256": "63e0b7497259846dfba9337283ec3307833c072ddbbda24ba341dcd43b595ff9",
+      "note": "Optional graphics batch staging hook for converted output. Preserve raw timestamp alignment when a deferred copy fails."
     }
   ]
 }

@@ -1,0 +1,128 @@
+diff --git a/MetalStageBuffer.swift b/MetalStageBuffer.swift
+--- a/MetalStageBuffer.swift
++++ b/MetalStageBuffer.swift
+@@ -24,6 +24,23 @@
+     let format: MTLPixelFormat
+     let width: Int
+     let height: Int
++    var stagedVideoCopy: MTLCommandBuffer?
++
++    // The command buffer retains its textures and destination storage even
++    // when OBS destroys a slot before it is mapped.
++    func waitForStagedVideoCopy() -> Bool {
++        guard let command = stagedVideoCopy else { return true }
++        let status = command.status
++        if status != .completed && status != .error {
++            command.waitUntilCompleted()
++        }
++        return command.status == .completed
++    }
++
++    func retireStagedVideoCopy() {
++        _ = waitForStagedVideoCopy()
++        stagedVideoCopy = nil
++    }
+ 
+     init?(device: MetalDevice, width: Int, height: Int, format: MTLPixelFormat) {
+         self.device = device
+diff --git a/MetalDevice.swift b/MetalDevice.swift
+--- a/MetalDevice.swift
++++ b/MetalDevice.swift
+@@ -668,6 +668,7 @@
+     /// GPU has actually completed the blit into the destination buffer.
+     ///
+     func stageTextureToBuffer(source: MetalTexture, destination: MetalStageBuffer) throws {
++        destination.retireStagedVideoCopy()
+         if source.hasPendingWrites {
+             finishPendingCommands()
+         }
+diff --git a/metal-stagesurf.swift b/metal-stagesurf.swift
+--- a/metal-stagesurf.swift
++++ b/metal-stagesurf.swift
+@@ -113,6 +113,7 @@
+ ) -> Bool {
+     let stageSurface: MetalStageBuffer = unretained(stagesurf)
+ 
++    guard stageSurface.waitForStagedVideoCopy() else { return false }
+     ptr.pointee = stageSurface.buffer.contents()
+     linesize.pointee = UInt32(stageSurface.width * stageSurface.format.bytesPerPixel!)
+ 
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -34,6 +34,7 @@
+     metal-samplerstate.swift
+     metal-shader.swift
+     metal-stagesurf.swift
++    producer-metal-stage-batch.swift
+     metal-subsystem.swift
+     metal-swapchain.swift
+     metal-texture2d.swift
+diff --git a/producer-metal-stage-batch.swift b/producer-metal-stage-batch.swift
+new file mode 100644
+--- /dev/null
++++ b/producer-metal-stage-batch.swift
+@@ -0,0 +1,63 @@
++import Metal
++
++// Optional libobs graphics backend export for the video output's converted
++// planes. Mapping the previous slot fences the submitted copy if necessary.
++@_cdecl("device_stage_textures")
++public func device_stage_textures(
++    device devicePointer: UnsafeRawPointer,
++    destinations: UnsafePointer<UnsafeRawPointer?>,
++    sources: UnsafePointer<UnsafeRawPointer?>,
++    count: Int
++) -> Bool {
++    guard (2...3).contains(count) else { return false }
++    let device: MetalDevice = unretained(devicePointer)
++
++    for index in 0..<count {
++        guard let sourcePointer = sources[index],
++              let destinationPointer = destinations[index] else { return false }
++        let source: MetalTexture = unretained(sourcePointer)
++        let destination: MetalStageBuffer = unretained(destinationPointer)
++        guard source.device === device, destination.device === device,
++              source.texture.width == destination.width,
++              source.texture.height == destination.height,
++              source.texture.pixelFormat == destination.format,
++              destination.format.bytesPerPixel != nil else { return false }
++    }
++
++    for index in 0..<count {
++        let destination: MetalStageBuffer = unretained(destinations[index]!)
++        destination.retireStagedVideoCopy()
++    }
++
++    do {
++        try device.ensureCommandBuffer()
++    } catch {
++        return false
++    }
++    guard let command = device.renderState.commandBuffer,
++          let encoder = command.makeBlitCommandEncoder() else { return false }
++
++    // Conversion draws already encoded into this command precede the copies.
++    for index in 0..<count {
++        let source: MetalTexture = unretained(sources[index]!)
++        let destination: MetalStageBuffer = unretained(destinations[index]!)
++        encoder.copy(
++            from: source.texture,
++            sourceSlice: 0,
++            sourceLevel: 0,
++            sourceOrigin: .init(x: 0, y: 0, z: 0),
++            sourceSize: .init(width: destination.width, height: destination.height, depth: 1),
++            to: destination.buffer,
++            destinationOffset: 0,
++            destinationBytesPerRow: destination.width * destination.format.bytesPerPixel!,
++            destinationBytesPerImage: 0
++        )
++    }
++    encoder.endEncoding()
++    device.finishPendingCommands()
++    for index in 0..<count {
++        let destination: MetalStageBuffer = unretained(destinations[index]!)
++        destination.stagedVideoCopy = command
++    }
++    return true
++}
