@@ -209,7 +209,7 @@ pack_artifact() {
 # skipped), and the same code runs on both platforms: patches whose hunks are
 # irrelevant on a platform are still applied so the lock stays one identity.
 apply_patchsets() {
-  local src="$1" count i dir target want have patch
+  local src="$1" count i dir target want have patch git_root git_prefix
   count="$(lock_get "['patchsets']" | python_len)" || return 1
   for ((i = 0; i < count; i++)); do
     dir="$REPO_ROOT/$(lock_get "['patchsets'][$i]['dir']")"
@@ -217,11 +217,16 @@ apply_patchsets() {
     want="$(lock_get "['patchsets'][$i]['sha256']")"
     have="$(cat $(ls "$dir"/*.patch | sort) | "$(resolve_python)" -c 'import sys,hashlib; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')"
     [[ $want == "$have" ]] || { echo "FATAL: patchset $dir sha256 mismatch (lock $want, files $have)" >&2; return 1; }
+    # Git ignores out-of-scope paths when apply is run from a subdirectory.
+    # Rebase target-relative paths at the owning Git root. A submodule has
+    # its own root and an empty prefix.
+    git_root="$(git -C "$target" rev-parse --show-toplevel)" || return 1
+    git_prefix="$(git -C "$target" rev-parse --show-prefix)" || return 1
     for patch in $(ls "$dir"/*.patch | sort); do
-      if git -C "$target" apply --check "$patch" 2>/dev/null; then
-        git -C "$target" apply "$patch"
+      if git -C "$git_root" apply --directory="$git_prefix" --check "$patch" 2>/dev/null; then
+        git -C "$git_root" apply --directory="$git_prefix" "$patch"
         echo "patch applied: $(basename "$patch") @ $(lock_get "['patchsets'][$i]['target']")"
-      elif git -C "$target" apply --reverse --check "$patch" 2>/dev/null; then
+      elif git -C "$git_root" apply --directory="$git_prefix" --reverse --check "$patch" 2>/dev/null; then
         echo "patch already present: $(basename "$patch")"
       else
         echo "FATAL: patch neither applies nor is present: $patch" >&2

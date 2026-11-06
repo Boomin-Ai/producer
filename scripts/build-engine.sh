@@ -85,6 +85,8 @@ done
 # Fail before publishing an engine that silently falls back to old scheduling.
 nm -gU "$STAGE/Frameworks/libobs-metal.dylib" | grep ' _producer_metal_copy_texture_async_v1$' >/dev/null \
   || { echo "FATAL: current-frame Metal copy API missing" >&2; exit 1; }
+nm -gU "$STAGE/Frameworks/libobs-metal.dylib" | grep ' _device_stage_textures$' >/dev/null \
+  || { echo "FATAL: batch Metal video staging API missing" >&2; exit 1; }
 
 for p in "${ENGINE_PLUGINS[@]}"; do
   # mac-virtualcam is the one plugin CMake must NOT provide. Upstream's build

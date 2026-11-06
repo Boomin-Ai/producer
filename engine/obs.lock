@@ -22,8 +22,9 @@
     "url": "https://github.com/obsproject/obs-studio/releases/download/32.1.2/OBS-Studio-32.1.2-macOS-Apple.dmg",
     "sha256": "2aeb3aaa99544fefd557f10ac6550e73df71540dd57528b2a1e6f39a55ebacfb"
   },
-  "artifact_rev": 12,
+  "artifact_rev": 13,
   "artifact_adds": [
+    "rev 13: apply nested engine patches from their owning Git root and verify the batch staging export",
     "rev 12: batch converted video plane staging on Metal and fence the previous raw slot at map",
     "rev 11: clear the display render target before queued Metal offscreen rendering",
     "rev 10: synchronize Metal swapchain target ownership and display-link snapshots during preview navigation/resize",
