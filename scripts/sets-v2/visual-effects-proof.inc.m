@@ -1,6 +1,11 @@
 /* Exact native compositor pixels, independent of HTML or synthetic CSS. */
 static NSDictionary *visual_effects_proof(NSString *out){
  obs_source_t *red=solid(320,240,1,0,0,false),*blue=solid(160,240,0,0,1,false),*green=solid(24,24,0,1,0,false);
+ obs_source_t *soft=producer_set_v2_group_create(320,240,28,1);
+ require(soft&&producer_set_v2_group_effects(soft,0,1,.5,.5,24,false,0,0)&&add(soft,red,0,0,320,240)&&producer_set_v2_group_seal(soft),"create feathered rounded camera edge");
+ NSData *feather=capture(soft,320,240,320,240);const uint8_t *edge=pixel(feather,320,0,120),*ramp=pixel(feather,320,6,120),*middle=pixel(feather,320,12,120),*inside=pixel(feather,320,28,120);
+ require(edge[3]<20&&ramp[3]>20&&ramp[3]<110&&middle[3]>90&&middle[3]<200&&inside[3]>240,"rounded mask feathers inward without blurring camera center");
+ png(feather,320,240,[out stringByAppendingPathComponent:@"rounded-feather.png"]);obs_source_release(soft);
  obs_source_t *camera=producer_set_v2_group_create(320,240,0,1);
  require(camera&&producer_set_v2_group_effects(camera,1,0,.5,.5,0,false,0,0)&&add(camera,red,0,0,320,240)&&producer_set_v2_group_seal(camera),"create circle reveal");
  for(int step=0;step<3;step++){
@@ -65,5 +70,5 @@ static NSDictionary *visual_effects_proof(NSString *out){
  sample=capture(producer_set_v2_scene_source(scene),320,240,320,240);require(pixel(sample,320,280,120)[3]==255,"cached mask resets to authored progress on reentry");producer_set_v2_scene_release(scene);
  obs_source_release(root);obs_source_release(panel);obs_source_release(inverse);obs_source_release(wipe);obs_source_release(camera);obs_source_release(green);obs_source_release(blue);obs_source_release(red);
  for(int i=0;i<300&&producer_set_v2_live_groups();i++)usleep(10000);require(!producer_set_v2_live_groups(),"effect texture/group resources released");
- return @{@"ok":@YES,@"circleProgress":@[@0,@0.5,@1],@"wipe":@YES,@"inverse":@YES,@"backdrop":@YES,@"foregroundSharp":@YES,@"translucentAlpha":@YES,@"sceneReplacements":@240,@"colorContexts":@2,@"nativeAnimationTrack":@YES,@"cachedReset":@YES,@"remainingGroups":@(producer_set_v2_live_groups())};
+ return @{@"ok":@YES,@"roundedFeather":@YES,@"circleProgress":@[@0,@0.5,@1],@"wipe":@YES,@"inverse":@YES,@"backdrop":@YES,@"foregroundSharp":@YES,@"translucentAlpha":@YES,@"sceneReplacements":@240,@"colorContexts":@2,@"nativeAnimationTrack":@YES,@"cachedReset":@YES,@"remainingGroups":@(producer_set_v2_live_groups())};
 }

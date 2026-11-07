@@ -547,6 +547,40 @@ pub struct DeckState {
     pub state: i32,
     pub looping: bool,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProgramPhase {
+    Idle,
+    Ready,
+    Playing,
+    Paused,
+    Loading,
+    Crossfade,
+    Manual,
+    Stopping,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProgramNextKind {
+    Incoming,
+    Deck,
+    Queue,
+    Shuffle,
+    None,
+}
+#[derive(Clone, Debug, Serialize)]
+pub struct ProgramTrack {
+    pub title: String,
+    pub deck: usize,
+}
+/// Audience-facing DJ metadata. Deck track paths and IDs stay in the controls.
+#[derive(Clone, Debug, Serialize)]
+pub struct ProgramStatus {
+    pub phase: ProgramPhase,
+    pub current: Option<ProgramTrack>,
+    pub next: Option<ProgramTrack>,
+    pub next_kind: ProgramNextKind,
+}
 #[derive(Clone, Debug, Serialize)]
 pub struct Status {
     pub decks: [DeckState; 2],
@@ -559,6 +593,10 @@ pub struct Status {
     pub duck: bool,
     pub transitioning: bool,
     pub error: Option<String>,
+    pub program: ProgramStatus,
+    pub queue_titles: Vec<String>,
+    #[cfg(have_engine)]
+    pub audio: crate::live::dj_audio::Frame,
 }
 #[tauri::command]
 pub async fn dj_control(state: State<'_, AppState>, action: Action) -> Result<Status, String> {

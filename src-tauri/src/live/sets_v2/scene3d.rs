@@ -21,6 +21,7 @@ const SCRIPT: &[u8] =
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Spec {
+    pub music: Option<Value>,
     pub cue_sequence: Option<u64>,
     pub id: String,
     pub pass: String,
@@ -74,11 +75,40 @@ pub fn validate(s: &Spec) -> Result<(), String> {
     if !ident(&s.id) || !["background", "foreground"].contains(&s.pass.as_str()) || !ident(&s.cue) {
         return Err("Invalid 3D layer identity/pass/cue".into());
     }
+    if let Some(m) = &s.music {
+        obj(
+            m,
+            &[
+                "sensitivity",
+                "intensity",
+                "waveform",
+                "waveHeight",
+                "drop",
+                "money",
+                "color",
+                "motion",
+                "soundPopups",
+            ],
+        )?;
+        if !number(&m["sensitivity"], 0., 3.)
+            || !number(&m["intensity"], 0., 2.)
+            || !number(&m["motion"], 0., 2.)
+            || !number(&m["waveHeight"], 0.25, 2.)
+            || !matches!(m["waveform"].as_str(), Some("bars" | "line" | "off"))
+            || !m["money"].is_boolean()
+            || !color(&m["color"])
+            || !m["drop"].as_u64().is_some_and(|v| v <= 1000000)
+            || m.get("soundPopups").is_some_and(|v| !v.is_boolean())
+        {
+            return Err("Invalid music controls".into());
+        }
+    }
     let w = &s.world;
     obj(
         w,
         &[
             "schema",
+            "dj",
             "fps",
             "clearColor",
             "fog",
@@ -100,6 +130,26 @@ pub fn validate(s: &Spec) -> Result<(), String> {
         || !color(&w["clearColor"])
     {
         return Err("Invalid 3D world".into());
+    }
+    if let Some(dj) = w.get("dj") {
+        obj(dj, &["role", "headerRatio", "headerRect"])?;
+        if !matches!(dj["role"].as_str(), Some("stage" | "spectrum"))
+            || dj.get("headerRatio").is_some_and(|v| !number(v, 0.1, 1.))
+        {
+            return Err("Invalid DJ visual surface".into());
+        }
+        if let Some(r) = dj.get("headerRect") {
+            let a = r.as_array().ok_or("Invalid DJ header rectangle")?;
+            if a.len() != 4
+                || a.iter().any(|v| !number(v, 0., 1.))
+                || a[2].as_f64().unwrap() <= 0.
+                || a[3].as_f64().unwrap() <= 0.
+                || a[0].as_f64().unwrap() + a[2].as_f64().unwrap() > 1.000001
+                || a[1].as_f64().unwrap() + a[3].as_f64().unwrap() > 1.000001
+            {
+                return Err("Invalid DJ header rectangle".into());
+            }
+        }
     }
     obj(&w["fog"], &["color", "near", "far"])?;
     if !color(&w["fog"]["color"])
@@ -153,6 +203,7 @@ pub fn validate(s: &Spec) -> Result<(), String> {
             n,
             &[
                 "id",
+                "text",
                 "kind",
                 "args",
                 "position",
@@ -180,9 +231,20 @@ pub fn validate(s: &Spec) -> Result<(), String> {
             "box" | "sphere" | "cone" => 3,
             "roundedBox" => 5,
             "cylinder" | "torus" => 4,
-            "plane" => 2,
+            "plane" | "text" => 2,
             _ => return Err("Unsupported 3D geometry".into()),
         };
+        if kind == "text"
+            && !n["text"].as_str().is_some_and(|v| {
+                !v.is_empty()
+                    && v.len() <= 32
+                    && v.bytes().all(|b| {
+                        b.is_ascii_uppercase() || b.is_ascii_digit() || b" .!&-".contains(&b)
+                    })
+            })
+        {
+            return Err("Invalid 3D lettering".into());
+        }
         let a = n["args"].as_array().ok_or("Invalid geometry arguments")?;
         if a.len() != count || a.iter().any(|v| !number(v, 0.001, 64.)) {
             return Err("Geometry budget exceeded".into());
@@ -371,6 +433,8 @@ fn now() -> f64 {
 }
 #[derive(Clone, Serialize)]
 struct Control {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    music: Option<Value>,
     #[serde(rename = "cueSequence", skip_serializing_if = "Option::is_none")]
     cue_sequence: Option<u64>,
     rendering: bool,
@@ -384,6 +448,7 @@ struct Control {
 }
 #[derive(Default)]
 struct Receipt {
+    music: Option<Value>,
     at: Option<std::time::Instant>,
     revision: u64,
     ready: bool,
@@ -425,6 +490,7 @@ impl Bridge {
                 session: 0,
                 sequence: 0,
                 control: Control {
+                    music: spec.music.clone(),
                     cue_sequence: spec.cue_sequence,
                     rendering: false,
                     revision: 1,
@@ -508,6 +574,10 @@ impl Bridge {
             if stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n").is_err(){return}
             let mut previous = String::new();
             let mut heartbeat = std::time::Instant::now();
+            let music = self.world["world"].get("dj").is_some();
+            let _music_subscription = music.then(super::super::dj_audio::subscribe);
+            let mut music_at = Instant::now();
+            let mut sound_sequence = 0;
             while self.active.load(Ordering::Acquire) {
                 let value = self.snapshot();
                 if value != previous || heartbeat.elapsed() > Duration::from_secs(1) {
@@ -520,7 +590,32 @@ impl Bridge {
                     previous = value;
                     heartbeat = std::time::Instant::now();
                 }
-                std::thread::sleep(Duration::from_millis(8));
+                if music
+                    && music_at.elapsed() >= Duration::from_millis(33)
+                    && self.state.lock().unwrap().control.rendering
+                {
+                    let value = serde_json::to_string(&super::super::dj_audio::snapshot()).unwrap();
+                    if stream
+                        .write_all(format!("event: music\ndata: {value}\n\n").as_bytes())
+                        .is_err()
+                    {
+                        return;
+                    }
+                    music_at = Instant::now();
+                    let sequence = crate::soundboard::visual_sequence();
+                    if sequence != sound_sequence {
+                        sound_sequence = sequence;
+                        let value =
+                            serde_json::to_string(&crate::soundboard::visual_event()).unwrap();
+                        if stream
+                            .write_all(format!("event: sound\ndata: {value}\n\n").as_bytes())
+                            .is_err()
+                        {
+                            return;
+                        }
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(if music { 11 } else { 8 }));
             }
             return;
         }
@@ -552,7 +647,9 @@ impl Bridge {
                     s.sequence = serial;
                     let software = v["software"].as_bool().unwrap_or(false);
                     let ready = v["ready"] == true && v["webgl2"] == true && !software;
+                    let music=v.get("music").filter(|m|number(&m["energy"],0.,1.)&&number(&m["bass"],0.,1.)&&m["dropActive"].is_boolean()&&m["moneyParticles"].as_u64().is_some_and(|v|v<=36)&&m["draws"].as_u64().is_some()).map(|m|json!({"energy":m["energy"],"bass":m["bass"],"dropActive":m["dropActive"],"moneyParticles":m["moneyParticles"],"draws":m["draws"],"soundActive":m["soundActive"].as_bool().unwrap_or(false),"soundSequence":m["soundSequence"].as_u64().unwrap_or(0),"soundLabel":m["soundLabel"].as_str().filter(|s|s.chars().count()<=64).unwrap_or("")}));
                     s.receipt = Receipt {
+                        music,
                         at: Some(std::time::Instant::now()),
                         revision,
                         ready,
@@ -615,7 +712,8 @@ impl Bridge {
                 (show, !running)
             })
             .unwrap_or((current, false));
-        if old.cue_sequence != spec.cue_sequence
+        if old.music != spec.music
+            || old.cue_sequence != spec.cue_sequence
             || !old.rendering
             || old.cue != spec.cue
             || old.view != spec.view
@@ -624,6 +722,7 @@ impl Bridge {
         {
             let revision = old.revision + 1;
             s.control = Control {
+                music: spec.music.clone(),
                 cue_sequence: spec.cue_sequence,
                 rendering: true,
                 revision,
@@ -802,6 +901,13 @@ impl Lease {
     }
     /// Describe the stalled startup stage without warming or resetting a
     /// renderer. A receipt alone is never a substitute for its pixel fence.
+    pub fn music_status(&self) -> Option<Value> {
+        let state = self.bridge.state.lock().unwrap();
+        state.receipt.music.clone().map(|mut m| {
+            m["role"] = self.bridge.world["world"]["dj"]["role"].clone();
+            m
+        })
+    }
     pub fn pending_reason(&self) -> Option<String> {
         let state = self.bridge.state.lock().unwrap();
         if state.session == 0 {
@@ -861,6 +967,7 @@ mod tests {
     fn renderer_response_survives_a_nonblocking_accepted_socket() {
         let bridge = Bridge::start(
             &Spec {
+                music: None,
                 cue_sequence: None,
                 id: "test".into(),
                 pass: "background".into(),
@@ -907,6 +1014,7 @@ mod tests {
     #[test]
     fn bridge_uses_os_entropy_and_releases_loopback_listener() {
         let spec = Spec {
+            music: None,
             cue_sequence: None,
             id: "test".into(),
             pass: "background".into(),

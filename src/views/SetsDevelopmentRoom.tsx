@@ -2,7 +2,7 @@ import atmosphereSet from '../../docs/shows/atmosphere.json';
 import {dataIntegrations} from '../lib/dataIntegrations';
 import {guests} from '../lib/ipc';
 import factsShow from '../../docs/shows/just-facts.json';
-import {parsePackage} from '../features/presentation/schema';
+import {parsePackage, type PresentationPackage} from '../features/presentation/schema';
 import {upgradeJustFacts,upgradeJustFactsShow} from '../features/presentation/upgradeJustFacts';
 import {setActiveEndpointId} from '../lib/workspace';
 import { invoke } from "../lib/nativeInvoke";
@@ -16,6 +16,39 @@ export function SetsDevelopmentRoom() {
     [error, setError] = useState("");
   const bootstrap=useRef<Promise<LiveRoom>|undefined>(undefined);
   const smokeStarted = useRef(false);
+  const djKleveland = import.meta.env.DEV && import.meta.env.VITE_DJ_TEST_ROOM === 'kleveland';
+  const djVinyl = djKleveland || (import.meta.env.DEV && import.meta.env.VITE_DJ_TEST_ROOM === 'vinyl');
+  const djRoom = djVinyl || (import.meta.env.DEV && import.meta.env.VITE_DJ_TEST_ROOM === '1');
+  const djProofStarted = useRef(false);
+  useEffect(() => {
+    const tones = import.meta.env.DEV && import.meta.env.VITE_DJ_TEST_TONES;
+    if (!room || !djRoom || (!tones && !djVinyl) || djProofStarted.current) return;
+    djProofStarted.current = true;
+    if (djKleveland) {
+      const doc = JSON.parse(room.config ?? '{}').presentation.package as PresentationPackage;
+      if(import.meta.env.VITE_DJ_REACTIVE_PROOF==='1'){const key='dj-reactive-proof.'+doc.version;if(!sessionStorage.getItem(key)){sessionStorage.setItem(key,'started');void import('../features/sets-v2/djReactiveRoomProof').then(m=>m.djReactiveRoomProof(room.id));return;}}
+      const proofKey = 'kleveland-proof.' + doc.version;
+      if (import.meta.env.VITE_KLEVELAND_PROOF === '1' && !sessionStorage.getItem(proofKey)) {
+        sessionStorage.setItem(proofKey, 'started');
+        void import('../features/sets-v2/klevelandRoomProof').then(module => module.klevelandRoomProof(doc));
+      } else {
+        void import('../features/sets-v2/djFeedRoomProof').then(module => module.showDjVinylReview());
+      }
+      return;
+    }
+    void import('../features/sets-v2/djFeedRoomProof').then(module => {
+      if (!tones) return module.showDjVinylReview();
+      const vinyl = djVinyl ? JSON.parse(room.config ?? '{}').presentation.package as PresentationPackage : undefined;
+      if (vinyl?.version === '2.2.0' || vinyl?.version === '2.3.0') return module.showDjVinylReview();
+      if (vinyl?.version === '2.1.0') {
+        const key = 'producer.dj-landscape-proof.' + vinyl.version;
+        if (sessionStorage.getItem(key)) return module.showDjVinylReview();
+        sessionStorage.setItem(key, 'started');
+        return module.djLandscapeProof(tones);
+      }
+      return module.djFeedRoomProof(tones, vinyl);
+    }).catch(error => console.warn('DJ test room', error));
+  }, [room, djRoom, djVinyl, djKleveland]);
   const authoringProof=import.meta.env.DEV&&import.meta.env.VITE_AUTHORING_DESKTOP_PROOF==='1';
   const authoringReview=import.meta.env.DEV&&['1','review'].includes(import.meta.env.VITE_AUTHORING_DESKTOP_PROOF);
   const authoringStarted=useRef(false);
@@ -62,21 +95,45 @@ export function SetsDevelopmentRoom() {
     }
   },[room,scene3d]);
   useEffect(() => {
+    if (djRoom) return;
     void invoke<boolean>("live_set_v2_smoke_enabled").then(enabled=>{
       if(enabled && new URLSearchParams(location.search).has('roomApplyCheck') && !smokeStarted.current) { smokeStarted.current=true; void import('../features/sets-v2/roomSmoke').then(m=>m.roomApplyCheck()); }
       else if(enabled && !studio && !new URLSearchParams(location.search).has('roomInspect') && !smokeStarted.current) { smokeStarted.current=true; void import("../features/sets-v2/roomSmoke").then(m=>m.roomSmoke(new URLSearchParams(location.search).get('roomTiming')==='1',new URLSearchParams(location.search).get('roomResolution')==='1',new URLSearchParams(location.search).get('roomShowcase')==='1')); }
     });
-  }, []);
+  }, [djRoom]);
   useEffect(() => {
     let cancelled = false;
     bootstrap.current??=(async () => {
       const smoke = await invoke<boolean>("live_set_v2_smoke_enabled");
       const timingRoom=import.meta.env.DEV&&import.meta.env.VITE_CONTROL_TIMING_ROOM==='1';
-      const name = timingRoom ? "Producer control timing acceptance" : authoringReview ? "Producer authoring acceptance" : atmosphere ? "Atmosphere Studio" : studio ? "Producer 3D Studio" : scene3d ? "Producer 3D GPU lab" : new URLSearchParams(location.search).has("roomColor") ? "Producer color check" : smoke ? "Producer dev smoke" : "Producer dev";
-      const workspace=await invoke<{endpointId:string;serverRoomId:string;runProof?:boolean;moduleBindings:import('../../shared/set-runtime/contract').ModuleBindings}|null>('live_set_v2_dev_workspace');
+      const name = djVinyl ? 'Internet DJ Vinyl Test' : djRoom ? 'Internet DJ Test' : timingRoom ? "Producer control timing acceptance" : authoringReview ? "Producer authoring acceptance" : atmosphere ? "Atmosphere Studio" : studio ? "Producer 3D Studio" : scene3d ? "Producer 3D GPU lab" : new URLSearchParams(location.search).has("roomColor") ? "Producer color check" : smoke ? "Producer dev smoke" : "Producer dev";
+      const workspace=djRoom?null:await invoke<{endpointId:string;serverRoomId:string;runProof?:boolean;moduleBindings:import('../../shared/set-runtime/contract').ModuleBindings}|null>('live_set_v2_dev_workspace');
       if(workspace)setActiveEndpointId(workspace.endpointId);
       const rooms = await ipc.liveListRooms();
       let room = rooms.filter(r=>r.name===name).sort((a,b)=>(b.config?.length??0)-(a.config?.length??0))[0] ?? (await ipc.liveCreateRoom(name));
+      if (djRoom) {
+        const config = JSON.parse(room.config || '{}');
+        if (djVinyl) {
+          const file = djKleveland ? 'kleveland-live-mix.json' : 'internet-dj-vinyl.json';
+          const djSet = parsePackage(JSON.parse(await ipc.setLibraryRead(file)));
+          if (djSet.id !== (djKleveland ? 'kleveland-live-mix' : 'internet-dj')) throw Error('DJ fixture package identity changed');
+          config.presentation = { bindings: {}, framing: {}, ...config.presentation, package: djSet };
+        } else if (config.presentation?.package?.id !== 'internet-dj') {
+          const djSet = parsePackage(JSON.parse(await ipc.setLibraryRead('internet-dj.json')));
+          config.presentation = { package: djSet, bindings: {}, framing: {} };
+        }
+        const scaffoldKey='producer.dev.dj.full-room-layout.v1.'+room.id;
+        const stripped=!localStorage.getItem(scaffoldKey);
+        if(stripped){
+          config.layout={top:['vote','scenes','sources','chat'],left:['dj'],right:['setControls'],bottom:['sounds','mixer'],hidden:['guests','mods','stats','channels','updates']};
+          config.sizes={...config.sizes,top:56,bottom:56,left:Math.max(260,config.sizes?.left??280),right:Math.max(300,config.sizes?.right??320)};
+        }
+        if (JSON.stringify(config) !== room.config) {
+          await ipc.liveUpdateRoom(room.id, { config: JSON.stringify(config) });
+          room = { ...room, config: JSON.stringify(config) };
+        }
+        if(stripped)localStorage.setItem(scaffoldKey,'1');
+      }
       if(timingRoom&&!room.config?.includes('"presentation"'))throw Error('Create the isolated control timing fixture before enabling VITE_CONTROL_TIMING_ROOM.');
       if(authoringProof){
         const {authoringAcceptanceConfig}=await import('../features/sets-v2/authoringDesktopProof');
@@ -129,7 +186,7 @@ export function SetsDevelopmentRoom() {
           if(saved.version==='0.1.0')await ipc.setLibrarySave(JSON.stringify(upgrade(saved)));
         }
       }
-      if(smoke&&!new URLSearchParams(location.search).has('roomInspect')){
+      if(smoke&&!djRoom&&!new URLSearchParams(location.search).has('roomInspect')){
         const config=JSON.parse(room.config||'{}');
         if(workspace){config.server_room_id=workspace.serverRoomId;if(config.presentation)config.presentation.moduleBindings={...config.presentation.moduleBindings,...workspace.moduleBindings};}
         if(studio){config.presentation={...config.presentation,package:studio3d,moduleBindings:{}};config.sizes={...config.sizes,bottom:420};}

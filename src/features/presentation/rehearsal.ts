@@ -51,6 +51,7 @@ export interface RehearsalState {
   controlError?:string;
   media?:Record<string,MediaTransport>;
   animationClock?:AnimationClock;
+  animationCues?:Readonly<Record<string,{value:Scalar;positionMs:number|null}>>;
   layoutMotion?:AnimationTrack[];
   layoutMotionId?:string;
   layoutMotions?:Record<string,AnimationTrack[]>;
@@ -58,6 +59,7 @@ export interface RehearsalState {
   workspaceMode: 'prepare' | 'rehearsal' | 'live';
   running: boolean; paused: boolean; layoutId: string;
   values: Record<string, Scalar>; feeds: Record<string, Scalar>;
+  roomFeeds?: Readonly<Record<string, Scalar>>;
   show: { phase: string; collecting: boolean; revealed: boolean; winner: string; result: '' | 'winner' | 'draw'; ballot: number;
     heat: number; remainingMs: number; total: number };
   ballotChoiceIds: string[]; ballotHistory: Array<{ ballot: number; counts: Record<string, number>; total: number }>;
@@ -82,6 +84,7 @@ export function evaluate(binding: Binding, state: RehearsalState, props: Record<
     if(binding.get==='show.layoutId')return state.layoutId;
     const [scope, key,field] = binding.get.split('.');
     if(scope==='modules'){const values=state.modules?.[key];if(!values||!Object.prototype.hasOwnProperty.call(values,field))throw new Error('Missing module output '+binding.get);return values[field];}
+    if (scope === 'feeds' && state.roomFeeds && Object.prototype.hasOwnProperty.call(state.roomFeeds, key)) return state.roomFeeds[key];
     const data = scope === 'tokens' ? tokens : scope === 'props' ? props : scope === 'values' ? state.values : scope === 'feeds' ? state.feeds : state.show;
     const v = (data as Record<string, Scalar>)[key];
     if (!Object.prototype.hasOwnProperty.call(data, key)) throw new Error(`Missing binding ${binding.get}.`);
@@ -139,7 +142,7 @@ export class RehearsalSession {
     this.workspaceMode = workspaceMode;
     const packageDoc = doc as PresentationPackage;
     this.#package = validatedPackages.has(packageDoc) ? packageDoc : sealPackage(parsePackage(doc));
-    this.sandboxId = sandboxId;this.moduleRuntime=this.createModules();this.state = freeze(this.initial());this.observeModules();
+    this.sandboxId = sandboxId;this.moduleRuntime=this.createModules();this.state = freeze(this.initial());this.syncAnimationCues();this.observeModules();
   }
   private initial(): RehearsalState {
     const media:Record<string,MediaTransport>={};enterMedia(this.package,undefined,this.preparation?.layoutId??this.package.set.initialLayout,media);
@@ -170,10 +173,11 @@ export class RehearsalSession {
     this.workspaceMode = 'prepare'; this.freshBoundary(); this.preparation = undefined; return true;
   };
   private freshBoundary() {
+    const roomFeeds = this.workspaceMode === 'live' ? this.state.roomFeeds : undefined;
     this.attachControlTransport(undefined,false);
     this.voters.clear(); this.reactionTimes.clear(); this.heatEvents = [];
     this.sandboxId = `rehearsal-${crypto.randomUUID()}`;
-    this.stopModules?.();this.moduleRuntime.shutdown();this.liveModules=undefined;this.moduleTransport=undefined;this.moduleLifecycleTransport=undefined;this.moduleRuntime=this.createModules();this.state = freeze(this.initial());this.observeModules();this.syncModuleLifecycle();this.emit();
+    this.stopModules?.();this.moduleRuntime.shutdown();this.liveModules=undefined;this.moduleTransport=undefined;this.moduleLifecycleTransport=undefined;this.moduleRuntime=this.createModules();this.state = freeze({...this.initial(), ...(roomFeeds ? {roomFeeds} : {})});this.observeModules();this.syncModuleLifecycle();this.emit();
   }
   private lastControllerState='';
   private controllerState(snapshot:ModuleSnapshot){const id=this.package.set.viewController,m=id?snapshot.modules[id]:undefined;return m?JSON.stringify([m.epoch,m.view,m.values]):'';}
@@ -252,6 +256,24 @@ export class RehearsalSession {
     return this.moduleRuntime.dispatch(command,{role:participant?'audience':'operator',id:participant??'operator',modules:[module]},Date.now());
   };
   snapshot = () => this.state;
+  /** Only trusted room adapters call this. Sample feed values stay exportable. */
+  setRoomFeeds = (feeds: Record<string, Scalar>): boolean => {
+    if (this.workspaceMode === 'rehearsal') return false;
+    const entries = Object.entries(feeds);
+    const roomFeeds = Object.fromEntries(entries.map(([key, value]) => {
+      const definitions = this.package.set.feeds;
+      if (!Object.prototype.hasOwnProperty.call(definitions, key)) throw new Error('Unknown room feed.');
+      return [key, validateValue(definitions[key], value, key)];
+    }));
+    const previous = this.state.roomFeeds ?? {};
+    if (entries.length === Object.keys(previous).length && entries.every(([key, value]) => previous[key] === value)) return false;
+    const next = { ...this.state, revision: this.state.revision + 1 };
+    if (entries.length) next.roomFeeds = roomFeeds;
+    else delete next.roomFeeds;
+    this.state = freeze(next);
+    this.emit();
+    return true;
+  };
   /** Immutable editor-to-output snapshot. Only the configured defaults and
    * starting layout change, so the already validated design can be shared. */
   preparedPackage = (): PresentationPackage => {
@@ -490,7 +512,15 @@ export class RehearsalSession {
     if (this.voters.size >= 100) throw new Error('Simulation participant limit.');
     this.voters.set(player, choice); next.counts[choice]++; next.show.total++;
   }
-  private emit() { this.listeners.forEach(fn => fn()); }
+  private syncAnimationCues(){
+    const cues={...this.state.animationCues};let changed=false;let animationClock=this.state.animationClock;
+    for(const layout of this.package.set.layouts){const binding=layout.animation?.cue;if(binding===undefined)continue;
+      const key=JSON.stringify(binding),value=evaluate(binding,this.state,{},64,this.package.set.tokens),prior=cues[key];
+      if(!prior||prior.value!==value){let positionMs:number|null=null;if(prior&&animationClock){const at=Date.now(),position=clockPosition(animationClock,at);animationClock={...animationClock,...position,anchorMs:at};positionMs=position.positionMs;}cues[key]={value,positionMs};changed=true;}
+    }
+    if(changed)this.state=freeze({...this.state,animationClock,animationCues:cues});
+  }
+  private emit() {this.syncAnimationCues(); this.listeners.forEach(fn => fn()); }
 }
 
 /** Leaders of this ballot only; zero votes are not a tied result. */

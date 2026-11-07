@@ -11,6 +11,8 @@ export function SoundboardPanel({ roomId, enabled, compact = false }: { roomId: 
   const [search, setSearch] = useState('');
   const [edit, setEdit] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [previewPending,setPreviewPending]=useState<string|null>(null);
+  const previewRequest=useRef(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [hotkeys, setHotkeys] = useState(soundHotkeysEnabled);
   const [pair, setPair] = useState('');
@@ -20,6 +22,7 @@ export function SoundboardPanel({ roomId, enabled, compact = false }: { roomId: 
   const titleId = useId();
   const sequence = useRef(0);
   const saving = useRef(Promise.resolve());
+  useEffect(()=>()=>{++sequence.current;++previewRequest.current;void sounds.control(roomId,'stop_preview').catch(()=>{});},[roomId]);
 
   useEffect(() => {
     let active = true;
@@ -86,6 +89,7 @@ export function SoundboardPanel({ roomId, enabled, compact = false }: { roomId: 
   const closeSettings = () => {
     setSettingsOpen(false);
     setPair('');
+    void stopPreview();
   };
 
   const run = async (action: string, id = '') => {
@@ -114,6 +118,19 @@ export function SoundboardPanel({ roomId, enabled, compact = false }: { roomId: 
     // A pad can appear in the dock before its assignment has reached the native store.
     await saving.current;
     await run(action, id);
+  };
+
+  const stopPreview=async()=>{
+    ++previewRequest.current;setPreviewPending(null);
+    await run('stop_preview');
+  };
+  const audition=async(id:string)=>{
+    if(previewPending===id||status?.previewing.includes(id)){await stopPreview();return;}
+    const ticket=++previewRequest.current,n=++sequence.current;
+    setPreviewPending(id);setError('');
+    try{await saving.current;if(ticket!==previewRequest.current)return;const next=await sounds.control(roomId,'preview',id);if(ticket===previewRequest.current&&n===sequence.current)setStatus(next);}
+    catch(error){if(ticket===previewRequest.current&&n===sequence.current)setError(String(error));}
+    finally{if(ticket===previewRequest.current)setPreviewPending(null);}
   };
 
   const importing = async (folder: boolean) => {
@@ -189,7 +206,7 @@ export function SoundboardPanel({ roomId, enabled, compact = false }: { roomId: 
             <strong>{pad.name}</strong>
           </button>
           {!compact && <><button disabled={!enabled} aria-label={`Preview ${pad.name}`} title="Preview in headphones"
-            aria-pressed={preview} onClick={() => void trigger('preview', pad.id)}>Preview</button>
+            aria-pressed={preview} onClick={() => void audition(pad.id)}>Preview</button>
           <button aria-label={`Edit ${pad.name}`} onClick={event => openSettings(event, pad.id)}>Edit</button>
           {(active || preview) && <button disabled={!enabled} aria-label={`Stop ${pad.name}`} onClick={() => void run('stop', pad.id)}>■</button>}</>}
         </li>;
@@ -221,13 +238,21 @@ export function SoundboardPanel({ roomId, enabled, compact = false }: { roomId: 
               <button disabled={busy || !library} onClick={() => void importing(true)}>Import folder</button>
             </div>
             <p>Imports are saved to the library and connected to this room.</p>
+            <p>Preview sounds on this device before connecting them.</p>
             {busy && <p role="status">Importing sounds…</p>}
             <input type="search" aria-label="Search sound library" placeholder="Search library" value={search} onChange={event => setSearch(event.target.value)} />
             <ul className="sb-inventory">
               {inventory.map(sound => {
                 const assigned = connected.has(sound.id);
+                const preview=previewing.includes(sound.id),pending=previewPending===sound.id;
                 return <li key={sound.id}>
+                  <button className="sb-library-preview" disabled={!enabled||busy} aria-label={`${preview||pending?'Stop preview':'Preview'} ${sound.name}`}
+                    title={pending?'Loading preview — click to cancel':preview?'Stop preview':'Preview on this device'} aria-pressed={preview} aria-busy={pending}
+                    onClick={()=>void audition(sound.id)}>
+                    {preview||pending?<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="1"/></svg>:<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"/></svg>}
+                  </button>
                   <span title={sound.name}>{sound.name}</span>
+                  <div className="sb-inventory-actions">
                   {assigned && compact && <button aria-label={`Edit ${sound.name}`} onClick={() => setEdit(sound.id)}>Edit</button>}
                   <button className={assigned ? undefined : 'sb-connect'} disabled={busy || (!assigned && pads.length >= 500)}
                     aria-label={assigned ? `Remove ${sound.name} from room` : `Connect ${sound.name} to room`}
@@ -239,6 +264,7 @@ export function SoundboardPanel({ roomId, enabled, compact = false }: { roomId: 
                       const pad: SoundPad = { id: sound.id, name: sound.name, color: '#36DFFF', mode: 'restart', volume: .8, fade_ms: 5 };
                       updateBoard({ pads: [...pads, pad] });
                     }}>{assigned ? 'Remove' : 'Connect'}</button>
+                  </div>
                 </li>;
               })}
             </ul>

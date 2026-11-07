@@ -20,7 +20,7 @@
   function layerMask(entry,progress){
     const m=entry.mask;if(!m)return;const el=entry.element,w=parseFloat(el.style.width)||el.clientWidth,h=parseFloat(el.style.height)||el.clientHeight;
     if(m.radius)el.style.clipPath='inset(0 round '+m.radius+'px)';
-    if(m.kind==='rounded'){el.style.clipPath='inset(0 round '+(m.radius||0)+'px)';return;}
+    if(m.kind==='rounded'){el.style.clipPath='inset(0 round '+(m.radius||0)+'px)';if(m.feather>0){const f=m.feather,r=Math.max(0,(m.radius||0)-f/2);const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'" height="'+h+'"><defs><filter id="b"><feGaussianBlur stdDeviation="'+f/3+'"/></filter></defs><rect x="'+f/2+'" y="'+f/2+'" width="'+Math.max(1,w-f)+'" height="'+Math.max(1,h-f)+'" rx="'+r+'" fill="white" filter="url(#b)"/></svg>';const url='url("data:image/svg+xml,'+encodeURIComponent(svg)+'")';el.style.maskImage=url;el.style.webkitMaskImage=url;}else{el.style.maskImage='';el.style.webkitMaskImage='';}return;}
     const p=progress??m.progress??1,inside=m.invert?'transparent':'#000',outside=m.invert?'#000':'transparent',f=Math.max(.5,m.feather||0);
     let image;if(p<=0)image='linear-gradient('+outside+','+outside+')';else if(p>=1)image='linear-gradient('+inside+','+inside+')';
     else if(m.kind==='circle'){const x=m.x??.5,y=m.y??.5,r=Math.hypot(Math.max(x,1-x)*w,Math.max(y,1-y)*h)*p;image='radial-gradient(circle at '+x*100+'% '+y*100+'%, '+inside+' '+Math.max(0,r-f/2)+'px, '+outside+' '+(r+f/2)+'px)';}
@@ -34,10 +34,10 @@
         if(track.property==='mask.progress')layerMask(entry,value);
         else if(track.property.startsWith('shader.')){if(entry.shaderValues)entry.shaderValues[track.property.slice(7)]=value;}
         else if(entry.shaderValues&&track.property==='opacity')entry.shaderValues.opacity=value;
-        else if(track.property==='scale'||track.property==='rotation'){const t=transforms.get(el)||{scale:1,rotation:0};t[track.property]=value;transforms.set(el,t);}
+        else if(track.property==='scale'||track.property==='rotation'){const t=transforms.get(el)||{scale:1,rotation:0,hasScale:false};t[track.property]=value;if(track.property==='scale')t.hasScale=true;transforms.set(el,t);}
         else el.style[({x:'left',y:'top'})[track.property]||track.property]=track.property==='opacity'?String(value):value+'px';
       }
-      for(const [el,t]of transforms){el.style.transformOrigin='0 0';el.style.transform=(el.dataset.baseTransform||'')+' scale('+t.scale+') rotate('+t.rotation+'deg)';}
+      for(const [el,t]of transforms){el.style.transformOrigin=t.hasScale?'0 0':'50% 50%';el.style.transform=(el.dataset.baseTransform||'')+' scale('+t.scale+') rotate('+t.rotation+'deg)';}
       for(const entry of map.values())if(entry.chart)entry.chart.draw(show);
       for(const entry of map.values())if(entry.gpu){const v=entry.shaderValues;entry.gpu.draw((entry.shader.clock==='show'?show:segment)/1000,v.intensity,v.scale,v.opacity,parseFloat(entry.element.style.width),parseFloat(entry.element.style.height));}
   }
@@ -110,7 +110,7 @@
   }
   function updateWorld(entry,spec){
     const clock=timeline?.clock,now=Date.now();
-    const update={revision:(entry.scene3dRevision=(entry.scene3dRevision??0)+1),anchor:clock?.running?clock.anchorMs-clock.positionMs:now,elapsed:clock?.positionMs??0,paused:!clock?.running,cue:spec.cue,...(spec.cueSequence!==undefined?{cueSequence:spec.cueSequence}:{}),...(spec.view?{view:spec.view}:{})};
+    const update={revision:(entry.scene3dRevision=(entry.scene3dRevision??0)+1),anchor:clock?.running?clock.anchorMs-clock.positionMs:now,elapsed:clock?.positionMs??0,...(spec.music?{music:spec.music}:{}),paused:!clock?.running,cue:spec.cue,...(spec.cueSequence!==undefined?{cueSequence:spec.cueSequence}:{}),...(spec.view?{view:spec.view}:{})};
     entry.scene3dControl=update;entry.scene3d?.update(update);return update;
   }
   function sync(node, parent, used, surface, isRoot = false) {
@@ -145,7 +145,7 @@
       const update=updateWorld(entry,spec);
       if(entry.scene3dSignature!==signature){
         entry.scene3d?.dispose();entry.scene3dPending=true;el.replaceChildren();const gpu=document.createElement('canvas');gpu.style.cssText='width:100%;height:100%;display:block';el.appendChild(gpu);entry.scene3dSignature=signature;
-        const pending=ProducerScene3d.mountWorld(gpu,spec.world,{pass:spec.pass,width:node.styles.width,height:node.styles.height,control:update,onStatus:s=>{gpu.dataset.scene3dReady=String(s.ready);if(s.error&&!s.lost)port?.postMessage({type:'error'});}});
+        const pending=ProducerScene3d.mountWorld(gpu,spec.world,{pass:spec.pass,width:node.styles.width,height:node.styles.height,control:update,onStatus:s=>{gpu.dataset.scene3dReady=String(s.ready);if(s.music)gpu.dataset.music=JSON.stringify(s.music);if(s.error&&!s.lost)port?.postMessage({type:'error'});}});
         entry.scene3dPromise=pending;pending.then(api=>{if(entry.scene3dPromise!==pending||!el.isConnected){api.dispose();return;}entry.scene3d=api;entry.scene3dPending=false;api.update(entry.scene3dControl);}).catch(()=>port?.postMessage({type:'error'}));
       }else entry.scene3d?.update(update);
     }
@@ -223,6 +223,8 @@
     if (port) port.close();
     port = event.ports[0];
     port.onmessage = ({ data }) => {
+      if(data?.type==='djAudio'){for(const entry of entries.values())entry.scene3d?.audio(data.audio);return;}
+      if(data?.type==='soundTrigger'){for(const entry of entries.values())entry.scene3d?.sound(data.event);return;}
       if(data?.type==='sourceFrames') {
         Object.assign(sourceFrames,data.frames);
         for(const entry of entries.values())liveSlot(entry);
@@ -241,7 +243,7 @@
         if(!p.timeline||!p.timeline.clock.running&&p.timeline.clock.positionMs===0)removePrevious();
         const content=[];const collectContent=n=>{if(n.type==='text')content.push([n.id,n.text,n.styles]);if(n.type==='chart')content.push([n.id,n.chart]);n.children.forEach(collectContent);};collectContent(p.root);
         const series=[];const collectSeries=n=>{if(n.type==='chart')series.push([n.chart.id,n.chart.data]);n.children.forEach(collectSeries);};collectSeries(p.root);const nextCharts=series.length?JSON.stringify(series):'',chartUpdate=!!previewCharts&&!!nextCharts&&previewCharts!==nextCharts;previewCharts=nextCharts;
-        const nextContent=JSON.stringify(content),sameLayout=canvas.firstElementChild?.dataset.node===p.root.id;
+        const nextContent=p.contentKey??JSON.stringify(content),sameLayout=canvas.firstElementChild?.dataset.node===p.root.id;
         // Freeze only the outgoing preview pixels. Keep live entries (including
         // Three.js contexts and camera subscriptions) in place during a content
         // dissolve; no second scene renderer is constructed.

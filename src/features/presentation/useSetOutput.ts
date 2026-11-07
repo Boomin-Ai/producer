@@ -173,7 +173,7 @@ function useLegacySetOutput(session:RehearsalSession,roomId:string|null,sources:
     const next=resolveRoomBindings(bindings,sources);
     if(JSON.stringify(next)!==JSON.stringify(bindings)){setBindings(next);onBindings?.(next);}
   },[bindings,sources]);
-  useEffect(()=> {setError('');},[state.layoutId,state.values,state.feeds,bindings,framing]);
+  useEffect(()=> {setError('');},[state.layoutId,state.values,state.feeds,state.roomFeeds,bindings,framing]);
   useEffect(()=> {
     if(!active || busy || error)return;
     const timer=setTimeout(()=> {try {if(fingerprint()!==acknowledged.current)void apply();}catch(e){setError(String(e));}},0);

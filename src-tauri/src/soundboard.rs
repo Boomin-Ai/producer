@@ -1,6 +1,7 @@
 //! Persistent room boards and the shared UI / Stream Deck command boundary.
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::time::Instant;
 use std::{
     path::{Path, PathBuf},
     sync::{
@@ -8,9 +9,72 @@ use std::{
         Mutex, OnceLock,
     },
 };
+use tauri::Emitter;
 use tauri::Manager;
 static STORE: Mutex<()> = Mutex::new(());
+static VISUAL_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+static VISUAL: Mutex<Option<(Instant, SoundVisual)>> = Mutex::new(None);
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SoundVisual {
+    pub sequence: u64,
+    pub label: String,
+    pub age_ms: u64,
+}
+pub fn visual_sequence() -> u64 {
+    VISUAL_SEQUENCE.load(Ordering::Acquire)
+}
+pub fn visual_event() -> Option<SoundVisual> {
+    let visual = VISUAL.lock().ok()?;
+    let (at, event) = visual.as_ref()?;
+    let age = at.elapsed().as_millis() as u64;
+    (age < 3000).then(|| SoundVisual {
+        age_ms: age,
+        ..event.clone()
+    })
+}
+pub fn clear_visual() {
+    if let Ok(mut visual) = VISUAL.lock() {
+        *visual = None;
+        VISUAL_SEQUENCE.fetch_add(1, Ordering::Release);
+    }
+}
+fn publish_visual(app: &tauri::AppHandle, room: &str, label: &str) {
+    let event = {
+        let Ok(active) = ACTIVE.lock() else { return };
+        if active.as_deref() != Some(room) {
+            return;
+        }
+        let Ok(mut visual) = VISUAL.lock() else {
+            return;
+        };
+        let sequence = VISUAL_SEQUENCE.load(Ordering::Relaxed) + 1;
+        let event = SoundVisual {
+            sequence,
+            label: label.chars().take(64).collect(),
+            age_ms: 0,
+        };
+        *visual = Some((Instant::now(), event.clone()));
+        VISUAL_SEQUENCE.store(sequence, Ordering::Release);
+        event
+    };
+    let _ = app.emit("soundboard-trigger", event);
+}
 static GENERATION: AtomicU64 = AtomicU64::new(0);
+static PREVIEW_GENERATION: AtomicU64 = AtomicU64::new(0);
+pub fn preview_current(ticket: u64) -> bool {
+    PREVIEW_GENERATION.load(Ordering::SeqCst) == ticket
+}
+pub fn cancel_previews() {
+    PREVIEW_GENERATION.fetch_add(1, Ordering::SeqCst);
+}
+fn preview_ticket(request: &Request) -> Option<u64> {
+    matches!(
+        request.action.as_str(),
+        "preview" | "stop_preview" | "stop_all"
+    )
+    .then(|| PREVIEW_GENERATION.fetch_add(1, Ordering::SeqCst) + 1)
+}
 static DECODE: Mutex<()> = Mutex::new(());
 pub static ACTIVE: Mutex<Option<String>> = Mutex::new(None);
 pub static REMOTE: OnceLock<Pairing> = OnceLock::new();
@@ -77,6 +141,8 @@ pub enum Native {
     Has(String, u64),
     Load(String, u64, Vec<f32>),
     Trigger(String, u64, i32, f32, u32, bool),
+    Audition(String, u64, f32, u32, u64),
+    StopPreview(String, u64),
     Stop(String),
     Mix(String, f32, bool),
     Status(String),
@@ -222,9 +288,16 @@ pub(crate) fn pcm(path: &Path) -> Result<Vec<f32>, String> {
     Ok(out)
 }
 fn prepare(app: &tauri::AppHandle, room: &str, sound: &Sound) -> Result<(), String> {
-    let _g = DECODE.lock().map_err(|e| e.to_string())?;
     ensure_active(room)?;
     let n = numeric(&sound.id)?;
+    if matches!(
+        dispatch(app, Native::Has(room.into(), n))?,
+        Reply::Cached(true)
+    ) {
+        return Ok(());
+    }
+    let _g = DECODE.lock().map_err(|e| e.to_string())?;
+    ensure_active(room)?;
     if matches!(
         dispatch(app, Native::Has(room.into(), n))?,
         Reply::Cached(true)
@@ -239,12 +312,29 @@ fn prepare(app: &tauri::AppHandle, room: &str, sound: &Sound) -> Result<(), Stri
 }
 pub fn execute(app: &tauri::AppHandle, r: Request) -> Result<Status, String> {
     ensure_active(&r.room)?;
+    let ticket = preview_ticket(&r);
+    execute_at(app, r, ticket)
+}
+fn execute_at(app: &tauri::AppHandle, r: Request, ticket: Option<u64>) -> Result<Status, String> {
+    ensure_active(&r.room)?;
+    if r.action == "preview" && ticket.is_some_and(|value| !preview_current(value)) {
+        return Err("Sound preview cancelled".into());
+    }
     let generation = GENERATION.load(Ordering::SeqCst);
     match r.action.as_str() {
         "status" => status(app, Native::Status(r.room)),
+        "stop_preview" => status(
+            app,
+            Native::StopPreview(r.room, ticket.ok_or("Missing preview ticket")?),
+        ),
         "stop_all" => {
             GENERATION.fetch_add(1, Ordering::SeqCst);
-            status(app, Native::Stop(r.room))
+            let result = status(app, Native::Stop(r.room));
+            if result.is_ok() {
+                clear_visual();
+                let _ = app.emit("soundboard-trigger", Option::<SoundVisual>::None);
+            }
+            result
         }
         "volume" | "monitor" => {
             let v = r.value.ok_or("Missing value")?;
@@ -270,12 +360,10 @@ pub fn execute(app: &tauri::AppHandle, r: Request) -> Result<Status, String> {
         }
         "play" | "preview" | "prepare" | "stop" => {
             let lib = library(app, &r.room)?;
-            let p = lib
-                .board
-                .pads
-                .iter()
-                .find(|p| p.id == r.id)
-                .ok_or("Sound is not assigned to this room")?;
+            let p = lib.board.pads.iter().find(|p| p.id == r.id);
+            if r.action != "preview" && p.is_none() {
+                return Err("Sound is not assigned to this room".into());
+            }
             let sound = lib
                 .sounds
                 .iter()
@@ -287,6 +375,19 @@ pub fn execute(app: &tauri::AppHandle, r: Request) -> Result<Status, String> {
             if generation != GENERATION.load(Ordering::SeqCst) {
                 return Err("Sound trigger cancelled".into());
             }
+            if r.action == "preview" {
+                return status(
+                    app,
+                    Native::Audition(
+                        r.room,
+                        numeric(&r.id)?,
+                        p.map_or(0.8, |p| p.volume),
+                        p.map_or(5, |p| p.fade_ms),
+                        ticket.ok_or("Missing preview ticket")?,
+                    ),
+                );
+            }
+            let p = p.ok_or("Sound is not assigned to this room")?;
             if r.action == "prepare" {
                 return status(app, Native::Status(r.room));
             }
@@ -302,24 +403,33 @@ pub fn execute(app: &tauri::AppHandle, r: Request) -> Result<Status, String> {
                     _ => 0,
                 }
             };
-            status(
+            let reply = status(
                 app,
                 Native::Trigger(
-                    r.room,
+                    r.room.clone(),
                     numeric(&p.id)?,
                     mode,
                     p.volume,
                     p.fade_ms,
                     r.action == "preview",
                 ),
-            )
+            )?;
+            if r.action == "play"
+                && generation == GENERATION.load(Ordering::SeqCst)
+                && reply.playing.contains(&r.id)
+            {
+                publish_visual(app, &r.room, &p.name);
+            }
+            Ok(reply)
         }
         _ => Err("Unknown soundboard action".into()),
     }
 }
 #[tauri::command]
 pub async fn soundboard_control(app: tauri::AppHandle, request: Request) -> Result<Status, String> {
-    tauri::async_runtime::spawn_blocking(move || execute(&app, request))
+    ensure_active(&request.room)?;
+    let ticket = preview_ticket(&request);
+    tauri::async_runtime::spawn_blocking(move || execute_at(&app, request, ticket))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -331,6 +441,8 @@ pub async fn soundboard_activate(app: tauri::AppHandle, room: String) -> Result<
     let h = app.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let lib = library(&h, &room)?;
+        clear_visual();
+        cancel_previews();
         GENERATION.fetch_add(1, Ordering::SeqCst);
         let s = status(&h, Native::Activate(room.clone()))?;
         *ACTIVE.lock().map_err(|e| e.to_string())? = Some(room.clone());

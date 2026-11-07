@@ -1,3 +1,4 @@
+import {parseMusic} from './scene3d/contract.mjs';
 import {chartData,resolveChart,type ChartSpec} from './charts';
 import {validateMask,validateBackdrop,type LayerMask,type BackdropEffect} from './visualEffects';
 import {mediaConfig} from './playback';
@@ -17,7 +18,7 @@ export interface RenderNode {
   id: string; type: 'box' | 'text' | 'slot' | 'media' | 'shader' | 'scene3d' | 'chart'; text?: string; slotLabel?: string; slotId?: string; framing?: import('./schema').SlotFraming; appearance?: SourceAppearance;
   styles: Record<string, string | number>; children: RenderNode[]; motionClass?: string;
 }
-export interface OutputProjection { moduleCommit?:{setEpoch:number;revision:number;domain:'live'|'rehearsal'}; timeline?:AnimationTimeline;assets?:Record<string,import('./assets').MediaAsset>; width: number; height: number; revision: number; root: RenderNode; css: string }
+export interface OutputProjection { contentKey?:string; moduleCommit?:{setEpoch:number;revision:number;domain:'live'|'rehearsal'}; timeline?:AnimationTimeline;assets?:Record<string,import('./assets').MediaAsset>; width: number; height: number; revision: number; root: RenderNode; css: string }
 
 /** Output receives resolved visual data only, never the operator tree or raw state.
  * Any future live adapter must supply an authorized public state projection here.
@@ -77,7 +78,8 @@ export function outputProjection(doc: PresentationPackage, state: RehearsalState
       const spec=n.scene3d!,cue=spec.cue===undefined?'neutral':evaluate(spec.cue,publicState,props,64,doc.set.tokens),view=spec.view===undefined?undefined:evaluate(spec.view,publicState,props,64,doc.set.tokens);
       if(typeof cue!=='string'||!(/^[a-z][a-z0-9-]{0,63}$/).test(cue)||(spec.world.cues?!Object.prototype.hasOwnProperty.call(spec.world.cues,cue):cue!=='neutral')||view!==undefined&&(typeof view!=='string'||!spec.world.views?.[view]))throw Error('Invalid resolved 3D cue/view');
       const cueSequence=spec.cueSequence===undefined?undefined:evaluate(spec.cueSequence,publicState,props,64,doc.set.tokens);if(cueSequence!==undefined&&(typeof cueSequence!=='number'||!Number.isSafeInteger(cueSequence)||cueSequence<0))throw Error('Invalid 3D cue sequence');
-      out.scene3d={id:spec.id,pass:spec.pass,world:structuredClone(spec.world),cue:cue as string,...(typeof cueSequence==='number'?{cueSequence}:{}),...(typeof view==='string'?{view}:{})};
+      const music=spec.music?parseMusic(Object.fromEntries(Object.entries(spec.music).map(([key,binding])=>[key,evaluate(binding,publicState,props,64,doc.set.tokens)]))):undefined;
+      out.scene3d={...(music?{music}:{}),id:spec.id,pass:spec.pass,world:structuredClone(spec.world),cue:cue as string,...(typeof cueSequence==='number'?{cueSequence}:{}),...(typeof view==='string'?{view}:{})};
     }
     if(n.type==='shader'){
       const {bindings,...shader}=structuredClone(n.shader!);
@@ -111,9 +113,13 @@ export function outputProjection(doc: PresentationPackage, state: RehearsalState
   const used=new Set<string>();const collect=(n:RenderNode)=>{if(n.assetId)used.add(n.assetId);n.children.forEach(collect);};collect(root);
   const assets=Object.fromEntries([...used].map(id=>[id,(( {name,mime,data})=>({name,mime,data}))(doc.set.assets![id])]));
   const hasShaders=[...authored.values()].some(n=>n.type==='shader'||n.type==='scene3d'||n.type==='chart');
-  const timeline:AnimationTimeline|undefined=layout.animation||hasShaders?{...layout.animation,tracks:(layout.animation?.tracks??[]).filter(t=>resolved.has(t.target)).map(t=>({...t,target:resolved.get(t.target)!})),clock:state.animationClock?{...state.animationClock}:{running:false,positionMs:state.elapsedMs,segmentMs:0,anchorMs:Date.now()}}:undefined;
+  const {cue:animationCue,...animation}=layout.animation??{};
+  const timeline:AnimationTimeline|undefined=layout.animation||hasShaders?{...animation,tracks:(layout.animation?.tracks??[]).filter(t=>resolved.has(t.target)).map(t=>({...t,target:resolved.get(t.target)!})),clock:state.animationClock?{...state.animationClock}:{running:false,positionMs:state.elapsedMs,segmentMs:0,anchorMs:Date.now()}}:undefined;
+  if(timeline&&animationCue!==undefined){const cue=state.animationCues?.[JSON.stringify(animationCue)];timeline.clock.segmentMs=cue?.positionMs===undefined||cue.positionMs===null?86_400_000:Math.max(0,timeline.clock.positionMs-cue.positionMs);}
   const layoutMotion=state.layoutMotions?.[layout.id]??(state.layoutMotionId===layout.id?state.layoutMotion:undefined);
   if(timeline&&layoutMotion){const visible=new Set(resolved.values()),motion=layoutMotion.filter(t=>visible.has(t.target));const keys=new Set(motion.map(t=>`${t.target}:${t.property}`));timeline.tracks=[...timeline.tracks.filter(t=>!keys.has(`${t.target}:${t.property}`)),...motion];}
   if(timeline&&hasShaders&&!doc.show)timeline.clock={...timeline.clock,running:!state.paused};
-  return { ...((state.moduleConnection==='live'||state.workspaceMode==='rehearsal')?{moduleCommit:{...state.moduleCommit,domain:state.workspaceMode==='rehearsal'?'rehearsal' as const:'live' as const}}:{}),...(timeline?{timeline}:{}),...(used.size?{assets}:{}),width: layout.width, height: layout.height, revision: state.revision, root, css: css.join('\n') };
+  const contentFeeds=layout.animation?.transition?.contentFeeds;
+  const contentKey=contentFeeds?JSON.stringify(contentFeeds.map(key=>evaluate({get:'feeds.'+key},publicState))):undefined;
+  return { ...(contentKey===undefined?{}:{contentKey}),...((state.moduleConnection==='live'||state.workspaceMode==='rehearsal')?{moduleCommit:{...state.moduleCommit,domain:state.workspaceMode==='rehearsal'?'rehearsal' as const:'live' as const}}:{}),...(timeline?{timeline}:{}),...(used.size?{assets}:{}),width: layout.width, height: layout.height, revision: state.revision, root, css: css.join('\n') };
 }

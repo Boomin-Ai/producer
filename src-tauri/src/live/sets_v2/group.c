@@ -57,7 +57,7 @@ static const char EFFECT[] =
     "V VS(V v){V o;o.pos=mul(float4(v.pos.xyz,1.0),ViewProj);o.uv=v.uv;return o;}"
     "float maskValue(float2 uv){float2 halfSize=extent*0.5;float r=min(radius,min(halfSize.x,halfSize.y));"
     "float2 q=abs((uv-0.5)*extent)-(halfSize-r);float d=length(max(q,0.0))+min(max(q.x,q.y),0.0)-r;"
-    "float base=saturate(0.5-d);float m=1.0;float feather=max(mask_feather,0.5);"
+    "float base=mask_kind<0.5&&mask_feather>0.5?smoothstep(0.0,mask_feather,-d):saturate(0.5-d);float m=1.0;float feather=max(mask_feather,0.5);"
     "if(mask_kind>0.5){if(mask_progress<=0.0)m=0.0;else if(mask_progress>=1.0)m=1.0;else{"
     "if(mask_kind<1.5){float2 farCorner=max(mask_center,1.0-mask_center)*extent;"
     "d=length((uv-mask_center)*extent)-length(farCorner)*mask_progress;}"

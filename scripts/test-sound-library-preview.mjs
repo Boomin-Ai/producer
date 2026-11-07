@@ -1,0 +1,52 @@
+import assert from 'node:assert/strict';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {chromium} from '../tools/producer-mcp/node_modules/playwright-core/index.mjs';
+const executablePath=process.env.PRODUCER_CHROME_PATH??(process.platform==='darwin'?'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome':undefined);
+const browser=await chromium.launch({...(executablePath?{executablePath}:{}),headless:true});
+try{
+ const page=await browser.newPage({viewport:{width:900,height:800}});
+ const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await page.goto('http://127.0.0.1:1436/scripts/soundboard-browser.html?compact');
+ const dock=page.getByRole('list',{name:'Connected sounds'});
+ await dock.getByRole('button',{name:'Air horn',exact:true}).click();
+ await page.getByRole('button',{name:'Sound settings',exact:true}).click();
+ const dialog=page.getByRole('dialog',{name:'Sound settings'});
+ await dialog.getByRole('button',{name:'Preview Bell',exact:true}).click();
+ await dialog.getByRole('button',{name:'Stop preview Bell',exact:true}).waitFor();
+ let state=await page.evaluate(()=>window.soundboardState());
+ assert.deepEqual(state.status.previewing,['c'.repeat(64)]);assert.deepEqual(state.status.playing,['a'.repeat(64)]);
+ assert.equal(state.library.board.pads.length,2,'Audition must not connect an unassigned sound');
+ await dialog.getByRole('button',{name:'Preview Applause',exact:true}).click();
+ await dialog.getByRole('button',{name:'Stop preview Applause',exact:true}).waitFor();
+ assert.deepEqual((await page.evaluate(()=>window.soundboardState())).status.previewing,['b'.repeat(64)],'Switching previews replaces the previous sound');
+ await dialog.getByRole('button',{name:'Done',exact:true}).click();
+ await page.waitForFunction(()=>!window.soundboardState().status.previewing.length);
+ assert.deepEqual((await page.evaluate(()=>window.soundboardState())).status.playing,['a'.repeat(64)],'Closing settings preserves on-air sounds');
+ await page.getByRole('button',{name:'Sound settings',exact:true}).click();
+ await page.evaluate(()=>window.previewDelay=200);
+ await dialog.getByRole('button',{name:'Preview Bell',exact:true}).click();
+ await dialog.getByRole('button',{name:'Done',exact:true}).click();await page.waitForTimeout(350);
+ state=await page.evaluate(()=>window.soundboardState());assert.equal(state.status.previewing.length,0,'Closing cancels a loading preview');assert.equal(state.library.board.pads.length,2);
+ await page.evaluate(()=>window.previewDelay=0);
+ await page.getByRole('button',{name:'Sound settings',exact:true}).click();
+ await page.evaluate(()=>window.saveDelay=200);
+ await dialog.getByRole('button',{name:'Connect Bell to room',exact:true}).click();
+ await dialog.getByRole('button',{name:'Preview Bell',exact:true}).click();
+ await dialog.getByRole('button',{name:'Done',exact:true}).click();await page.waitForTimeout(350);
+ assert.equal((await page.evaluate(()=>window.soundboardState())).status.previewing.length,0,'Closing also cancels a preview waiting for a board save');
+ await page.evaluate(()=>window.saveDelay=0);
+ await page.getByRole('button',{name:'Sound settings',exact:true}).click();
+ await dialog.getByRole('button',{name:'Remove Bell from room',exact:true}).click();
+ await dialog.getByRole('button',{name:'Preview Bell',exact:true}).click();
+ await dialog.getByRole('button',{name:'Stop preview Bell',exact:true}).click();
+ await page.waitForFunction(()=>!window.soundboardState().status.previewing.length);
+ for(const width of [200,320,600,1000]){
+  await page.setViewportSize({width,height:800});
+  assert.equal(await dialog.evaluate(node=>node.scrollWidth>node.clientWidth),false,'No dialog overflow at '+width);
+  assert.equal(await dialog.locator('.sb-inventory').evaluate(node=>node.scrollWidth>node.clientWidth),false,'No library overflow at '+width);
+ }
+ await page.setViewportSize({width:1000,height:800});
+ await page.screenshot({path:join(process.env.PRODUCER_TEST_OUTPUT_DIR??tmpdir(),'sound-library-preview.png')});
+ assert.deepEqual(errors,[]);console.log('PASS: unconnected library previews, replacement, stop, cancellation, unchanged room assignment/on-air sounds, and 200–1000px layouts');
+}finally{await browser.close();}

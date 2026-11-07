@@ -283,6 +283,7 @@ impl Action {
 #[serde(rename_all = "camelCase")]
 pub struct Status {
     pub scene3d_contexts: usize,
+    pub dj_visuals: Vec<serde_json::Value>,
     pub graphics_layers: usize,
     pub graphics_creations: usize,
     pub cached_keys: Vec<String>,

@@ -26,7 +26,16 @@ export type DJDeck = {
   state: number;
   looping: boolean;
 };
+export type DJProgramTrack = { title: string; deck: 0 | 1 };
+export type DJProgram = {
+  phase: "idle" | "ready" | "playing" | "paused" | "loading" | "crossfade" | "manual" | "stopping";
+  current: DJProgramTrack | null;
+  next: DJProgramTrack | null;
+  next_kind: "incoming" | "deck" | "queue" | "shuffle" | "none";
+};
+export type DJAudio = {positionMs?:number;durationMs?:number;playing?:boolean;blend?:number;mixing?:boolean;energy:number;bass:number;high:number;bands:number[];wave:number[]};
 export type DJStatus = {
+  audio?:DJAudio;
   decks: [DJDeck, DJDeck];
   active: number;
   volume: number;
@@ -37,6 +46,8 @@ export type DJStatus = {
   duck: boolean;
   transitioning: boolean;
   error: string | null;
+  program?: DJProgram;
+  queue_titles?: string[];
 };
 export type DJAction =
   | { kind: "status" | "clear" | "pause_all" | "stop_all" }

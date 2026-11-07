@@ -86,6 +86,8 @@ impl Soundboard {
         &self.room
     }
     pub fn clear(&mut self) {
+        crate::soundboard::clear_visual();
+        crate::soundboard::cancel_previews();
         unsafe {
             for (i, s) in self.sources.iter_mut().enumerate() {
                 if !s.is_null() {
@@ -140,6 +142,8 @@ impl Soundboard {
             Native::Has(r, _)
             | Native::Load(r, _, _)
             | Native::Trigger(r, ..)
+            | Native::Audition(r, ..)
+            | Native::StopPreview(r, ..)
             | Native::Mix(r, ..)
             | Native::Stop(r)
             | Native::Status(r) => r,
@@ -179,6 +183,21 @@ impl Soundboard {
                     {
                         return Err("Sound not ready or 32 voices already playing".into());
                     }
+                }
+                Native::Audition(_, id, gain, fade, ticket) => {
+                    if !crate::soundboard::preview_current(ticket) {
+                        return Err("Sound preview cancelled".into());
+                    }
+                    producer_soundboard_stop(self.sources[1]);
+                    if producer_soundboard_trigger(self.sources[1], id, 0, gain, fade) == 0 {
+                        return Err("Sound preview is not ready".into());
+                    }
+                }
+                Native::StopPreview(_, ticket) => {
+                    if !crate::soundboard::preview_current(ticket) {
+                        return Err("Sound preview cancelled".into());
+                    }
+                    producer_soundboard_stop(self.sources[1]);
                 }
                 Native::Stop(_) => {
                     for s in self.sources {
