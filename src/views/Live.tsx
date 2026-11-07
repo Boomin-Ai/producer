@@ -13,6 +13,7 @@ import type { RoomSource, RoomAction } from "../../server/src/roomActions";
 import { formatGuestLink, hostedAudienceLink } from "../lib/hostedShare";
 import { afterPreviewWork, closePreviewSessions, previewSession, setPreviewTransparency } from "../lib/previewSession";
 import { useSetOutput } from "../features/presentation/useSetOutput";
+import { useDjSetFeeds } from "../features/presentation/djFeeds";
 import { SetControlsPanel, type SetEditorTake } from "../features/presentation/SetControlsPanel";
 import { DEFAULT_SET } from "../features/presentation/catalog";
 import { RehearsalSession } from "../features/presentation/rehearsal";
@@ -4640,7 +4641,9 @@ export function LiveView({
     void roomEngineRef.current?.run(async () => { await sounds.activate(roomId ?? "local"); }).catch(error => notifyError(error, {key:"soundboard"}));
   }, [docApplied, isHost, roomId]);
 
-  const setOutput=useSetOutput(setRehearsal,roomId,sources,docApplied && !mountVeil && isHost && !(import.meta.env.DEV && import.meta.env.VITE_SCENE3D_PROOF),cfg.presentation?.bindings ?? {},bindings=>writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.preparedPackage(),bindings,framing:cfgRef.current.presentation?.framing}},true),cfg.presentation?.framing ?? {},framing=>writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.preparedPackage(),bindings:cfgRef.current.presentation?.bindings ?? {},framing}},true));
+  const setOutputEnabled=docApplied && !mountVeil && isHost && !(import.meta.env.DEV && import.meta.env.VITE_SCENE3D_PROOF);
+  useDjSetFeeds(setRehearsal,roomId,setOutputEnabled);
+  const setOutput=useSetOutput(setRehearsal,roomId,sources,setOutputEnabled,cfg.presentation?.bindings ?? {},bindings=>writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.preparedPackage(),bindings,framing:cfgRef.current.presentation?.framing}},true),cfg.presentation?.framing ?? {},framing=>writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.preparedPackage(),bindings:cfgRef.current.presentation?.bindings ?? {},framing}},true));
   if(setOutput.renderer==='native')setOutput.createSource=async(slot,spec,label,assign=true)=>{
     const id='set-source-'+crypto.randomUUID();
     const next=await invoke<LiveSources>('live_set_source_create',{id,label,spec});

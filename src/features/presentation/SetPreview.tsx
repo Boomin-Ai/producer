@@ -47,6 +47,13 @@ export function SetPreview({ doc, state, output }: { doc: PresentationPackage; s
     ref.current?.contentWindow?.postMessage('presentation.probe', '*');
     return () => { window.clearTimeout(timeout); window.removeEventListener('message', onMessage); port.current?.close(); port.current = null; };
   }, []);
+  useEffect(()=>{const audio=(event:Event)=>port.current?.postMessage({type:'djAudio',audio:(event as CustomEvent).detail});window.addEventListener('producer:dj-audio',audio);return()=>window.removeEventListener('producer:dj-audio',audio);},[]);
+  useEffect(()=>{let disposed=false;let unlisten:(()=>void)|undefined;
+    const send=(event:unknown)=>port.current?.postMessage({type:'soundTrigger',event});
+    const preview=(event:Event)=>send((event as CustomEvent).detail);window.addEventListener('producer:sound-trigger',preview);
+    void import('@tauri-apps/api/event').then(({listen})=>listen('soundboard-trigger',event=>send(event.payload))).then(stop=>{if(disposed)stop();else unlisten=stop;}).catch(()=>{});
+    return()=>{disposed=true;unlisten?.();window.removeEventListener('producer:sound-trigger',preview);};
+  },[]);
   useEffect(()=>{void send();}, [doc, state, output?.bindings, output?.framing, output?.sources]);
   const visible = new Set<string>();
   const collect=(node:ReturnType<typeof outputProjection>['root'])=>{if(node.slotId&&output?.bindings[node.slotId])visible.add(output.bindings[node.slotId]);node.children.forEach(collect);};

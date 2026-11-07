@@ -1468,6 +1468,17 @@ impl RoomProgram {
         }
         Ok(Status {
             scene3d_contexts: scene3d::live_count(),
+            dj_visuals: self
+                .current
+                .as_ref()
+                .map(|d| {
+                    d._resources
+                        .scenes3d
+                        .values()
+                        .filter_map(|scene| scene.music_status())
+                        .collect()
+                })
+                .unwrap_or_default(),
             graphics_layers: self.resources.graphics_count(),
             graphics_creations: self.resources.graphics_created.get(),
             cached_keys: self.bank.keys().cloned().collect(),

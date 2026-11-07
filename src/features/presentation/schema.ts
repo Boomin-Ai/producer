@@ -134,14 +134,15 @@ const styles = dictionary(binding, STYLE_KEYS.length);
 const motion = object({ durationMs: number(200, 30_000), property: union(literal('opacity'), literal('transform')),
   from: scalar, to: scalar });
 const scene3dWorld:Codec<Scene3dWorld>={json:WORLD_SCHEMA,read(v,p){try{return parseWorld(v);}catch(e){return fail(p,String(e));}}};
-const scene3dLayer=object({id:string(53,'^[a-z][a-z0-9-]{0,52}$'),pass:union(literal('background'),literal('foreground')),world:scene3dWorld,cue:optional(binding),view:optional(binding),cueSequence:optional(binding)});
+const musicBindings=object({sensitivity:binding,intensity:binding,waveform:binding,waveHeight:binding,drop:binding,money:binding,color:binding,motion:binding,soundPopups:optional(binding)});
+const scene3dLayer=object({music:optional(musicBindings),id:string(53,'^[a-z][a-z0-9-]{0,52}$'),pass:union(literal('background'),literal('foreground')),world:scene3dWorld,cue:optional(binding),view:optional(binding),cueSequence:optional(binding)});
 const chart=object({id,kind:union(literal('line'),literal('area'),literal('bar')),unit:optional(binding),timeZone:optional(binding),data:union(string(32768),binding),color:string(9,'^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$'),gridColor:optional(string(9,'^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$')),durationMs:optional(number(0,2000)),lineWidth:optional(number(1,8)),fillOpacity:optional(number(0,.5)),yMin:optional(number(-1e6,1e6)),yMax:optional(number(-1e6,1e6)),windowMs:optional(number(1,604800000))});
 const shader=object({effect:union(literal('aurora'),literal('edgeGlow'),literal('lightSweep'),literal('plasma'),literal('silk'),literal('rings'),literal('grid'),literal('stars'),literal('petals'),literal('contours'),literal('prism'),literal('borderFlare'),literal('rain'),literal('snow'),literal('clouds'),literal('voiceBars'),literal('voiceRing'),literal('launchV1'),literal('voiceSea')),colors:array(string(7),3),speed:number(0,4),intensity:number(0,2),scale:number(.25,4),opacity:number(0,1),radius:number(0,960),glow:optional(number(0,1)),variant:optional(number(0,15)),bindings:optional(object({intensity:optional(binding),speed:optional(binding),glow:optional(binding)})),quality:union(literal('low'),literal('medium')),clock:union(literal('show'),literal('segment'))});
 const layerMask=object({kind:union(literal('rounded'),literal('circle'),literal('wipe')),radius:optional(binding),progress:optional(binding),x:optional(binding),y:optional(binding),feather:optional(binding),invert:optional(binding),direction:optional(union(literal('left'),literal('right'),literal('up'),literal('down')))});
 const backdropEffect=object({blur:binding});
-const animation=object({tracks:array(object({target:id,property:union(literal('x'),literal('y'),literal('width'),literal('height'),literal('opacity'),literal('scale'),literal('rotation'),literal('shader.intensity'),literal('shader.scale'),literal('mask.progress')),
+const animation=object({cue:optional(binding),tracks:array(object({target:id,property:union(literal('x'),literal('y'),literal('width'),literal('height'),literal('opacity'),literal('scale'),literal('rotation'),literal('shader.intensity'),literal('shader.scale'),literal('mask.progress')),
   keyframes:array(object({atMs:number(0,60_000),value:number(-3840,3840)}),16),easing:optional(union(literal('linear'),literal('easeIn'),literal('easeOut'),literal('easeInOut'))),
-  clock:optional(union(literal('show'),literal('segment'))),delayMs:optional(number(0,60_000)),loop:optional(union(literal('none'),literal('repeat'),literal('pingpong')))}),32),transition:optional(object({type:union(literal('cut'),literal('crossfade'),literal('morph')),durationMs:number(0,2000),contentDurationMs:optional(number(0,1000))}))});
+  clock:optional(union(literal('show'),literal('segment'))),delayMs:optional(number(0,60_000)),loop:optional(union(literal('none'),literal('repeat'),literal('pingpong')))}),32),transition:optional(object({type:union(literal('cut'),literal('crossfade'),literal('morph')),durationMs:number(0,2000),contentDurationMs:optional(number(0,1000)),contentFeeds:optional(array(id,16))}))});
 export interface SlotFraming { mode:'fill'|'fit'; x:number; y:number }
 const framing = object({mode:union(literal('fill'),literal('fit')),x:number(0,1),y:number(0,1)});
 export interface PresentationNode {
@@ -149,7 +150,7 @@ export interface PresentationNode {
   mask?:Type<typeof layerMask>;backdrop?:Type<typeof backdropEffect>;
   chart?:Type<typeof chart>;
   shader?:import('./shaders').ShaderEffect;
-  scene3d?:{id:string;pass:'background'|'foreground';world:Scene3dWorld;cue?:Binding;view?:Binding;cueSequence?:Binding};
+  scene3d?:{music?:Record<keyof import('./scene3d/contract.mjs').MusicControl,Binding>;id:string;pass:'background'|'foreground';world:Scene3dWorld;cue?:Binding;view?:Binding;cueSequence?:Binding};
   styleId?: string; styles?: Record<string, Binding>; text?: Binding; children?: PresentationNode[];
   assetId?:string;fit?:'contain'|'cover';loop?:boolean;autoplay?:boolean;
   slotId?: string; framing?:SlotFraming; appearance?: Partial<Record<keyof SourceAppearance, Binding>>; component?: string; props?: Record<string, Binding>; when?: Binding;
@@ -331,6 +332,7 @@ export function parsePackage(value: unknown): PresentationPackage {
     if(n.type==='scene3d'){
       if(['constructor','prototype'].includes(n.scene3d!.id))fail('$.set','Invalid 3D identity.');
       if(Number(n.styles?.width)<16||Number(n.styles?.height)<16)fail('$.set','3D surfaces require at least 16 pixels per side.');
+      for(const value of Object.values(n.scene3d!.music??{}))checkBinding(value,scope);
       for(const value of [n.scene3d!.cue,n.scene3d!.view])if(value!==undefined){checkBinding(value,scope);if(bindingType(value,props)!=='string')fail('$.set','3D cue/view bindings must resolve to text.');}
       if(n.scene3d?.cueSequence!==undefined){checkBinding(n.scene3d.cueSequence,scope);if(bindingType(n.scene3d.cueSequence,props)!=='number')fail('$.set','3D cue sequence must be numeric.');}
       if(n.styles?.position!=='absolute'||['left','top','width','height'].some(k=>typeof n.styles?.[k]!=='number'))fail('$.set','3D layers require numeric absolute geometry.');
@@ -380,7 +382,9 @@ export function parsePackage(value: unknown): PresentationPackage {
     if(shaderNodes.length&&(layout.root.styles?.position!=='relative'||layout.root.styles?.transform!==undefined||layout.root.styles?.opacity!==undefined&&layout.root.styles.opacity!==1||layout.root.motion))fail('$.set.layouts','Shader layouts require a plain relative root.');
     if(shaderNodes.length&&(layout.root.styles?.width!==layout.width||layout.root.styles?.height!==layout.height||Object.keys(layout.root.styles??{}).some(k=>!['position','width','height','background','overflow'].includes(k))))fail('$.set.layouts','Shader roots must match the canvas without padding or CSS transforms.');
     for(const n of shaderNodes){const s=n.styles!;if(Number(s.left)<0||Number(s.top)<0||Number(s.width)<1||Number(s.height)<1||Number(s.left)+Number(s.width)>layout.width||Number(s.top)+Number(s.height)>layout.height)fail('$.set.layouts','Shader geometry must fit inside the canvas.');}
+    if(layout.animation?.cue!==undefined)checkBinding(layout.animation.cue,new Set());
     const animated=new Set<string>();
+    for(const key of layout.animation?.transition?.contentFeeds??[])if(!doc.set.feeds?.[key])fail('$.set.layouts.animation','Transition feed must exist.');
     for(const track of layout.animation?.tracks??[]){
       const target=nodes.get(track.target);if(!target)fail('$.set.layouts.animation','Animation target must belong to the layout.');
       const key=`${track.target}:${track.property}`;if(animated.has(key))fail('$.set.layouts.animation','Duplicate animation property.');animated.add(key);
@@ -390,7 +394,7 @@ export function parsePackage(value: unknown): PresentationPackage {
       if(target!.backdrop&&['x','y','width','height','rotation','scale'].includes(track.property))fail('$.set.layouts.animation','Backdrop geometry must be static; animate its mask or opacity.');
       if(track.property.startsWith('shader.')&&(target!.type!=='shader'||track.keyframes.some(f=>track.property==='shader.intensity'?(f.value<0||f.value>2):(f.value<.25||f.value>4))))fail('$.set.layouts.animation','Shader tracks require a shader target and bounded values.');
       const hasSlot=(n:PresentationNode):boolean=>n.type==='slot'||n.type==='shader'||n.type==='scene3d'||!!n.children?.some(hasSlot)||n.type==='component';
-      if(track.property!=='mask.progress'&&!['slot','shader'].includes(target!.type)&&hasSlot(target!))fail('$.set.layouts.animation','Animate native layers directly; animated ancestors are unsupported.');
+      if(track.property!=='mask.progress'&&!['slot','shader','scene3d'].includes(target!.type)&&hasSlot(target!))fail('$.set.layouts.animation','Animate native layers directly; animated ancestors are unsupported.');
       if(['x','y','width','height'].includes(track.property)&&target!.styles?.position!=='absolute')fail('$.set.layouts.animation','Geometry tracks require an absolute element.');
       if(target!.type==='slot'&&['x','y'].includes(track.property)&&typeof target!.styles?.[track.property==='x'?'left':'top']!=='number')fail('$.set.layouts.animation','Source position tracks require numeric left and top.');
     }

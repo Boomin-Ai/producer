@@ -5,8 +5,20 @@
 mod performance_trace {
     pub fn native_stage(_: &'static str, _: std::time::Duration, _: Option<bool>) {}
 }
+#[path = "../../../../src-tauri/src/live/dj_audio.rs"]
+mod dj_audio;
 #[path = "../../../../src-tauri/src/live/ffi.rs"]
 mod ffi;
+// The standalone graphics adapter owns no sound library or playback controller.
+// App-level sound events are exercised by the native room integration checks.
+mod soundboard {
+    pub fn visual_sequence() -> u64 {
+        0
+    }
+    pub fn visual_event() -> Option<serde_json::Value> {
+        None
+    }
+}
 // Windows raw-dylib declarations name the room's opaque OBS canvas. The
 // standalone adapter owns no room canvas; retain its exact C pointer layout.
 #[cfg(target_os = "windows")]
@@ -97,13 +109,35 @@ mod set_media {
 
 // Probe-only bridge to the shipped graphics serializer; no new app IPC/API.
 #[no_mangle]
-pub unsafe extern "C" fn sets_v2_rust_graphics_document(json:*const c_char,density:f32,output:*mut c_char,capacity:usize)->bool{
- let result=(||->Result<String,String>{
-  let node:sets_v2::contract::Node=serde_json::from_str(CStr::from_ptr(json).to_str().map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
-  sets_v2::contract::graphics_document_scaled(&[&node],1760,800,(0.,0.),&Default::default(),density)
- })();
- match result{
-  Ok(html) if html.len()<capacity=>{std::ptr::copy_nonoverlapping(html.as_ptr(),output as *mut u8,html.len());*output.add(html.len())=0;true},
-  Err(e)=>{eprintln!("Probe document: {e}");false},_=>false,
- }
+pub unsafe extern "C" fn sets_v2_rust_graphics_document(
+    json: *const c_char,
+    density: f32,
+    output: *mut c_char,
+    capacity: usize,
+) -> bool {
+    let result = (|| -> Result<String, String> {
+        let node: sets_v2::contract::Node =
+            serde_json::from_str(CStr::from_ptr(json).to_str().map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
+        sets_v2::contract::graphics_document_scaled(
+            &[&node],
+            1760,
+            800,
+            (0., 0.),
+            &Default::default(),
+            density,
+        )
+    })();
+    match result {
+        Ok(html) if html.len() < capacity => {
+            std::ptr::copy_nonoverlapping(html.as_ptr(), output as *mut u8, html.len());
+            *output.add(html.len()) = 0;
+            true
+        }
+        Err(e) => {
+            eprintln!("Probe document: {e}");
+            false
+        }
+        _ => false,
+    }
 }

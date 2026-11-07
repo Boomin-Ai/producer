@@ -11,9 +11,12 @@ export function layoutFieldKeys(doc:PresentationPackage,layoutId:string):Set<str
   };
   const visit=(node:PresentationNode,ancestors:Set<string>)=>{
     binding(node.text);binding(node.when);
+    Object.values(node.mask??{}).forEach(binding);Object.values(node.backdrop??{}).forEach(binding);
     Object.values(node.styles??{}).forEach(binding);
     Object.values(node.appearance??{}).forEach(binding);
     Object.values(node.shader?.bindings??{}).forEach(binding);
+    Object.values(node.scene3d?.music??{}).forEach(binding);
+    binding(node.scene3d?.cue);binding(node.scene3d?.cueSequence);binding(node.scene3d?.view);
     Object.values(node.props??{}).forEach(binding);
     node.children?.forEach(child=>visit(child,ancestors));
     if(node.component && !ancestors.has(node.component)){

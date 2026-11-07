@@ -19,6 +19,7 @@ jobs:
       - run: bun run test:performance-trace
       - run: python3 scripts/profile-production.py --self-test
       - run: bun run test:presentation
+      - run: node scripts/test-dj-set-feed.mjs
       - run: bun run test:module-push
       - run: bun run test:set-control
       - run: bun run test:room-set-control
@@ -74,6 +75,28 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npx vitest run
+
+  sound-library-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: npm ci --prefix tools/producer-mcp
+      - run: node tools/producer-mcp/node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Verify library previews without changing room assignments or live playback
+        run: |
+          set -euo pipefail
+          bun run dev -- --host 127.0.0.1 --port 1436 --strictPort > /tmp/producer-preview-vite.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:1436/scripts/soundboard-browser.html >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/test-sound-library-preview.mjs
 
   rust:
     strategy:

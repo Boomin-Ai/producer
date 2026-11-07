@@ -45,6 +45,7 @@ export function useRoomOutput(
     [framing, setFraming] = useState(initialFraming);
   const [pendingChange, setPendingChange] = useState<"set" | "segment" | "content">("content");
   const shownCharts=useRef(''),portraitShownCharts=useRef('');
+  const shownContentKey=useRef<string|undefined>(undefined),portraitContentKey=useRef<string|undefined>(undefined);
   const shownSelection = useRef({definition: "", layout: "", phase: ""});
   const deliberatelyHidden=useRef(false);
   useEffect(()=>{deliberatelyHidden.current=false;},[session.package.id,roomId]);
@@ -303,7 +304,7 @@ export function useRoomOutput(
       if (!stillTaking()) throw interrupted;
       const charts=chartSeries(full),chartUpdate=!!charts&&!!shownCharts.current&&charts!==shownCharts.current;
       const transition =
-        authoredCrossfadeMs(full.timeline?.transition,isActive.current&&(shownSelection.current.definition!==selection.definition||shownLayout.current!==layout),snapshot.paused,isActive.current&&!chartUpdate);
+        authoredCrossfadeMs(full.timeline?.transition,isActive.current&&(shownSelection.current.definition!==selection.definition||shownLayout.current!==layout),snapshot.paused,isActive.current&&!chartUpdate&&(full.contentKey===undefined||full.contentKey!==shownContentKey.current));
       timing('take-request',{transitionMs:transition});
       await request(portraitSpec?{op:'takePair',generation:takeGeneration,programRevision:attempted,portraitRevision:entries[1].revision,durationMs:transition,mode:'dissolve'}:{op:'take',generation:takeGeneration,revision:attempted,durationMs:transition,mode:'dissolve'});
       let sawTransition=false;
@@ -321,10 +322,12 @@ export function useRoomOutput(
             media.current.acknowledge(portraitProjection);
             portraitShownLayout.current=current.session.package.id+':'+portraitId;
             portraitShownCharts.current=chartSeries(portraitProjection);
+            portraitContentKey.current=portraitProjection.contentKey;
             if(portraitProjection.moduleCommit)window.dispatchEvent(new CustomEvent('producer:module-presented',{detail:{roomId:current.roomId,output:'portrait',generation:generation.current,nativeRevision:entries[1].revision,renderSerial:portraitStatus?.renderSerial,moduleCommit:portraitProjection.moduleCommit}}));
           }
           confirmed.current = fingerprint;
           shownCharts.current=charts;
+          shownContentKey.current=full.contentKey;
           shownLayout.current = layout;
           shownSelection.current = selection;
           isActive.current = true;
@@ -428,6 +431,7 @@ export function useRoomOutput(
     state.layoutId,
     JSON.stringify(state.values),
     JSON.stringify(state.feeds),
+    state.roomFeeds,
   ]);
   useEffect(() => {
     alive.current = true;
@@ -513,13 +517,13 @@ export function useRoomOutput(
       const plan=runtimePlan(entry.plan!,projection);failureStage='render';
       await send({op:'activate',key:entry.key,revision:candidate,plan});
       const charts=chartSeries(projection),chartUpdate=!!charts&&!!portraitShownCharts.current&&charts!==portraitShownCharts.current;
-      await send({op:'take',revision:candidate,durationMs:authoredCrossfadeMs(projection.timeline?.transition,portraitShownLayout.current!==portraitKey,!!current.session.snapshot().paused,!!portraitShownLayout.current&&!chartUpdate),mode:'dissolve'});
+      await send({op:'take',revision:candidate,durationMs:authoredCrossfadeMs(projection.timeline?.transition,portraitShownLayout.current!==portraitKey,!!current.session.snapshot().paused,!!portraitShownLayout.current&&!chartUpdate&&(projection.contentKey===undefined||projection.contentKey!==portraitContentKey.current)),mode:'dissolve'});
     for (let i = 0; i < 200; i++) {
       const state = await send({ op: "status" });
       if (
         state.renderedRevision === candidate &&
         !state.transitioning
-      ) { if(ticket!==portraitOperation.current||!alive.current||current.roomId!==latest.current.roomId||current.session!==latest.current.session)return;portraitShownCharts.current=chartSeries(projection);portraitShownLayout.current=portraitKey;if(projection.moduleCommit)window.dispatchEvent(new CustomEvent('producer:module-presented',{detail:{roomId:current.roomId,output:'portrait',generation:roomGeneration,nativeRevision:candidate,renderSerial:state.renderSerial,moduleCommit:projection.moduleCommit}})); return; }
+      ) { if(ticket!==portraitOperation.current||!alive.current||current.roomId!==latest.current.roomId||current.session!==latest.current.session)return;portraitShownCharts.current=chartSeries(projection);portraitContentKey.current=projection.contentKey;portraitShownLayout.current=portraitKey;if(projection.moduleCommit)window.dispatchEvent(new CustomEvent('producer:module-presented',{detail:{roomId:current.roomId,output:'portrait',generation:roomGeneration,nativeRevision:candidate,renderSerial:state.renderSerial,moduleCommit:projection.moduleCommit}})); return; }
       if (i === 199) throw Error("Portrait did not confirm its rendered frame");
       await sleep(20);
     }

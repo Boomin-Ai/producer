@@ -1,6 +1,6 @@
 export type AnimationClock={running:boolean;positionMs:number;segmentMs:number;anchorMs:number};
 export type AnimationTrack={target:string;property:'x'|'y'|'width'|'height'|'opacity'|'scale'|'rotation'|'shader.intensity'|'shader.scale'|'mask.progress';keyframes:Array<{atMs:number;value:number}>;easing?:'linear'|'easeIn'|'easeOut'|'easeInOut';clock?:'show'|'segment';delayMs?:number;loop?:'none'|'repeat'|'pingpong'};
-export type LayoutAnimation={tracks:AnimationTrack[];transition?:{type:'cut'|'crossfade'|'morph';durationMs:number;contentDurationMs?:number}};
+export type LayoutAnimation={tracks:AnimationTrack[];transition?:{type:'cut'|'crossfade'|'morph';durationMs:number;contentDurationMs?:number;contentFeeds?:string[]}};
 export type AnimationTimeline=LayoutAnimation&{clock:AnimationClock};
 export function clockPosition(clock:AnimationClock,now=Date.now()){
  const delta=clock.running?Math.max(0,now-clock.anchorMs):0;

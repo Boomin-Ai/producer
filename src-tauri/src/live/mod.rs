@@ -16,6 +16,8 @@ pub mod transcription;
 pub use producer_guest_session as guest_session;
 #[cfg(have_engine)]
 pub mod dj;
+#[cfg(have_engine)]
+pub mod dj_audio;
 #[cfg(all(have_engine, target_os = "windows"))]
 mod person_mask_win;
 #[cfg(have_engine)]
