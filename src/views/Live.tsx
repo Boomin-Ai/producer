@@ -79,6 +79,7 @@ import { filterEditQueue, withSourceFilters } from "../lib/sourceFilters";
 import { DEMO_CHAT, DEMO_VIDEO_URL, demoOn } from "../lib/demo";
 import { activeEndpointId, isBoomin, resolveActiveEndpoint } from "../lib/workspace";
 import { nativeGuestSources } from "../lib/nativeGuestSources";
+import { withWindowsCameraDevices } from "../lib/cameraDevicePersistence";
 import { BugSheet } from "./BugSheet";
 import { dismiss, dismissKey, errText, notify, notifyError } from "../lib/notices";
 import { NoticeHost } from "../components/Notice";
@@ -5019,6 +5020,7 @@ export function LiveView({
             ...cfgRef.current,
             sources: {
               ...cfgRef.current.sources,
+              extras: withWindowsCameraDevices(cfgRef.current.sources.extras, ev.sources.items, document.documentElement.dataset.platform),
               overlay_window: ev.sources.overlay_window ?? null,
               overlay_url: ev.sources.overlay_url ?? null,
             },
