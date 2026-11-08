@@ -130,6 +130,7 @@ PY
   xcrun stapler validate "$APP"
   spctl -a -t exec "$APP"
 fi
+node "$TOOLS/ci-network-mac-dev-origin-smoke.mjs" "$APP" "$OUTPUT/native-origin-smoke.json"
 mkdir "$OUTPUT/symbols"
 SYMBOLS="$SOURCE/src-tauri/target/aarch64-apple-darwin/release/producer.dSYM"
 [[ -d $SYMBOLS ]] || { echo 'Missing matching native symbols' >&2; exit 1; }
@@ -140,4 +141,4 @@ cp "$ENGINE/manifest.json" "$OUTPUT/engine-manifest.json"
 ditto -c -k --keepParent "$APP" "$OUTPUT/Producer-DJ-Test-mac-arm64.zip"
 export ENGINE_RUN ENGINE_ARCHIVE_SHA256 NOTARY_SUBMISSION_ID
 python3 "$TOOLS/ci-network-mac-dev.py" receipt "$SOURCE" "$APP" "$OUTPUT" "$TOOLS"
-echo 'Verified unreleased dev candidate; public-repo Actions artifact, no app launch/release/deployment.'
+echo 'Verified unreleased dev candidate and native core/custom IPC smoke; no release/deployment or device/RTC qualification.'

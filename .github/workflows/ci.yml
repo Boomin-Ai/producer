@@ -82,6 +82,8 @@ jobs:
       - run: node --experimental-strip-types --test tests/shareDomain.test.ts
       - run: node --test tests/siteRoomRoutes.test.mjs
       - run: node scripts/test-site-public-routes.mjs
+      - run: python3 scripts/ci-network-mac-dev.py self-test
+      - run: node scripts/ci-network-mac-dev-origin-smoke.mjs --self-test
 
   server:
     if: ${{ !(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feat/producer-network-links' && inputs.network_mac_source_sha != '') }}

@@ -60,6 +60,7 @@ jobs:
           sparse-checkout: |
             scripts/ci-network-mac-dev.sh
             scripts/ci-network-mac-dev.py
+            scripts/ci-network-mac-dev-origin-smoke.mjs
 
       - name: Checkout exact application source
         uses: actions/checkout@v4
@@ -116,6 +117,7 @@ jobs:
         shell: bash
         run: |
           printf '%s\n' 'UNRELEASED Actions artifact on a PUBLIC repository; not collaborator-private. Contains no customer profile or credentials.' >> "$GITHUB_STEP_SUMMARY"
-          printf '%s\n' 'No app was launched, no public release/updater was written, and no deployment ran.' >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' 'The signed candidate passed core+custom IPC smoke from a fixed loopback HTML page. No accounts, rooms, devices or RTC were tested.' >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' 'No public release/updater was written and no deployment ran.' >> "$GITHUB_STEP_SUMMARY"
           printf '%s\n' 'Uses the existing dev identity/profile and Vite on port 1436. Signing changes may still prompt for macOS permissions or Keychain access.' >> "$GITHUB_STEP_SUMMARY"
           printf '%s\n' 'Virtual-camera runtime plugin is retained for an existing installed production provider; this dev app does not install system extensions.' >> "$GITHUB_STEP_SUMMARY"

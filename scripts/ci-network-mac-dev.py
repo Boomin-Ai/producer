@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unreleased public-repo CI artifact gates. No app launch or deployment."""
+"""Unreleased CI artifact gates. Native acceptance is limited to the IPC smoke."""
 import datetime
 import hashlib
 import json
@@ -136,6 +136,14 @@ def receipt(source, app, output, tools):
     expected_config = isolated_config(json.loads((source / 'src-tauri/tauri.sets-v2-dev.conf.json').read_text()), source)
     require(json.loads(generated_config.read_text()) == expected_config, 'Generated dev runtime configuration changed')
     (output / 'dev-config.json').write_bytes(generated_config.read_bytes())
+    smoke_path = output / 'native-origin-smoke.json'
+    smoke = json.loads(smoke_path.read_text())
+    require(smoke.get('schema') == 'producer.native-origin-smoke/1' and smoke.get('status') == 'passed' and smoke.get('passed') is True,
+            'Signed native origin smoke did not pass')
+    require(smoke.get('identifier') == IDENTIFIER and smoke.get('origin') == DEV_ORIGIN and smoke.get('core_ipc') is True
+            and smoke.get('custom_ipc') is True and smoke.get('smoke_enabled') is True and smoke.get('application_launched') is True
+            and smoke.get('owned_process_exited') is True and smoke.get('commands') == ['plugin:app|identifier', 'live_set_v2_smoke_enabled', 'live_set_v2_report']
+            and smoke.get('binary_sha256') == digest(binary), 'Native origin smoke does not qualify this exact binary/origin')
     native_tree = git(source, 'ls-tree', '-rz', 'HEAD', '--', 'src-tauri', 'crates', 'labs/guest-rtc/vendor')
     value = {
         'schema': 'producer.unreleased-mac-dev/1',
@@ -161,8 +169,9 @@ def receipt(source, app, output, tools):
         'virtual_camera_runtime': 'mac-virtualcam plugin retained for an existing installed ai.boomin.producer.camera-extension provider; installer qualification is outside this dev artifact.',
         'permissions': 'Existing profile is preserved by identity; macOS TCC/Keychain may prompt after signing/executable changes.',
         'updater_artifacts': False, 'production_updater_endpoints': False, 'public_release': False,
-        'application_launched': False, 'native_runtime_acceptance': 'not run; qualify real camera/audio/RTC on the Mac',
-        'tooling_sha256': {name: digest(tools / name) for name in ['ci-network-mac-dev.sh', 'ci-network-mac-dev.py']},
+        'application_launched': True, 'native_runtime_acceptance': 'core+custom IPC smoke only; devices and RTC not qualified',
+        'native_origin_smoke_sha256': digest(smoke_path),
+        'tooling_sha256': {name: digest(tools / name) for name in ['ci-network-mac-dev.sh', 'ci-network-mac-dev.py', 'ci-network-mac-dev-origin-smoke.mjs']},
     }
     (output / 'provenance.json').write_text(json.dumps(value, indent=2) + '\n')
     print('Wrote unreleased candidate provenance; source/native/engine/signature/symbol gates passed.')
