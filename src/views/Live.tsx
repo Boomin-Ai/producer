@@ -18,6 +18,7 @@ import { SetControlsPanel, type SetEditorTake } from "../features/presentation/S
 import { DEFAULT_SET } from "../features/presentation/catalog";
 import { RehearsalSession } from "../features/presentation/rehearsal";
 import { roomSession } from "../lib/roomSession";
+import {producerLocalAccess} from '../lib/producerLocalAccess';
 import { sharedProgramCapture } from "../lib/programCapture";
 import { openingScene, scenePlan } from "../lib/scenePlan";
 import { SoundboardPanel } from "../components/SoundboardPanel";
@@ -2688,6 +2689,7 @@ export function LiveView({
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
   const deferredMicIds = useRef<string[]>([]);
   const entryAccessRef = useRef(entryAccess);
+  const [producerLocalAuthorized,setProducerLocalAuthorized]=useState(()=>!seat);
   const roomEngineRef = useRef<ReturnType<typeof roomSession> | null>(null);
   useLayoutEffect(() => {
     const session = roomSession();
@@ -3424,7 +3426,7 @@ export function LiveView({
   };
   // Never publish the engine's previous room while this room is restoring.
   const guestSeat = useGuestSeat(seat && (seat.videoSource==='webcam' ||
-    snapshot?.engine_ready && docApplied && sceneSettled && framesReady) ? {
+    producerLocalAuthorized && snapshot?.engine_ready && docApplied && sceneSettled && framesReady) ? {
       ...seat,
       prepareProgram:async()=>{
         const owner=roomEngineRef.current;if(!owner)throw Error('The local room is not ready.');
@@ -4957,6 +4959,37 @@ export function LiveView({
     });
   }, [room, savedRoomConfig]);
 
+  // A Producer appearance renders its own room but must never run that room's
+  // host roster/heartbeat. Consume local authorization independently of the
+  // deliberately skipped host poll, including the exact receipt from Home.
+  useEffect(()=>{
+    if(!seat||!room?.id||seat.videoSource==='webcam')return;
+    let alive=true;
+    const endpointId=seat.endpointId,serverRoomId=savedRoomConfig.server_room_id;
+    const current=()=>alive&&activeEndpointId()===endpointId&&roomEngineRef.current!==null;
+    setProducerLocalAuthorized(false);setAccessPending(true);
+    void (async()=>{
+      const resolved=await ensureEndpoint();
+      if(!current()||resolved!==endpointId)return;
+      if(serverRoomId&&boominRoomRef.current){
+        const authorized=await producerLocalAccess({endpointId,serverRoomId,current,receipt:entryAccessRef.current,read:()=>guestsIpc.access(endpointId,serverRoomId)});
+        if(!current())return;
+        entryAccessRef.current=undefined;
+        roomRoleRef.current=authorized.info.role;setRoomRole(authorized.info.role);setRoomAccess(authorized.info);
+        const dto=authorized.raw.access as {grants?:unknown}|undefined;
+        setRoomGrants(Array.isArray(dto?.grants)?dto.grants as RoomGrantRowLike[]:null);
+      }
+      if(!current())return;
+      accessAsked.current=true;setAccessPending(false);setProducerLocalAuthorized(true);
+      void refresh();
+    })().catch(error=>{
+      if(!current())return;
+      accessAsked.current=true;roomRoleRef.current='viewer';setRoomRole('viewer');setRoomAccess(roomAccessFrom({available:true,denied:true}));setRoomGrants(null);setAccessPending(false);setProducerLocalAuthorized(false);
+      notifyError(error,{key:'banner'});void refresh();
+    });
+    return()=>{alive=false;};
+  },[seat,room?.id,savedRoomConfig.server_room_id,refresh]);
+
   useEffect(() => {
     refresh();
     let alive = true;
@@ -5824,7 +5857,7 @@ export function LiveView({
   const scenesRef = useRef(scenes);
   scenesRef.current = scenes;
   useEffect(() => {
-    if (!room?.id || !cfg.server_room_id) return;
+    if (!room?.id || !cfg.server_room_id || seat) return;
     // Open server: the host only (a mod runs views/ModSeat.tsx). Boomin: any
     // role — a mod's Producer lights the host's list off `scene.cut` frames
     // and takes the tally on `interactions:control` (the hub gates it).
@@ -6074,7 +6107,7 @@ export function LiveView({
       audienceSenders.current.clear();
       if (controlRef.current === link) controlRef.current = null;
     };
-  }, [room?.id, cfg.server_room_id, roomRole, boominRoom]);
+  }, [room?.id, cfg.server_room_id, roomRole, boominRoom,seat]);
   useEffect(() => { publishSourceTruth(); }, [sources, roomRole]);
 
   // Every change to the list or the active scene reaches the mods. Open
@@ -6083,6 +6116,7 @@ export function LiveView({
   // validates against — debounced, and only when it actually changed.
   const publishedCfgRef = useRef<string | null>(null);
   useEffect(() => {
+    if(seat)return;
     if (roomRole === "host") controlRef.current?.publishScenes(scenes, activeScene ?? null);
     if (!boominRoom || roomRole !== "host" || !cfg.server_room_id) return;
     const sid = cfg.server_room_id;
@@ -6100,7 +6134,7 @@ export function LiveView({
         .catch(() => {});
     }, 600);
     return () => window.clearTimeout(t);
-  }, [scenes, activeScene, boominRoom, roomRole, cfg.server_room_id]);
+  }, [scenes, activeScene, boominRoom, roomRole, cfg.server_room_id,seat]);
 
   /** Boomin, a mod's Producer: the host's scene directory as the room config
    * carries it, the active one lit by `scene.cut` frames. Null on the host

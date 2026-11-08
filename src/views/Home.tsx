@@ -18,6 +18,7 @@ import { AccountSheet } from "./AccountSheet";
 import { BugSheet } from "./BugSheet";
 import { AccessPanel } from "./Access";
 import { fetchMe, myRoomAccess } from "../lib/access";
+import {producerLocalAccess} from '../lib/producerLocalAccess';
 import { roleTitle, type RoomAccessInfo } from "../lib/participants";
 import type { Channel, EndpointInfo, Job, LiveDestination, LiveRoom, LiveSnapshot, ServerRoom } from "../lib/ipc";
 import type { TargetResult } from "../lib/ipc";
@@ -114,7 +115,7 @@ type MainView =
   /** GUEST MODE: a room opened on a seat in someone else's show (a deal
    * entered, a live stage knocked on). `room` is this Producer's own stage
    * — the scene that is their camera — when they have one. */
-  | { kind: "seat"; room?: LiveRoom; seat: GuestSeatSpec }
+  | { kind: "seat"; room?: LiveRoom; seat: GuestSeatSpec; access?:RoomEntryAccess }
   | { kind: "compose" }
   | { kind: "history" }
   /** The server's settings console (Brand settings, Payments, members…), delivered at runtime. */
@@ -478,6 +479,7 @@ export function Home({
     current();
     if(seat.endpointId!==activeEndpointId())throw Error('The workspace changed. Open the invitation again.');
     let own:LiveRoom|undefined;
+    let access:RoomEntryAccess|undefined;
     if(seat.videoSource==='program'){
       const endpoint=endpoints.find(e=>e.id===activeEndpointId());
       if(!endpoint)throw Error('Choose a local workspace first.');
@@ -488,9 +490,9 @@ export function Home({
       if(engine.session_state!=='idle'||captures.some(rows=>rows.some(row=>row.status==='recording')))throw Error('Start the program appearance before streaming or recording locally. Webcam-only appearances can join while output is active.');
       const serverRoom=roomMetadata(own).server_room_id;
       if(serverRoom&&isBoomin(endpoint)){
-        const access=await myRoomAccess(endpoint.id,serverRoom);
+        const authorized=await producerLocalAccess({endpointId:endpoint.id,serverRoomId:serverRoom,current:()=>!signal.aborted&&activeEndpointId()===endpoint.id,read:()=>guests.access(endpoint.id,serverRoom)});
         current();
-        if(!access.known||!access.can.manage)throw Error('Host or manager access to the selected local room is required before sending its Set.');
+        access={endpointId:endpoint.id,endpointBaseUrl:endpoint.base_url,serverRoomId:serverRoom,result:Promise.resolve(authorized.raw)};
       }
       if(activeEndpointId()!==endpoint.id)throw Error('The workspace changed. Open the invitation again.');
     }
@@ -499,7 +501,7 @@ export function Home({
     roomExit.current!.cancel();
     markRoomClick();
     setNetworkSheet(null);setPendingSeat(undefined);
-    setView({ kind: "seat", room: own, seat });
+    setView({ kind: "seat", room: own, seat, access });
   }, [endpoints]);
 
 
@@ -542,6 +544,7 @@ export function Home({
         key={`seat:${view.seat.joinUrl}`}
         room={view.room}
         seat={view.seat}
+        entryAccess={view.access}
         onLeave={back}
       />
     );
