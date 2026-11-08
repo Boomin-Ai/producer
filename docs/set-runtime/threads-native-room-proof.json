@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-08T07:31:22.298Z",
+  "at": "2026-11-08T13:56:12.375Z",
   "checks": [
     {
       "check": "real account and published post selected in Data connections",
@@ -27,41 +27,26 @@
     {
       "check": "Live replies presented in both orientations",
       "revisions": [
-        24,
-        25
+        22,
+        23
       ]
     },
     {
       "check": "Channel overview presented in both orientations",
       "revisions": [
-        30,
-        31
+        28,
+        29
       ]
     },
     {
       "after": [
-        34,
-        35
+        28,
+        29
       ],
       "attempt": 1,
       "before": [
-        30,
-        31
-      ],
-      "check": "settled snapshot polling",
-      "renderingContinues": true,
-      "unchangedData": false,
-      "unchangedRevisions": false
-    },
-    {
-      "after": [
-        34,
-        35
-      ],
-      "attempt": 2,
-      "before": [
-        34,
-        35
+        28,
+        29
       ],
       "check": "settled snapshot polling",
       "renderingContinues": true,
@@ -69,12 +54,18 @@
       "unchangedRevisions": true
     }
   ],
-  "generation": 1,
+  "generation": 4,
   "kind": "threads-native-room",
   "ok": true,
   "stage": "ready for visual review",
   "status": "passed",
   "applicationVersion": "0.4.87",
   "bundleIdentifier": "ai.boomin.producer.sets-v2-dev",
-  "testScope": "Full native app, real owned account; no public publishing"
+  "testScope": "Full native app, real owned account; no public publishing",
+  "binarySha256": "7a1cdd48929b71726bdbe4be9d35a84310f55ed36b7f061e98eeaa08dcbcea8f",
+  "reload": {
+    "sameNativeProcess": true,
+    "captureTimeouts": 0,
+    "duplicateCaptureWarnings": 0
+  }
 }

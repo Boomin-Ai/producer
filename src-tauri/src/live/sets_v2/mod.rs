@@ -1513,6 +1513,12 @@ impl Drop for RoomProgram {
                 ffi::obs_sceneitem_remove(self.item);
                 self.item = ptr::null_mut();
             }
+            // OBS destroys scene trees asynchronously. Retired trees may still
+            // own these placements when the room recreates a camera with the
+            // same identity, so detach device children before returning.
+            for placement in self.capture_placements.values() {
+                ffi::producer_source_placement_retarget(placement.0, ptr::null_mut());
+            }
         }
     }
 }

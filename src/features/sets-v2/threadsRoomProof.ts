@@ -29,6 +29,17 @@ export async function threadsRoomProof(){
   const endpoint=activeEndpointId();if(!endpoint)throw Error('Choose the connected workspace first');
   const room=(await ipc.liveListRooms(endpoint)).find(r=>r.name==='Atlantium');if(!room)throw Error('Atlantium is not available in the active workspace');
   const serverRoom=JSON.parse(room.config||'{}').server_room_id;if(typeof serverRoom!=='string'||!serverRoom)throw Error('Atlantium has no connected server room');
+  if(import.meta.env.VITE_THREADS_ROOM_PROOF==='review'){
+   if(JSON.parse(room.config||'{}').presentation?.package?.id!=='threads-live-dashboard')throw Error('The saved room no longer selects the Threads dashboard');
+   await until('saved camera ready',async()=>(await ipc.liveEngineStatus()).sources?.items?.some(s=>s.kind==='camera'&&s.has_frame&&s.src_w>0&&s.src_h>0));
+   // The preview view starts in landscape on reload; request both explicitly.
+   (await until('Output settings',()=>button('Output settings'))).click();(await until('Both orientations',()=>button('Both'))).click();(await until('Close output settings',()=>button('Close output settings'))).click();
+   // Room restore may still advance its generation after camera frames arrive.
+   const presented=await until('saved paired outputs',async()=>{try{const {generation}=await ipc.liveSetStatus();const outputs=await Promise.all(['program','portrait'].map(outputId=>invoke<NativeStatus>('live_set_v2',{request:{op:'status',generation,outputId}})));return outputs.every(o=>o.renderedRevision>0&&!o.transitioning)?{generation,outputs}:null;}catch{return null;}});
+   await until('saved Threads data',async()=>{const reply=await moduleCall(endpoint,serverRoom,'GET');return reply.snapshot&&Object.values(reply.snapshot.modules).some(m=>m.execution==='running'&&m.values.username)?reply.snapshot:null;});
+   checks.push({check:'saved room reopened for review',cameraReady:true,revisions:presented.outputs.map(o=>o.renderedRevision)});
+   await report('ready for visual review',{ok:true,status:'passed',mode:'review',generation:presented.generation});return;
+  }
   let editor=document.querySelector<HTMLDialogElement>('dialog[open]');
   if(!editor){document.querySelector<HTMLElement>('[aria-label="Show the bottom row"]')?.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));(await until('Set settings',()=>button('Set settings'))).click();editor=await until('Set editor',()=>document.querySelector<HTMLDialogElement>('dialog[open]'));}
   const picker=await until('Set picker',()=>editor!.querySelector<HTMLButtonElement>('[role="combobox"][aria-label="Choose set"]'));picker.click();
@@ -79,5 +90,5 @@ export async function threadsRoomProof(){
   }
   if(!stable)throw Error('A stable data snapshot did not retain its native output revisions');
   await report('ready for visual review',{ok:true,status:'passed',generation});
- }catch(error){await report('failed',{ok:false,status:'failed',error:String(error),alerts:[...document.querySelectorAll('[role="alert"],.set-error')].map(n=>n.textContent),controls:[...document.querySelectorAll('dialog[open] button,.set-controls button')].filter(n=>!(n as HTMLButtonElement).disabled).map(n=>n.getAttribute('aria-label')||n.textContent?.trim()).slice(0,50)});}
+ }catch(error){await report('failed',{ok:false,status:'failed',error:String(error),alerts:[...document.querySelectorAll('[role="alert"],.set-error')].map(n=>n.textContent),controls:[...document.querySelectorAll('dialog[open] button,.set-controls button')].filter(n=>!(n as HTMLButtonElement).disabled).map(n=>n.getAttribute('aria-label')||n.textContent?.trim()).slice(0,50),screen:{canvas:!!document.querySelector('.rm-canvas'),veil:!!document.querySelector('.rm-veil'),dialog:!!document.querySelector('dialog[open]'),buttons:[...document.querySelectorAll<HTMLButtonElement>('button')].map(b=>({label:b.getAttribute('aria-label')||b.textContent?.trim().slice(0,80),disabled:b.disabled})).slice(0,60)}});}
 }

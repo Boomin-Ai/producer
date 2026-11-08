@@ -17,6 +17,6 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 );
 
 // Explicit local native verification only; removed by the production build.
-if(import.meta.env.DEV&&import.meta.env.VITE_THREADS_ROOM_PROOF==='1'){
+if(import.meta.env.DEV&&['1','review'].includes(import.meta.env.VITE_THREADS_ROOM_PROOF)){
  void import('./features/sets-v2/threadsRoomProof').then(m=>m.threadsRoomProof());
 }
