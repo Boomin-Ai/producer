@@ -19,8 +19,9 @@ bash scripts/check-macos-engine.sh "$PRODUCER_ENGINE_DIR" "$(uname -m)"
 # Keep compiler caches inside the checkout, including in sandboxed dev environments.
 export CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-$REPO_ROOT/src-tauri/target/clang-modules}"
 mkdir -p "$CLANG_MODULE_CACHE_PATH"
-export CFLAGS="${CFLAGS:-} -fmodules-cache-path=$CLANG_MODULE_CACHE_PATH"
-export CXXFLAGS="${CXXFLAGS:-} -fmodules-cache-path=$CLANG_MODULE_CACHE_PATH"
+export CC_SHELL_ESCAPED_FLAGS=1
+export CFLAGS="${CFLAGS:-} -fmodules-cache-path=\"$CLANG_MODULE_CACHE_PATH\""
+export CXXFLAGS="${CXXFLAGS:-} -fmodules-cache-path=\"$CLANG_MODULE_CACHE_PATH\""
 
 # app bundle only: skip dmg and, critically, the updater artifact — that one
 # needs the signing key and has no business in a dev loop.
