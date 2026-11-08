@@ -10,8 +10,8 @@ export function integrationRequirements(doc:PresentationPackage):IntegrationRequ
  for(const instance of doc.runtime.instances){
   const behavior=doc.runtime.definitions[instance.definition]?.behavior;
   if(!behavior||!('integrationRole'in behavior)||roles.has(behavior.integrationRole))continue;
-  const weather=behavior.type==='weather';
-  roles.set(behavior.integrationRole,{role:behavior.integrationRole,label:weather?'Live weather':'Agent responses',capability:`data.${behavior.type}@1`,input:weather?'weather.location-query@1':'agent.question@1',output:weather?'weather.observation@1':'agent.answer@1',delivery:'snapshot',optional:false,transport:weather?'poll':'request',refresh:weather});
+  const weather=behavior.type==='weather',social=behavior.type==='social';
+  roles.set(behavior.integrationRole,{role:behavior.integrationRole,label:weather?'Live weather':social?'Threads account':'Agent responses',capability:`data.${behavior.type}@1`,input:weather?'weather.location-query@1':social?'social.selection@1':'agent.question@1',output:weather?'weather.observation@1':social?'social.dashboard@1':'agent.answer@1',delivery:'snapshot',optional:false,transport:weather||social?'poll':'request',refresh:weather||social});
  }
  return [...roles.values()];
 }
@@ -20,7 +20,7 @@ export function compatibleAdapters(requirement:IntegrationRequirement,adapters:r
 }
 export function compatibleConnections(requirement:IntegrationRequirement,connections:readonly SavedConnection[],adapters:readonly DataAdapterManifest[]){
  const providers=new Set(compatibleAdapters(requirement,adapters).map(a=>a.id));
- return connections.filter(c=>providers.has(c.connection.provider)&&(!['data.weather@1','data.agent@1'].includes(requirement.capability)||`data.${c.connection.kind}@1`===requirement.capability)&&(c.connection.kind!=='agent'||c.hasSecret));
+ return connections.filter(c=>providers.has(c.connection.provider)&&(!['data.weather@1','data.agent@1','data.social@1'].includes(requirement.capability)||`data.${c.connection.kind}@1`===requirement.capability)&&(c.connection.kind!=='agent'||c.hasSecret));
 }
 export function integrationSetup(doc:PresentationPackage,connections:readonly SavedConnection[],bindings:ModuleBindings,adapters:readonly DataAdapterManifest[]){
  return integrationRequirements(doc).map(requirement=>{

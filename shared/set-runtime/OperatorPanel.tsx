@@ -72,6 +72,7 @@ export function OperatorPanel({definition,snapshot,segment,disabled=false,send,r
     <div className="module-operator-actions">{button('Show response','agent.show',m.agent.status!=='completed')}{button('Clear response','agent.clear',!m.agent.displayedQuestion&&!m.agent.displayedResponse)}</div>
     {m.agent.displayedResponse&&<div className="module-operator-actions">{button('Previous page','agent.page',m.agent.page===0,{page:m.agent.page-1})}<span>Page {m.agent.page+1} / {answerPages(presentationText(m.agent.displayedResponse)).length}</span>{button('Next page','agent.page',m.agent.page+1>=answerPages(presentationText(m.agent.displayedResponse)).length,{page:m.agent.page+1})}</div>}
    </>}
+   {behavior?.type==='social'&&<div className="module-control-group"><p role="status">{String(m.values.status??'Connect Threads in Data connections')}</p>{m.error&&<p role="alert">{m.error}</p>}<button type="button" disabled={locked||m.execution!=='running'||!requestAgent} onClick={()=>{setBusy(v=>({...v,[id]:true}));void requestAgent?.(id,'',true).catch(e=>setErrors(v=>({...v,[id]:String(e)}))).finally(()=>setBusy(v=>({...v,[id]:false})));}}>Refresh Threads data</button></div>}
    {weatherSimulation}
    {errors[id]&&<p role="alert">{errors[id]}</p>}
   </article>;

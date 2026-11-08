@@ -88,7 +88,7 @@ function CachedManager({ endpoint, channels: initialChannels, onCompose, initial
     await Promise.all([client.cancelQueries({ queryKey: keys.collections }), client.cancelQueries({ queryKey: keys.units })]);
     client.setQueryData<Collection[]>(keys.collections, (rows = []) => [...rows.filter((row) => row.id !== created.collectionId), { id: created.collectionId, name, kind }]);
     if (created.unitId) client.setQueryData<ContentUnit[]>(keys.units, (rows = []) => [...rows.filter((row) => row.id !== created.unitId), {
-      id: created.unitId!, collectionId: created.collectionId, title: name, type: "short-video", stage: "draft", caption: "", partIds: [], postIds: [], selectedChannelIds: [],
+      id: created.unitId!, collectionId: created.collectionId, title: name, type: "text", stage: "draft", caption: "", partIds: [], postIds: [], selectedChannelIds: [],
     }]);
     void client.invalidateQueries({ queryKey: keys.collections }); void client.invalidateQueries({ queryKey: keys.units });
     return created;

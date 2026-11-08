@@ -1,7 +1,9 @@
 import type {WeatherLocation} from '../../shared/set-runtime/weather';
 import {guests as guestsIpc} from './ipc';
-import type {Connection,AgentResult,WeatherResult} from '../../server/src/dataIntegrations/providers';
-export type {Connection,AgentResult,WeatherResult};
+import type {Connection as ProviderConnection,AgentResult,WeatherResult} from '../../server/src/dataIntegrations/providers';
+import type {SocialConnection,SocialSnapshot,SocialQuery} from '../../shared/set-runtime/social';
+export type Connection=ProviderConnection|SocialConnection;
+export type {AgentResult,WeatherResult,SocialSnapshot};
 export interface SavedConnection {connection:Connection;revision:number;hasSecret:boolean;status:'unverified'|'ready'|'error';error:string;testedAt:number|null}
 async function call<T>(endpoint:string,method:'GET'|'POST'|'DELETE',path:string,body?:unknown):Promise<T>{
  const result=await guestsIpc.request(endpoint,method,'/v1/app/data-integrations'+path,body);
@@ -14,8 +16,9 @@ export const dataIntegrations={
  authorSet:(endpoint:string,id:string,body:{expectedRevision:number;prompt:string;package?:import('../features/presentation/schema').PresentationPackage})=>call<import('../features/presentation/setAuthoring').AuthoringReply>(endpoint,'POST','/'+encodeURIComponent(id)+'/author-set',body),
  locations:(endpoint:string,query:string)=>call<{locations:WeatherLocation[]}>(endpoint,'GET','/locations?query='+encodeURIComponent(query)),
  list:(endpoint:string)=>call<{connections:SavedConnection[];capabilities:string[];adapters?:import('../../shared/set-runtime/dataAdapters').DataAdapterManifest[]}>(endpoint,'GET',''),
+ socialPosts:(endpoint:string,saved:SavedConnection,after?:string)=>call<{posts:{id:string;text:string;postedAt:string|null;type:string}[];after:string|null}>(endpoint,'GET','/'+encodeURIComponent(saved.connection.id)+'/posts'+(after?'?after='+encodeURIComponent(after):'')),
  save:(endpoint:string,connection:Connection,apiKey?:string,expectedRevision?:number)=>call<SavedConnection>(endpoint,'POST','',{connection,...(apiKey?{apiKey}:{}),...(expectedRevision!==undefined?{expectedRevision}:{})}),
  remove:(endpoint:string,saved:SavedConnection)=>call<{deleted:boolean}>(endpoint,'DELETE','/'+encodeURIComponent(saved.connection.id),{expectedRevision:saved.revision}),
  test:(endpoint:string,saved:SavedConnection)=>call<{ok:boolean;connectionRevision:number;sample?:WeatherResult}>(endpoint,'POST','/'+encodeURIComponent(saved.connection.id)+'/test',{}),
- query:(endpoint:string,saved:SavedConnection,input?:{question:string;mode:'answer'|'factCheck';instructions?:string}|{location?:WeatherLocation},options:{refresh?:boolean}={})=>call<{connectionId:string;connectionRevision:number;result:AgentResult|WeatherResult;cached?:boolean;stale?:boolean;cache?:{fetchedAt:number;expiresAt:number}}>(endpoint,'POST','/'+encodeURIComponent(saved.connection.id)+'/query',{expectedRevision:saved.revision,...(input?{input}:{}),...(options.refresh?{refresh:true}:{})}),
+ query:(endpoint:string,saved:SavedConnection,input?:{question:string;mode:'answer'|'factCheck';instructions?:string}|{location?:WeatherLocation}|SocialQuery,options:{refresh?:boolean}={})=>call<{connectionId:string;connectionRevision:number;result:AgentResult|WeatherResult|SocialSnapshot;cached?:boolean;stale?:boolean;cache?:{fetchedAt:number;expiresAt:number}}>(endpoint,'POST','/'+encodeURIComponent(saved.connection.id)+'/query',{expectedRevision:saved.revision,...(input?{input}:{}),...(options.refresh?{refresh:true}:{})}),
 };

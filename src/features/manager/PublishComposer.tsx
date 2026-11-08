@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { acceptsTextOnly, captionLimit, validatePostTarget } from "./publishing";
 import { convertFileSrc } from "../../lib/nativeInvoke";
 import { open } from "@tauri-apps/plugin-dialog";
 import { ipc, type Channel, type TargetResult } from "../../lib/ipc";
@@ -8,7 +9,7 @@ import { ChannelPostSettings, DEFAULT_CHANNEL_PARAMS, buildChannelOverrides, typ
 export function PublishComposer({ endpointId, channels, onBack, onSubmitted }: {
   endpointId: string; channels: Channel[]; onBack: () => void; onSubmitted: () => void;
 }) {
-  const available = channels.filter((channel) => channel.endpoint_id === endpointId && channel.status === "active");
+  const active = channels.filter((channel) => channel.endpoint_id === endpointId && channel.status === "active");
   const [caption, setCaption] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [params, setParams] = useState<Record<string, ChannelParams>>({});
@@ -25,12 +26,14 @@ export function PublishComposer({ endpointId, channels, onBack, onSubmitted }: {
   const [results, setResults] = useState<TargetResult[] | null>(null);
   const submitLock = useRef(false);
   const uploadLock = useRef(false);
-  const chosen = available.filter((channel) => selected.has(channel.id));
   const locked = busy || uploading || submitted;
   const source = upload ? convertFileSrc(upload.path) : /^https:\/\//i.test(mediaUrl.trim()) ? mediaUrl.trim() : null;
   const video = upload ? upload.kind === "video" : /\.(mp4|mov|webm)(?:[?#]|$)/i.test(mediaUrl);
-  const limits = chosen.map((channel) => channel.capabilities?.text?.maxChars).filter((value): value is number => typeof value === "number");
-  const maxChars = limits.length ? Math.min(...limits) : 2200;
+  const available = source ? active : active.filter(acceptsTextOnly);
+  const chosen = available.filter((channel) => selected.has(channel.id));
+  const hasContent = !!source || !!caption.trim();
+  const limits = chosen.map(captionLimit);
+  const maxChars = limits.length ? Math.min(...limits) : source ? 2200 : 500;
   useEffect(() => {
     if (!pickerOpen) return;
     const dismiss = (event: PointerEvent) => { if (event.target instanceof Node && !pickerRef.current?.contains(event.target)) setPickerOpen(false); };
@@ -60,7 +63,7 @@ export function PublishComposer({ endpointId, channels, onBack, onSubmitted }: {
     if (locked || submitLock.current) return;
     setError(null);
     if (!chosen.length) { setError("Choose a channel before posting."); return; }
-    if (!upload && !mediaUrl.trim()) { setError("Add an image or video before posting."); return; }
+
     if (mediaUrl.trim()) {
       try { if (new URL(mediaUrl.trim()).protocol !== "https:") throw new Error(); }
       catch { setError("Use a public HTTPS media URL."); return; }
@@ -70,7 +73,8 @@ export function PublishComposer({ endpointId, channels, onBack, onSubmitted }: {
     for (const channel of chosen) {
       const overrides = buildChannelOverrides(params[channel.id] ?? DEFAULT_CHANNEL_PARAMS, channel.platform);
       const text = typeof overrides.caption === "string" ? overrides.caption : caption;
-      if (text.length > (channel.capabilities?.text?.maxChars ?? 2200)) { setError(`The caption is too long for ${channel.display_name}.`); return; }
+      const issue = validatePostTarget(channel, text, !!source);
+      if (issue) { setError(issue); return; }
     }
     submitLock.current = true; setBusy(true); setResults(null);
     try {
@@ -87,16 +91,16 @@ export function PublishComposer({ endpointId, channels, onBack, onSubmitted }: {
     <header className="pm-new-post-bar">
       <button type="button" className="pm-unit-back" disabled={busy || uploading} onClick={onBack} aria-label="Back to overview">←</button>
       <div className="pm-unit-meta-title"><span>NEW POST</span><h1>New post</h1><small>Unfiled</small></div>
-      <div className="pm-unit-meta-field"><span>CONTENT</span><strong>{source ? video ? "Short video" : "Image" : "Add media"}</strong></div>
-      <div className="pm-unit-meta-field pm-new-post-channels" ref={pickerRef}><span>DISTRIBUTION</span><button type="button" className="pm-new-post-channel-trigger" disabled={locked} onClick={() => setPickerOpen((value) => !value)} aria-haspopup="dialog" aria-expanded={pickerOpen} aria-label="Choose channels"><span className="pm-channel-trigger-content">{chosen[0] ? <><span className="pm-publish-avatar">{chosen[0].avatar_url ? <img src={chosen[0].avatar_url} alt="" /> : chosen[0].display_name[0]}</span><span className="pm-channel-trigger-name">{chosen[0].external_handle ? "@" + chosen[0].external_handle.replace(/^@/, "") : chosen[0].display_name}</span>{chosen.length > 1 && <span className="pm-channel-more">+{chosen.length - 1}</span>}</> : "Choose channels"}</span><span aria-hidden="true">⌄</span></button>{pickerOpen && <div className="pm-new-post-channel-menu" role="dialog" aria-label="Distribution channels"><div className="pm-new-post-channel-menu-head">CHANNELS</div>{available.map((channel) => <label className="pm-new-post-channel-option" key={channel.id}><input type="checkbox" checked={selected.has(channel.id)} disabled={locked} onChange={() => toggle(channel.id)} /><span><strong>{channel.external_handle ? "@" + channel.external_handle.replace(/^@/, "") : channel.display_name}</strong><small>{channel.platform}</small></span></label>)}{!available.length && <p>No connected channels. Connect an account in Settings → Integrations.</p>}</div>}</div>
+      <div className="pm-unit-meta-field"><span>CONTENT</span><strong>{source ? video ? "Short video" : "Image" : "Text post"}</strong></div>
+      <div className="pm-unit-meta-field pm-new-post-channels" ref={pickerRef}><span>DISTRIBUTION</span><button type="button" className="pm-new-post-channel-trigger" disabled={locked} onClick={() => setPickerOpen((value) => !value)} aria-haspopup="dialog" aria-expanded={pickerOpen} aria-label="Choose channels"><span className="pm-channel-trigger-content">{chosen[0] ? <><span className="pm-publish-avatar">{chosen[0].avatar_url ? <img src={chosen[0].avatar_url} alt="" /> : chosen[0].display_name[0]}</span><span className="pm-channel-trigger-name">{chosen[0].external_handle ? "@" + chosen[0].external_handle.replace(/^@/, "") : chosen[0].display_name}</span>{chosen.length > 1 && <span className="pm-channel-more">+{chosen.length - 1}</span>}</> : "Choose channels"}</span><span aria-hidden="true">⌄</span></button>{pickerOpen && <div className="pm-new-post-channel-menu" role="dialog" aria-label="Distribution channels"><div className="pm-new-post-channel-menu-head">CHANNELS</div>{available.map((channel) => <label className="pm-new-post-channel-option" key={channel.id}><input type="checkbox" checked={selected.has(channel.id)} disabled={locked} onChange={() => toggle(channel.id)} /><span><strong>{channel.external_handle ? "@" + channel.external_handle.replace(/^@/, "") : channel.display_name}</strong><small>{channel.platform}</small></span></label>)}{!available.length && <p>No compatible channels. Connect Threads in Settings → Integrations, or add media for other destinations.</p>}</div>}</div>
       <div className="pm-unit-meta-field"><span>STAGE</span><strong>{submitted ? "Submitted" : scheduleAt ? "Scheduling" : "Draft"}</strong></div>
     </header>
     <div className="pm-new-post-body">
-      <aside className="pm-new-post-preview"><div className="pm-new-post-preview-head"><span>MEDIA</span><small>{upload?.filename ?? (source ? "Media URL" : "No files")}</small></div><div className="pm-new-post-media-frame">{source ? video ? <video src={source} controls /> : <img src={source} alt="Selected media" /> : <div className="pm-new-post-media-empty"><span aria-hidden="true">＋</span><strong>No media yet</strong><small>Add an image or video.</small></div>}</div><div className="pm-new-post-media-actions"><button type="button" disabled={locked || !available.length} onClick={() => void pickMedia()}>{uploading ? "Uploading…" : source ? "Replace media" : "Add media"}</button>{source && <button type="button" disabled={locked} onClick={() => { setUpload(null); setMediaUrl(""); }}>Remove</button>}</div>{!upload && <input className="pm-publish-url" aria-label="Public media URL" placeholder="…or paste a public media URL" disabled={locked} value={mediaUrl} onChange={(event) => setMediaUrl(event.target.value)} />}</aside>
-      <div className="pm-new-post-editor"><div className="pm-new-post-intro"><div><p className="pm-eyebrow">CREATE CONTENT</p><h2>New post</h2></div><button className="pm-new-post-save" type="submit" disabled={locked || !chosen.length || !source}>{busy ? "Submitting…" : submitted ? "Submitted" : scheduleAt ? "Schedule" : "Post now"}</button></div>
+      <aside className="pm-new-post-preview"><div className="pm-new-post-preview-head"><span>{source ? "MEDIA" : "POST PREVIEW"}</span><small>{upload?.filename ?? (source ? "Media URL" : "Threads")}</small></div><div className={"pm-new-post-media-frame" + (source ? "" : " pm-text-post-frame")}>{source ? video ? <video src={source} controls /> : <img src={source} alt="Selected media" /> : <div className="pm-new-post-media-empty"><strong>{caption.trim() ? caption : "Your text post"}</strong><small>Images and video are optional for Threads.</small></div>}</div><div className="pm-new-post-media-actions"><button type="button" disabled={locked || !active.length} onClick={() => void pickMedia()}>{uploading ? "Uploading…" : source ? "Replace media" : "Add media"}</button>{source && <button type="button" disabled={locked} onClick={() => { setUpload(null); setMediaUrl(""); }}>Remove</button>}</div>{!upload && <input className="pm-publish-url" aria-label="Public media URL" placeholder="…or paste a public media URL" disabled={locked} value={mediaUrl} onChange={(event) => setMediaUrl(event.target.value)} />}</aside>
+      <div className="pm-new-post-editor"><div className="pm-new-post-intro"><div><p className="pm-eyebrow">CREATE CONTENT</p><h2>New post</h2></div><button className="pm-new-post-save" type="submit" disabled={locked || !chosen.length || !hasContent}>{busy ? "Submitting…" : submitted ? "Submitted" : scheduleAt ? "Schedule" : "Post now"}</button></div>
         {error && <p className="pm-publish-error" role="alert">{error}</p>}
         {results && <section className="pm-new-post-card" role="status"><h3>SUBMISSION</h3>{results.map((result) => <p key={result.channel_id}>{available.find((channel) => channel.id === result.channel_id)?.display_name ?? "Channel"}: {result.accepted ? "Accepted for publishing" : result.error ?? "Awaiting confirmation"}</p>)}<p>Check posting activity for the final status.</p></section>}
-        <section className="pm-new-post-card"><h3>CAPTION <small>{caption.length}/{maxChars}</small></h3><label className="pm-new-post-field"><textarea aria-label="Caption" rows={8} placeholder="Write your caption…" disabled={locked} value={caption} onChange={(event) => setCaption(event.target.value)} /></label></section>
+        <section className="pm-new-post-card"><h3>{source ? "CAPTION" : "POST"} <small>{Array.from(caption).length}/{maxChars}</small></h3><label className="pm-new-post-field"><textarea aria-label="Caption" rows={8} placeholder={source ? "Write your caption…" : "What would you like to share?"} disabled={locked} value={caption} onChange={(event) => setCaption(event.target.value)} /></label></section>
         <section className="pm-new-post-card pm-post-targets"><h3>POST SETTINGS <small>{chosen.length} {chosen.length === 1 ? "channel" : "channels"}</small></h3>{chosen.length ? <div className="channel-cards">{chosen.map((channel) => <ChannelPostSettings key={channel.id} channel={channel} params={params[channel.id] ?? DEFAULT_CHANNEL_PARAMS} expanded={expanded.has(channel.id)} readOnly={locked} onToggle={() => setExpanded((current) => { const next = new Set(current); next.has(channel.id) ? next.delete(channel.id) : next.add(channel.id); return next; })} onPatch={(patch) => setParams((current) => ({ ...current, [channel.id]: { ...(current[channel.id] ?? DEFAULT_CHANNEL_PARAMS), ...patch } }))} onRemove={locked ? undefined : () => toggle(channel.id)} />)}</div> : <p>Choose a channel in Distribution.</p>}</section>
         <section className="pm-new-post-card"><h3>SCHEDULE</h3><input className="pm-publish-schedule" aria-label="Schedule time" type="datetime-local" disabled={locked} value={scheduleAt} onChange={(event) => setScheduleAt(event.target.value)} /><p>Leave empty to post now. Times use this Mac’s timezone.</p></section>
       </div>

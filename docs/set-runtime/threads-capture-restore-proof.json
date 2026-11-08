@@ -1,0 +1,17 @@
+{
+  "schema": "producer.native-capture-restore-proof/1",
+  "applicationVersion": "0.4.87",
+  "bundleIdentifier": "ai.boomin.producer.sets-v2-dev",
+  "receipt": {
+    "kept_source_retained": true,
+    "passed": true,
+    "replacement_name_preserved": true,
+    "retired_native_outputs_detached": 2,
+    "retired_source_released": true
+  },
+  "regression": {
+    "preFixFailed": true,
+    "preFixDuplicateSourceName": true,
+    "retiredOutputTreesHeldDuringReplacement": 2
+  }
+}

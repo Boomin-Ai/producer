@@ -135,8 +135,8 @@ export function ChannelPostSettings({ channel, params, expanded, onToggle, onPat
       </>}
       {platform === "threads" && <>
         <div className="acc-row"><span className="acc-label">Who can reply</span><Select size="sm" value={params.reply_control} disabled={readOnly} onChange={(value) => onPatch({ reply_control: value })} title="Who can reply" options={[{ value: "", label: "Everyone (default)" }, { value: "accounts_you_follow", label: "Accounts you follow" }, { value: "mentioned_only", label: "Mentioned only" }]} /></div>
-        <div className="acc-row"><span className="acc-label">Topic tag</span><input value={params.topic_tag} disabled={readOnly} onChange={(event) => onPatch({ topic_tag: event.target.value })} placeholder="one topic, no # needed (e.g. Producer)" /></div>
-        <div className="acc-row"><span className="acc-label">Link attachment</span><input value={params.link_attachment} disabled={readOnly} onChange={(event) => onPatch({ link_attachment: event.target.value })} placeholder="https://… (text-only posts — shows a preview card)" /></div>
+        <div className="acc-row"><span className="acc-label">Topic tag</span><input value={params.topic_tag} disabled={readOnly || channel.endpoint_kind === 'connected' && channel.capabilities?.features?.topic_tag !== true} onChange={(event) => onPatch({ topic_tag: event.target.value })} placeholder="one topic, no # needed (e.g. Producer)" /></div>
+        <div className="acc-row"><span className="acc-label">Link attachment</span><input value={params.link_attachment} disabled={readOnly || channel.endpoint_kind === 'connected' && channel.capabilities?.features?.link_attachment !== true} onChange={(event) => onPatch({ link_attachment: event.target.value })} placeholder="https://… (text-only posts — shows a preview card)" /></div>
       </>}
     </>}
   </div>;

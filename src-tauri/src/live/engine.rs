@@ -3786,6 +3786,7 @@ pub fn start(
                             let deferred = if async_room_mic {
                                 defer_room_microphones(&mut restore, queued_at)
                             } else { Vec::new() };
+                            hub_engine.retire_for_restore(&restore.keep_ids);
                             let mut result = match scene.as_mut() {
                                 Some(g) => g.restore_room(restore),
                                 None => Err("The room scene is not running".into()),
@@ -3803,6 +3804,7 @@ pub fn start(
                         // Even a failure leaves the graph hidden. Publish actual engine
                         // truth, never the pre-restore snapshot or a per-source echo.
                         if let Some(g) = scene.as_ref() {
+                            hub_engine.publish_targets(g);
                             let sources = g.state();
                             snap.lock().unwrap().sources = sources.clone();
                             sink(&LiveEvent::SourcesChanged { sources });
