@@ -1,0 +1,80 @@
+{
+  "at": "2026-11-08T07:31:22.298Z",
+  "checks": [
+    {
+      "check": "real account and published post selected in Data connections",
+      "postsLoaded": 50,
+      "rangeDays": 7
+    },
+    {
+      "check": "shared Host camera has real capture frames",
+      "kind": "camera"
+    },
+    {
+      "check": "live owned social module delivered",
+      "hasProfileViews": true,
+      "hasSelectedPost": true,
+      "moduleConnection": "live",
+      "replyCount": 3
+    },
+    {
+      "check": "Post spotlight presented in both orientations",
+      "revisions": [
+        16,
+        17
+      ]
+    },
+    {
+      "check": "Live replies presented in both orientations",
+      "revisions": [
+        24,
+        25
+      ]
+    },
+    {
+      "check": "Channel overview presented in both orientations",
+      "revisions": [
+        30,
+        31
+      ]
+    },
+    {
+      "after": [
+        34,
+        35
+      ],
+      "attempt": 1,
+      "before": [
+        30,
+        31
+      ],
+      "check": "settled snapshot polling",
+      "renderingContinues": true,
+      "unchangedData": false,
+      "unchangedRevisions": false
+    },
+    {
+      "after": [
+        34,
+        35
+      ],
+      "attempt": 2,
+      "before": [
+        34,
+        35
+      ],
+      "check": "settled snapshot polling",
+      "renderingContinues": true,
+      "unchangedData": true,
+      "unchangedRevisions": true
+    }
+  ],
+  "generation": 1,
+  "kind": "threads-native-room",
+  "ok": true,
+  "stage": "ready for visual review",
+  "status": "passed",
+  "applicationVersion": "0.4.87",
+  "bundleIdentifier": "ai.boomin.producer.sets-v2-dev",
+  "testScope": "Full native app, real owned account; no public publishing"
+}
