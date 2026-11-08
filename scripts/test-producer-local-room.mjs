@@ -7,7 +7,8 @@ const model={};vm.runInNewContext(compile('../server/guest/src/participants.ts')
 const accessModule={};vm.runInNewContext(compile('../src/lib/producerLocalAccess.ts'),{exports:accessModule,require:()=>model,DOMException,Error});
 const {producerLocalAccess}=accessModule;
 const hostAccess={available:true,access:{role:'host',via:'brand',can:{manage:true},grants:[{id:'local-grant'}]}};
-const home=readFileSync(new URL('../src/views/Home.tsx',import.meta.url),'utf8'),start=home.indexOf('  const startSeat = useCallback('),end=home.indexOf('  if (view.kind === "opening")',start);
+const readSource=file=>readFileSync(new URL(file,import.meta.url),'utf8').replace(/\r\n/g,'\n');
+const home=readSource('../src/views/Home.tsx'),start=home.indexOf('  const startSeat = useCallback('),end=home.indexOf('  if (view.kind === "opening")',start);
 assert(start>0&&end>start);const code=ts.transpileModule(home.slice(start,end)+'\nexports.start=startSeat;',{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
 const deferred=()=>{let resolve;return {promise:new Promise(r=>resolve=r),resolve:v=>resolve(v)};};
 function harness({rooms,access,streaming=false,recording=false}={}){
@@ -28,7 +29,7 @@ console.log('PASS local program admission: exact room, cancellation during reads
 
 // Execute the production seat bootstrap, not a facsimile: a cached access
 // receipt must settle the actual restore flags without starting the host poll.
-const live=readFileSync(new URL('../src/views/Live.tsx',import.meta.url),'utf8'),bootstrapStart=live.indexOf('  // A Producer appearance renders its own room'),bootstrapEnd=live.indexOf('  useEffect(() => {\n    refresh();',bootstrapStart);
+const live=readSource('../src/views/Live.tsx'),bootstrapStart=live.indexOf('  // A Producer appearance renders its own room'),bootstrapEnd=live.indexOf('  useEffect(() => {\n    refresh();',bootstrapStart);
 assert(bootstrapStart>0&&bootstrapEnd>bootstrapStart);
 const bootstrapCode=ts.transpileModule(live.slice(bootstrapStart,bootstrapEnd),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
 function bootstrap({receipt,read=async()=>hostAccess}={}){
