@@ -2844,9 +2844,7 @@ impl ThumbHub {
             let mut targets = self.targets.lock().unwrap();
             let (kept, retired): (Vec<_>, Vec<_>) = std::mem::take(&mut *targets)
                 .into_iter()
-                .partition(|target| {
-                    target.id != PROGRAM_THUMB_ID && keep_ids.contains(&target.id)
-                });
+                .partition(|target| target.id != PROGRAM_THUMB_ID && keep_ids.contains(&target.id));
             *targets = kept;
             retired
         };
