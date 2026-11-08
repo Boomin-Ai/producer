@@ -1051,3 +1051,12 @@
 }
 :is(.rm-dock-top,.rm-dock-bottom) > .rm-panel-setControls .set-participation .set-arranged-section h4 > button,
 :is(.rm-dock-top,.rm-dock-bottom) > .rm-panel-setControls .set-participation .set-arranged-section-controls { padding-inline:0; }
+
+/* Saved social connections and their private post selection in Set Edit. */
+.set-integration-requirement { display: grid; gap: 12px; padding: 16px 0; border-top: 1px solid #ffffff16; min-width: 0; }
+.set-integration-requirement label, .set-social-selection { display: grid; gap: 8px; min-width: 0; }
+.set-integration-requirement select, .set-integration-requirement input { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px 12px; border: 1px solid #344650; border-radius: 8px; background: #141d25; color: #e5edf1; font: inherit; }
+.set-integration-requirement p { margin: 0; line-height: 1.5; }
+.set-social-selection { gap: 14px; }
+.set-social-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.set-social-actions button { border: 1px solid #344650; border-radius: 8px; padding: 8px 12px; color: #e5edf1; background: #141d25; font: inherit; }

@@ -1,8 +1,8 @@
 {
   "name": "producer",
   "private": true,
-  "version": "0.4.88",
-  "description": "Producer by Boomin \u2014 the open-source studio for creators: post everywhere, stream everywhere.",
+  "version": "0.4.89",
+  "description": "Producer by Boomin — the open-source studio for creators: post everywhere, stream everywhere.",
   "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
@@ -16,6 +16,7 @@
     "test:room-opening": "node scripts/test-room-opening.mjs",
     "test:manager-cache": "node scripts/test-manager-cache.mjs",
     "test:prepared-scenes": "node scripts/test-prepared-scenes.mjs",
+    "test:set-capture-recovery-browser": "node scripts/test-set-capture-recovery-browser.mjs",
     "dev": "vite",
     "dev:room": "bash scripts/dev-room.sh",
     "build": "tsc && vite build",
@@ -39,7 +40,22 @@
     "test:presentation-native-output": "node scripts/test-presentation-output.mjs --native",
     "test:scene-restoration": "node scripts/test-scene-restoration.mjs",
     "test:guest-reconnect": "node scripts/test-guest-reconnect.mjs",
+    "test:beta-onboarding-browser": "node scripts/test-beta-onboarding-browser.mjs",
+    "test:entry-presentation-browser": "node scripts/test-entry-presentation-browser.mjs",
+    "test:guest-return-audio-browser": "node scripts/test-return-audio-browser.mjs",
+    "test:guest-program-expansion-browser": "node scripts/test-program-expansion-browser.mjs",
+    "test:producer-media-diagnostics": "node scripts/test-producer-media-diagnostics.mjs",
+    "test:network-diagnostics-proof": "node scripts/test-network-diagnostics-proof.mjs",
+    "test:network-dev-report": "node scripts/test-network-dev-report.mjs",
+    "test:native-pair-proof": "node scripts/test-native-pair-proof.mjs",
+    "test:producer-native-pair-launch": "node scripts/test-native-pair-launch.mjs",
+    "test:network-performance-sample": "node scripts/test-network-performance-sample.mjs",
+    "test:network-tone-proof": "node scripts/test-network-tone-proof.mjs",
+    "test:producer-network-diagnostics": "node scripts/test-producer-media-diagnostics.mjs && node scripts/test-network-diagnostics-proof.mjs && node scripts/test-network-dev-report.mjs && node scripts/test-network-performance-sample.mjs && node scripts/test-native-pair-proof.mjs && node scripts/test-native-pair-launch.mjs && node scripts/test-network-tone-proof.mjs",
+    "test:producer-network": "node scripts/test-producer-network-links.mjs && node scripts/test-producer-local-room.mjs && node scripts/test-network-messages.mjs && node scripts/test-producer-seat.mjs && node scripts/test-producer-guest-rtc.mjs && node scripts/test-producer-media-diagnostics.mjs && node scripts/test-network-diagnostics-proof.mjs && node scripts/test-network-dev-report.mjs && node scripts/test-network-performance-sample.mjs && node scripts/test-network-tone-proof.mjs",
     "test:guest-reconnect-browser": "node scripts/test-guest-reconnect-browser.mjs",
+    "test:producer-seat": "node scripts/test-producer-seat.mjs",
+    "test:producer-seat-browser": "node scripts/test-producer-seat-browser.mjs",
     "test:sets-v2": "node scripts/test-sets-v2.mjs",
     "test:sets-v2-native": "bash scripts/sets-v2/run-native-probe.sh",
     "dev:sets-v2-room": "python3 scripts/sets-v2/dev-room.py",
@@ -69,7 +85,9 @@
     "test:mcp": "node tools/producer-mcp/test.mjs",
     "test:authoring-visual": "node scripts/test-authoring-visual.mjs",
     "test:visual-review-browser": "node scripts/test-visual-review-browser.mjs",
-    "test:roster-poll": "node scripts/test-roster-poll.mjs"
+    "test:roster-poll": "node scripts/test-roster-poll.mjs",
+    "test:threads-social": "node scripts/test-threads-social.mjs",
+    "test:threads-browser": "node scripts/test-threads-browser.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.0",
@@ -79,8 +97,10 @@
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.1",
+    "livekit-client": "2.22.4",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "zod": "4.2.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

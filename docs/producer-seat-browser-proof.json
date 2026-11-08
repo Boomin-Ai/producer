@@ -1,0 +1,37 @@
+{
+  "source": "synthetic canvas and oscillator only",
+  "nativeDevicesOpened": false,
+  "waitingOpenedMedia": false,
+  "firstVideoMsFromSession": 1267,
+  "sampledDecodedFps": 20,
+  "reconnectMs": 4572,
+  "before": {
+    "frames": 4,
+    "audioBytes": 742
+  },
+  "after": {
+    "frames": 4,
+    "audioBytes": 14175
+  },
+  "captures": 1,
+  "localTracksStopped": true,
+  "allMediaPeersClosed": true,
+  "sessionRequests": 2,
+  "at": "2026-11-08T18:10:21.891Z",
+  "scope": "Browser legacy guest transport only; not a real Mac/Windows or native LiveKit media qualification",
+  "fixtureCorrection": "Replacement offers for the same logical peer preserve negotiated media order; baseline and candidate both pass the corrected fixture.",
+  "measurementNotes": "This standalone run overlapped a browser control; do not infer a product gain or regression from timing differences.",
+  "matchedControlObservations": {
+    "baseline": {
+      "firstVideoMsFromSession": 589,
+      "sampledDecodedFps": 20,
+      "reconnectMs": 1649
+    },
+    "candidate": {
+      "firstVideoMsFromSession": 617,
+      "sampledDecodedFps": 20,
+      "reconnectMs": 1656
+    },
+    "scope": "One matched synthetic legacy observation per variant, not a production performance comparison."
+  }
+}

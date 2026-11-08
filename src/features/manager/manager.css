@@ -523,3 +523,8 @@
 
 .pm-recording-location {align-self:flex-start;border:0;background:transparent;padding:3px 0;color:#3472a1;font:inherit;font-size:12px;cursor:pointer;text-align:left;}
 .pm-recording-location:hover {text-decoration:underline;}
+
+.pm-text-post-frame { aspect-ratio: auto; min-height: 240px; padding: 24px; }
+.pm-text-post-frame .pm-new-post-media-empty { align-items: flex-start; text-align: left; }
+.pm-text-post-frame strong { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 17px; line-height: 1.6; color: var(--pm-text); }
+.pm-text-post-frame small { max-width: none; }

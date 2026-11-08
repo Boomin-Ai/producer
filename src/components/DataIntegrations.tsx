@@ -1,5 +1,6 @@
+import type {Connection} from '../../server/src/dataIntegrations/providers';
 import {useEffect,useRef,useState} from 'react';
-import {dataIntegrations,type Connection,type SavedConnection} from '../lib/dataIntegrations';
+import {dataIntegrations,type SavedConnection} from '../lib/dataIntegrations';
 import './dataIntegrations.css';
 const weather=():Connection=>({id:'weather-'+crypto.randomUUID().slice(0,8),name:'Weather',kind:'weather',provider:'open-meteo',location:'Atlanta',latitude:33.749,longitude:-84.388,units:'celsius',pollSeconds:300});
 const agent=():Connection=>({id:'agent-'+crypto.randomUUID().slice(0,8),name:'Research agent',kind:'agent',provider:'anthropic',model:'',webSearch:true,maxOutputTokens:2048});
@@ -10,7 +11,7 @@ export function DataIntegrations({endpointId,initialKind}:{endpointId:string|nul
  const refresh=async(id=endpointId)=>{if(!id)return;const response=await dataIntegrations.list(id);if(current.current===id){setConnections(response.connections);setLoaded(true);}};
  useEffect(()=>{let cancelled=false;setConnections([]);setDraft(initialKind==='weather'?weather():initialKind==='agent'?agent():null);setSecret('');setError('');setLoaded(false);setBusy(false);setRevision(undefined);if(endpointId)void refresh(endpointId).catch(e=>{if(!cancelled)setError(String(e));});return()=>{cancelled=true;};},[endpointId]);
  const run=async(work:(id:string)=>Promise<void>)=>{if(!endpointId||busy)return;const id=endpointId;setBusy(true);setError('');try{await work(id);window.dispatchEvent(new Event('producer:data-connections-changed'));}catch(e){if(current.current===id)setError(String(e));}finally{if(current.current===id)setBusy(false);}};
- const edit=(saved:SavedConnection)=>{setDraft(structuredClone(saved.connection));setRevision(saved.revision);setSecret('');setError('');};
+ const edit=(saved:SavedConnection)=>{if(saved.connection.kind==='social')return;setDraft(structuredClone(saved.connection));setRevision(saved.revision);setSecret('');setError('');};
  const change=(patch:Partial<Connection>)=>setDraft(previous=>previous?{...previous,...patch} as Connection:previous);
  const save=()=>void run(async id=>{if(!draft)return;await dataIntegrations.save(id,draft,secret||undefined,revision);if(current.current!==id)return;setSecret('');setDraft(null);await refresh(id);});
  return <section className="data-integrations" aria-label="Data integrations">
@@ -20,9 +21,9 @@ export function DataIntegrations({endpointId,initialKind}:{endpointId:string|nul
    {!endpointId&&<p className="cr-hint">Select a workspace to configure weather and agent connections.</p>}
    {endpointId&&loaded&&!visibleConnections.length&&<p className="cr-hint">Connect weather data or an agent, then select it in a set’s module settings.</p>}
    {visibleConnections.map(saved=><div className="cr-sheet-row data-connection" key={saved.connection.id}>
-    <span className="cr-sheet-row-name">{saved.connection.name}</span><span className="cr-sheet-row-sub">{saved.connection.kind==='weather'?`${saved.connection.location} · Open-Meteo`:`${saved.connection.model} · ${saved.connection.provider==='anthropic'?'Claude':'OpenAI'}${saved.connection.webSearch?' · Web research':''}`}</span>
+    <span className="cr-sheet-row-name">{saved.connection.name}</span><span className="cr-sheet-row-sub">{saved.connection.kind==='social'?'Threads · managed in workspace Integrations':saved.connection.kind==='weather'?`${saved.connection.location} · Open-Meteo`:`${saved.connection.model} · ${saved.connection.provider==='anthropic'?'Claude':'OpenAI'}${saved.connection.webSearch?' · Web research':''}`}</span>
     <span className="data-connection-status" role="status">{saved.status==='ready'?'Connected':saved.status==='error'?'Needs attention':'Not tested'}</span>
-    <div className="data-connection-actions"><button disabled={busy} onClick={()=>edit(saved)}>Edit</button><button disabled={busy} onClick={()=>void run(async id=>{await dataIntegrations.test(id,saved);await refresh(id);})}>Test connection</button><button disabled={busy} onClick={()=>void run(async id=>{await dataIntegrations.remove(id,saved);await refresh(id);})}>Remove</button></div>
+    <div className="data-connection-actions">{saved.connection.kind!=='social'&&<button disabled={busy} onClick={()=>edit(saved)}>Edit</button>}<button disabled={busy} onClick={()=>void run(async id=>{await dataIntegrations.test(id,saved);await refresh(id);})}>Test connection</button>{saved.connection.kind!=='social'&&<button disabled={busy} onClick={()=>void run(async id=>{await dataIntegrations.remove(id,saved);await refresh(id);})}>Remove</button>}</div>
     {saved.error&&<span className="cr-hint" role="alert">{saved.error}</span>}
    </div>)}
    {endpointId&&loaded&&!draft&&<div className="data-connection-actions">{initialKind!=='agent'&&<button disabled={busy} onClick={()=>{setDraft(weather());setRevision(undefined);setSecret('');}}>Add weather connection</button>}{initialKind!=='weather'&&<button disabled={busy} onClick={()=>{setDraft(agent());setRevision(undefined);setSecret('');}}>Add LLM connection</button>}</div>}

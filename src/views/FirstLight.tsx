@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { hasTauri, ipc, vcam as vcamIpc, type LivePermissions, type VcamStatus } from "../lib/ipc";
-import { Wordmark } from "./Onboarding";
+import { EntryFrame } from "./EntryFrame";
 
-/** First Light — the first-launch experience. A cinematic intro (once,
- * ever), a short welcome, and the permissions ritual with the native drag
- * chip for Screen Recording. Skippable at every step; state lives in
- * localStorage so an update never replays it. */
+/** First-launch welcome and device access. The completion key is unchanged,
+ * so existing users are not sent through setup again after an update. */
 
 const DONE_KEY = "producer.firstlight.v1";
-const INTRO_KEY = "producer.firstlight.intro.v1";
 
 export function firstLightDone(): boolean {
   try {
@@ -18,16 +15,10 @@ export function firstLightDone(): boolean {
   }
 }
 
-type Phase = "intro" | "welcome" | "permissions";
+type Phase = "welcome" | "permissions";
 
 export function FirstLight({ onDone }: { onDone: () => void }) {
-  const [phase, setPhase] = useState<Phase>(() => {
-    try {
-      return localStorage.getItem(INTRO_KEY) === "1" ? "welcome" : "intro";
-    } catch {
-      return "welcome";
-    }
-  });
+  const [phase, setPhase] = useState<Phase>("welcome");
 
   // Mid-permissions relaunch (the Screen Recording grant requires one):
   // a Rust-side marker survives the restart — localStorage can't, WKWebView
@@ -55,153 +46,24 @@ export function FirstLight({ onDone }: { onDone: () => void }) {
     onDone();
   }, [onDone]);
 
-  if (phase === "intro")
-    return (
-      <Intro
-        onEnd={() => {
-          try {
-            localStorage.setItem(INTRO_KEY, "1");
-          } catch {
-            /* cosmetic only */
-          }
-          setPhase("welcome");
-        }}
-      />
-    );
   if (phase === "welcome") return <Welcome onNext={() => setPhase("permissions")} />;
   return <Permissions onDone={finish} />;
-}
-
-/* ── Intro: dark fade, mark breathes in, ambient swell ─────────────────── */
-
-function Intro({ onEnd }: { onEnd: () => void }) {
-  const ended = useRef(false);
-  const end = useCallback(() => {
-    if (ended.current) return;
-    ended.current = true;
-    onEnd();
-  }, [onEnd]);
-
-  useEffect(() => {
-    const stop = playSwell();
-    const t = setTimeout(end, 5200);
-    return () => {
-      clearTimeout(t);
-      stop();
-    };
-  }, [end]);
-
-  return (
-    <div className="fl-intro" onClick={end}>
-      <div className="fl-intro-mark">
-        <Wordmark />
-        <div className="fl-intro-sub">Go live everywhere.</div>
-      </div>
-    </div>
-  );
-}
-
-/** Soft two-chord synth swell — no bundled audio, no licensing. Voiced in
- * the 220–660 Hz band laptop speakers actually reproduce, with slow-attack
- * detuned pairs so it reads as a pad, not a beep. If the webview refuses
- * audio without a gesture the intro simply plays silent. */
-function playSwell(): () => void {
-  try {
-    const Ctx = window.AudioContext ?? (window as never as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = new Ctx();
-    const kick = () => {
-      if (ctx.state === "suspended") ctx.resume().catch(() => {});
-    };
-    kick();
-    const retry = setInterval(kick, 400);
-    const master = ctx.createGain();
-    master.gain.value = 0;
-    const lp = ctx.createBiquadFilter();
-    lp.type = "lowpass";
-    lp.frequency.value = 1400;
-    master.connect(lp).connect(ctx.destination);
-    const t0 = ctx.currentTime;
-    master.gain.setValueAtTime(0, t0);
-    master.gain.linearRampToValueAtTime(0.24, t0 + 1.8);
-    master.gain.setValueAtTime(0.24, t0 + 3.6);
-    master.gain.linearRampToValueAtTime(0.0, t0 + 5.1);
-    const voices: OscillatorNode[] = [];
-    const chord = (freqs: number[], start: number, dur: number) => {
-      for (const f of freqs) {
-        // detuned pair per note = gentle chorus shimmer
-        for (const cents of [-4, 4]) {
-          const o = ctx.createOscillator();
-          o.type = "triangle";
-          o.frequency.value = f;
-          o.detune.value = cents;
-          const g = ctx.createGain();
-          g.gain.setValueAtTime(0, t0 + start);
-          g.gain.linearRampToValueAtTime(0.22, t0 + start + dur * 0.45);
-          g.gain.linearRampToValueAtTime(0, t0 + start + dur);
-          o.connect(g).connect(master);
-          o.start(t0 + start);
-          o.stop(t0 + start + dur + 0.1);
-          voices.push(o);
-        }
-      }
-    };
-    chord([220, 277.18, 329.63, 440], 0, 3.4); // A add9 bloom
-    chord([246.94, 311.13, 392.0, 493.88], 2.3, 2.9); // lift to B
-    const cleanup = () => {
-      clearInterval(retry);
-      try {
-        for (const v of voices) v.stop();
-        ctx.close().catch(() => {});
-      } catch {
-        /* already gone */
-      }
-    };
-    setTimeout(() => clearInterval(retry), 5200);
-    return cleanup;
-  } catch {
-    return () => {};
-  }
 }
 
 /* ── Welcome ───────────────────────────────────────────────────────────── */
 
 function Welcome({ onNext }: { onNext: () => void }) {
   return (
-    <div className="fl-screen">
-      <div className="fl-body">
-        <Wordmark />
-        <h1 className="fl-h1">Welcome to Producer</h1>
-        <p className="fl-sub">The open-source studio for going live everywhere, from one Mac.</p>
-        <div className="fl-props">
-          <div className="fl-prop">
-            <span className="fl-prop-dot" />
-            <div>
-              <strong>Multistream natively.</strong> Twitch, Kick, and YouTube at once — one
-              encoder, zero extra apps.
-            </div>
-          </div>
-          <div className="fl-prop">
-            <span className="fl-prop-dot" />
-            <div>
-              <strong>Overlays built in.</strong> Alerts, browser overlays, and window capture
-              with true transparency.
-            </div>
-          </div>
-          <div className="fl-prop">
-            <span className="fl-prop-dot" />
-            <div>
-              <strong>Part of a network.</strong> Connect your Boomin workspace and your streams
-              join something bigger.
-            </div>
-          </div>
-        </div>
-        <div className="fl-actions">
-          <button className="fl-primary" onClick={onNext}>
-            Set up permissions
-          </button>
-        </div>
+    <EntryFrame stage="welcome">
+      <p className="entry-eyebrow">Welcome to Producer</p>
+      <h1 className="entry-heading">Your studio starts here.</h1>
+      <p className="entry-description">Create Sets, go live, and bring guests into your show.</p>
+      <div className="entry-actions">
+        <button type="button" className="entry-primary" onClick={onNext}>
+          Continue to setup
+        </button>
       </div>
-    </div>
+    </EntryFrame>
   );
 }
 
@@ -287,22 +149,22 @@ function Permissions({ onDone }: { onDone: () => void }) {
     }
   }
 
-  let cameraDetail = "Lets Producer appear as a webcam in Zoom, Meet and Discord.";
+  let cameraDetail = "Use your Producer output as a webcam in other apps.";
   let cameraAction: React.ReactNode = null;
   if (vcam && !vcam.installed) {
     switch (vcam.state) {
       case "move_to_applications":
-        cameraDetail = "Drag Producer to Applications, then reopen it from there to install the virtual camera.";
+        cameraDetail = "Move Producer to Applications, then reopen it to install the virtual camera.";
         cameraAction = (
-          <button className="fl-ghost" onClick={() => vcamIpc.revealApp().catch(() => {})}>
+          <button type="button" className="entry-secondary" onClick={() => vcamIpc.revealApp().catch(() => {})}>
             Show in Finder
           </button>
         );
         break;
       case "needs_approval":
-        cameraDetail = "Open System Settings to approve Producer Virtual Camera.";
+        cameraDetail = "Approve Producer Virtual Camera in system settings.";
         cameraAction = (
-          <button className="fl-primary" onClick={() => vcamIpc.openSettings().catch(() => {})}>
+          <button type="button" className="entry-secondary" onClick={() => vcamIpc.openSettings().catch(() => {})}>
             Open Settings
           </button>
         );
@@ -315,9 +177,9 @@ function Permissions({ onDone }: { onDone: () => void }) {
         break;
       default: {
         const installing = vcamBusy || vcam.state === "requested" || vcam.state === "active";
-        if (vcam.state === "failed") cameraDetail = vcam.error ?? "macOS refused the camera extension.";
+        if (vcam.state === "failed") cameraDetail = vcam.error ?? "The virtual camera could not be installed.";
         cameraAction = (
-          <button className="fl-ghost" disabled={installing} onClick={() => void installVirtualCamera().catch(() => {})}>
+          <button type="button" className="entry-secondary" disabled={installing} onClick={() => void installVirtualCamera().catch(() => {})}>
             {installing ? "Installing…" : "Install"}
           </button>
         );
@@ -326,30 +188,28 @@ function Permissions({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <div className="fl-screen">
-      <div className="fl-body">
-        <Wordmark />
-        <h1 className="fl-h1">Permissions</h1>
-        <p className="fl-sub">
-          macOS asks once. Producer is signed and notarized, so these grants survive updates.
-          The first three are what streaming needs; the last is optional.
-        </p>
-
+    <EntryFrame stage="access">
+      <p className="entry-eyebrow">Studio setup</p>
+      <h1 className="entry-heading">Give your studio access.</h1>
+      <p className="entry-description">
+        Allow the screen and devices you plan to use. Your system may ask you to approve access.
+      </p>
+      <div className="entry-list" role="list" aria-label="Studio permissions">
         <PermRow
           title="Screen recording"
           detail={
             chipUp
-              ? "System Settings is open — drag the floating Producer chip into the list, then flip its toggle on."
-              : "Lets Producer capture your screen for the stream."
+              ? "In system settings, add the floating Producer chip to screen recording and turn access on."
+              : "Share a screen or window in your show."
           }
           status={perms?.screen === "granted" ? "granted" : perms ? "pending" : "unknown"}
           action={
             needsRelaunch ? (
-              <button className="fl-primary" onClick={relaunchNow}>
-                Restart Producer to finish
+              <button type="button" className="entry-secondary" onClick={relaunchNow}>
+                Restart Producer
               </button>
             ) : screenGranted ? null : (
-              <button className="fl-primary" onClick={startScreenGrant}>
+              <button type="button" className="entry-secondary" onClick={startScreenGrant}>
                 Open Settings
               </button>
             )
@@ -357,11 +217,11 @@ function Permissions({ onDone }: { onDone: () => void }) {
         />
         <PermRow
           title="Camera"
-          detail="For your on-stream camera. Producer never records without you."
+          detail="Bring your camera into the room."
           status={perms?.camera === "granted" ? "granted" : perms ? "pending" : "unknown"}
           action={
             perms?.camera === "granted" ? null : (
-              <button className="fl-primary" onClick={() => ipc.liveRequestPermission("camera").catch(() => {})}>
+              <button type="button" className="entry-secondary" onClick={() => ipc.liveRequestPermission("camera").catch(() => {})}>
                 Allow camera
               </button>
             )
@@ -369,11 +229,11 @@ function Permissions({ onDone }: { onDone: () => void }) {
         />
         <PermRow
           title="Microphone"
-          detail="So your voice makes it to the stream."
+          detail="Add your voice to the show."
           status={perms?.mic === "granted" ? "granted" : perms ? "pending" : "unknown"}
           action={
             perms?.mic === "granted" ? null : (
-              <button className="fl-primary" onClick={() => ipc.liveRequestPermission("mic").catch(() => {})}>
+              <button type="button" className="entry-secondary" onClick={() => ipc.liveRequestPermission("mic").catch(() => {})}>
                 Allow microphone
               </button>
             )
@@ -387,14 +247,14 @@ function Permissions({ onDone }: { onDone: () => void }) {
           status={vcam?.installed ? "granted" : cameraAction ? "pending" : "unknown"}
           action={cameraAction}
         />
-
-        <div className="fl-actions">
-          <button className={allSet ? "fl-primary" : "fl-ghost"} onClick={onDone} disabled={needsRelaunch}>
-            {allSet ? "Continue" : "Skip for now"}
-          </button>
-        </div>
       </div>
-    </div>
+      <p className="entry-note">Virtual camera is optional. You can manage access later in Settings.</p>
+      <div className="entry-actions">
+        <button type="button" className={allSet ? "entry-primary" : "entry-secondary"} onClick={onDone} disabled={needsRelaunch}>
+          {allSet ? "Continue" : "Skip for now"}
+        </button>
+      </div>
+    </EntryFrame>
   );
 }
 
@@ -414,8 +274,8 @@ function PermRow({
   optional?: boolean;
 }) {
   return (
-    <div className={`fl-perm ${status === "granted" ? "is-granted" : ""}`}>
-      <div className="fl-perm-check">{status === "granted" ? "✓" : ""}</div>
+    <div className={`fl-perm ${status === "granted" ? "is-granted" : ""}`} role="listitem">
+      <div className="fl-perm-check" aria-hidden="true">{status === "granted" ? "✓" : ""}</div>
       <div className="fl-perm-text">
         <div className="fl-perm-title">
           {title}
@@ -423,8 +283,8 @@ function PermRow({
         </div>
         <div className="fl-perm-detail">{detail}</div>
       </div>
-      <div className="fl-perm-action">
-        {status === "granted" ? <span className="fl-perm-granted">Granted</span> : action}
+      <div className="fl-perm-action" aria-live="polite">
+        {action ?? (status === "granted" ? <span className="fl-perm-granted">Granted</span> : null)}
       </div>
     </div>
   );

@@ -24,7 +24,7 @@ export function arrangementCatalog(doc:PresentationPackage):ArrangementCatalog {
     const s=section(`module:${instance.id}:$tools`,`${definition.label} · Tools`);
     add(s,{id:`module:${instance.id}:$lifecycle`,label:`${definition.label} playback`,type:'lifecycle',kind:'module',moduleId:instance.id,controlId:'$lifecycle',signature:`lifecycle/1:${instance.definition}`});
     if(definition.behavior?.type==='weather')add(s,{id:`module:${instance.id}:$weather-location`,label:'City and weather refresh',type:'weather-location',kind:'module',moduleId:instance.id,controlId:'$weather-location',signature:`weather-location/1:${instance.definition}`});
-    if(definition.behavior&&['agent','vote','submissions'].includes(definition.behavior.type))add(s,{id:`module:${instance.id}:$behavior-tools`,label:`${definition.label} tools`,type:'behavior-tools',kind:'module',moduleId:instance.id,controlId:'$behavior-tools',signature:`behavior-tools/1:${instance.definition}:${definition.behavior.type}`});
+    if(definition.behavior&&['agent','vote','submissions','social'].includes(definition.behavior.type))add(s,{id:`module:${instance.id}:$behavior-tools`,label:`${definition.label} tools`,type:'behavior-tools',kind:'module',moduleId:instance.id,controlId:'$behavior-tools',signature:`behavior-tools/1:${instance.definition}:${definition.behavior.type}`});
   }
   const authored=doc.set.controlArrangement;
   const placed=new Set(authored?.sections.flatMap(s=>s.controls)??[]);

@@ -1,0 +1,55 @@
+<!doctype html><html><body><video id="remote" autoplay muted playsinline></video><script type="module">
+import {GuestSeat} from '/src/lib/guestSeat.ts';
+window.runProducerSeatTest=async()=>{
+ const originalSocket=window.WebSocket,originalFetch=window.fetch,originalCapture=navigator.mediaDevices.getUserMedia;
+ const canvas=document.createElement('canvas');canvas.width=640;canvas.height=360;const ctx=canvas.getContext('2d');let tick=0;
+ const drawing=setInterval(()=>{ctx.fillStyle=tick++%2?'#00bb88':'#2255aa';ctx.fillRect(0,0,640,360);},50);
+ const input=canvas.captureStream(20),audio=new AudioContext(),osc=audio.createOscillator(),dest=audio.createMediaStreamDestination();osc.frequency.value=440;osc.connect(dest);osc.start();await audio.resume();dest.stream.getAudioTracks().forEach(t=>input.addTrack(t));
+ const sockets=[],hosts=[],requests=[];let captureCount=0,accepted=false,firstSessionAt=0,mainMediaOrder=[];
+ class Socket{
+  static OPEN=1;
+  constructor(url){this.url=url;this.readyState=0;this.queue=Promise.resolve();this.ice=[];sockets.push(this);
+   if(!String(url).endsWith('/conversation')){this.host=new RTCPeerConnection({iceServers:[]});hosts.push(this.host);this.host.ontrack=e=>{document.getElementById('remote').srcObject=e.streams[0]??new MediaStream([e.track]);};this.host.onicecandidate=e=>{if(e.candidate)this.deliver({kind:'ice',candidate:e.candidate.toJSON()});};}
+   setTimeout(()=>{this.readyState=1;this.onopen?.();},10);
+  }
+  deliver(payload){if(this.readyState===1)queueMicrotask(()=>this.onmessage?.({data:JSON.stringify({type:'signal',payload:{...payload,peer:'main'}})}));}
+  send(raw){const {payload}=JSON.parse(raw);if(!this.host||payload?.peer!=='main')return;this.queue=this.queue.then(async()=>{
+   if(this.readyState!==1)return;
+   if(payload.kind==='hello'&&hosts.length>1&&!this.host.localDescription){
+    // This remains the same logical main peer. MediaStream.getTracks() does
+    // not guarantee video-first order; preserve the first negotiated m-lines
+    // rather than making an invalid replacement offer to the retained guest.
+    if(!mainMediaOrder.length)throw Error('Missing negotiated main media order');
+    for(const kind of mainMediaOrder)this.host.addTransceiver(kind,{direction:'recvonly'});
+    await this.host.setLocalDescription(await this.host.createOffer());this.deliver({kind:'sdp',description:this.host.localDescription});}
+   else if(payload.description){
+    // The host is the impolite side, matching GuestRenderPage's fixed roles.
+    // Its new offer wins a collision with the retained guest's ICE restart.
+    if(payload.description.type==='offer'&&this.host.signalingState!=='stable')return;
+    if(payload.description.type==='answer'&&this.host.signalingState!=='have-local-offer')return;
+    await this.host.setRemoteDescription(payload.description);if(!mainMediaOrder.length)mainMediaOrder=this.host.getTransceivers().map(t=>t.receiver.track.kind);for(const ice of this.ice.splice(0))await this.host.addIceCandidate(ice);if(payload.description.type==='offer'){await this.host.setLocalDescription(await this.host.createAnswer());this.deliver({kind:'sdp',description:this.host.localDescription});}}
+   else if(payload.candidate){if(this.host.remoteDescription)await this.host.addIceCandidate(payload.candidate);else this.ice.push(payload.candidate);}
+  }).catch(error=>{this.error=error.message;});}
+  close(){if(this.readyState===3)return;this.readyState=3;this.host?.close();this.onclose?.();}
+ }
+ navigator.mediaDevices.getUserMedia=async()=>{captureCount++;return input;};window.WebSocket=Socket;
+ window.fetch=async(url,options)=>{requests.push({url:String(url),method:options?.method});
+  if(String(url).endsWith('/room-session'))return new Response(JSON.stringify({signaling_url:'/conversation',peer_id:'guest-one',stage:{on_stage:[],version:1},ice_servers:[]}));
+  if(String(url).endsWith('/session')){firstSessionAt ||= performance.now();return new Response(JSON.stringify({signaling_ticket:'synthetic-ticket',signaling_url:'/media',ice_servers:[]}));}
+  return new Response(JSON.stringify({transport:'legacy',guest:{id:'guest-one',status:accepted?'accepted':'waiting',grants:['media.camera','media.mic']}}));
+ };
+ const seat=new GuestSeat({joinUrl:'https://synthetic.example/connect/guest/gi_local',apiBase:'https://synthetic.example',endpointId:'local-only',hostName:'Synthetic host',title:'Synthetic Producer appearance',producerCam:false,videoSource:'webcam'});
+ const wait=async predicate=>{const end=performance.now()+15000;while(!await predicate()){if(performance.now()>end)throw Error('Synthetic Producer media timed out: '+JSON.stringify({sockets:sockets.map(s=>({url:s.url,error:s.error,state:s.host?.connectionState,signal:s.host?.signalingState})),stats:await Promise.all(hosts.map(h=>stats(h))),captureCount,seat:seat.snapshot()}));await new Promise(r=>setTimeout(r,50));}};
+ const stats=async host=>{const r={frames:0,audioBytes:0};for(const s of(await host.getStats()).values())if(s.type==='inbound-rtp'){if(s.kind==='video')r.frames+=s.framesDecoded??0;if(s.kind==='audio')r.audioBytes+=s.bytesReceived??0;}return r;};
+ try{
+  await seat.start();if(captureCount||hosts.length)throw Error('Waiting activated media');accepted=true;
+  await wait(async()=>hosts[0]&&(await stats(hosts[0])).frames>3&&(await stats(hosts[0])).audioBytes>0);
+  const firstFrameMs=Math.round(performance.now()-firstSessionAt),before=await stats(hosts[0]);await new Promise(r=>setTimeout(r,2000));const sampled=await stats(hosts[0]);
+  const first=sockets.find(s=>s.host===hosts[0]),reconnectAt=performance.now();first.close();hosts[0].close();
+  await wait(async()=>hosts.length>1&&(await stats(hosts.at(-1))).frames>3&&(await stats(hosts.at(-1))).audioBytes>0);
+  const reconnectMs=Math.round(performance.now()-reconnectAt),after=await stats(hosts.at(-1)),captured=seat.localStream();seat.leave();
+  if(captureCount!==1||!captured.getTracks().every(t=>t.readyState==='ended'))throw Error('Capture ownership leaked across reconnect/leave');
+  return {source:'synthetic canvas and oscillator only',nativeDevicesOpened:false,waitingOpenedMedia:false,firstVideoMsFromSession:firstFrameMs,sampledDecodedFps:(sampled.frames-before.frames)/2,reconnectMs,before,after,captures:captureCount,localTracksStopped:true,allMediaPeersClosed:hosts.every(h=>h.connectionState==='closed'),sessionRequests:requests.filter(r=>r.url.endsWith('/session')).length};
+ }finally{seat.leave();for(const h of hosts)h.close();input.getTracks().forEach(t=>t.stop());clearInterval(drawing);osc.stop();await audio.close();window.WebSocket=originalSocket;window.fetch=originalFetch;navigator.mediaDevices.getUserMedia=originalCapture;}
+};
+</script></body></html>

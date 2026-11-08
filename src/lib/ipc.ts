@@ -1,4 +1,5 @@
 import { invoke } from "./nativeInvoke";
+import { NetworkEntryRequests } from "./networkEntry";
 
 /** What an endpoint IS, derived (Rust-side) from whether it carries a brand
  * scope: "boomin" = a Boomin workspace (network, deals, room visibility);
@@ -28,8 +29,8 @@ export interface Channel {
   status: "active" | "needs_reconnect" | "disabled";
   capabilities?: {
     rateLimit?: { type: string; max: number; windowSeconds: number };
-    media?: { kinds?: string[] };
-    text?: { maxChars?: number };
+    media?: { kinds?: string[]; required?: boolean };
+    text?: { maxChars?: number }; features?: Record<string, boolean>;
   };
   /** Added client-side: which endpoint this channel lives on. */
   endpoint_id: string;
@@ -710,10 +711,10 @@ export const network = {
     invoke<{ rooms?: NetworkLiveRoom[] }>("network_live_rooms", { endpointId }),
   /** Knock on a visible open stage. The join_url is the seat's credential
    * (its invite code) — Producer takes the seat natively (lib/guestSeat),
-   * never a browser. `api_base` is the endpoint the code is good for. Rust
-   * starts the virtual camera when it can; `producer_cam` says so. */
+   * never a browser. `api_base` is the endpoint the code is good for.
+   * Local room/media selection and host admission precede capture. */
   enterRoom: (endpointId: string, roomId: string) =>
-    invoke<NetworkSeat>("network_enter_room", { endpointId, roomId }),
+    enterNetworkSeat(endpointId, `/v1/app/network/rooms/${encodeURIComponent(roomId)}/enter`),
   /** Every deal this brand is party to. */
   deals: (endpointId: string) => invoke<{ deals?: NetworkDeal[] }>("network_deals", { endpointId }),
   /** Book an appearance: we (the host) pay them to appear on OUR server room.
@@ -741,14 +742,28 @@ export const network = {
   /** accept | decline (beneficiary) · cancel (either side, before funding). */
   dealAction: (endpointId: string, id: string, action: "accept" | "decline" | "cancel") =>
     invoke<{ deal: NetworkDeal }>("network_deal_action", { endpointId, id, action }),
-  /** Beneficiary enters the show THROUGH the deal: Rust knocks via the API
-   * (so admitting them settles it) and starts the virtual camera; the UI
-   * opens a room in guest mode on the returned seat. No browser, no window.
+  /** Beneficiary enters the show THROUGH the deal using a retry-safe knock.
+   * The UI confirms the chosen local room/feed before capture; the host still
+   * controls admission. No external browser is opened.
    * Rejects with a message starting `network_room_closed:` while the host's
    * room isn't open. */
   enterDeal: (endpointId: string, dealId: string) =>
-    invoke<NetworkSeat>("network_deal_enter", { endpointId, dealId }),
+    enterNetworkSeat(endpointId, `/v1/app/network/deals/${encodeURIComponent(dealId)}/enter`),
 };
+
+const networkEntries = new NetworkEntryRequests();
+async function enterNetworkSeat(endpointId:string,path:string):Promise<NetworkSeat>{
+ const endpoint=(await ipc.listEndpoints()).find(e=>e.id===endpointId);
+ if(!endpoint)throw Error('Reconnect to this workspace first.');
+ const result=await networkEntries.enter<NetworkSeat>(`${endpointId}:${path}`,async requestId=>{
+   const capability=await guests.request(endpointId,'GET','/v1/app/network/entry-capabilities');
+   if(capability.status!==200||(capability.body as {network_entry_protocol?:number}|undefined)?.network_entry_protocol!==1)
+     throw Error('This server needs the coordinated Producer network update before a network appearance can start.');
+   return guests.request(endpointId,'POST',path,{request_id:requestId});
+ });
+ // Joining grants a seat, not permission to start this computer's devices.
+ return {...result,api_base:endpoint.base_url,producer_cam:false};
+}
 
 /** What a knock returns: the seat this Producer now holds in someone
  * else's room. */

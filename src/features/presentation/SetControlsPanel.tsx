@@ -1,3 +1,4 @@
+import {useSocialRehearsal} from './useSocialRehearsal';
 import {SetIntegrationConnections} from './SetIntegrationConnections';
 import {integrationRequirements} from './integrationRequirements';
 import {layoutViews,preferredViewLayout,viewForLayout} from './layoutViews';
@@ -156,12 +157,13 @@ export function SetControlsPanel(props:PanelProps) {
     onRetryConnections={retryConnections} workspace={workspace} workspaceBusy={publishing}
     onWorkspaceClose={()=>draft.exitRehearsal()} />;
 }
-function SetControlsPanelView({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, voting, onFieldEdit, workspace, workspaceBusy=false, editorOnly=false,onPublish,publishError,onWorkspaceClose,editorStatus='changed',endpoint,serverRoomId,preferenceRoomId,moduleBindings={},connections=[],adapters=[],connectionError='',onRetryConnections,onModuleBinding }: PanelProps & {connections?:SavedConnection[];adapters?:import('../../../shared/set-runtime/dataAdapters').DataAdapterManifest[];connectionError?:string;onRetryConnections?:()=>void;onModuleBinding?:(role:string,binding:{id:string;revision:number})=>void;} & {editorStatus?:'changed'|'applying'|'applied'|'error';onWorkspaceClose?:()=>void;workspace?:(onClose:()=>void)=>ReactNode;workspaceBusy?:boolean;editorOnly?:boolean;onPublish?:()=>void;publishError?:string}) {
+function SetControlsPanelView({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, voting, onFieldEdit, workspace, workspaceBusy=false, editorOnly=false,onPublish,publishError,onWorkspaceClose,editorStatus='changed',endpoint,serverRoomId,preferenceRoomId,moduleBindings={},connections=[],adapters=[],connectionError='',onRetryConnections,onModuleBinding }: PanelProps & {connections?:SavedConnection[];adapters?:import('../../../shared/set-runtime/dataAdapters').DataAdapterManifest[];connectionError?:string;onRetryConnections?:()=>void;onModuleBinding?:(role:string,binding:ModuleBindings[string])=>void;} & {editorStatus?:'changed'|'applying'|'applied'|'error';onWorkspaceClose?:()=>void;workspace?:(onClose:()=>void)=>ReactNode;workspaceBusy?:boolean;editorOnly?:boolean;onPublish?:()=>void;publishError?:string}) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const arrangements=useControlArrangement(session.package,JSON.stringify([endpoint??'local',serverRoomId??preferenceRoomId??'preview']));
   const [player, setPlayer] = useState('player-1');
   const rundownId = useId();
   useShowClock(session);
+  useSocialRehearsal(session,endpoint,moduleBindings,connections,state.workspaceMode);
   // Fast Refresh can retain a session built by the previous runtime module.
   // Replace that rehearsal instance while retaining its prepared configuration.
   const staleSession = !(session instanceof RehearsalSession);

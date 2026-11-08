@@ -1,0 +1,86 @@
+{
+  "packageVersion": "1.2.0",
+  "revision": "cd22674fe1e8a928716363c4f35ddb300ddc4f45a782a8318a0d3f37739f6473",
+  "browser": {
+    "renders": 12,
+    "layouts": [
+      "overview-landscape",
+      "overview-portrait",
+      "spotlight-landscape",
+      "spotlight-portrait",
+      "replies-landscape",
+      "replies-portrait"
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "errors": [],
+    "privateDataExported": false,
+    "lightTextContrastWorstCase": {
+      "#171b20": 14.54,
+      "#3d4650": 8.06,
+      "#53606c": 5.42
+    },
+    "one3DWorldPerOutput": true
+  },
+  "compiler": {
+    "visualIssues": [],
+    "nativeBudgetIssues": []
+  },
+  "native": {
+    "at": "2026-11-08T15:34:41.655Z",
+    "cameraCount": 1,
+    "cameraReady": true,
+    "checks": [
+      {
+        "check": "Light mode real control presented in both orientations",
+        "revisions": [
+          9,
+          10
+        ]
+      },
+      {
+        "check": "Dark mode real control presented in both orientations",
+        "revisions": [
+          13,
+          14
+        ]
+      },
+      {
+        "check": "Light mode real control presented in both orientations",
+        "revisions": [
+          18,
+          19
+        ]
+      },
+      {
+        "check": "Post spotlight presented in light mode",
+        "revisions": [
+          26,
+          27
+        ]
+      },
+      {
+        "check": "Live replies presented in light mode",
+        "revisions": [
+          30,
+          31
+        ]
+      },
+      {
+        "check": "Channel overview presented in light mode",
+        "revisions": [
+          32,
+          33
+        ]
+      }
+    ],
+    "kind": "threads-native-room",
+    "ok": true,
+    "packageVersion": "1.2.0",
+    "stage": "light mode ready for visual review",
+    "status": "passed",
+    "theme": "light"
+  }
+}

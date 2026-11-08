@@ -159,13 +159,18 @@ export class HostLink {
 
   /** Fresh camera/mic after a phone comes back from the background: swap the
    *  tracks into the existing senders — no renegotiation needed. */
-  replaceLocalTracks(fresh: MediaStream): void {
+  async replaceLocalTracks(fresh: MediaStream): Promise<void> {
     const main = this.peers.get("main");
     if (!main) return;
+    const replacements: Promise<void>[] = [];
     for (const sn of main.pc.getSenders()) {
       const t = fresh.getTracks().find((tr) => tr.kind === sn.track?.kind);
-      if (t && sn.track !== t) void sn.replaceTrack(t).catch(() => {});
+      if (t && sn.track !== t) replacements.push(sn.replaceTrack(t));
     }
+    // Existing guest-page callers do not await this best-effort operation.
+    // Settle every sender before a capture owner releases its previous track,
+    // while retaining the original non-throwing API on replacement failure.
+    await Promise.allSettled(replacements);
   }
 
   /** Share the screen: getDisplayMedia → a video track on the SCREEN peer.

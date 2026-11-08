@@ -2836,6 +2836,31 @@ impl ThumbHub {
         }
     }
 
+    /// Release observers of captures that a room restore is about to replace.
+    /// Otherwise a thumbnail can keep the old device session alive until the
+    /// next idle tick, after the replacement has already tried to open it.
+    /// Sources explicitly retained by the restore keep their thumbnail lease.
+    pub fn retire_for_restore(&self, keep_ids: &[String]) {
+        let retired = {
+            let mut targets = self.targets.lock().unwrap();
+            let (kept, retired): (Vec<_>, Vec<_>) = std::mem::take(&mut *targets)
+                .into_iter()
+                .partition(|target| target.id != PROGRAM_THUMB_ID && keep_ids.contains(&target.id));
+            *targets = kept;
+            retired
+        };
+        // Match publish_targets: source callbacks must run outside the list lock.
+        unsafe {
+            for target in retired {
+                if target.preview_active {
+                    ffi::obs_source_dec_active(target.src);
+                }
+                ffi::obs_source_dec_showing(target.src);
+                ffi::obs_source_release(target.src);
+            }
+        }
+    }
+
     /// Engine thread: replace the target list with the scene's current guest
     /// sources. Takes refs for the new list, releases the old list's refs.
     pub fn publish_targets(&self, scene: &SceneGraph) {
@@ -3167,6 +3192,149 @@ pub fn thumbnail_selftest() {
     println!(
         "{}",
         serde_json::json!({"passed":true,"hidden_native_guest":true,"thumbnail_frames":frames,"green_pixels":colored})
+    );
+}
+
+/// Native proof on the engine worker: synthetic color, no camera or credentials.
+#[cfg(all(feature = "sets-v2-dev", debug_assertions, target_os = "macos"))]
+pub fn thumbnail_restore_selftest() {
+    let temp = std::env::temp_dir().join(format!("producer-thumb-restore-{}", std::process::id()));
+    let report = super::engine::bootstrap_with_config(&temp);
+    assert!(report.ok, "{report:?}");
+    let mut graph = SceneGraph::create().unwrap();
+    let id = "thumbnail-restore-source";
+    let spec = ExtraSpec::Color {
+        color: "#00ff00".into(),
+    };
+    graph.add_extra(id, "Restore fixture", &spec).unwrap();
+    let hub = ThumbHub::new();
+    hub.preview_requests
+        .lock()
+        .unwrap()
+        .insert("restore-test".into(), vec![id.into()]);
+    hub.publish_targets(&graph);
+    let original = graph.source_by_id(id).unwrap();
+
+    hub.retire_for_restore(&[id.into()]);
+    assert_eq!(hub.targets.lock().unwrap()[0].src, original);
+    graph
+        .restore_room(RoomRestore {
+            keep_ids: vec![id.into()],
+            extras: vec![],
+            overlay_window: None,
+            overlay_url: None,
+            changes: vec![],
+        })
+        .unwrap();
+    assert_eq!(graph.source_by_id(id).unwrap(), original);
+
+    // Native Set trees can outlive their Rust owners while a renderer or OBS
+    // destroy task still holds a reference. Exercise both output owners, not
+    // just the thumbnail path, and keep those trees alive through replacement.
+    use super::sets_v2::contract::{Action, Plan};
+    let generation = graph.presentation_generation;
+    let (width, height) = SceneGraph::base_size();
+    let mut retired_programs = Vec::new();
+    for output_id in [None, Some("portrait".to_string())] {
+        let portrait = output_id.is_some();
+        let (width, height) = if portrait {
+            (height, width)
+        } else {
+            (width, height)
+        };
+        let plan: Plan = serde_json::from_value(serde_json::json!({
+            "definitionId":"restore-proof","definitionRevision":1,"instanceId":"restore-proof",
+            "canvasId":if portrait {"portrait"} else {"landscape"},
+            "target":{"id":output_id.as_deref().unwrap_or("program"),"orientation":if portrait {"portrait"} else {"landscape"},"width":width as u32,"height":height as u32,"scaling":"stretch"},
+            "viewport":{"scaleX":1,"scaleY":1,"offsetX":0,"offsetY":0,"clip":{"x":0,"y":0,"width":width,"height":height}},
+            "root":{"id":"root","kind":"group","bounds":{"x":0,"y":0,"width":width,"height":height},"properties":{},"children":[
+                {"id":"slot","kind":"source","resource":id,"fit":"contain","bounds":{"x":0,"y":0,"width":width,"height":height},"properties":{},"children":[]}
+            ]},"resources":[id]
+        })).unwrap();
+        let mut status = graph
+            .sets_v2(Action::Prepare {
+                generation,
+                output_id: output_id.clone(),
+                revision: 1,
+                plan,
+            })
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while !status.ready && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+            status = graph
+                .sets_v2(Action::Status {
+                    generation,
+                    output_id: output_id.clone(),
+                })
+                .unwrap();
+        }
+        assert!(status.ready, "Native restore fixture did not prepare");
+        graph
+            .sets_v2(Action::Take {
+                generation,
+                output_id: output_id.clone(),
+                revision: 1,
+                duration_ms: 0.,
+                mode: "dissolve".into(),
+            })
+            .unwrap();
+        let program = if portrait {
+            graph.sets_v2_portrait.as_ref().unwrap()
+        } else {
+            graph.sets_v2.as_ref().unwrap()
+        };
+        retired_programs.push(unsafe {
+            ffi::obs_source_get_ref(ffi::obs_sceneitem_get_source(program.scene_item()))
+        });
+    }
+
+    hub.retire_for_restore(&[]);
+    assert!(hub.targets.lock().unwrap().is_empty());
+    graph
+        .restore_room(RoomRestore {
+            keep_ids: vec![],
+            extras: vec![RestoreExtra {
+                id: id.into(),
+                label: "Replacement fixture".into(),
+                spec,
+                filters: vec![],
+            }],
+            overlay_window: None,
+            overlay_url: None,
+            changes: vec![],
+        })
+        .unwrap();
+    let replacement = graph.source_by_id(id).unwrap();
+    unsafe {
+        // A surviving thumbnail or native Set capture reserves the old name,
+        // so OBS renames the replacement and lookup returns the retired one.
+        let name = CString::new(id).unwrap();
+        let named = ffi::obs_get_source_by_name(name.as_ptr());
+        assert_eq!(
+            named, replacement,
+            "Retired capture reference survived replacement"
+        );
+        assert_eq!(
+            std::ffi::CStr::from_ptr(ffi::obs_source_get_name(replacement))
+                .to_str()
+                .unwrap(),
+            id
+        );
+        ffi::obs_source_release(named);
+        for program in retired_programs {
+            ffi::obs_source_release(program);
+        }
+    }
+    graph.clear_room().unwrap();
+    drop(graph);
+    unsafe {
+        ffi::obs_shutdown();
+    }
+    let _ = std::fs::remove_dir_all(temp);
+    println!(
+        "{}",
+        serde_json::json!({"passed":true,"kept_source_retained":true,"retired_source_released":true,"replacement_name_preserved":true,"retired_native_outputs_detached":2})
     );
 }
 

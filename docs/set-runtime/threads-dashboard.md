@@ -1,0 +1,23 @@
+# Threads dashboard
+
+Boomin workspaces expose their connected Threads account in Producer’s Settings → Integrations and Manager’s posting channels. New Manager posts start as text. Threads supports text without media or one image/video through the desktop composer; Instagram keeps its media requirement. The existing CMS publishing queue and native outbox remain responsible for publishing.
+
+Import **Threads · Live Dashboard**, open **Set Edit → Data connections**, choose your Threads account, choose a 7- or 30-day period, and select a published post. Apply the Set. The selected post drives both Post spotlight and Live replies; Channel overview shows account metrics. All three views have paired landscape and portrait compositions and one shared Host camera slot. The post picker loads additional pages on request.
+
+The charcoal-and-silver design uses a full-width Host camera with current channel followers directly underneath, plus a static silver 3D wordmark. Portrait Live replies shows the latest four replies at a larger reading size; landscape shows up to six. Both use the same six-reply data feed.
+
+Use **Appearance → Light mode** to switch to the pale theme; the same control becomes **Dark mode** to switch back. It is also available in the minimized controls. Text, metrics, reply cards, borders and the 3D wordmark change together in all six layouts, and changing views retains the current theme. Both themes use one 3D renderer per output; the wordmark changes through a visibility cue inside its existing world.
+
+The portable Set contains no account ID, post ID or credentials. Connection revision, post selection and date range stay in the room’s private module bindings. Recipients connect their own account. Self-hosted servers can import the design; a trusted social adapter is required to supply data.
+
+Account views are profile views, not aggregate post views. Followers are the current total. Account metrics use provider windows; post metrics are lifetime counters. Missing metrics display — and genuine measured zero displays 0. Each section displays its observation time. Account/post refreshes use Boomin sync jobs, with account refresh after two minutes and post refresh after one minute. Replies come from Boomin’s signed webhook ingestion and the latest six stored replies are checked every three seconds while the Set is on output. A short excerpt is shown for long posts and replies; Manager retains the full text. Provider insight updates can lag the conversation.
+
+The runtime uses data.social@1, social.selection@1 and social.dashboard@1. Social updates require trusted connector authority, a running module and current Set/module epochs. Older snapshots are rejected. Errors retain the last visible values. Identical observations do not write a new runtime revision or rebuild the Set. Changing accounts invalidates the saved connection revision and requires rebinding.
+
+Authoring and validation use the bundled Producer MCP compiler. Browser previews use placeholder cameras; native rendering must be checked separately. Focused checks: npm run test:threads-social and npm run test:threads-browser (with a Vite server on port 1447).
+
+For the isolated native dev bundle only, opt into `VITE_THREADS_ROOM_PROOF=1` on its Vite server and launch the existing bundle normally, with other proof flags disabled. Stop recording and broadcasting first. The proof uses the full app and real connected workspace, selects the dashboard and a published post in Atlantium, assigns a camera, and checks presentation receipts in both orientations plus unchanged-snapshot polling. It leaves the dashboard on output for visual review and writes a bounded local `sets-v2-ui-proof.json`. It never publishes a post. Disable the Vite flag after the run; this harness is excluded from production builds.
+
+`VITE_THREADS_ROOM_PROOF=review` opens the saved Atlantium room in the complete app, selects Both previews, verifies its camera, paired outputs and social data, and leaves its current Set configuration intact. It performs no layout-switching test sequence.
+
+The native dev bundle also accepts `PRODUCER_THUMB_RESTORE_SELFTEST=1` when launched from the CLI. This runs a synthetic color-source ownership check on one engine worker while servicing the macOS main queue, without a camera or account. It verifies that a kept source retains its thumbnail lease, while replacement releases both thumbnail and native Set capture references before recreation. Both retired output trees remain alive during replacement to exercise asynchronous OBS destruction; the replacement must retain its exact OBS name. A successful run prints a JSON receipt and exits.

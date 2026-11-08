@@ -5,8 +5,10 @@
  * arrives, and one line of truth about where they are — waiting for the
  * host, connecting, in the room. They can stay here as long as they like.
  */
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { GuestSeat, type GuestSeatSpec, type SeatState } from "../lib/guestSeat";
+import { ExpandableProgram } from "../components/ExpandableProgram";
+import { useReturnAudio } from "../features/network/useReturnAudio";
 
 /** One seat per mounted view; created on mount, left on unmount. */
 export function useGuestSeat(spec: GuestSeatSpec | undefined, camLabel?: string | null): GuestSeat | null {
@@ -50,24 +52,15 @@ function Stream({ stream, className, muted }: { stream: MediaStream | null; clas
   return <video ref={ref} className={className} autoPlay playsInline muted={muted} />;
 }
 
-function HostAudio({ stream }: { stream: MediaStream | null }) {
-  const ref = useRef<HTMLAudioElement>(null);
-  useEffect(() => {
-    const a = ref.current;
-    if (!a) return;
-    if (a.srcObject !== stream) a.srcObject = stream;
-    if (stream) void a.play().catch(() => {});
-  }, [stream]);
-  return <audio ref={ref} autoPlay />;
-}
-
 export function GreenRoomBar({ seat, spec, onLeave }: { seat: GuestSeat | null; spec: GuestSeatSpec; onLeave: () => void }) {
   const st = useSeatState(seat);
+  const audio = useReturnAudio({seat, stream: seat?.hostAudioStream() ?? null});
+  const audioStatusId = useId();
   const phase = st?.phase ?? "starting";
   const host = spec.hostName;
   const line =
     phase === "starting"
-      ? "Opening your camera…"
+      ? spec.videoSource==='program'?"Preparing your local room…":"Preparing your guest seat…"
       : phase === "waiting"
         ? `Waiting for ${host} to bring you on`
         : phase === "connecting"
@@ -80,9 +73,9 @@ export function GreenRoomBar({ seat, spec, onLeave }: { seat: GuestSeat | null; 
   const sub =
     phase === "gone" || phase === "error"
       ? null
-      : st?.producerCam
-        ? "Your Producer stage is your camera — what's on it is what they see."
-        : "Your webcam is your camera. Start the virtual camera to send your stage instead.";
+        : st?.mediaMode==='program'
+        ? "Source: your room and Set with processed local audio."
+        : "Source: your webcam and microphone.";
   return (
     <section className={`rm-seat rm-seat--${phase}`} aria-live="polite">
       <div className="rm-seat-self">
@@ -93,18 +86,27 @@ export function GreenRoomBar({ seat, spec, onLeave }: { seat: GuestSeat | null; 
         <div className="rm-seat-eyebrow">
           <span className={`rm-seat-dot rm-seat-dot--${phase}`} />
           {spec.title}
+          {st?.transport && <span> · {st.transport==='livekit'?'LiveKit':'Guest link'}</span>}
         </div>
         <div className="rm-seat-line">{line}</div>
         {sub && <div className="rm-seat-sub">{sub}</div>}
       </div>
       {st?.hasProgram && (
-        <div className="rm-seat-return" title={`${host}'s program`}>
+        <ExpandableProgram title={`${host}'s program`}>
           <Stream stream={seat?.programStream() ?? null} className="rm-seat-program" muted />
-          <span className="rm-seat-return-label">PROGRAM</span>
-        </div>
+        </ExpandableProgram>
       )}
-      <HostAudio stream={seat?.hostAudioStream() ?? null} />
+      <audio ref={audio.audioRef} autoPlay hidden />
       <div className="rm-seat-actions">
+        {(phase==='live'||phase==='connecting')&&<div className="rm-seat-audio">
+          <button className={`hd-chip${audio.status==='playing'?' rm-seat-listening':''}`}
+            disabled={!seat||audio.status==='playing'}
+            onClick={audio.enableAudio} aria-describedby={audioStatusId}>
+            {audio.status==='playing'?'Listening':audio.status==='starting'?'Enabling audio…':audio.status==='error'||audio.status==='blocked'?'Retry audio':'Enable audio'}
+          </button>
+          <span id={audioStatusId} className="rm-seat-audio-status"
+            role={audio.status==='error'?'alert':'status'}>{audio.message}</span>
+        </div>}
         <button className={`hd-chip${st?.muted ? " rm-seat-off" : ""}`} onClick={() => seat?.toggleMute()} disabled={!seat}>
           {st?.muted ? "Unmute" : "Mute"}
         </button>
@@ -117,4 +119,16 @@ export function GreenRoomBar({ seat, spec, onLeave }: { seat: GuestSeat | null; 
       </div>
     </section>
   );
+}
+
+/** A webcam-only appearance has no local room graph to render or restore. */
+export function ProducerGuestView({spec,onLeave}:{spec:GuestSeatSpec;onLeave:()=>void}){
+  const seat=useGuestSeat(spec),state=useSeatState(seat);
+  return <main className="producer-guest-view">
+    <GreenRoomBar seat={seat} spec={spec} onLeave={onLeave}/>
+    <section className="producer-guest-stage" aria-label="Host program return">
+      {state?.hasProgram?<Stream stream={seat?.programStream()??null} className="producer-guest-program" muted/>:
+      <div><h1>{state?.phase==='waiting'?'You’re in the green room':state?.phase==='error'?'Could not join the show':`Joining ${spec.hostName}`}</h1><p>{state?.message||'The host’s program appears here when it is available.'}</p></div>}
+    </section>
+  </main>;
 }

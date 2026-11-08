@@ -1,0 +1,123 @@
+name: Unreleased Mac Network Dev
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: "Full Producer source SHA; later frontend commits must retain the pinned engine lock"
+        required: true
+        type: string
+        default: "98a2a87fadced029f6adf0ae3df223e63c0992d3"
+      notarize:
+        description: "Notarize/staple the unreleased Developer ID app before uploading"
+        required: true
+        type: boolean
+        default: true
+  workflow_call:
+    inputs:
+      source_sha:
+        required: true
+        type: string
+      notarize:
+        required: false
+        type: boolean
+        default: true
+
+# This queue cannot cancel or publish a production Release run.
+concurrency:
+  group: producer-network-mac-dev-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  mac-dev:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      CANDIDATE_SOURCE_SHA: ${{ inputs.source_sha }}
+      INFRASTRUCTURE_SHA: ${{ github.sha }}
+      PINNED_ENGINE_LOCK_SHA256: f8b2551c9526a0cda2d1a333dcafeff343476589119f19888dfd0cd44030ec8e
+    steps:
+      - name: Validate explicit source revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo 'source_sha must be a full lowercase commit SHA' >&2; exit 1;
+          }
+
+      # The requested older source does not contain these NEW CI helpers.
+      # Keep reviewed workflow tooling separate from the app source checkout.
+      - name: Checkout reviewed build tooling
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: build-infra
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/ci-network-mac-dev.sh
+            scripts/ci-network-mac-dev.py
+            scripts/ci-network-mac-dev-origin-smoke.mjs
+
+      - name: Checkout exact application source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          path: candidate
+          persist-credentials: false
+
+      - name: Verify source, engine pin and isolated configuration
+        run: python3 build-infra/scripts/ci-network-mac-dev.py prepare candidate "$RUNNER_TEMP/network-mac-dev-config"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: oven-sh/setup-bun@v2
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: candidate/src-tauri
+          shared-key: build-macos-arm64-live
+      - name: Install locked frontend dependencies
+        working-directory: candidate
+        run: bun install --frozen-lockfile
+
+      - name: Build, sign and verify unreleased dev app
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Do not name these APPLE_*: Tauri must not sign the engine-less app.
+          SIGN_IDENT: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          CERT_B64: ${{ secrets.APPLE_CERTIFICATE }}
+          CERT_PW: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          NOTARY_ID: ${{ secrets.APPLE_ID }}
+          NOTARY_PW: ${{ secrets.APPLE_PASSWORD }}
+          NOTARY_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARIZE: ${{ inputs.notarize && '1' || '0' }}
+          PRODUCER_SOURCE_SHA: ${{ inputs.source_sha }}
+          CARGO_PROFILE_RELEASE_DEBUG: line-tables-only
+          CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO: packed
+          CARGO_INCREMENTAL: '0'
+        run: bash build-infra/scripts/ci-network-mac-dev.sh "$GITHUB_WORKSPACE/candidate" "$GITHUB_WORKSPACE/build-infra/scripts" "$GITHUB_WORKSPACE/unreleased-mac-artifact"
+
+      - name: Retain unreleased app and matching provenance/symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: Producer-network-mac-dev-${{ inputs.source_sha }}
+          path: unreleased-mac-artifact/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Candidate scope
+        shell: bash
+        run: |
+          printf '%s\n' 'UNRELEASED Actions artifact on a PUBLIC repository; not collaborator-private. Contains no customer profile or credentials.' >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' 'The signed candidate passed core+custom IPC smoke from a fixed loopback HTML page. No accounts, rooms, devices or RTC were tested.' >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' 'No public release/updater was written and no deployment ran.' >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' 'Uses the existing dev identity/profile and Vite on port 1436. Signing changes may still prompt for macOS permissions or Keychain access.' >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' 'Virtual-camera runtime plugin is retained for an existing installed production provider; this dev app does not install system extensions.' >> "$GITHUB_STEP_SUMMARY"

@@ -19,6 +19,7 @@ import { SetControlsPanel, type SetEditorTake } from "../features/presentation/S
 import { DEFAULT_SET } from "../features/presentation/catalog";
 import { RehearsalSession } from "../features/presentation/rehearsal";
 import { roomSession } from "../lib/roomSession";
+import {producerLocalAccess} from '../lib/producerLocalAccess';
 import { sharedProgramCapture } from "../lib/programCapture";
 import { openingScene, scenePlan } from "../lib/scenePlan";
 import { SoundboardPanel } from "../components/SoundboardPanel";
@@ -79,6 +80,7 @@ import { filterEditQueue, withSourceFilters } from "../lib/sourceFilters";
 import { DEMO_CHAT, DEMO_VIDEO_URL, demoOn } from "../lib/demo";
 import { activeEndpointId, isBoomin, resolveActiveEndpoint } from "../lib/workspace";
 import { nativeGuestSources } from "../lib/nativeGuestSources";
+import { withWindowsCameraDevices } from "../lib/cameraDevicePersistence";
 import { BugSheet } from "./BugSheet";
 import { dismiss, dismissKey, errText, notify, notifyError } from "../lib/notices";
 import { NoticeHost } from "../components/Notice";
@@ -1677,7 +1679,7 @@ function WindowSourceForm({ onAdd }: { onAdd: (id: number, title: string) => voi
  * interface, second display — appears here without Producer knowing the
  * hardware. Switching applies in place: the source keeps its position, size
  * and place in the stack. */
-function DevicePicker({ itemId, kind, onClose }: { itemId: string; kind: CaptureKind; onClose: () => void }) {
+function DevicePicker({ itemId, kind, device, onClose }: { itemId: string; kind: CaptureKind; device?: string | null; onClose: () => void }) {
   const [list, setList] = useState<DeviceOption[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -1749,6 +1751,7 @@ function DevicePicker({ itemId, kind, onClose }: { itemId: string; kind: Capture
         <button
           key={d.id}
           className="rm-device"
+          aria-pressed={d.id === device}
           disabled={d.disabled || busy !== null}
           onClick={async () => {
             setBusy(d.id);
@@ -1762,7 +1765,7 @@ function DevicePicker({ itemId, kind, onClose }: { itemId: string; kind: Capture
             }
           }}
         >
-          <span className="rm-device-name">{d.name}</span>
+          <span className="rm-device-name">{d.name}{d.id === device ? " · Selected" : ""}</span>
         </button>
       ))}
     </div>
@@ -2689,11 +2692,13 @@ export function LiveView({
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
   const deferredMicIds = useRef<string[]>([]);
   const entryAccessRef = useRef(entryAccess);
+  const [producerLocalAuthorized,setProducerLocalAuthorized]=useState(()=>!seat);
   const roomEngineRef = useRef<ReturnType<typeof roomSession> | null>(null);
   useLayoutEffect(() => {
     const session = roomSession();
     roomEngineRef.current = session;
     return () => {
+      if(roomEngineRef.current===session)roomEngineRef.current=null;
       // Conceal both native views before RTC/source teardown can reveal the
       // camera underneath the Set. Home may already own this same receipt.
       const previewClosed=closePreviewSessions(()=>ipc.liveDetachPreview());
@@ -3350,7 +3355,6 @@ export function LiveView({
    * the extension being installed (once, with the user's approval) and the
    * output actually running. */
   const [vcamState, setVcamState] = useState<VcamStatus | null>(null);
-  const guestSeat = useGuestSeat(seat, vcamState?.device_name);
   const [vcamOn, setVcamOn] = useState(false);
   const [vcamPending, setVcamPending] = useState<'installing'|'starting'|'stopping'|null>(null);
   const vcamFlight = useRef(false);
@@ -3389,6 +3393,7 @@ export function LiveView({
    * not by the host: it stops when the last monitor leaves. A manual toggle
    * takes ownership back. */
   const vcamAutoRef = useRef(false);
+  const producerProgramWantedRef = useRef(false);
   const vcamManuallyStopped = useRef(false);
   const vcamAutoNextTry = useRef(0);
 
@@ -3422,6 +3427,32 @@ export function LiveView({
       setVcamPending(null);
     }
   };
+  // Never publish the engine's previous room while this room is restoring.
+  const guestSeat = useGuestSeat(seat && (seat.videoSource==='webcam' ||
+    producerLocalAuthorized && snapshot?.engine_ready && docApplied && sceneSettled && framesReady) ? {
+      ...seat,
+      prepareProgram:async()=>{
+        const owner=roomEngineRef.current;if(!owner)throw Error('The local room is not ready.');
+        producerProgramWantedRef.current=true;
+        let prepared=false;
+        await owner.run(async()=>{
+          if(vcamOnRef.current){prepared=true;return;}
+          try{if(await setCameraOutput(true))vcamAutoRef.current=true;}
+          catch(error){producerProgramWantedRef.current=false;throw error;}
+          prepared=true;
+        });
+        if(!prepared||roomEngineRef.current!==owner){producerProgramWantedRef.current=false;throw Error('The local room closed before its program was ready.');}
+      },
+      releaseProgram:()=>{
+        producerProgramWantedRef.current=false;
+        void roomEngineRef.current?.run(async()=>{
+          if(producerProgramWantedRef.current||!vcamAutoRef.current)return;
+          // A guest-mode room has no independent roster/return senders. Only
+          // retire the camera output this appearance started, never manual output.
+          await setCameraOutput(false);vcamAutoRef.current=false;
+        }).catch(()=>{});
+      },
+    }:undefined, vcamState?.device_name);
   const toggleVcam = async () => {
     if (vcamFlight.current) return;
     vcamAutoRef.current = false;
@@ -4931,6 +4962,37 @@ export function LiveView({
     });
   }, [room, savedRoomConfig]);
 
+  // A Producer appearance renders its own room but must never run that room's
+  // host roster/heartbeat. Consume local authorization independently of the
+  // deliberately skipped host poll, including the exact receipt from Home.
+  useEffect(()=>{
+    if(!seat||!room?.id||seat.videoSource==='webcam')return;
+    let alive=true;
+    const endpointId=seat.endpointId,serverRoomId=savedRoomConfig.server_room_id;
+    const current=()=>alive&&activeEndpointId()===endpointId&&roomEngineRef.current!==null;
+    setProducerLocalAuthorized(false);setAccessPending(true);
+    void (async()=>{
+      const resolved=await ensureEndpoint();
+      if(!current()||resolved!==endpointId)return;
+      if(serverRoomId&&boominRoomRef.current){
+        const authorized=await producerLocalAccess({endpointId,serverRoomId,current,receipt:entryAccessRef.current,read:()=>guestsIpc.access(endpointId,serverRoomId)});
+        if(!current())return;
+        entryAccessRef.current=undefined;
+        roomRoleRef.current=authorized.info.role;setRoomRole(authorized.info.role);setRoomAccess(authorized.info);
+        const dto=authorized.raw.access as {grants?:unknown}|undefined;
+        setRoomGrants(Array.isArray(dto?.grants)?dto.grants as RoomGrantRowLike[]:null);
+      }
+      if(!current())return;
+      accessAsked.current=true;setAccessPending(false);setProducerLocalAuthorized(true);
+      void refresh();
+    })().catch(error=>{
+      if(!current())return;
+      accessAsked.current=true;roomRoleRef.current='viewer';setRoomRole('viewer');setRoomAccess(roomAccessFrom({available:true,denied:true}));setRoomGrants(null);setAccessPending(false);setProducerLocalAuthorized(false);
+      notifyError(error,{key:'banner'});void refresh();
+    });
+    return()=>{alive=false;};
+  },[seat,room?.id,savedRoomConfig.server_room_id,refresh]);
+
   useEffect(() => {
     refresh();
     let alive = true;
@@ -4960,6 +5022,7 @@ export function LiveView({
             ...cfgRef.current,
             sources: {
               ...cfgRef.current.sources,
+              extras: withWindowsCameraDevices(cfgRef.current.sources.extras, ev.sources.items, document.documentElement.dataset.platform),
               overlay_window: ev.sources.overlay_window ?? null,
               overlay_url: ev.sources.overlay_url ?? null,
             },
@@ -5798,7 +5861,7 @@ export function LiveView({
   const scenesRef = useRef(scenes);
   scenesRef.current = scenes;
   useEffect(() => {
-    if (!room?.id || !cfg.server_room_id) return;
+    if (!room?.id || !cfg.server_room_id || seat) return;
     // Open server: the host only (a mod runs views/ModSeat.tsx). Boomin: any
     // role — a mod's Producer lights the host's list off `scene.cut` frames
     // and takes the tally on `interactions:control` (the hub gates it).
@@ -6048,7 +6111,7 @@ export function LiveView({
       audienceSenders.current.clear();
       if (controlRef.current === link) controlRef.current = null;
     };
-  }, [room?.id, cfg.server_room_id, roomRole, boominRoom]);
+  }, [room?.id, cfg.server_room_id, roomRole, boominRoom,seat]);
   useEffect(() => { publishSourceTruth(); }, [sources, roomRole]);
 
   // Every change to the list or the active scene reaches the mods. Open
@@ -6057,6 +6120,7 @@ export function LiveView({
   // validates against — debounced, and only when it actually changed.
   const publishedCfgRef = useRef<string | null>(null);
   useEffect(() => {
+    if(seat)return;
     if (roomRole === "host") controlRef.current?.publishScenes(scenes, activeScene ?? null);
     if (!boominRoom || roomRole !== "host" || !cfg.server_room_id) return;
     const sid = cfg.server_room_id;
@@ -6074,7 +6138,7 @@ export function LiveView({
         .catch(() => {});
     }, 600);
     return () => window.clearTimeout(t);
-  }, [scenes, activeScene, boominRoom, roomRole, cfg.server_room_id]);
+  }, [scenes, activeScene, boominRoom, roomRole, cfg.server_room_id,seat]);
 
   /** Boomin, a mod's Producer: the host's scene directory as the room config
    * carries it, the active one lit by `scene.cut` frames. Null on the host
@@ -6824,7 +6888,7 @@ export function LiveView({
           // and any seat or guest holding media.return_feed.
           const wantsProgram = full.filter((g) => !!g.render_url && resolveGrants(g).has("media.return_feed"));
           if (audienceStateRef.current.enabled) wantsProgram.push({} as RoomGuest);
-          const wantVcam = wantedMonitors.size > 0 || wantsProgram.length > 0;
+          const wantVcam = producerProgramWantedRef.current || wantedMonitors.size > 0 || wantsProgram.length > 0;
           const vs = vcamStateRef.current;
           if (wantVcam && !vcamOnRef.current && !vcamManuallyStopped.current && !vcamFlight.current && Date.now() > vcamAutoNextTry.current) {
             vcamAutoNextTry.current = Date.now() + 10_000;
@@ -7370,7 +7434,7 @@ export function LiveView({
                 (() => {
                   const it = (sources.items ?? []).find((i) => i.id === deviceFor.key);
                   return it && isCaptureKind(it.kind) ? (
-                    <DevicePicker itemId={it.id} kind={it.kind} onClose={() => setDeviceFor(null)} />
+                    <DevicePicker itemId={it.id} kind={it.kind} device={it.device} onClose={() => setDeviceFor(null)} />
                   ) : (
                     <div className="rm-devices-empty">That source is gone.</div>
                   );
@@ -9432,7 +9496,7 @@ export function LiveView({
             (() => {
               const it = (sources.items ?? []).find((i) => i.id === deviceMenu);
               return it && isCaptureKind(it.kind) ? (
-                <DevicePicker itemId={it.id} kind={it.kind} onClose={() => setDeviceMenu(null)} />
+                <DevicePicker itemId={it.id} kind={it.kind} device={it.device} onClose={() => setDeviceMenu(null)} />
               ) : null;
             })()
           )}
