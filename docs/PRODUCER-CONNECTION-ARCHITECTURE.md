@@ -163,8 +163,15 @@ Native source incarnation is the durable follow-up boundary.
 The branch contains a native camera-detachment correction absent from installed
 0.4.87. Windows investigation also identified unsaved camera device choices and
 an unexpected Elgato virtual-camera input. Its bounded device-choice persistence
-correction is integrated; exact selected-device and physical recovery evidence
-remain separate from a source-readiness or transport pass.
+correction is integrated. On November 8 the Windows owner confirmed the physical
+Elgato Facecam MK.2 remained selected and delivered current moving video after
+leaving and reopening the room, supported by native device logs and the saved
+device ID. That pass used frontend `b1bc461` and native core `fc4a252`; it does
+not qualify the later merged native core, guest rebinding or host-run recovery.
+
+The first local-workspace implementation is specified in
+[LOCAL-STUDIO-OWNERSHIP.md](LOCAL-STUDIO-OWNERSHIP.md). It is a delivery boundary,
+not an enabled local mode or a migration applied to production profiles.
 
 ## Performance and media scope
 
