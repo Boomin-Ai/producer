@@ -118,6 +118,12 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: npm ci --prefix tools/producer-mcp
       - run: node tools/producer-mcp/node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Verify guest playback feedback and stable expanded program video
+        env:
+          PRODUCER_BROWSER_CHANNEL: chromium
+        run: |
+          node scripts/test-return-audio-browser.mjs
+          node scripts/test-program-expansion-browser.mjs
       - name: Verify library previews without changing room assignments or live playback
         run: |
           set -euo pipefail

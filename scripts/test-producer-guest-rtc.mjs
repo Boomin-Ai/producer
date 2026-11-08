@@ -105,6 +105,25 @@ function returnReceiver(h,kind,read){
  const track={kind,sid:`synthetic-${kind}`,mediaStreamTrack:{kind,readyState:'live',enabled:true,muted:false},getRTCStatsReport:read};
  h.owner.room.events.get('sub')(track,{source:kind==='video'?'camera':'microphone',kind,trackSid:track.sid,setSubscribed(){}},{identity:h.owner.authority.producer_identity});return track;
 }
+test('audio unlock starts SDK and every peer inside the same call before awaiting an unresolved SDK promise',async t=>{
+ const h=harness(t);await h.start();let release;const calls=[];
+ h.owner.room.startAudio=()=>{calls.push('sdk');return new Promise(resolve=>{release=resolve;});};
+ h.owner.peerAudio.set('one',{element:{play(){calls.push('one');return Promise.resolve();},pause(){},remove(){}},track:{detach(){}}});
+ h.owner.peerAudio.set('two',{element:{play(){calls.push('two');return Promise.resolve();},pause(){},remove(){}},track:{detach(){}}});
+ const pending=h.owner.resumeAudio();assert.deepEqual(calls,['sdk','one','two']);release();await pending;
+ assert.ok(h.tracks.every(track=>track.stops===0));
+});
+test('audio unlock surfaces blocked peer playback instead of swallowing it',async t=>{
+ const h=harness(t);await h.start();
+ h.owner.peerAudio.set('blocked',{element:{play(){return Promise.reject(Error('NotAllowedError'));},pause(){},remove(){}},track:{detach(){}}});
+ await assert.rejects(h.owner.resumeAudio(),/NotAllowedError/);assert.equal(h.states.at(-1),'live');
+});
+test('synchronous playback failure still attempts all owners and does not retire a healthy call',async t=>{
+ const h=harness(t);await h.start();const room=h.owner.room,calls=[];
+ room.startAudio=()=>{calls.push('sdk');throw Error('Playback unavailable');};
+ h.owner.peerAudio.set('one',{element:{play(){calls.push('one');return Promise.resolve();},pause(){},remove(){}},track:{detach(){}}});
+ await assert.rejects(h.owner.resumeAudio(),/Playback unavailable/);assert.deepEqual(calls,['sdk','one']);assert.equal(h.owner.room,room);assert.equal(room.disconnected,0);
+});
 test('actual owner only reads existing authorized receiver stats on explicit request; diagnostics do not change media or polling',async t=>{
  const h=harness(t);await h.start();let calls=0,frames=10;
  returnReceiver(h,'video',async()=>{calls++;return new Map([['private-stat',{id:'PRIVATE-ID',type:'inbound-rtp',kind:'video',timestamp:frames*100,framesDecoded:frames,bytesReceived:frames*50}]]);});

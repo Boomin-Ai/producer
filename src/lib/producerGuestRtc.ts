@@ -285,7 +285,19 @@ export class ProducerGuestRtc {
     // old audio attached. The next independently authorized poll republishes.
     await this.retire();
   }
-  async resumeAudio(): Promise<void> {await this.room?.startAudio();await Promise.allSettled([...this.peerAudio.values()].map(peer=>peer.element.play()));}
+  async resumeAudio(): Promise<void> {
+    // Start every playback owner inside the click's user activation. Waiting
+    // for the SDK first can leave peer elements outside that activation in
+    // WebKit; a rejected peer must also reach the UI instead of disappearing.
+    const pending: Promise<unknown>[] = [];
+    const start = (play: () => unknown) => {
+      try { pending.push(Promise.resolve(play())); }
+      catch (error) { pending.push(Promise.reject(error)); }
+    };
+    start(() => this.room?.startAudio());
+    for (const peer of this.peerAudio.values()) start(() => peer.element.play());
+    await Promise.all(pending);
+  }
   /** Explicitly requested, sanitized receiver observations only. No media is
    * acquired or published, and no polling/export continues after this call. */
   mediaDiagnostics(options:MediaDiagnosticsOptions):Promise<ProducerMediaSnapshot> {

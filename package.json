@@ -41,6 +41,8 @@
     "test:scene-restoration": "node scripts/test-scene-restoration.mjs",
     "test:guest-reconnect": "node scripts/test-guest-reconnect.mjs",
     "test:beta-onboarding-browser": "node scripts/test-beta-onboarding-browser.mjs",
+    "test:guest-return-audio-browser": "node scripts/test-return-audio-browser.mjs",
+    "test:guest-program-expansion-browser": "node scripts/test-program-expansion-browser.mjs",
     "test:producer-media-diagnostics": "node scripts/test-producer-media-diagnostics.mjs",
     "test:network-diagnostics-proof": "node scripts/test-network-diagnostics-proof.mjs",
     "test:native-pair-proof": "node scripts/test-native-pair-proof.mjs",
