@@ -81,9 +81,10 @@ clang++ -bundle "${OBJECTS[@]}" "$CEF/build/libcef_dll_wrapper/Release/libcef_dl
 cat > "$PLUGIN/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>ai.boomin.producer.obs-browser</string><key>CFBundleExecutable</key><string>obs-browser</string><key>CFBundlePackageType</key><string>BNDL</string></dict></plist>
+<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>ai.boomin.producer.obs-browser</string><key>CFBundleExecutable</key><string>obs-browser</string><key>CFBundlePackageType</key><string>BNDL</string><key>CFBundleVersion</key><string>1</string><key>CFBundleShortVersionString</key><string>2.26.8</string></dict></plist>
 PLIST
 cp -R "$CEF/Release/Chromium Embedded Framework.framework" "$STAGE/Frameworks/"
+cp "$CEF/LICENSE.txt" "$STAGE/licenses/CEF-LICENSE.txt"
 mkdir -p "$STAGE/signing"
 cp "$WORK/browser"/cmake/macos/entitlements-helper*.plist "$STAGE/signing/"
 clang++ "${FLAGS[@]}" -DENABLE_BROWSER_SHARED_TEXTURE \
@@ -100,7 +101,11 @@ suffix=sys.argv[2]
 with open(sys.argv[1],'wb') as f:
     plistlib.dump({'CFBundleExecutable':'Producer Helper'+suffix,
                   'CFBundleIdentifier':'ai.boomin.producer.helper'+''.join(c for c in suffix if c.isalpha()),
-                  'CFBundlePackageType':'APPL'},f)
+                  'CFBundlePackageType':'APPL','CFBundleVersion':'1',
+                  'CFBundleShortVersionString':'1.0','CFBundleInfoDictionaryVersion':'6.0',
+                  'CFBundleName':'Producer Helper'+suffix,'LSMinimumSystemVersion':'13.0',
+                  'LSUIElement':True,'NSSupportsAutomaticGraphicsSwitching':True,
+                  'LSEnvironment':{'MallocNanoZone':'0'}},f)
 PY
 done
 "$REPO_ROOT/scripts/engine-closure.sh" "$STAGE"
