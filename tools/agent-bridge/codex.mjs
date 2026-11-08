@@ -68,8 +68,10 @@ export function workerArguments(execution, disabledMcpServers = []) {
     '-c',`shell_environment_policy.set=${toml({OPENSSL_CONF:process.platform === 'win32' ? 'NUL' : '/dev/null',NODE_OPTIONS:`--openssl-config=${process.platform === 'win32' ? 'NUL' : '/dev/null'}`})}`,
     '-c','features.apps=false','-c','features.plugins=false','-c','web_search="disabled"','-c','mcp_servers={}',
     ...disabledMcpServers.flatMap(name => {
-      if (typeof name !== 'string' || !name || name.length > 200 || /[\x00-\x1f]/.test(name)) throw new Error('Invalid MCP server name');
-      return ['-c',`mcp_servers.${JSON.stringify(name)}.enabled=false`];
+      // Codex's -c dotted-key parser retains quotes as literal key characters.
+      // Accept only unambiguous bare keys; never create a second quoted server.
+      if (typeof name !== 'string' || !/^[A-Za-z_][A-Za-z0-9_-]{0,199}$/.test(name)) throw new Error('Invalid MCP server name');
+      return ['-c',`mcp_servers.${name}.enabled=false`];
     }), 'app-server','--stdio'];
 }
 

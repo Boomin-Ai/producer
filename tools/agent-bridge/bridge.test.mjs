@@ -150,7 +150,8 @@ test('worker scope denies credential ancestors, private state, symlink aliases a
 });
 test('every worker turn selects the named profile, never legacy sandbox fields or automatic approval',async t=>{
  const l=await local(t),execution=await workerSandbox(l.config),args=workerArguments(execution,['node_repl']);
- assert(args.includes('features.apps=false'));assert(args.includes('features.plugins=false'));assert(args.includes('mcp_servers."node_repl".enabled=false'));assert(args.includes('default_permissions="producer_bridge"'));assert(!args.includes('--sandbox'));
+ assert(args.includes('features.apps=false'));assert(args.includes('features.plugins=false'));assert.deepEqual(args.slice(args.indexOf('mcp_servers={}')+1,-2),['-c','mcp_servers.node_repl.enabled=false']);assert(!args.some(arg=>arg.includes('mcp_servers."')));assert(args.includes('default_permissions="producer_bridge"'));assert(!args.includes('--sandbox'));
+ for(const name of ['node.repl','"node_repl"','node_repl.enabled','node repl','node_repl\n','x'.repeat(201)])assert.throws(()=>workerArguments(execution,[name]),/Invalid MCP server name/);
  const rpc=new EventEmitter();let sent;
  rpc.call=async(method,params)=>{assert.equal(method,'turn/start');sent=params;queueMicrotask(()=>{rpc.emit('notification',{method:'item/completed',params:{threadId:'thread',item:{type:'agentMessage',text:'{"status":"completed"}'}}});rpc.emit('notification',{method:'turn/completed',params:{threadId:'thread',turn:{id:'turn',status:'completed'}}});});return {turn:{id:'turn'}};};
  const result=await Codex.prototype.run.call(rpc,'thread','inspect only',1000,'test-model',undefined,execution);
