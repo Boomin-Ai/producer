@@ -38,6 +38,7 @@ function harness({transport='legacy',status='accepted',programError=false,deferr
   async close(){this.closed=true;}
   async replaceLocalTracks(){this.replaced=true;}
   async resumeAudio(){this.resumed=true;}
+  async mediaDiagnostics(options){this.diagnosticsOptions=options;return {status:'sampled',video:{decodeProgress:'unknown'}};}
  }
  const program={video:new Track('video'),audio:new Track('audio'),releases:0,onVideo(fn){this.listener=fn;},release(){this.releases++;}};
  const traceBackend={
@@ -98,6 +99,24 @@ test('modern guest metadata selects the existing authority-fenced SDK owner excl
  const h=harness({transport:'livekit'}),s=h.seat({videoSource:'program'});await s.start();assert.equal(h.nativeOwners.length,1);assert.equal(h.links.length,0);assert.equal(h.conversations.length,0);const owner=h.nativeOwners[0];
  assert.equal(owner.options.participantId,'guest-one');assert.equal(owner.options.api,'https://api.example/prefix/v1/connect');assert.equal(owner.options.localStream(),s.localStream());assert.equal(s.snapshot().transport,'livekit');
  owner.options.onState('live');owner.options.onStage(true);assert.equal(s.snapshot().onStage,true);s.leave();assert.equal(owner.closed,true);owner.options.onState('live');assert.equal(h.timers.size,0);
+});
+test('seat diagnostics delegate only to the active modern receiver and fence late results on leave',async()=>{
+ const h=harness({transport:'livekit'}),s=h.seat({videoSource:'program'});await s.start();const rtc=h.nativeOwners[0];
+ assert.equal((await s.mediaDiagnostics({enabled:true})).status,'sampled');assert.equal(rtc.diagnosticsOptions.enabled,true);assert.equal(h.captures.length,0);
+ let resolve;rtc.mediaDiagnostics=()=>new Promise(done=>{resolve=done;});const pending=s.mediaDiagnostics({enabled:true});s.leave();resolve({status:'sampled'});assert.equal(await pending,null);
+ const legacy=harness(),other=legacy.seat();await other.start();assert.equal(await other.mediaDiagnostics({enabled:true}),null);other.leave();
+});
+test('passive registry exposes only one active modern runtime session and retires handles on reconnect, stage change and leave',async()=>{
+ const h=harness({transport:'livekit'}),s=h.seat();let changes=0;const unsubscribe=h.exports.subscribeGuestSeatDiagnosticSessions(()=>{changes++;});
+ assert.equal(h.exports.activeGuestSeatDiagnosticSession(),null);await s.start();assert.equal(h.exports.activeGuestSeatDiagnosticSession(),null);
+ h.nativeOwners[0].options.onState('live');const first=h.exports.activeGuestSeatDiagnosticSession();assert.ok(first?.current());assert.equal((await first.sample({enabled:true})).status,'sampled');assert.deepEqual(Object.keys(first).sort(),['current','sample']);
+ h.nativeOwners[0].options.onState('reconnecting');assert.equal(first.current(),false);assert.equal(await first.sample({enabled:false}),null);assert.equal(h.exports.activeGuestSeatDiagnosticSession(),null);
+ h.nativeOwners[0].options.onState('live');const second=h.exports.activeGuestSeatDiagnosticSession();assert.notEqual(second,first);h.nativeOwners[0].options.onStage(true);assert.equal(second.current(),false);assert.ok(h.exports.activeGuestSeatDiagnosticSession()?.current());
+ s.leave();assert.equal(h.exports.activeGuestSeatDiagnosticSession(),null);assert.ok(changes>=5);unsubscribe();
+});
+test('passive registry refuses to guess between simultaneous active seats',async()=>{
+ const h=harness({transport:'livekit'}),first=h.seat(),second=h.seat();await first.start();h.nativeOwners[0].options.onState('live');const handle=h.exports.activeGuestSeatDiagnosticSession();assert.ok(handle);
+ await second.start();h.nativeOwners[1].options.onState('live');assert.equal(h.exports.activeGuestSeatDiagnosticSession(),null);second.leave();assert.equal(h.exports.activeGuestSeatDiagnosticSession(),handle);first.leave();assert.equal(h.exports.activeGuestSeatDiagnosticSession(),null);
 });
 test('legacy transport uses maintained signaling renewal and stage-aware conversation',async()=>{
  const h=harness(),s=h.seat({videoSource:'webcam'});await s.start();assert.equal(h.captures.length,1);assert.equal(h.captures[0].video.frameRate.max,30);const {options}=h.links[0];assert.equal(options.returnFeed,true);const renewed=await options.refreshSession();assert.match(renewed.wsUrl,/^wss:\/\/api.example/);

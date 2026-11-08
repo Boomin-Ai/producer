@@ -1,6 +1,7 @@
 import { Room, RoomEvent, Track, ConnectionState, setLogLevel, LogLevel,
   type ParticipantTrackPermission, type RemoteParticipant, type RemoteTrackPublication, type RemoteTrack } from "livekit-client";
 import { readGuestRtcAuthority, validateGuestRtcSession, sameGuestRtcBinding, guestTrackAllowed, guestPeerAudioAllowed, guestAudioRecipients, type GuestRtcAuthority } from "./producerGuestAuthority";
+import {ProducerMediaDiagnostics,type MediaDiagnosticsOptions,type ProducerMediaSnapshot} from './producerMediaDiagnostics';
 
 type Callbacks = {
   onStage?: (onStage: boolean) => void;
@@ -29,6 +30,7 @@ export class ProducerGuestRtc {
   private peerAudio = new Map<string,{track:RemoteTrack; element:HTMLMediaElement}>();
   private closed: Promise<void> | null = null;
   private watchdog: ReturnType<typeof setInterval> | null = null;
+  private readonly mediaObserver = new ProducerMediaDiagnostics();
   constructor(private input: {api: string; invite: string; participantId: string; endpoint: string;
     localStream: () => MediaStream | null} & Callbacks) {}
 
@@ -73,6 +75,7 @@ export class ProducerGuestRtc {
     return {status: r.status, value: JSON.parse(new TextDecoder().decode(bytes))};
   }
   private clearReturn(): void {
+    this.mediaObserver.reset();
     for(const peer of this.peerAudio.values()){peer.element.pause();peer.track.detach(peer.element);peer.element.srcObject=null;peer.element.remove();}
     this.peerAudio.clear();
     this.video = this.audio = null;
@@ -104,9 +107,11 @@ export class ProducerGuestRtc {
     }
     if (publication.source === Track.Source.Camera && track.kind === Track.Kind.Video) {
       if (this.video && this.video.sid === track.sid && this.video.mediaStreamTrack === track.mediaStreamTrack) return;
+      this.mediaObserver.reset();
       this.video = track; this.input.onProgram(new MediaStream([track.mediaStreamTrack]));
     } else if (publication.source === Track.Source.Microphone && track.kind === Track.Kind.Audio) {
       if (this.audio && this.audio.sid === track.sid && this.audio.mediaStreamTrack === track.mediaStreamTrack) return;
+      this.mediaObserver.reset();
       this.audio = track; this.input.onAudio(new MediaStream([track.mediaStreamTrack]));
     } else publication.setSubscribed(false);
   }
@@ -153,8 +158,8 @@ export class ProducerGuestRtc {
     room.on(RoomEvent.TrackUnsubscribed, track => {
       const peer=track.sid ? this.peerAudio.get(track.sid):undefined;
       if(peer){peer.element.pause();track.detach(peer.element);peer.element.srcObject=null;peer.element.remove();if(track.sid)this.peerAudio.delete(track.sid);}
-      if (this.video?.sid === track.sid) {this.video = null; this.input.onProgram(null);}
-      if (this.audio?.sid === track.sid) {this.audio = null; this.input.onAudio(null);}
+      if (this.video?.sid === track.sid) {this.mediaObserver.reset();this.video = null; this.input.onProgram(null);}
+      if (this.audio?.sid === track.sid) {this.mediaObserver.reset();this.audio = null; this.input.onAudio(null);}
     });
     room.on(RoomEvent.Reconnecting, () => {
       this.lastAuthorityAt=0;this.clearReturn();
@@ -281,6 +286,14 @@ export class ProducerGuestRtc {
     await this.retire();
   }
   async resumeAudio(): Promise<void> {await this.room?.startAudio();await Promise.allSettled([...this.peerAudio.values()].map(peer=>peer.element.play()));}
+  /** Explicitly requested, sanitized receiver observations only. No media is
+   * acquired or published, and no polling/export continues after this call. */
+  mediaDiagnostics(options:MediaDiagnosticsOptions):Promise<ProducerMediaSnapshot> {
+    const room=this.room,video=this.video,audio=this.audio;
+    return this.mediaObserver.sample(options,{video,audio},()=>!this.stopRequested&&!!room&&this.room===room&&
+      room.state===ConnectionState.Connected&&this.video===video&&this.audio===audio&&
+      this.authority?.expected.can_subscribe===true&&this.lastAuthorityAt>0&&Date.now()-this.lastAuthorityAt<3500);
+  }
   close(): Promise<void> {
     if (this.closed) return this.closed;
     this.stopRequested = true; this.request.abort();

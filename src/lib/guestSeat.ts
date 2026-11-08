@@ -10,6 +10,7 @@ import {resolveGrants,type ParticipantLike} from '../../server/guest/src/partici
 import type {StageUpdate} from '../../server/guest/src/guestMesh';
 import {sharedProgramCapture,type ProgramLease} from './programCapture';
 import type {ProducerGuestRtc} from './producerGuestRtc';
+import type {MediaDiagnosticsOptions,ProducerMediaSnapshot} from './producerMediaDiagnostics';
 import {GuestSeatTrace} from './guestSeatTrace';
 
 export type SeatPhase='starting'|'waiting'|'connecting'|'live'|'gone'|'error';
@@ -33,6 +34,18 @@ export interface SeatState {
 type Guest=ParticipantLike&{id:string;display_name?:string;status:string};
 type GuestReply={guest:Guest;transport?:unknown};
 const POLL_MS=2500,RECONNECT_MS=2000,BOOMIN_RTC='wss://producer-boomin-6h2iz2sq.livekit.cloud';
+/** Local runtime handles only; no identity, endpoint, invitation or capture
+ * authority is exposed to a passive diagnostic consumer. */
+export interface GuestSeatDiagnosticSession {
+ current():boolean;
+ sample(options:MediaDiagnosticsOptions):Promise<ProducerMediaSnapshot|null>;
+}
+const diagnosticSessions=new Set<GuestSeatDiagnosticSession>(),diagnosticListeners=new Set<()=>void>();
+function notifyDiagnosticSessions(){for(const fn of diagnosticListeners)try{fn();}catch{/* Observation cannot affect the seat. */}}
+export function activeGuestSeatDiagnosticSession():GuestSeatDiagnosticSession|null {
+ const active=[...diagnosticSessions].filter(session=>session.current());return active.length===1?active[0]:null;
+}
+export function subscribeGuestSeatDiagnosticSessions(fn:()=>void):()=>void {diagnosticListeners.add(fn);return()=>{diagnosticListeners.delete(fn);};}
 
 /** Decode only the final credential segment; never rewrite the minted link. */
 export function inviteCodeFromJoinUrl(joinUrl:string):string|null {
@@ -58,6 +71,7 @@ export class GuestSeat {
  private local:MediaStream|null=null;private program:MediaStream|null=null;private hostAudio:MediaStream|null=null;
  private lease:ProgramLease|null=null;private programPrepared=false;private link:HostLink|null=null;private conversation:GuestConversation|null=null;
  private rtc:ProducerGuestRtc|null=null;private peerId='';private mediaKey='';private downSince=0;
+ private diagnosticSession:GuestSeatDiagnosticSession|null=null;
  constructor(spec:GuestSeatSpec){
   this.spec=spec;this.api=connectApiBase(spec.apiBase);this.code=inviteCodeFromJoinUrl(spec.joinUrl);
   const mediaMode=spec.videoSource??(spec.producerCam?'program':'webcam');
@@ -68,14 +82,30 @@ export class GuestSeat {
  localStream():MediaStream|null{return this.local;}
  programStream():MediaStream|null{return this.program;}
  hostAudioStream():MediaStream|null{return this.hostAudio;}
- private set(patch:Partial<SeatState>){if(!this.alive)return;if(patch.phase)this.trace.phase(patch.phase);this.state={...this.state,...patch};for(const fn of this.listeners)fn();}
+ /** Null means this seat has no active modern receiver; legacy/native host
+  * ingest and local speaker audibility are deliberately not inferred. */
+ async mediaDiagnostics(options:MediaDiagnosticsOptions):Promise<ProducerMediaSnapshot|null>{
+  const rtc=this.rtc,gen=this.callGeneration;if(!rtc||!this.alive||this.terminal)return null;
+  const result=await rtc.mediaDiagnostics(options);
+  return this.alive&&!this.terminal&&this.rtc===rtc&&this.callGeneration===gen?result:null;
+ }
+ private syncDiagnosticSession(){
+  const eligible=this.alive&&!this.terminal&&!!this.rtc&&this.state.transport==='livekit'&&this.state.phase==='live';
+  if(this.diagnosticSession&&(!eligible||!this.diagnosticSession.current())){diagnosticSessions.delete(this.diagnosticSession);this.diagnosticSession=null;notifyDiagnosticSessions();}
+  if(eligible&&!this.diagnosticSession){
+   const gen=this.callGeneration,rtc=this.rtc,onStage=this.state.onStage;
+   const session:GuestSeatDiagnosticSession={current:()=>this.alive&&!this.terminal&&this.diagnosticSession===session&&this.rtc===rtc&&this.callGeneration===gen&&this.state.phase==='live'&&this.state.onStage===onStage,sample:options=>session.current()?this.mediaDiagnostics(options):Promise.resolve(null)};
+   this.diagnosticSession=session;diagnosticSessions.add(session);notifyDiagnosticSessions();
+  }
+ }
+ private set(patch:Partial<SeatState>){if(!this.alive)return;if(patch.phase)this.trace.phase(patch.phase);this.state={...this.state,...patch};this.syncDiagnosticSession();for(const fn of this.listeners)fn();}
  async start():Promise<void>{
   if(this.started||!this.alive)return;this.started=true;this.trace.start(this.state.mediaMode==='program');
   if(!this.code){this.fail('The join link has no valid invite code.');return;}
   await this.poll();
  }
  leave():void{
-  if(!this.alive)return;this.alive=false;this.terminal=true;this.request.abort();window.clearTimeout(this.timer);
+  if(!this.alive)return;this.alive=false;this.terminal=true;this.syncDiagnosticSession();this.request.abort();window.clearTimeout(this.timer);
   this.trace.cancel();this.trace.begin('peer.leave');
   const retiring=this.teardownCall();this.releaseMedia();this.listeners.clear();this.trace.leave(retiring);
  }

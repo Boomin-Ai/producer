@@ -639,7 +639,7 @@ export function Home({
         />
       )}
       {networkSheet==='messages'&&<aside className="producer-network-sheet" aria-label="Producer messages"><NetworkMessages endpoint={endpoints.find(e=>e.id===activeId)??null} onClose={()=>setNetworkSheet(null)} onConnections={()=>{setNetworkSheet(null);setSurface('rooms');setView({kind:'home'});}} onUnreadChange={setNetworkUnread}/></aside>}
-      {networkSheet==='join'&&<aside className="producer-network-sheet join-sheet"><ProducerJoin key={`${activeId}:${pendingSeat?.joinUrl??'link'}`} endpoint={endpoints.find(e=>e.id===activeId)??null} rooms={rooms.filter(r=>r.endpoint_id===activeId)} invitation={pendingSeat} onClose={()=>{setNetworkSheet(null);setPendingSeat(undefined);}} onEnter={startSeat}/></aside>}
+      {networkSheet==='join'&&<aside className="producer-network-sheet join-sheet" data-producer-network-room-id={pendingSeat?.networkRoomId} data-producer-endpoint-id={pendingSeat?.endpointId}><ProducerJoin key={`${activeId}:${pendingSeat?.joinUrl??'link'}`} endpoint={endpoints.find(e=>e.id===activeId)??null} rooms={rooms.filter(r=>r.endpoint_id===activeId)} invitation={pendingSeat} onClose={()=>{setNetworkSheet(null);setPendingSeat(undefined);}} onEnter={startSeat}/></aside>}
       {view.kind === "console" && (
         <ConsoleHost
           endpoint={endpoints.find((e) => e.id === activeId) ?? endpoints.find((e) => e.kind === "connected") ?? null}
@@ -3107,6 +3107,8 @@ function LiveNowStrip({ onEnterSeat }: { onEnterSeat: (seat: GuestSeatSpec) => v
             </span>
             <button
               className="cr-primary"
+              data-producer-network-room-id={r.room_id}
+              data-producer-endpoint-id={endpointId}
               disabled={entering === r.room_id}
               onClick={() => void enter(r)}
             >

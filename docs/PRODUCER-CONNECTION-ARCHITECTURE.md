@@ -7,6 +7,14 @@ provider-aware branding in `b437891`. Local-first onboarding, portable native
 authority and federation remain work to design and qualify. Development
 coordination is in issue #131.
 
+Beta delivery decision, November 8: new installations require Boomin sign-in.
+Preserve existing owned-server connections. Prioritize automated Boomin-to-Boomin
+camera/audio/recovery qualification and comparable performance baselines before
+local-only onboarding or cross-server federation. This beta sequence does not
+change the longer-term independent-studio boundary below. Public Producer handle
+and explicitly published Set-download routes must remain part of the Boomin
+identity integration; they are not a second handle namespace.
+
 ## Product boundary
 
 Accepted product direction: **Producer** is the independent production studio.
@@ -203,16 +211,20 @@ telemetry delivery.
 1. **Paired baseline:** stable Mac/Windows dev profiles, exact frontend/native
    revisions, recovery fix, source readiness and stale-frame evidence. Keep
    production release ownership on Mac and freeze source during measured tests.
-2. **Local workspace:** versioned ownership migration and no-account startup;
+2. **Boomin Network beta:** Boomin-first new-user entry, automated bounded media
+   checks, known-sound/mute verification and performance/recovery runs. Existing
+   self-hosted connections remain supported. Use the existing handle ownership
+   and network/deal authority; verify public Producer routes separately.
+3. **Local workspace:** versioned ownership migration and no-account startup;
    local rooms, Sets/MCP, recording catalog and explicitly scoped RTMP output.
-3. **Local live execution:** device-supported Set controls through a local
+4. **Local live execution:** device-supported Set controls through a local
    authority adapter; connected data providers remain optional attachments.
-4. **Portable contract and adapters:** agree on minimum capabilities and run the
+5. **Portable contract and adapters:** agree on minimum capabilities and run the
    same authority/recovery tests against Boomin and the owned server.
-5. **Cross-host parity:** prove both directions for server↔Boomin and
+6. **Cross-host parity:** prove both directions for server↔Boomin and
    server↔server with native provider/reachability configuration, then device
    guest entry without an account.
-6. **Device hosting and optional federation:** LAN pairing, Internet rendezvous,
+7. **Device hosting and optional federation:** LAN pairing, Internet rendezvous,
    then durable external relationships/messages under the documented extensions.
 
 Before exposing a new mode, test clean install, offline restart, account attach

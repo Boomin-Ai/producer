@@ -21,6 +21,7 @@ function harness(t,{startupStatus=201}={}){
  const authority=()=>({expected:{brand_id:id,room_id:id,run_id:runs[phase],participant_id:id,role:'guest',scope:'stage',private_participant_id:null,host_lease_epoch:1,control_revision:1,authorization_generation:1,endpoint,publish_sources:['camera','microphone'],can_subscribe:true},producer_identity:`producer-${host}-e1-g1`,on_stage:true});
  const session=()=>({...authority().expected,schema_version:1,transport:'livekit',provider_room:`b_${id}_r_${id}_run_${runs[phase]}_stage`,rtc_identity:`guest-${id}-e1-g1`,issued_at_ms:now,expires_at_ms:now+60000,join_token:'synthetic-credential-never-sent'});
  const auth={};vm.runInNewContext(compile(authoritySource),{exports:auth,require,Date:{now:()=>now},Set,JSON,RegExp,Error});
+ const media={};vm.runInNewContext(compile(readFileSync(root+'/src/lib/producerMediaDiagnostics.ts','utf8')),{exports:media,Map,Promise,performance:{now:()=>now},setTimeout,clearTimeout});
  class Room {
   constructor(){this.state='disconnected';this.remoteParticipants=new Map();this.connected=0;this.disconnected=0;this.published=[];this.events=new Map();this.localParticipant={identity:`guest-${id}-e1-g1`,trackPublications:new Map(),setTrackSubscriptionPermissions(){},publishTrack:async track=>{this.published.push(track);}};rooms.push(this);}
   async prepareConnection(){}on(event,fn){this.events.set(event,fn);return this;}removeAllListeners(){this.events.clear();}
@@ -30,7 +31,7 @@ function harness(t,{startupStatus=201}={}){
  class Stream{constructor(tracks){this.tracks=tracks;}getTracks(){return this.tracks;}}
  const stream=new Stream(tracks),exports={};
  const response=(status,value={})=>new Response(JSON.stringify(value),{status});
- vm.runInNewContext(compile(ownerSource),{exports,require:name=>name==='livekit-client'?sdk:['./producerGuestAuthority','./guestRtcAuthority'].includes(name)?auth:require(name),AbortController,AbortSignal,TextDecoder,Uint8Array,JSON,Set,Map,Date:{now:()=>now},MediaStream:Stream,document:{body:{appendChild(){}}},
+ vm.runInNewContext(compile(ownerSource),{exports,require:name=>name==='livekit-client'?sdk:name==='./producerMediaDiagnostics'?media:['./producerGuestAuthority','./guestRtcAuthority'].includes(name)?auth:require(name),AbortController,AbortSignal,TextDecoder,Uint8Array,JSON,Set,Map,Date:{now:()=>now},MediaStream:Stream,document:{body:{appendChild(){}}},
   setTimeout(fn,ms){const key=++seq;timers.set(key,{fn,ms});return key;},clearTimeout(key){timers.delete(key);},setInterval(fn,ms){const key=++seq;timers.set(key,{fn,ms});return key;},clearInterval(key){timers.delete(key);},
   fetch:async(url,options)=>{
    const path=url.split('/rtc/')[1],body=options.body?JSON.parse(options.body):null;requests.push({phase,path,ticket:body?.connection_ticket??null,options});
@@ -98,4 +99,33 @@ test('ordinary SDK disconnection rejoins same authority with its valid ticket in
 });
 test('authority permission denial fails closed when stale and never mints replacement credentials while denied',async t=>{
  const h=harness(t);await h.start();const first=h.owner.room;h.state(403);await h.tick(4000);assert.equal(h.owner.room,null);assert.equal(first.state,'disconnected');for(let i=0;i<3;i++)await h.tick();assert.equal(h.count('startup'),1);assert.equal(h.count('connection'),0);assert.equal(h.count('session'),0);assert.equal(h.states.at(-1),'reconnecting');
+});
+
+function returnReceiver(h,kind,read){
+ const track={kind,sid:`synthetic-${kind}`,mediaStreamTrack:{kind,readyState:'live',enabled:true,muted:false},getRTCStatsReport:read};
+ h.owner.room.events.get('sub')(track,{source:kind==='video'?'camera':'microphone',kind,trackSid:track.sid,setSubscribed(){}},{identity:h.owner.authority.producer_identity});return track;
+}
+test('actual owner only reads existing authorized receiver stats on explicit request; diagnostics do not change media or polling',async t=>{
+ const h=harness(t);await h.start();let calls=0,frames=10;
+ returnReceiver(h,'video',async()=>{calls++;return new Map([['private-stat',{id:'PRIVATE-ID',type:'inbound-rtp',kind:'video',timestamp:frames*100,framesDecoded:frames,bytesReceived:frames*50}]]);});
+ const requestCount=h.requests.length,timerCount=h.timers.size;
+ assert.equal(calls,0);assert.equal((await h.owner.mediaDiagnostics({enabled:false})).status,'disabled');assert.equal(calls,0);
+ const first=await h.owner.mediaDiagnostics({enabled:true});assert.equal(first.video.decodeProgress,'unknown');assert.equal(calls,1);
+ h.advance(1000);frames=30;const second=await h.owner.mediaDiagnostics({enabled:true});assert.equal(second.video.delta.framesDecoded,20);assert.equal(second.video.decodeProgress,'advancing');assert.equal(h.requests.length,requestCount);assert.equal(h.timers.size,timerCount);assert.equal(h.owner.room.published.length,2);assert.ok(!JSON.stringify(second).includes('PRIVATE'));
+});
+test('actual owner retirement fences an in-flight stats result without stopping caller tracks',async t=>{
+ const h=harness(t);await h.start();let resolve;
+ returnReceiver(h,'audio',()=>new Promise(done=>{resolve=done;}));const pending=h.owner.mediaDiagnostics({enabled:true});await flush();await h.owner.retire();
+ assert.equal((await pending).status,'retired');resolve(new Map([['private',{type:'inbound-rtp',kind:'audio',totalSamplesDuration:2,totalAudioEnergy:0.2}]]));await flush();assert.equal((await h.owner.mediaDiagnostics({enabled:true})).status,'unavailable');assert.ok(h.tracks.every(track=>track.stops===0));
+});
+test('actual owner cannot read old media after authority expires or after close',async t=>{
+ const h=harness(t);await h.start();let calls=0;returnReceiver(h,'video',async()=>{calls++;return new Map();});h.advance(3500);
+ assert.equal((await h.owner.mediaDiagnostics({enabled:true})).status,'unavailable');assert.equal(calls,0);await h.owner.close();assert.equal((await h.owner.mediaDiagnostics({enabled:true})).status,'unavailable');assert.equal(calls,0);
+});
+test('actual owner track replacement discards old in-flight results and begins a new decoder baseline',async t=>{
+ const h=harness(t);await h.start();let resolve;
+ returnReceiver(h,'video',()=>new Promise(done=>{resolve=done;}));const pending=h.owner.mediaDiagnostics({enabled:true});await flush();
+ const old=h.owner.video;h.owner.room.events.get('unsub')(old);
+ returnReceiver(h,'video',async()=>new Map([['new',{id:'new',type:'inbound-rtp',kind:'video',timestamp:2000,framesDecoded:100}]]));
+ assert.equal((await pending).status,'retired');resolve(new Map([['old',{type:'inbound-rtp',kind:'video',framesDecoded:10}]]));await flush();const current=await h.owner.mediaDiagnostics({enabled:true});assert.equal(current.video.counters.framesDecoded,100);assert.equal(current.video.delta,null);
 });
