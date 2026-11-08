@@ -17,7 +17,8 @@ $bridgeLauncherText = @"
 Start-Process -FilePath '$quotedNode' -ArgumentList @('`"$quotedScript`"', '`"$quotedConfig`"') -WindowStyle Hidden -RedirectStandardOutput '$quotedState\listener.stdout.log' -RedirectStandardError '$quotedState\listener.stderr.log'
 "@
 Set-Content -LiteralPath $bridgeLauncher -Value $bridgeLauncherText -Encoding utf8
-$bridgePowerShell = (Get-Process -Id $PID).Path
+$bridgePowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+if (-not (Test-Path -LiteralPath $bridgePowerShell)) { throw 'Stable Windows PowerShell executable not found' }
 $bridgeRunKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 New-Item -Path $bridgeRunKey -Force | Out-Null
 $bridgeStartCommand = '"' + $bridgePowerShell + '" -NoProfile -WindowStyle Hidden -File "' + $bridgeLauncher + '"'
