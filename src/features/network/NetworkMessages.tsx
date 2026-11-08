@@ -2,6 +2,7 @@ import {useCallback,useEffect,useLayoutEffect,useRef,useState,useSyncExternalSto
 import type {EndpointInfo} from '../../lib/ipc';
 import {createMessagesClient} from './client';
 import {NetworkMessagesController,type MessagesClient,type MessagesState} from './controller';
+import {networkProviderLabels} from './providerLabels';
 import './network.css';
 
 export type NetworkMessagesProps={endpoint:EndpointInfo|null;onClose:()=>void;onConnections:()=>void;onUnreadChange?:(count:number)=>void;client?:MessagesClient};
@@ -11,6 +12,7 @@ export function NetworkMessages(props:NetworkMessagesProps){
  return <MessagesPane key={props.endpoint.id} {...props} endpoint={props.endpoint}/>;
 }
 function MessagesPane({endpoint,onClose,onConnections,onUnreadChange,client}:NetworkMessagesProps&{endpoint:EndpointInfo}){
+ const provider=networkProviderLabels(endpoint);
  const [controller,setController]=useState<NetworkMessagesController|null>(null),[filter,setFilter]=useState('');
  const thread=useRef<HTMLDivElement>(null),bottom=useRef(true),selectedBefore=useRef<string|null>(null),olderHeight=useRef<number|null>(null);
  useEffect(()=>{
@@ -37,8 +39,8 @@ function MessagesPane({endpoint,onClose,onConnections,onUnreadChange,client}:Net
  const active=state.status==='ready',canSend=!!conversation?.can_send&&!state.pending;
  const count=[...state.draft].length;
  return <section className="network-messages" aria-label="Network messages">
-  <header className="network-messages-heading"><div><span className="network-eyebrow">PRODUCER NETWORK</span><h1>Messages {unread>0&&<span className="network-unread-total">{unread}</span>}</h1><p>{endpoint.name} · private conversations between connected producers</p></div><div><button onClick={onConnections}>Connections</button><button className="network-close" aria-label="Close messages" onClick={onClose}>×</button></div></header>
-  {state.status==='unavailable'?<div className="network-messages-empty"><h2>Messages are not available on this server</h2><p>{state.error}</p><p>Your workspace stays on {endpoint.name}. You can still join another Producer using its guest room link.</p><button onClick={onClose}>Back to rooms</button></div>:
+  <header className="network-messages-heading"><div><span className="network-eyebrow">{provider.eyebrow}</span><h1>Messages {unread>0&&<span className="network-unread-total">{unread}</span>}</h1><p>{endpoint.name} · private conversations between connected producers</p></div><div><button onClick={onConnections}>Connections</button><button className="network-close" aria-label="Close messages" onClick={onClose}>×</button></div></header>
+  {state.status==='unavailable'?<div className="network-messages-empty"><h2>Messages are not available on {provider.name}</h2><p>{state.error}</p><p>Your workspace stays on {endpoint.name}. You can still join another Producer using its guest room link.</p><button onClick={onClose}>Back to rooms</button></div>:
    state.status==='error'?<div className="network-messages-empty"><h2>Couldn’t load messages</h2><p role="alert">{state.error}</p><button onClick={()=>void controller?.refresh()}>Try again</button></div>:
    <div className="network-messages-body">
     <aside className="network-conversations" aria-label="Conversations"><label className="network-search"><span>Find a conversation</span><input aria-label="Find a conversation" placeholder="Search connections" value={filter} onChange={e=>setFilter(e.target.value)}/></label>

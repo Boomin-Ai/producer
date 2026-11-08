@@ -2,6 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import type {EndpointInfo,LiveRoom} from '../../lib/ipc';
 import type {GuestSeatSpec} from '../../lib/guestSeat';
 import {parseProducerJoinLink,resolveProducerInvitation} from '../../lib/producerJoin';
+import {producerInvitationLabel} from './providerLabels';
 import './producer-join.css';
 
 export function ProducerJoin({endpoint,rooms,invitation,onClose,onEnter}:{endpoint:EndpointInfo|null;rooms:LiveRoom[];invitation?:GuestSeatSpec;onClose:()=>void;onEnter:(seat:GuestSeatSpec,signal:AbortSignal)=>void|Promise<void>}){
@@ -24,7 +25,7 @@ export function ProducerJoin({endpoint,rooms,invitation,onClose,onEnter}:{endpoi
   finally{if(operation.current===abort)operation.current=null;if(alive.current)setBusy(false);}
  };
  return <section className="producer-join" aria-label="Join a Producer room">
-  <header><div><small>PRODUCER NETWORK</small><h1>{invitation?`Appear with ${invitation.hostName}`:'Join another Producer'}</h1></div><button onClick={close} aria-label="Close Producer invitation">×</button></header>
+  <header><div><small>{producerInvitationLabel(invitation)}</small><h1>{invitation?`Appear with ${invitation.hostName}`:'Join another Producer'}</h1></div><button onClick={close} aria-label="Close Producer invitation">×</button></header>
   <p>Bring your Set into their show. The host controls admission and when you appear on stage.</p>
   <form onSubmit={e=>{e.preventDefault();void enter();}}>
    {!invitation&&<><label>Room or invitation link<input aria-label="Producer invitation link" type="url" value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://their-server/connect/guest/…" required disabled={busy}/></label><label>Your name<input value={name} onChange={e=>setName(e.target.value)} maxLength={80} required disabled={busy}/></label><details><summary>Guest API address</summary><p>Boomin links resolve automatically. For a separate self-hosted API, enter its HTTPS address.</p><input aria-label="Guest API address" type="url" value={api} onChange={e=>setApi(e.target.value)} placeholder="Automatic from invitation" disabled={busy}/></details></>}
