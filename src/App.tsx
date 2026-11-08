@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import "./App.css";
-import { hasTauri, ipc, type EndpointInfo } from "./lib/ipc";
+import { hasTauri, ipc, uiLog, type EndpointInfo } from "./lib/ipc";
 import { Onboarding, SignIn, Wordmark, hasSignedInBefore } from "./views/Onboarding";
 import { ModSeat } from "./views/ModSeat";
 import type { ModLink } from "./lib/modSeat";
@@ -13,6 +13,17 @@ import {SetsDevelopmentRoom} from "./views/SetsDevelopmentRoom";
 type View = "loading" | "onboarding" | "onboarding-server" | "signin" | "home" | { kind: "modseat"; link: ModLink; from: "onboarding" | "signin" };
 
 function App() {
+  const entryReviewRequested = import.meta.env.DEV && import.meta.env.VITE_PRODUCER_ENTRY_REVIEW === '1';
+  const [entryReview, setEntryReview] = useState<'checking' | 'open' | 'closed'>(entryReviewRequested ? 'checking' : 'closed');
+  useEffect(() => {
+    if (!entryReviewRequested) return;
+    let alive = true;
+    void import('@tauri-apps/api/app').then(app => app.getIdentifier()).then(id => {
+      if (alive) setEntryReview(id === 'ai.boomin.producer.sets-v2-dev' || id === 'ai.boomin.producer.windows-network-dev' ? 'open' : 'closed');
+    }).catch(() => { if (alive) setEntryReview('closed'); });
+    return () => { alive = false; };
+  }, [entryReviewRequested]);
+  useEffect(() => { if (entryReview === 'open') uiLog('[entry-review] Sign-in screen opened in the development bundle; saved workspace routing retained.'); }, [entryReview]);
   const [setsDevelopment,setSetsDevelopment]=useState(false);
   useEffect(()=>{
     if(!hasTauri())return;
@@ -63,6 +74,12 @@ function App() {
     await refresh();
   }
 
+  if (entryReview !== 'closed') {
+    return <main className="shell">{entryReview === 'checking' ? <div className="boot"><Wordmark /></div> : <>
+      <Onboarding onConnected={() => { setEntryReview('closed'); void refresh(); }} />
+      <button type="button" className="entry-review-exit" onClick={() => setEntryReview('closed')}>Back to studio</button>
+    </>}</main>;
+  }
   if(setsDevelopment)return <SetsDevelopmentRoom/>;
   if (firstLight) {
     return <FirstLight onDone={() => setFirstLight(false)} />;

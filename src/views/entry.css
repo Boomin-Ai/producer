@@ -19,6 +19,7 @@
   font-family: var(--font);
 }
 .shell:has(> .entry-shell) { padding: 0; align-items: stretch; }
+.entry-review-exit { position: fixed; bottom: 15px; left: 50%; transform: translateX(-50%); z-index: 2; padding: 6px 12px; border: 1px solid #454d53; border-radius: 7px; background: #202528; color: #dce4e7; font-size: 11px; }
 .entry-header, .entry-footer { width: min(1100px, 100%); margin-inline: auto; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
 .entry-header { min-height: 46px; }
 .entry-identity { display: flex; align-items: center; gap: 11px; font-size: 21px; font-weight: 700; letter-spacing: -.6px; pointer-events: none; }
