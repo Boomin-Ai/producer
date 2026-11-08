@@ -45,7 +45,7 @@ jobs:
           echo "PRODUCER_ENGINE_DIR=$ARTIFACT_DIR/$(artifact_name)" >> "$GITHUB_ENV"
       - name: Build engine-linked development app
         run: |
-          bun run tauri build --debug --bundles app --config '{"bundle":{"createUpdaterArtifacts":false,"macOS":{"minimumSystemVersion":"13.0"}}}'
+          bun run tauri build --debug --bundles app --features guest-rtc-production --config '{"bundle":{"createUpdaterArtifacts":false,"macOS":{"minimumSystemVersion":"13.0"}}}'
           APP=src-tauri/target/debug/bundle/macos/Producer.app
           otool -L "$APP/Contents/MacOS/Producer" | grep -q libobs
           lipo "$APP/Contents/MacOS/Producer" -verify_arch x86_64

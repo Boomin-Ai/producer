@@ -56,6 +56,8 @@ assert 'PRODUCER_REQUIRE_ENGINE:' in intel_job and '--features guest-rtc-product
 assert 'scripts/check-macos-engine.sh' in intel_job and 'scripts/check-camera-bundle.py' in intel_job
 assert 'UPD="Producer_x64.app.tar.gz"' in intel_job
 assert 'Stage notarized Intel updater archive' in intel_job
+assert '--features guest-rtc-production' in (root / 'scripts/dev.sh').read_text()
+assert '--features guest-rtc-production' in (root / '.github/workflows/intel-dev.yml').read_text()
 publisher = workflow.split("\n  publish-verified-release:\n", 1)[1]
 assert "needs.build-windows-live.result == 'success'" in publisher
 assert "needs.build-macos-intel-live.result == 'success'" in publisher

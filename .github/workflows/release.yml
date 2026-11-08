@@ -10,7 +10,7 @@ on:
         type: boolean
         default: false
       native_guest:
-        description: "Include the native LiveKit guest runtime in the Apple Silicon candidate"
+        description: "Include native LiveKit guest runtime in both Mac candidates (required for public releases)"
         type: boolean
         default: false
       windows_only:

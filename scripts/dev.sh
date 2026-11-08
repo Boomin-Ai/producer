@@ -24,7 +24,7 @@ export CXXFLAGS="${CXXFLAGS:-} -fmodules-cache-path=$CLANG_MODULE_CACHE_PATH"
 
 # app bundle only: skip dmg and, critically, the updater artifact — that one
 # needs the signing key and has no business in a dev loop.
-npx tauri build --debug --bundles app --config '{"bundle":{"createUpdaterArtifacts":false}}'
+npx tauri build --debug --bundles app --features guest-rtc-production --config '{"bundle":{"createUpdaterArtifacts":false}}'
 
 # A running instance keeps plugins mapped and codesign gets "Operation not
 # permitted" rewriting them — close it before touching the bundle.

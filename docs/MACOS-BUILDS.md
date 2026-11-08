@@ -31,6 +31,11 @@ make check
 make dev
 ```
 
+Both the bundled local dev launcher and signed Intel dev workflow include
+`guest-rtc-production`, matching the production native guest feature set.
+The earlier caca7a9 camera-only candidate is evidence for the limited physical
+camera check below, not the default configuration for future full dev builds.
+
 Setup reuses only the exact lock/architecture artifact after component and
 architecture validation. Silicon fetches the source-built CI artifact; Intel
 uses `engine/macos-intel-fallback.json`, checked against `engine/obs.lock`.
