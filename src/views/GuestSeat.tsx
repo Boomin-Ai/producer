@@ -50,8 +50,8 @@ function Stream({ stream, className, muted }: { stream: MediaStream | null; clas
   return <video ref={ref} className={className} autoPlay playsInline muted={muted} />;
 }
 
-function HostAudio({ stream }: { stream: MediaStream | null }) {
-  const ref = useRef<HTMLAudioElement>(null);
+function HostAudio({ stream, audioRef }: { stream: MediaStream | null; audioRef?:{current:HTMLAudioElement|null} }) {
+  const localRef = useRef<HTMLAudioElement>(null),ref=audioRef??localRef;
   useEffect(() => {
     const a = ref.current;
     if (!a) return;
@@ -63,11 +63,12 @@ function HostAudio({ stream }: { stream: MediaStream | null }) {
 
 export function GreenRoomBar({ seat, spec, onLeave }: { seat: GuestSeat | null; spec: GuestSeatSpec; onLeave: () => void }) {
   const st = useSeatState(seat);
+  const audioRef=useRef<HTMLAudioElement>(null),[audioError,setAudioError]=useState('');
   const phase = st?.phase ?? "starting";
   const host = spec.hostName;
   const line =
     phase === "starting"
-      ? "Opening your camera…"
+      ? spec.videoSource==='program'?"Preparing your local room…":"Preparing your guest seat…"
       : phase === "waiting"
         ? `Waiting for ${host} to bring you on`
         : phase === "connecting"
@@ -80,9 +81,9 @@ export function GreenRoomBar({ seat, spec, onLeave }: { seat: GuestSeat | null; 
   const sub =
     phase === "gone" || phase === "error"
       ? null
-      : st?.producerCam
-        ? "Your Producer stage is your camera — what's on it is what they see."
-        : "Your webcam is your camera. Start the virtual camera to send your stage instead.";
+        : st?.mediaMode==='program'
+        ? "Source: your room and Set with processed local audio."
+        : "Source: your webcam and microphone.";
   return (
     <section className={`rm-seat rm-seat--${phase}`} aria-live="polite">
       <div className="rm-seat-self">
@@ -93,6 +94,7 @@ export function GreenRoomBar({ seat, spec, onLeave }: { seat: GuestSeat | null; 
         <div className="rm-seat-eyebrow">
           <span className={`rm-seat-dot rm-seat-dot--${phase}`} />
           {spec.title}
+          {st?.transport && <span> · {st.transport==='livekit'?'LiveKit':'Guest link'}</span>}
         </div>
         <div className="rm-seat-line">{line}</div>
         {sub && <div className="rm-seat-sub">{sub}</div>}
@@ -103,8 +105,13 @@ export function GreenRoomBar({ seat, spec, onLeave }: { seat: GuestSeat | null; 
           <span className="rm-seat-return-label">PROGRAM</span>
         </div>
       )}
-      <HostAudio stream={seat?.hostAudioStream() ?? null} />
+      <HostAudio stream={seat?.hostAudioStream() ?? null} audioRef={audioRef}/>
       <div className="rm-seat-actions">
+        {(phase==='live'||phase==='connecting')&&<button className="hd-chip" onClick={()=>{
+          setAudioError('');const tasks=[seat?.resumeAudio()];if(audioRef.current?.srcObject)tasks.push(audioRef.current.play());
+          void Promise.all(tasks).catch(()=>setAudioError('Audio is blocked. Try Enable audio again.'));
+        }}>Enable audio</button>}
+        {audioError&&<span role="alert">{audioError}</span>}
         <button className={`hd-chip${st?.muted ? " rm-seat-off" : ""}`} onClick={() => seat?.toggleMute()} disabled={!seat}>
           {st?.muted ? "Unmute" : "Mute"}
         </button>
@@ -117,4 +124,16 @@ export function GreenRoomBar({ seat, spec, onLeave }: { seat: GuestSeat | null; 
       </div>
     </section>
   );
+}
+
+/** A webcam-only appearance has no local room graph to render or restore. */
+export function ProducerGuestView({spec,onLeave}:{spec:GuestSeatSpec;onLeave:()=>void}){
+  const seat=useGuestSeat(spec),state=useSeatState(seat);
+  return <main className="producer-guest-view">
+    <GreenRoomBar seat={seat} spec={spec} onLeave={onLeave}/>
+    <section className="producer-guest-stage" aria-label="Host program return">
+      {state?.hasProgram?<Stream stream={seat?.programStream()??null} className="producer-guest-program" muted/>:
+      <div><h1>{state?.phase==='waiting'?'You’re in the green room':state?.phase==='error'?'Could not join the show':`Joining ${spec.hostName}`}</h1><p>{state?.message||'The host’s program appears here when it is available.'}</p></div>}
+    </section>
+  </main>;
 }

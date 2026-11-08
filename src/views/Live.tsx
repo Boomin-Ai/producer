@@ -2693,6 +2693,7 @@ export function LiveView({
     const session = roomSession();
     roomEngineRef.current = session;
     return () => {
+      if(roomEngineRef.current===session)roomEngineRef.current=null;
       // Conceal both native views before RTC/source teardown can reveal the
       // camera underneath the Set. Home may already own this same receipt.
       const previewClosed=closePreviewSessions(()=>ipc.liveDetachPreview());
@@ -3349,7 +3350,6 @@ export function LiveView({
    * the extension being installed (once, with the user's approval) and the
    * output actually running. */
   const [vcamState, setVcamState] = useState<VcamStatus | null>(null);
-  const guestSeat = useGuestSeat(seat, vcamState?.device_name);
   const [vcamOn, setVcamOn] = useState(false);
   const [vcamPending, setVcamPending] = useState<'installing'|'starting'|'stopping'|null>(null);
   const vcamFlight = useRef(false);
@@ -3388,6 +3388,7 @@ export function LiveView({
    * not by the host: it stops when the last monitor leaves. A manual toggle
    * takes ownership back. */
   const vcamAutoRef = useRef(false);
+  const producerProgramWantedRef = useRef(false);
   const vcamManuallyStopped = useRef(false);
   const vcamAutoNextTry = useRef(0);
 
@@ -3421,6 +3422,32 @@ export function LiveView({
       setVcamPending(null);
     }
   };
+  // Never publish the engine's previous room while this room is restoring.
+  const guestSeat = useGuestSeat(seat && (seat.videoSource==='webcam' ||
+    snapshot?.engine_ready && docApplied && sceneSettled && framesReady) ? {
+      ...seat,
+      prepareProgram:async()=>{
+        const owner=roomEngineRef.current;if(!owner)throw Error('The local room is not ready.');
+        producerProgramWantedRef.current=true;
+        let prepared=false;
+        await owner.run(async()=>{
+          if(vcamOnRef.current){prepared=true;return;}
+          try{if(await setCameraOutput(true))vcamAutoRef.current=true;}
+          catch(error){producerProgramWantedRef.current=false;throw error;}
+          prepared=true;
+        });
+        if(!prepared||roomEngineRef.current!==owner){producerProgramWantedRef.current=false;throw Error('The local room closed before its program was ready.');}
+      },
+      releaseProgram:()=>{
+        producerProgramWantedRef.current=false;
+        void roomEngineRef.current?.run(async()=>{
+          if(producerProgramWantedRef.current||!vcamAutoRef.current)return;
+          // A guest-mode room has no independent roster/return senders. Only
+          // retire the camera output this appearance started, never manual output.
+          await setCameraOutput(false);vcamAutoRef.current=false;
+        }).catch(()=>{});
+      },
+    }:undefined, vcamState?.device_name);
   const toggleVcam = async () => {
     if (vcamFlight.current) return;
     vcamAutoRef.current = false;
@@ -6823,7 +6850,7 @@ export function LiveView({
           // and any seat or guest holding media.return_feed.
           const wantsProgram = full.filter((g) => !!g.render_url && resolveGrants(g).has("media.return_feed"));
           if (audienceStateRef.current.enabled) wantsProgram.push({} as RoomGuest);
-          const wantVcam = wantedMonitors.size > 0 || wantsProgram.length > 0;
+          const wantVcam = producerProgramWantedRef.current || wantedMonitors.size > 0 || wantsProgram.length > 0;
           const vs = vcamStateRef.current;
           if (wantVcam && !vcamOnRef.current && !vcamManuallyStopped.current && !vcamFlight.current && Date.now() > vcamAutoNextTry.current) {
             vcamAutoNextTry.current = Date.now() + 10_000;

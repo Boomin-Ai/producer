@@ -30,6 +30,7 @@ import { copyText, ensureRoomJoinLink } from "../lib/roomLink";
 import { afterPreviewWork, previewExit, type PreviewExitState } from "../lib/previewSession";
 import { ipc,
   guests,
+  recording,
   firewall,
   isRoomClosedError,
   network,
@@ -59,6 +60,9 @@ import { ModSeat } from "./ModSeat";
 import { ModLinkDrop } from "./ModLinkDrop";
 import type { ModLink } from "../lib/modSeat";
 import type { GuestSeatSpec } from "../lib/guestSeat";
+import { NetworkMessages } from "../features/network/NetworkMessages";
+import { ProducerJoin } from "../features/network/ProducerJoin";
+import { ProducerGuestView } from "./GuestSeat";
 
 const STATE_LABEL: Record<string, string> = {
   scheduled: "Scheduled",
@@ -180,6 +184,9 @@ export function Home({
   onEndpointsChanged?: () => void;
 }) {
   const [view, setView] = useState<MainView>({ kind: "home" });
+  const [networkSheet,setNetworkSheet]=useState<'messages'|'join'|null>(null);
+  const [pendingSeat,setPendingSeat]=useState<GuestSeatSpec>();
+  const [networkUnread,setNetworkUnread]=useState(0);
   const [exitState,setExitState]=useState<PreviewExitState>('idle');
   const roomExit=useRef<ReturnType<typeof previewExit>|null>(null);
   if(!roomExit.current)roomExit.current=previewExit(()=>ipc.liveDetachPreview(),setExitState);
@@ -217,6 +224,7 @@ export function Home({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("app");
   const openSettings = useCallback(() => {
+    setNetworkSheet(null);
     setView({ kind: "home" });
     setSettingsOpen(true);
   }, []);
@@ -261,6 +269,12 @@ export function Home({
   // The active workspace (brand). Rooms, destinations and the network rail
   // all key on it; the profile popout switches it.
   const [activeId, setActiveId] = useState<string | null>(() => activeEndpointId());
+  useEffect(()=>{setNetworkSheet(null);setPendingSeat(undefined);setNetworkUnread(0);},[activeId]);
+  useEffect(()=>{
+    if(!networkSheet)return;
+    const close=(event:KeyboardEvent)=>{if(event.key==='Escape'){setNetworkSheet(null);setPendingSeat(undefined);}};
+    window.addEventListener('keydown',close);return()=>window.removeEventListener('keydown',close);
+  },[networkSheet]);
   // Last-known first (lib/fetchCache.ts): coming back from a room must not
   // flash an empty stage list while the IPC round-trips.
   const [rooms, setRooms] = useState<LiveRoom[]>(() => cached<LiveRoom[]>(`rooms:${activeEndpointId() ?? ""}`) ?? []);
@@ -454,11 +468,39 @@ export function Home({
    * first) in guest mode with the seat's green room over it. No browser,
    * no popout window. Room-less when this workspace has no rooms yet. */
   const enterSeat = useCallback((seat: GuestSeatSpec) => {
+    if(seat.endpointId!==activeEndpointId())return;
+    // A server-side knock is not a camera choice. Confirm the local room and
+    // media before mounting a live seat or touching this computer's devices.
+    setPendingSeat(seat);setNetworkSheet('join');
+  }, []);
+  const startSeat = useCallback(async(seat: GuestSeatSpec,signal:AbortSignal) => {
+    const current=()=>{if(signal.aborted)throw new DOMException('The invitation was closed.','AbortError');};
+    current();
+    if(seat.endpointId!==activeEndpointId())throw Error('The workspace changed. Open the invitation again.');
+    let own:LiveRoom|undefined;
+    if(seat.videoSource==='program'){
+      const endpoint=endpoints.find(e=>e.id===activeEndpointId());
+      if(!endpoint)throw Error('Choose a local workspace first.');
+      own=(await ipc.liveListRooms(endpoint.id)).find(room=>room.id===seat.localRoomId&&(!room.endpoint_id||room.endpoint_id===endpoint.id));
+      current();
+      if(!own)throw Error('The selected local room is no longer available. Choose another room.');
+      const [engine,captures]=await Promise.all([ipc.liveEngineStatus(),Promise.all(endpoints.map(e=>recording.list(e.id)))]);current();
+      if(engine.session_state!=='idle'||captures.some(rows=>rows.some(row=>row.status==='recording')))throw Error('Start the program appearance before streaming or recording locally. Webcam-only appearances can join while output is active.');
+      const serverRoom=roomMetadata(own).server_room_id;
+      if(serverRoom&&isBoomin(endpoint)){
+        const access=await myRoomAccess(endpoint.id,serverRoom);
+        current();
+        if(!access.known||!access.can.manage)throw Error('Host or manager access to the selected local room is required before sending its Set.');
+      }
+      if(activeEndpointId()!==endpoint.id)throw Error('The workspace changed. Open the invitation again.');
+    }
+    current();
+    if(seat.endpointId!==activeEndpointId())throw Error('The workspace changed. Open the invitation again.');
     roomExit.current!.cancel();
     markRoomClick();
-    const own = [...roomsRef.current].sort((a, b) => (b.last_live_at ?? "").localeCompare(a.last_live_at ?? ""))[0];
+    setNetworkSheet(null);setPendingSeat(undefined);
     setView({ kind: "seat", room: own, seat });
-  }, []);
+  }, [endpoints]);
 
 
   if (view.kind === "opening") return withExitCover(<RoomOpening name={view.room.name} onLeave={back} />);
@@ -494,6 +536,7 @@ export function Home({
     );
   }
   if (view.kind === "seat") {
+    if(view.seat.videoSource==='webcam')return withExitCover(<ProducerGuestView spec={view.seat} onLeave={back}/>);
     return withExitCover(
       <LiveView
         key={`seat:${view.seat.joinUrl}`}
@@ -570,18 +613,25 @@ export function Home({
           avatarUrl={meAvatar}
           surface={surface}
           onSurface={(s) => {
+            setNetworkSheet(null);
             closeSettings();
             setSurface(s);
             setView({ kind: "home" });
           }}
-          onCompose={() => { closeSettings(); setView({ kind: "compose" }); }}
-          onProfile={() => setAccountOpen((v) => !v)}
+          onCompose={() => { closeSettings(); setNetworkSheet(null); setView({ kind: "compose" }); }}
+          onProfile={() => {setNetworkSheet(null);setAccountOpen((v) => !v);}}
           settingsOpen={settingsOpen}
           updateAvailable={updater.version !== null}
           onSettings={() => (settingsOpen ? closeSettings() : openSettings())}
           onBack={closeSettings}
+          messagesOpen={networkSheet==='messages'}
+          unread={networkUnread}
+          onMessages={()=>{closeSettings();setAccountOpen(false);setView({kind:'home'});setNetworkSheet(current=>current==='messages'?null:'messages');}}
+          onJoin={()=>{closeSettings();setAccountOpen(false);setView({kind:'home'});setPendingSeat(undefined);setNetworkSheet('join');}}
         />
       )}
+      {networkSheet==='messages'&&<aside className="producer-network-sheet" aria-label="Producer messages"><NetworkMessages endpoint={endpoints.find(e=>e.id===activeId)??null} onClose={()=>setNetworkSheet(null)} onConnections={()=>{setNetworkSheet(null);setSurface('rooms');setView({kind:'home'});}} onUnreadChange={setNetworkUnread}/></aside>}
+      {networkSheet==='join'&&<aside className="producer-network-sheet join-sheet"><ProducerJoin key={`${activeId}:${pendingSeat?.joinUrl??'link'}`} endpoint={endpoints.find(e=>e.id===activeId)??null} rooms={rooms.filter(r=>r.endpoint_id===activeId)} invitation={pendingSeat} onClose={()=>{setNetworkSheet(null);setPendingSeat(undefined);}} onEnter={startSeat}/></aside>}
       {view.kind === "console" && (
         <ConsoleHost
           endpoint={endpoints.find((e) => e.id === activeId) ?? endpoints.find((e) => e.kind === "connected") ?? null}
@@ -3577,6 +3627,8 @@ const railIc = {
       <path d="M19 12H5M12 19l-7-7 7-7" />
     </svg>
   ),
+  messages: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M20 11.5a8 8 0 0 1-8 8H4l-2 2v-10a9 9 0 1 1 18 0Z"/><path d="M7 9h9M7 13h6"/></svg>,
+  link: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="m10 13 4-4M8 16l-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 1 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0" transform="translate(1 0)"/></svg>,
 };
 
 /** The profile popout: who you are acting as, and the brand switch.
@@ -3595,6 +3647,7 @@ function HomeRail({
   updateAvailable,
   onSettings,
   onBack,
+  messagesOpen,unread,onMessages,onJoin,
 }: {
   brandName: string;
   /** The account's profile picture once the session serves it; the
@@ -3611,6 +3664,10 @@ function HomeRail({
   updateAvailable: boolean;
   onSettings: () => void;
   onBack: () => void;
+  messagesOpen:boolean;
+  unread:number;
+  onMessages:()=>void;
+  onJoin:()=>void;
 }) {
   return (
     <nav className="home-rail">
@@ -3624,12 +3681,14 @@ function HomeRail({
           <i className="home-rail-presence" />
         </button>
       )}
-      <button className={surface === "rooms" && !settingsOpen ? "on" : ""} title="Rooms" onClick={() => onSurface("rooms")}>
+      <button className={surface === "rooms" && !settingsOpen && !messagesOpen ? "on" : ""} title="Rooms" onClick={() => onSurface("rooms")}>
         {railIc.onair}
       </button>
-      <button className={surface === "manager" && !settingsOpen ? "on" : ""} title="Manager" onClick={() => onSurface("manager")}>
+      <button className={surface === "manager" && !settingsOpen && !messagesOpen ? "on" : ""} title="Manager" onClick={() => onSurface("manager")}>
         {railIc.manager}
       </button>
+      <button className={`producer-messages-button${messagesOpen?' on':''}`} title="Messages" aria-label="Messages" aria-expanded={messagesOpen} onClick={onMessages}>{railIc.messages}{unread>0&&<span className="producer-messages-badge">{unread>99?'99+':unread}</span>}</button>
+      <button title="Join a Producer" aria-label="Join a Producer" onClick={onJoin}>{railIc.link}</button>
       <div className="home-rail-spring" />
       <button title="New post" onClick={onCompose}>{railIc.plus}</button>
       <button className={`home-settings-button${settingsOpen ? " on" : ""}`} title={updateAvailable ? "Settings — update available" : "Settings"} aria-label={updateAvailable ? "Settings — update available" : "Settings"} onClick={onSettings}>

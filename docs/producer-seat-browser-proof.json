@@ -1,0 +1,22 @@
+{
+  "source": "synthetic canvas and oscillator only",
+  "nativeDevicesOpened": false,
+  "waitingOpenedMedia": false,
+  "firstVideoMsFromSession": 317,
+  "sampledDecodedFps": 19.5,
+  "reconnectMs": 13607,
+  "before": {
+    "frames": 4,
+    "audioBytes": 626
+  },
+  "after": {
+    "frames": 4,
+    "audioBytes": 887
+  },
+  "captures": 1,
+  "localTracksStopped": true,
+  "allMediaPeersClosed": true,
+  "sessionRequests": 3,
+  "at": "2026-11-08T16:47:23.772Z",
+  "scope": "Browser legacy guest transport only; not a real Mac/Windows or native LiveKit media qualification"
+}
