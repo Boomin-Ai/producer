@@ -13,6 +13,10 @@ on:
         description: "Include the native LiveKit guest runtime in the Apple Silicon candidate"
         type: boolean
         default: false
+      windows_only:
+        description: "Publish a Windows manual-download patch without changing the shared latest release"
+        type: boolean
+        default: false
       resume_windows_run:
         description: "Resume only after a prior public build passed Windows install and failed the FFmpeg prerequisite"
         type: string
@@ -54,6 +58,7 @@ jobs:
       NATIVE_GUEST: ${{ inputs.native_guest }}
       PUBLISH_RELEASE: ${{ inputs.publish }}
       RESUME_WINDOWS_RUN: ${{ inputs.resume_windows_run }}
+      WINDOWS_ONLY: ${{ inputs.windows_only }}
     outputs:
       release_id: ${{ steps.draft.outputs.release_id }}
       source_sha: ${{ steps.draft.outputs.source_sha }}
@@ -84,6 +89,7 @@ jobs:
               assert os.environ['NATIVE_GUEST'] == 'true', 'Public dispatch must set native_guest=true'
           repo, sha = os.environ['GITHUB_REPOSITORY'], os.environ['GITHUB_SHA']
           resume = os.environ.get('RESUME_WINDOWS_RUN', '')
+          assert not (resume and os.environ.get('WINDOWS_ONLY') == 'true'), 'Windows-only publication cannot resume a multi-platform release'
           if resume:
               assert os.environ['RELEASE_EVENT'] == 'workflow_dispatch' and os.environ['PUBLISH_RELEASE'] == 'true'
               proof = json.loads(subprocess.check_output(['python3', 'scripts/validate-staged-release.py'], env=dict(os.environ, RELEASE_VERSION=version)))
@@ -170,7 +176,7 @@ jobs:
   # Windows exe here would race the live one for the same asset names, and
   # tauri-action's latest.json entry would point updaters at a stub build.
   build:
-    if: ${{ inputs.promote_run == '' && inputs.resume_windows_run == '' && (github.event_name == 'push' || inputs.publish) }}
+    if: ${{ !inputs.windows_only && inputs.promote_run == '' && inputs.resume_windows_run == '' && (github.event_name == 'push' || inputs.publish) }}
     needs: [validate-public-source]
     permissions:
       contents: write
@@ -252,7 +258,7 @@ jobs:
   #     absent artifact = silent stub build — guarded below with otool)
   #   engine inside the .app BEFORE notarization    (Apple scans nested Mach-Os)
   build-macos-arm64-live:
-    if: ${{ !cancelled() && inputs.promote_run == '' && inputs.resume_windows_run == '' && (needs.validate-public-source.result == 'success' || (github.event_name == 'workflow_dispatch' && !inputs.publish)) }}
+    if: ${{ !cancelled() && !inputs.windows_only && inputs.promote_run == '' && inputs.resume_windows_run == '' && (needs.validate-public-source.result == 'success' || (github.event_name == 'workflow_dispatch' && !inputs.publish)) }}
     needs: [validate-public-source]
     permissions:
       contents: write
@@ -772,7 +778,7 @@ jobs:
 
   # Keep the previous public release current until every new platform passes.
   publish-verified-release:
-    if: ${{ !cancelled() && inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) && needs.validate-public-source.result == 'success' && needs.build-windows-live.result == 'success' && ((inputs.resume_windows_run == '' && needs.build.result == 'success' && needs.build-macos-arm64-live.result == 'success') || (inputs.resume_windows_run != '' && needs.build.result == 'skipped' && needs.build-macos-arm64-live.result == 'skipped')) }}
+    if: ${{ !cancelled() && inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) && needs.validate-public-source.result == 'success' && needs.build-windows-live.result == 'success' && ((!inputs.windows_only && inputs.resume_windows_run == '' && needs.build.result == 'success' && needs.build-macos-arm64-live.result == 'success') || ((inputs.windows_only || inputs.resume_windows_run != '') && needs.build.result == 'skipped' && needs.build-macos-arm64-live.result == 'skipped')) }}
     needs: [validate-public-source, build, build-macos-arm64-live, build-windows-live]
     runs-on: ubuntu-latest
     permissions:
@@ -782,6 +788,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       PRODUCER_RELEASE_ID: ${{ needs.validate-public-source.outputs.release_id }}
       PRODUCER_SOURCE_SHA: ${{ needs.validate-public-source.outputs.source_sha }}
+      PRODUCER_WINDOWS_ONLY: ${{ inputs.windows_only }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -821,7 +828,9 @@ jobs:
               data = (out / name).read_bytes()
               assert assets[name]['size'] == len(data)
               assert assets[name]['digest'] == 'sha256:' + hashlib.sha256(data).hexdigest(), f'{name} was not staged on the reserved draft'
-          body = dict(draft=False, make_latest='true', body=(out / 'release-notes.md').read_text())
+          windows_only = os.environ.get('PRODUCER_WINDOWS_ONLY') == 'true'
+          assert receipt.get('windowsOnly', False) == windows_only
+          body = dict(draft=False, make_latest='false' if windows_only else 'true', body=(out / 'release-notes.md').read_text())
           release = json.loads(subprocess.check_output(['gh', 'api', '--method', 'PATCH', endpoint, '--input', '-'], input=json.dumps(body), text=True))
           assert not release['draft'] and not release['prerelease']
           print(release['html_url'])
