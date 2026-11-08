@@ -13,6 +13,7 @@ import sys
 SOURCE_DEFAULT = '98a2a87fadced029f6adf0ae3df223e63c0992d3'
 ENGINE_PIN = 'f8b2551c9526a0cda2d1a333dcafeff343476589119f19888dfd0cd44030ec8e'
 IDENTIFIER = 'ai.boomin.producer.sets-v2-dev'
+DEV_ORIGIN = 'http://localhost:1436'
 FEATURES = ['sets-v2-dev', 'guest-rtc-production']
 DEV_ENTITLEMENTS = {
     'com.apple.security.device.audio-input': True,
@@ -56,11 +57,19 @@ def check_source(source):
 
 
 def isolated_config(dev, source):
-    require(dev.get('identifier') == IDENTIFIER and dev.get('build', {}).get('devUrl') == 'http://localhost:1436', 'Source does not contain the expected isolated development identity/bootstrap')
+    require(dev.get('identifier') == IDENTIFIER and dev.get('build', {}).get('devUrl') == DEV_ORIGIN, 'Source does not contain the expected isolated development identity/bootstrap')
+    require(dev['build'].get('frontendDist') in [None, DEV_ORIGIN], 'Unexpected frontend override in the development overlay')
+    require('capabilities' not in dev.get('app', {}).get('security', {}), 'Keep the source default capabilities; no inline remote grants are accepted')
     result = json.loads(json.dumps(dev))
     result['productName'] = 'Producer DJ Test'
-    result['build']['frontendDist'] = str(source / 'dist')
+    # Tauri release builds derive the local app origin from frontendDist, not
+    # devUrl. Native sets-v2-dev then navigates to this exact loopback origin.
+    # A filesystem frontendDist would make that navigation remote and deny
+    # BOTH core/plugin IPC and custom app commands. Keep this CI-only override
+    # behind the exact isolated-ID/bootstrap gates; production stays bundled.
+    result['build']['frontendDist'] = DEV_ORIGIN
     for window in result.get('app', {}).get('windows', []):
+        require(window.get('label', 'main') == 'main' and window.get('url', 'index.html') in ['index.html', './index.html'], 'Unexpected window or remote navigation in development overlay')
         window['title'] = 'Producer DJ Test'
     result['bundle'] = {'targets': ['app'], 'createUpdaterArtifacts': False}
     # This unreleased dev app must not replace itself from the production updater.
@@ -123,6 +132,10 @@ def receipt(source, app, output, tools):
     submission = os.environ.get('NOTARY_SUBMISSION_ID', '')
     require(not notarized or re.fullmatch('[A-Fa-f0-9-]{36}', submission), 'Missing accepted notarization receipt')
     archive = output / 'Producer-DJ-Test-mac-arm64.zip'
+    generated_config = Path(os.environ['RUNNER_TEMP']) / 'network-mac-dev-config/candidate.json'
+    expected_config = isolated_config(json.loads((source / 'src-tauri/tauri.sets-v2-dev.conf.json').read_text()), source)
+    require(json.loads(generated_config.read_text()) == expected_config, 'Generated dev runtime configuration changed')
+    (output / 'dev-config.json').write_bytes(generated_config.read_bytes())
     native_tree = git(source, 'ls-tree', '-rz', 'HEAD', '--', 'src-tauri', 'crates', 'labs/guest-rtc/vendor')
     value = {
         'schema': 'producer.unreleased-mac-dev/1',
@@ -140,8 +153,10 @@ def receipt(source, app, output, tools):
         'artifact_visibility': 'UNRELEASED GitHub Actions artifact on a PUBLIC repository; not collaborator-private; no customer profile or credentials included.',
         'developer_id_team': team.group(1), 'notarized': notarized, 'notary_submission_id': submission or None,
         'bootstrap_url': 'http://localhost:1436/?roomInspect=1',
+        'runtime_origin': DEV_ORIGIN, 'dev_config_sha256': digest(output / 'dev-config.json'),
+        'ipc_origin_policy': 'Exact loopback frontendDist URL is the release app origin; existing local default capabilities remain unchanged; no remote capability grants added.',
         'profile_relative_database': IDENTIFIER + '/sets-v2-dev/producer.db',
-        'frontend_scope': 'Bundled snapshot from source_sha; dev startup loads live Vite 1436, whose working-tree provenance must be captured separately.',
+        'frontend_scope': 'Dev-only URL frontendDist; native startup loads live Vite 1436, whose working-tree provenance must be captured separately. Production bundled frontend configuration is unchanged.',
         'system_extension_installation': False,
         'virtual_camera_runtime': 'mac-virtualcam plugin retained for an existing installed ai.boomin.producer.camera-extension provider; installer qualification is outside this dev artifact.',
         'permissions': 'Existing profile is preserved by identity; macOS TCC/Keychain may prompt after signing/executable changes.',
@@ -155,16 +170,31 @@ def receipt(source, app, output, tools):
 
 def self_test():
     import tempfile
-    dev = {'identifier': IDENTIFIER, 'build': {'devUrl': 'http://localhost:1436'}}
+    dev = {'identifier': IDENTIFIER, 'build': {'devUrl': DEV_ORIGIN}}
+    original_dev = json.dumps(dev, sort_keys=True)
+    production = {'identifier': 'ai.boomin.producer', 'build': {'devUrl': 'http://localhost:1420', 'frontendDist': '../dist'}}
+    original_production = json.dumps(production, sort_keys=True)
     config = isolated_config(dev, Path('/candidate'))
-    require(config['identifier'] == IDENTIFIER and config['build']['devUrl'].endswith(':1436'), 'Identity test failed')
+    require(config['identifier'] == IDENTIFIER and config['build']['devUrl'] == DEV_ORIGIN and config['build']['frontendDist'] == DEV_ORIGIN, 'Exact dev identity/origin test failed')
+    require('capabilities' not in config.get('app', {}).get('security', {}), 'Unexpected inline IPC permissions')
     require(config['bundle']['createUpdaterArtifacts'] is False and config['plugins']['updater']['endpoints'] == [], 'Updater policy test failed')
     require(not any(k in DEV_ENTITLEMENTS for k in FORBIDDEN_ENTITLEMENTS), 'Entitlement scope test failed')
-    try:
-        isolated_config({'identifier': 'ai.boomin.producer'}, Path('/candidate'))
-        raise RuntimeError('Production identity was incorrectly accepted')
-    except ValueError:
-        pass
+    forbidden = [production]
+    for url in ['http://localhost:1437', 'http://127.0.0.1:1436', 'https://localhost:1436', 'http://localhost.evil:1436', 'https://producer.dev', DEV_ORIGIN + '/other', DEV_ORIGIN + '?redirect=1']:
+        forbidden.append({'identifier': IDENTIFIER, 'build': {'devUrl': url}})
+    forbidden.extend([
+        {**dev, 'build': {**dev['build'], 'frontendDist': 'https://outside.example'}},
+        {**dev, 'app': {'windows': [{'label': 'main', 'url': 'https://outside.example'}]}},
+        {**dev, 'app': {'windows': [{'label': 'other'}]}},
+        {**dev, 'app': {'security': {'capabilities': [{'remote': {'urls': ['http://*']}}]}}},
+    ])
+    for invalid in forbidden:
+        try:
+            isolated_config(invalid, Path('/candidate'))
+            raise RuntimeError('Unexpected identity/origin/grant was incorrectly accepted')
+        except ValueError:
+            pass
+    require(json.dumps(dev, sort_keys=True) == original_dev and json.dumps(production, sort_keys=True) == original_production, 'Source/production input was modified')
     with tempfile.TemporaryDirectory() as folder:
         root = Path(folder)
         names = ['Frameworks/libobs.framework/Versions/A/libobs', 'Frameworks/libobs-metal.dylib',
@@ -190,7 +220,7 @@ def self_test():
             raise RuntimeError('Different engine lock was incorrectly accepted')
         except ValueError:
             pass
-    print('PASS: isolated config/updater/entitlement policy and engine identity/integrity rejection fixtures; no build/signing/app launch.')
+    print('PASS: exact release-dev origin/default capabilities, production/source immutability, updater/entitlement policy and engine integrity fixtures; no build/signing/app launch.')
 
 
 if __name__ == '__main__':
