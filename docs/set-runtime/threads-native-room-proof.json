@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-08T13:56:12.375Z",
+  "at": "2026-11-08T14:35:51.712Z",
   "checks": [
     {
       "check": "real account and published post selected in Data connections",
@@ -20,8 +20,8 @@
     {
       "check": "Post spotlight presented in both orientations",
       "revisions": [
-        16,
-        17
+        14,
+        15
       ]
     },
     {
@@ -34,19 +34,19 @@
     {
       "check": "Channel overview presented in both orientations",
       "revisions": [
-        28,
-        29
+        30,
+        31
       ]
     },
     {
       "after": [
-        28,
-        29
+        30,
+        31
       ],
       "attempt": 1,
       "before": [
-        28,
-        29
+        30,
+        31
       ],
       "check": "settled snapshot polling",
       "renderingContinues": true,
@@ -54,7 +54,7 @@
       "unchangedRevisions": true
     }
   ],
-  "generation": 4,
+  "generation": 3,
   "kind": "threads-native-room",
   "ok": true,
   "stage": "ready for visual review",
@@ -62,10 +62,32 @@
   "applicationVersion": "0.4.87",
   "bundleIdentifier": "ai.boomin.producer.sets-v2-dev",
   "testScope": "Full native app, real owned account; no public publishing",
-  "binarySha256": "7a1cdd48929b71726bdbe4be9d35a84310f55ed36b7f061e98eeaa08dcbcea8f",
+  "binarySha256": "05dba8d3aa4cf35965505657f7610674e0568264d187b3971003beabd1f9aa7f",
   "reload": {
     "sameNativeProcess": true,
     "captureTimeouts": 0,
-    "duplicateCaptureWarnings": 0
+    "duplicateCaptureWarnings": 0,
+    "foregroundKeychainRetrySucceeded": true,
+    "additionalSavedRoomReloads": [
+      {
+        "at": "2026-11-08T14:37:01.707Z",
+        "generation": 5,
+        "cameraReady": true,
+        "revisions": [
+          4,
+          5
+        ]
+      },
+      {
+        "at": "2026-11-08T14:38:24.530Z",
+        "generation": 7,
+        "cameraReady": true,
+        "revisions": [
+          5,
+          6
+        ]
+      }
+    ],
+    "cameraStarts": 3
   }
 }
