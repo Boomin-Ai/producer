@@ -124,6 +124,12 @@ jobs:
         run: |
           node scripts/test-return-audio-browser.mjs
           node scripts/test-program-expansion-browser.mjs
+      - name: Verify beta setup, consent and responsive entry screens
+        env:
+          PRODUCER_BROWSER_CHANNEL: chromium
+        run: |
+          node scripts/test-beta-onboarding-browser.mjs
+          node scripts/test-entry-presentation-browser.mjs
       - name: Verify library previews without changing room assignments or live playback
         run: |
           set -euo pipefail
