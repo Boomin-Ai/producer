@@ -156,7 +156,13 @@ artifact_name() {
   # NOT `local arch="${2:-$(lock_get ...)}"`: a failing command substitution in a
   # `local` declaration does NOT trip set -e, so that spelling silently yields an
   # empty arch and a name like producer-libobs-macos--<hash>.
-  if [[ -z $arch ]]; then arch="$(lock_get "['arch']")" || return 1; fi
+  if [[ -z $arch ]]; then
+    if [[ $os == macos && $(uname -s) == Darwin ]]; then
+      arch="$(uname -m)"
+    else
+      arch="$(lock_get "['arch']")" || return 1
+    fi
+  fi
   echo "producer-libobs-${os}-${arch}-$(lock_hash)"
 }
 

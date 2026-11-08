@@ -13,7 +13,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SRC="$REPO_ROOT/engine/obs-studio/plugins/mac-virtualcam/src/camera-extension"
+SRC="${PRODUCER_OBS_SOURCE:-$REPO_ROOT/engine/obs-studio}/plugins/mac-virtualcam/src/camera-extension"
 OUT_DIR="$REPO_ROOT/engine/camera-extension"
 
 EXT_ID="${PRODUCER_VCAM_EXTENSION_ID:-ai.boomin.producer.camera-extension}"
@@ -52,7 +52,8 @@ PYRETIRED
 fi
 
 swiftc -O -swift-version 5 \
-  -target "arm64-apple-macos13.0" \
+  -module-cache-path "${CLANG_MODULE_CACHE_PATH:-$OUT_DIR/module-cache}" \
+  -target "$(uname -m)-apple-macos13.0" \
   -framework CoreMediaIO -framework CoreMedia -framework Foundation \
   -o "$BUNDLE/Contents/MacOS/$EXT_ID" \
   "$WORK"/*.swift

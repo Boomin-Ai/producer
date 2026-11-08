@@ -1,0 +1,115 @@
+name: Signed Intel development candidate
+
+on:
+  push:
+    branches: [dev/intel-live-2026-11-08]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: intel-dev-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  signed-intel:
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+    env:
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_DEV_INCREMENTAL: 'false'
+      PRODUCER_SOURCE_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Build frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+      - name: Prepare pinned Intel engine and Producer camera pair
+        env:
+          # Hosted runners do not qualify physical GPU behavior. Camera input
+          # and OpenGL startup are separately verified on the Intel dev Mac.
+          PRODUCER_METAL_COMPILE_ONLY: '1'
+          PRODUCER_ENGINE_PACK: '0'
+        run: |
+          bash scripts/extract-engine.sh
+          source scripts/engine-lib.sh
+          echo "PRODUCER_ENGINE_DIR=$ARTIFACT_DIR/$(artifact_name)" >> "$GITHUB_ENV"
+      - name: Build engine-linked development app
+        run: |
+          bun run tauri build --debug --bundles app --config '{"bundle":{"createUpdaterArtifacts":false,"macOS":{"minimumSystemVersion":"13.0"}}}'
+          APP=src-tauri/target/debug/bundle/macos/Producer.app
+          otool -L "$APP/Contents/MacOS/Producer" | grep -q libobs
+          lipo "$APP/Contents/MacOS/Producer" -verify_arch x86_64
+          echo "APP=$APP" >> "$GITHUB_ENV"
+      - name: Import existing Producer signing identity and camera profile
+        env:
+          SIGN_IDENT: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          CERT_B64: ${{ secrets.APPLE_CERTIFICATE }}
+          CERT_PW: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          PROFILE_B64: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+        run: |
+          set -euo pipefail
+          for key in SIGN_IDENT CERT_B64 PROFILE_B64; do
+            test -n "${!key}" || { echo "Required signing input $key is missing" >&2; exit 1; }
+          done
+          KC="$RUNNER_TEMP/intel-dev.keychain-db"
+          security create-keychain -p ci "$KC"
+          security default-keychain -s "$KC"
+          security unlock-keychain -p ci "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          printf '%s' "$CERT_B64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$CERT_PW" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ci "$KC" >/dev/null
+          printf '%s' "$PROFILE_B64" | base64 --decode > scripts/embedded.provisionprofile
+      - name: Assemble, sign and verify camera installation capability
+        env:
+          CODESIGN_IDENT: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          bash scripts/assemble-engine-bundle.sh "$APP" "$PRODUCER_ENGINE_DIR"
+          codesign --force --options runtime --timestamp --entitlements .github/macos/producer.entitlements --sign "$CODESIGN_IDENT" "$APP"
+          bash scripts/engine-closure.sh "$APP/Contents"
+          bash scripts/check-no-qt.sh "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          python3 scripts/check-camera-bundle.py "$APP"
+          for ext in "$APP"/Contents/Library/SystemExtensions/*.systemextension; do
+            EXE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$ext/Contents/Info.plist")
+            lipo "$ext/Contents/MacOS/$EXE" -verify_arch x86_64
+          done
+      - name: Notarize and staple development candidate
+        env:
+          NOTARY_ID: ${{ secrets.APPLE_ID }}
+          NOTARY_PW: ${{ secrets.APPLE_PASSWORD }}
+          NOTARY_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/Producer-submission.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/Producer-submission.zip" --apple-id "$NOTARY_ID" --password "$NOTARY_PW" --team-id "$NOTARY_TEAM" --wait --output-format json > "$RUNNER_TEMP/notary.json"
+          python3 - "$RUNNER_TEMP/notary.json" <<'PY'
+          import json,sys
+          result=json.load(open(sys.argv[1]))
+          print('Notarization:', result['status'])
+          assert result['status']=='Accepted', 'Development candidate was not accepted'
+          PY
+          xcrun stapler staple "$APP"
+          xcrun stapler validate "$APP"
+          spctl -a -t exec -vv "$APP"
+          mkdir -p candidate
+          ditto -c -k --keepParent "$APP" candidate/Producer-Intel-Dev.zip
+          shasum -a 256 candidate/Producer-Intel-Dev.zip > candidate/Producer-Intel-Dev.zip.sha256
+          printf '%s\n' "$PRODUCER_SOURCE_SHA" > candidate/source-revision.txt
+          cp "$RUNNER_TEMP/notary.json" candidate/notarization.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Producer-Intel-Dev-${{ github.sha }}
+          path: candidate/
+          if-no-files-found: error
+          retention-days: 14

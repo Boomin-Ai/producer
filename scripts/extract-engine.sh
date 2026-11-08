@@ -9,21 +9,35 @@ source "$(dirname "${BASH_SOURCE[0]}")/engine-lib.sh"
 DMG_URL="$(lock_get "['fallback']['url']")"
 DMG_SHA="$(lock_get "['fallback']['sha256']")"
 DMG_NAME="$(lock_get "['fallback']['asset']")"
+if [[ $(uname -m) == x86_64 ]]; then
+  INTEL_PIN="engine/macos-intel-fallback.json"
+  [[ $(lock_get_file "$INTEL_PIN" "d['obs_version']") == $(lock_get "['obs']['ref']") ]] \
+    || { echo "FATAL: Intel runtime pin does not match obs.lock" >&2; exit 1; }
+  DMG_URL="$(lock_get_file "$INTEL_PIN" "d['url']")"
+  DMG_SHA="$(lock_get_file "$INTEL_PIN" "d['sha256']")"
+  DMG_NAME="$(lock_get_file "$INTEL_PIN" "d['asset']")"
+fi
 DMG_PATH="$CACHE_DIR/$DMG_NAME"
 
 mkdir -p "$CACHE_DIR"
 if [[ ! -f $DMG_PATH ]]; then
   echo "downloading $DMG_URL"
-  curl -sL -o "$DMG_PATH" "$DMG_URL"
+  curl -fL --retry 2 -o "$DMG_PATH" "$DMG_URL"
 fi
 echo "$DMG_SHA  $DMG_PATH" | shasum -a 256 -c - || {
   echo "FATAL: DMG checksum mismatch against obs.lock pin" >&2; exit 1; }
 
-MOUNT="$(mktemp -d)/obsdmg"
-mkdir -p "$MOUNT"
-hdiutil attach -nobrowse -readonly -quiet -mountpoint "$MOUNT" "$DMG_PATH"
-trap 'hdiutil detach -quiet "$MOUNT" || true' EXIT
-SRC="$MOUNT/OBS.app/Contents"
+# Finder can mount the verified image when a sandbox cannot access disk devices.
+if [[ -n ${PRODUCER_OBS_CONTENTS:-} ]]; then
+  SRC="$PRODUCER_OBS_CONTENTS"
+else
+  MOUNT="$(mktemp -d)/obsdmg"
+  mkdir -p "$MOUNT"
+  hdiutil attach -nobrowse -readonly -mountpoint "$MOUNT" "$DMG_PATH"
+  trap 'hdiutil detach -quiet "$MOUNT" || true' EXIT
+  SRC="$MOUNT/OBS.app/Contents"
+fi
+lipo "$SRC/Frameworks/libobs.framework/Versions/A/libobs" -verify_arch "$(uname -m)"
 
 NAME="$(artifact_name)"
 STAGE="$ARTIFACT_DIR/$NAME"
@@ -73,17 +87,34 @@ done
 # licenses (GPL compliance: binaries ship with license texts; pinned source +
 # this script reproduce the artifact)
 cp -R "$SRC/Resources/license/." "$STAGE/licenses/" 2>/dev/null || true
-[[ -f "$REPO_ROOT/engine/obs-studio/COPYING" ]] && cp "$REPO_ROOT/engine/obs-studio/COPYING" "$STAGE/licenses/COPYING.obs-studio"
+if [[ -f "$REPO_ROOT/engine/obs-studio/COPYING" ]]; then
+  cp "$REPO_ROOT/engine/obs-studio/COPYING" "$STAGE/licenses/COPYING.obs-studio"
+fi
 
 # The official renderer lacks Producer's current-frame handoff. Rebuild only
 # that renderer from the same OBS pin and run its real-GPU checks locally.
 PRODUCER_ENGINE_DIR="$STAGE" "$REPO_ROOT/scripts/build-cutout-metal-lab.sh"
 cp "$REPO_ROOT/src-tauri/target/cutout-lab/libobs-metal-current-frame.dylib" "$STAGE/Frameworks/libobs-metal.dylib"
 
+# The extracted OBS camera pair uses OBS's identifiers. Build Producer's pair
+# from the same pinned source downloaded by the standalone Metal builder.
+export PRODUCER_OBS_SOURCE="$REPO_ROOT/src-tauri/target/cutout-lab/engine-source"
+export PRODUCER_SIMDE_INCLUDE="$REPO_ROOT/src-tauri/target/cutout-lab/simde"
+"$REPO_ROOT/scripts/build-virtualcam-plugin.sh" --stage "$STAGE"
+"$REPO_ROOT/scripts/build-camera-extension.sh"
+"$REPO_ROOT/scripts/build-retired-camera-extension.sh"
+rm -rf "$STAGE/SystemExtensions"
+mkdir -p "$STAGE/SystemExtensions"
+cp -R "$REPO_ROOT/engine/camera-extension/." "$STAGE/SystemExtensions/"
+cp "$PRODUCER_OBS_SOURCE/COPYING" "$STAGE/licenses/COPYING.obs-studio"
+bash "$REPO_ROOT/scripts/build-extracted-browser.sh" "$STAGE"
+
 # closure re-check against the staged artifact itself (zero-Qt gate, A9)
 "$REPO_ROOT/scripts/engine-closure.sh" "$STAGE" > /dev/null \
   || { echo "FATAL: staged artifact failed closure/Qt gate" >&2; exit 1; }
 
 write_manifest "$STAGE" "official-release-extract:$DMG_NAME"
-pack_artifact "$STAGE"
+if [[ ${PRODUCER_ENGINE_PACK:-1} == 1 ]]; then
+  pack_artifact "$STAGE"
+fi
 echo "engine artifact staged at $STAGE"

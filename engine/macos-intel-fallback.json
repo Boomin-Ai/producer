@@ -1,0 +1,6 @@
+{
+  "obs_version": "32.1.2",
+  "asset": "OBS-Studio-32.1.2-macOS-Intel.dmg",
+  "url": "https://github.com/obsproject/obs-studio/releases/download/32.1.2/OBS-Studio-32.1.2-macOS-Intel.dmg",
+  "sha256": "f7febee4c52e97930ffa9d8bcae79ee4c60c411827688cfbe36bc53edc51616e"
+}
