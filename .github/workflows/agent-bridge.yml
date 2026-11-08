@@ -1,0 +1,29 @@
+name: Agent bridge
+on:
+  pull_request:
+    paths: ['tools/agent-bridge/**', '.github/workflows/agent-bridge.yml']
+  push:
+    branches: ['tools/mac-windows-agent-bridge']
+    paths: ['tools/agent-bridge/**', '.github/workflows/agent-bridge.yml']
+jobs:
+  bridge:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --test tools/agent-bridge/bridge.test.mjs
+      - run: node --check tools/agent-bridge/client.mjs
+      - run: node --check tools/agent-bridge/install-macos.mjs
+      - name: Parse Windows installer without executing it
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $parseErrors = $null
+          $tokens = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path tools/agent-bridge/install-windows.ps1), [ref]$tokens, [ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count) { throw ($parseErrors | Out-String) }

@@ -1,0 +1,14 @@
+{
+  "name": "producer-agent-bridge",
+  "main": "relay.mjs",
+  "compatibility_date": "2026-11-08",
+  "workers_dev": true,
+  "durable_objects": { "bindings": [{ "name": "BRIDGE", "class_name": "Bridge" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Bridge"] }],
+  "vars": {
+    "REPO": "Boomin-Ai/producer",
+    "ALLOWED_ISSUES": "131",
+    "ALLOWED_ACTORS": "ikleveland"
+  },
+  "observability": { "enabled": false }
+}
