@@ -11,9 +11,11 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 source scripts/engine-lib.sh
 export PRODUCER_ENGINE_DIR="${PRODUCER_ENGINE_DIR:-$ARTIFACT_DIR/$(artifact_name)}"
+export PRODUCER_REQUIRE_ENGINE=1
 [[ -f "$PRODUCER_ENGINE_DIR/Frameworks/libobs.framework/Versions/A/libobs" ]] \
   || { echo "FATAL: live dev requires an engine; run bash scripts/extract-engine.sh first" >&2; exit 1; }
 lipo "$PRODUCER_ENGINE_DIR/Frameworks/libobs.framework/Versions/A/libobs" -verify_arch "$(uname -m)"
+bash scripts/check-macos-engine.sh "$PRODUCER_ENGINE_DIR" "$(uname -m)"
 # Keep compiler caches inside the checkout, including in sandboxed dev environments.
 export CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-$REPO_ROOT/src-tauri/target/clang-modules}"
 mkdir -p "$CLANG_MODULE_CACHE_PATH"

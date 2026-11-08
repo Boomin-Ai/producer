@@ -115,6 +115,11 @@ Then in Producer: **Use my own server**, paste the URL and your primary token.
 
 ## Develop
 
+For native live features on either Intel or Apple Silicon macOS, use
+`make setup` then `make dev`. See the [shared Mac build contract](docs/MACOS-BUILDS.md)
+for required engine components, signing and release checks. The frontend-only
+loop does not verify camera permissions, room output or virtual-camera setup.
+
 Requires [Bun](https://bun.sh) ≥ 1.3 and [Rust](https://rustup.rs) (stable).
 On Windows: Visual Studio Build Tools (MSVC) + WebView2. On macOS: Xcode
 Command Line Tools. Full setup in [CONTRIBUTING.md](./CONTRIBUTING.md).

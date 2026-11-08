@@ -52,6 +52,7 @@ fn link_live_engine() {
 
 fn link_live_engine_macos() {
     println!("cargo:rerun-if-env-changed=PRODUCER_ENGINE_DIR");
+    println!("cargo:rerun-if-env-changed=PRODUCER_REQUIRE_ENGINE");
     println!("cargo:rerun-if-changed=../engine/obs.lock");
 
     let engine_dir = std::env::var("PRODUCER_ENGINE_DIR")
@@ -59,11 +60,20 @@ fn link_live_engine_macos() {
         .ok()
         .or_else(|| find_default_artifact("macos"));
     let Some(engine_dir) = engine_dir else {
+        assert!(
+            std::env::var("PRODUCER_REQUIRE_ENGINE").as_deref() != Ok("1"),
+            "live Mac build requires its native engine; run make setup first"
+        );
         println!("cargo:warning=live engine artifact not found; building without live support");
         return;
     };
     let frameworks = engine_dir.join("Frameworks");
     if !frameworks.join("libobs.framework").exists() {
+        assert!(
+            std::env::var("PRODUCER_REQUIRE_ENGINE").as_deref() != Ok("1"),
+            "live Mac build is missing libobs.framework under {}",
+            frameworks.display()
+        );
         println!(
             "cargo:warning=no libobs.framework under {}; building without live support",
             frameworks.display()
@@ -79,7 +89,11 @@ fn link_live_engine_macos() {
         .args(["-verify_arch", arch])
         .status()
         .expect("lipo is required to validate the macOS engine architecture");
-    assert!(status.success(), "engine {} does not support {arch}", binary.display());
+    assert!(
+        status.success(),
+        "engine {} does not support {arch}",
+        binary.display()
+    );
 
     println!("cargo:rustc-cfg=have_engine");
     compile_sets_v2();

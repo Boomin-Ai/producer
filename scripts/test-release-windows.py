@@ -48,8 +48,18 @@ linux_job = workflow.split("\n  build:\n", 1)[1].split("\n  build-macos-arm64-li
 mac_job = workflow.split("\n  build-macos-arm64-live:\n", 1)[1].split("\n  build-windows-live:", 1)[0]
 assert "!inputs.windows_only" in linux_job.split("steps:", 1)[0]
 assert "!inputs.windows_only" in mac_job.split("steps:", 1)[0]
+intel_job = workflow.split("\n  build-macos-intel-live:\n", 1)[1].split("\n  build-windows-live:", 1)[0]
+assert 'macos-latest' not in linux_job, 'Intel must not return to the engine-less Linux matrix'
+assert 'runs-on: macos-15-intel' in intel_job
+assert 'Prepare complete pinned Intel live engine' in intel_job
+assert 'PRODUCER_REQUIRE_ENGINE:' in intel_job and '--features guest-rtc-production' in intel_job
+assert 'scripts/check-macos-engine.sh' in intel_job and 'scripts/check-camera-bundle.py' in intel_job
+assert 'UPD="Producer_x64.app.tar.gz"' in intel_job
+assert 'Stage notarized Intel updater archive' in intel_job
 publisher = workflow.split("\n  publish-verified-release:\n", 1)[1]
 assert "needs.build-windows-live.result == 'success'" in publisher
+assert "needs.build-macos-intel-live.result == 'success'" in publisher
+assert 'build-macos-intel-live' in publisher.split('runs-on:', 1)[0]
 assert "PRODUCER_WINDOWS_ONLY:" in publisher
 publish_script = publisher.split("name: Publish the verified release", 1)[1]
 publish_script = publish_script.split("python3 - <<'PY'\n", 1)[1].rsplit("          PY", 1)[0]
