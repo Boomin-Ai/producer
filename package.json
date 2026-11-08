@@ -37,7 +37,7 @@
     "test:presentation-native-output": "node scripts/test-presentation-output.mjs --native",
     "test:scene-restoration": "node scripts/test-scene-restoration.mjs",
     "test:guest-reconnect": "node scripts/test-guest-reconnect.mjs",
-    "test:producer-network": "node scripts/test-producer-network-links.mjs && node scripts/test-producer-local-room.mjs && node scripts/test-network-messages.mjs && node scripts/test-producer-seat.mjs",
+    "test:producer-network": "node scripts/test-producer-network-links.mjs && node scripts/test-producer-local-room.mjs && node scripts/test-network-messages.mjs && node scripts/test-producer-seat.mjs && node scripts/test-producer-guest-rtc.mjs",
     "test:guest-reconnect-browser": "node scripts/test-guest-reconnect-browser.mjs",
     "test:producer-seat": "node scripts/test-producer-seat.mjs",
     "test:producer-seat-browser": "node scripts/test-producer-seat-browser.mjs",

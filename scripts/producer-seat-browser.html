@@ -5,7 +5,7 @@ window.runProducerSeatTest=async()=>{
  const canvas=document.createElement('canvas');canvas.width=640;canvas.height=360;const ctx=canvas.getContext('2d');let tick=0;
  const drawing=setInterval(()=>{ctx.fillStyle=tick++%2?'#00bb88':'#2255aa';ctx.fillRect(0,0,640,360);},50);
  const input=canvas.captureStream(20),audio=new AudioContext(),osc=audio.createOscillator(),dest=audio.createMediaStreamDestination();osc.frequency.value=440;osc.connect(dest);osc.start();await audio.resume();dest.stream.getAudioTracks().forEach(t=>input.addTrack(t));
- const sockets=[],hosts=[],requests=[];let captureCount=0,accepted=false,firstSessionAt=0;
+ const sockets=[],hosts=[],requests=[];let captureCount=0,accepted=false,firstSessionAt=0,mainMediaOrder=[];
  class Socket{
   static OPEN=1;
   constructor(url){this.url=url;this.readyState=0;this.queue=Promise.resolve();this.ice=[];sockets.push(this);
@@ -15,13 +15,19 @@ window.runProducerSeatTest=async()=>{
   deliver(payload){if(this.readyState===1)queueMicrotask(()=>this.onmessage?.({data:JSON.stringify({type:'signal',payload:{...payload,peer:'main'}})}));}
   send(raw){const {payload}=JSON.parse(raw);if(!this.host||payload?.peer!=='main')return;this.queue=this.queue.then(async()=>{
    if(this.readyState!==1)return;
-   if(payload.kind==='hello'&&hosts.length>1&&!this.host.localDescription){this.host.addTransceiver('video',{direction:'recvonly'});this.host.addTransceiver('audio',{direction:'recvonly'});await this.host.setLocalDescription(await this.host.createOffer());this.deliver({kind:'sdp',description:this.host.localDescription});}
+   if(payload.kind==='hello'&&hosts.length>1&&!this.host.localDescription){
+    // This remains the same logical main peer. MediaStream.getTracks() does
+    // not guarantee video-first order; preserve the first negotiated m-lines
+    // rather than making an invalid replacement offer to the retained guest.
+    if(!mainMediaOrder.length)throw Error('Missing negotiated main media order');
+    for(const kind of mainMediaOrder)this.host.addTransceiver(kind,{direction:'recvonly'});
+    await this.host.setLocalDescription(await this.host.createOffer());this.deliver({kind:'sdp',description:this.host.localDescription});}
    else if(payload.description){
     // The host is the impolite side, matching GuestRenderPage's fixed roles.
     // Its new offer wins a collision with the retained guest's ICE restart.
     if(payload.description.type==='offer'&&this.host.signalingState!=='stable')return;
     if(payload.description.type==='answer'&&this.host.signalingState!=='have-local-offer')return;
-    await this.host.setRemoteDescription(payload.description);for(const ice of this.ice.splice(0))await this.host.addIceCandidate(ice);if(payload.description.type==='offer'){await this.host.setLocalDescription(await this.host.createAnswer());this.deliver({kind:'sdp',description:this.host.localDescription});}}
+    await this.host.setRemoteDescription(payload.description);if(!mainMediaOrder.length)mainMediaOrder=this.host.getTransceivers().map(t=>t.receiver.track.kind);for(const ice of this.ice.splice(0))await this.host.addIceCandidate(ice);if(payload.description.type==='offer'){await this.host.setLocalDescription(await this.host.createAnswer());this.deliver({kind:'sdp',description:this.host.localDescription});}}
    else if(payload.candidate){if(this.host.remoteDescription)await this.host.addIceCandidate(payload.candidate);else this.ice.push(payload.candidate);}
   }).catch(error=>{this.error=error.message;});}
   close(){if(this.readyState===3)return;this.readyState=3;this.host?.close();this.onclose?.();}

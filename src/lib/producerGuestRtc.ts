@@ -136,7 +136,7 @@ export class ProducerGuestRtc {
     if (sessionValue === undefined) {
       const minted = await this.json("session", {connection_ticket: this.ticket,
         expected: {run_id: e.run_id, control_revision: e.control_revision, host_lease_epoch: e.host_lease_epoch}});
-      if (minted.status === 401) this.ticket=null;
+      if (minted.status === 401 || minted.status === 409) {this.ticket=null;this.ticketRenewAt=0;}
       if (minted.status !== 200) throw new Error("Guest authorization changed while joining");
       sessionValue = minted.value;
     }
@@ -226,7 +226,8 @@ export class ProducerGuestRtc {
       } else state = await this.json("state?stage_audio=1");
       if (this.stopRequested) return;
       if (state.status === 404 || state.status === 410) {await this.close(); this.input.onState("gone"); return;}
-      if (state.status === 409) {await this.retire(); this.input.onState("waiting");}
+      // A host gap invalidates the run-bound connection; keep caller capture alive.
+      if (state.status === 409) {this.ticket=null;this.ticketRenewAt=0;await this.retire(); this.input.onState("waiting");}
       else if (state.status !== 200) throw new Error("Guest authority unavailable");
       else {
         const next = readGuestRtcAuthority(state.value, this.input.participantId, this.input.endpoint);
@@ -235,7 +236,7 @@ export class ProducerGuestRtc {
         this.input.onStage?.(next.on_stage === true);
         if (this.ticket && Date.now() >= this.ticketRenewAt) {
           const r = await this.json("connection/renew", {connection_ticket: this.ticket});
-          if(r.status===401)this.ticket=null;
+          if(r.status===401 || r.status===409){this.ticket=null;this.ticketRenewAt=0;await this.retire();}
           const v = r.value as {connection_ticket?: unknown};
           if (r.status !== 200 || typeof v.connection_ticket !== "string" || !v.connection_ticket || v.connection_ticket.length > 8192) throw new Error("Guest renewal unavailable");
           this.ticket = v.connection_ticket; this.ticketRenewAt = Date.now() + 300000;
