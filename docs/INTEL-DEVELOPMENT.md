@@ -42,3 +42,17 @@ signed/notarized Actions artifact and does not publish a release or update
 the public updater manifest. It runs the existing camera-pair/signing gates.
 The signed candidate still needs physical virtual-camera acceptance in a
 second application after the user approves macOS's extension prompt.
+
+Physical acceptance on 2026-11-08: installed the Developer ID-signed,
+Apple-notarized `caca7a9` candidate as `/Applications/Producer Intel Dev.app`.
+Enabled its camera extension in macOS General → Login Items & Extensions →
+Camera Extensions. Producer reported `Cam on`; selecting Producer Virtual
+Camera in Photo Booth displayed live video. This verifies camera input and
+external virtual-camera video on this Intel Mac. Microphone permission was
+still ungranted; audio, recording, streaming and Metal remain separate checks.
+The Actions run accepted notarization and stapled the app, but failed its
+subsequent online ticket validation because Apple's connection dropped. The
+preserved accepted archive passed local signature and provisioning checks;
+macOS successfully activated its extension. Local sandboxed `stapler` and
+Gatekeeper CLI checks could not access Launch Services, so no claim is made
+that the downloaded archive carries an offline ticket.
