@@ -1,7 +1,7 @@
 /** A single explicitly configured local dev run. A persisted nonce prevents
  * reload/HMR or reopening the app from sending another invitation. */
 import {getIdentifier} from '@tauri-apps/api/app';
-import {invoke} from '../../lib/nativeInvoke';
+import {reportNetworkDevResult} from './networkDevReport';
 import {validateNativePairFixture,type NativePairFixture,type NativePairProof} from './nativePairProof';
 
 const APP='ai.boomin.producer.sets-v2-dev';
@@ -76,10 +76,10 @@ export async function launchNativePairFromEnvironment():Promise<void>{
  const outcome=await runConfiguredNativePair(import.meta.env.VITE_PRODUCER_NATIVE_PAIR_RUN,{
   document,storage,now:()=>performance.now(),driver:()=>window.__producerNativePairProof,onStart:driver=>{activeDriver=driver;},
   diagnosticsReady:()=>!!window.__producerNetworkDiagnostics,delay:ms=>new Promise(resolve=>setTimeout(resolve,ms)),current:()=>!disposed,
-  report:result=>invoke('live_set_v2_report',{result}),
+  report:reportNetworkDevResult,
  });
  if(!disposed&&outcome!=='completed'&&outcome!=='refused'){
-  await invoke('live_set_v2_report',{result:{kind:'producer-native-pair-launch',version:1,outcome}}).catch(()=>{});
+  await reportNetworkDevResult({kind:'producer-native-pair-launch',version:1,outcome}).catch(()=>{});
  }
 }
 import.meta.hot?.dispose(()=>{disposed=true;activeDriver?.cancel();});

@@ -28,7 +28,7 @@ function fixture({active=true,env={DEV:true,VITE_PRODUCER_NETWORK_DIAGNOSTICS:'1
   __env:env,__hot:{dispose(fn){disposeModule=fn;}},require:name=>{
    if(name==='@tauri-apps/api/app')return {async getIdentifier(){identifierCalls++;return typeof appId==='function'?await appId():appId;}};
    if(name.endsWith('/ipc'))return {ipc:{liveEngineStatus:deps.readEngine},uiLog:deps.log};
-   if(name.endsWith('/nativeInvoke'))return {invoke:async(command,args)=>{assert.equal(command,'live_set_v2_report');reports.push(args.result);}};
+   if(name.endsWith('/networkDevReport'))return {reportNetworkDevResult:async result=>{reports.push(result);}};
    if(name.endsWith('/guestSeat'))return {activeGuestSeatDiagnosticSession:getSession,subscribeGuestSeatDiagnosticSessions:deps.subscribeSession};
    throw Error('Unexpected import '+name);
   }});

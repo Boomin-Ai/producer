@@ -2,7 +2,7 @@
  * changes mixer controls, shares traces or consumes the program PCM queue. */
 import {getIdentifier} from '@tauri-apps/api/app';
 import {ipc,uiLog,type LiveSnapshot} from '../../lib/ipc';
-import {invoke} from '../../lib/nativeInvoke';
+import {reportNetworkDevResult} from './networkDevReport';
 import {activeGuestSeatDiagnosticSession,subscribeGuestSeatDiagnosticSessions,type GuestSeatDiagnosticSession} from '../../lib/guestSeat';
 import type {ProducerMediaSnapshot,ReceiverObservation} from '../../lib/producerMediaDiagnostics';
 
@@ -157,7 +157,7 @@ export async function installNetworkDiagnosticsProof():Promise<void>{
  window.__producerNetworkDiagnostics?.dispose();
  installed=createNetworkDiagnosticsProof({now:()=>performance.now(),setTimer:(fn,ms)=>setTimeout(fn,ms),clearTimer:timer=>clearTimeout(timer),
   getSession:activeGuestSeatDiagnosticSession,subscribeSession:subscribeGuestSeatDiagnosticSessions,readEngine:()=>ipc.liveEngineStatus(),log:uiLog,
-  ...(id==='ai.boomin.producer.sets-v2-dev'?{report:(result:unknown)=>invoke('live_set_v2_report',{result})}:{})});
+  ...(id==='ai.boomin.producer.sets-v2-dev'?{report:reportNetworkDevResult}:{})});
  window.__producerNetworkDiagnostics=installed;
 }
 import.meta.hot?.dispose(()=>{moduleDisposed=true;installed?.dispose();if(window.__producerNetworkDiagnostics===installed)delete window.__producerNetworkDiagnostics;installed=undefined;});

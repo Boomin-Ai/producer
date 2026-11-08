@@ -27,7 +27,7 @@ function harness({env={DEV:true,VITE_PRODUCER_NATIVE_PAIR_PROOF:'1',VITE_PRODUCE
   require:name=>{
    if(name==='@tauri-apps/api/app')return {getIdentifier:async()=>{identifierCalls++;return appId;}};
    if(name.endsWith('/nativePairProof'))return pairExports;
-   if(name.endsWith('/nativeInvoke'))return {invoke:async(command,args)=>{assert.equal(command,'live_set_v2_report');reports.push(args.result);}};
+   if(name.endsWith('/networkDevReport'))return {reportNetworkDevResult:async result=>{reports.push(result);}};
    throw Error('Unexpected import '+name);
   }});
  return {exports,deps,window,driver,storage,saved,reports,get calls(){return calls;},get identifierCalls(){return identifierCalls;},get cancelled(){return cancelled;},
