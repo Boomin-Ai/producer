@@ -43,6 +43,11 @@ adoption did not by itself coordinate that legacy credential writer.
   it leases one shared program capture, clones owned tracks for muting, and uses
   processed mix-minus audio. It never silently substitutes a webcam. Webcam-only
   participation uses a lightweight guest view without restoring an OBS room.
+  The local room requires a known host access response, handed from Home into
+  the restore path. A separate visiting-mode bootstrap consumes that response
+  without starting the local host roster, heartbeat or scene publisher. Set
+  module data reads continue; this mode does not host a second guest roster or
+  load that local room's saved vote history through the host control channel.
 
 The companion API change requires migration
 `0187_live_rtc_network_entry.sql` and its coordinated network-entry adapter. It
@@ -111,4 +116,20 @@ The first real pair is Kleveland on Mac and Atlantium on Windows, using their
 existing active Boomin connection. Qualify both directions, visible moving Set
 output, audible host/music/guest routing, reconnect after host collapse/reopen,
 mute/revoke, and CPU/GPU/encode latency before publishing a production release.
-No real message or invitation is sent by the automated tests.
+Unit and synthetic browser tests send no real messages or invitations.
+
+On November 8, the authorized native Mac-to-Windows test sent a composed Threads
+Set through LiveKit. The user confirmed the complete Set and moving camera on
+Windows. The Mac observed about 19 fps outgoing and 31 fps incoming host-program
+video; these are instantaneous reported rates, not an end-to-end latency
+measurement. Acquiring the shared program took about 589 ms after local restore,
+excluding room loading and admission. An already-accepted guest was resumed;
+this does not qualify first-time admission. Backend observation confirmed stable
+admission, stage placement, host lease and current guest identity after five
+minutes. Audible routing, host-reopen recovery, the reverse appearance direction
+and comparative performance remain separate qualification items.
+
+The companion API is deployed at main revision `9ff3e38`, after applying only
+migration 0187. Authenticated entry capability returns protocol 1; unauthenticated
+requests are refused. Existing conversations, native room preflights and Threads
+posts passed post-deployment reads. No public desktop release was made.

@@ -5,7 +5,8 @@ const out=new URL('../../../outputs/producer-network/',import.meta.url);await mk
 const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
 try{
  const page=await browser.newPage({viewport:{width:1280,height:800}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.route('**/src/main.tsx',r=>r.fulfill({contentType:'application/javascript',body:''}));await page.goto(process.env.PRODUCER_TEST_URL??'http://127.0.0.1:1451');
+ await page.routeWebSocket(/ws:\/\/127\.0\.0\.1:\d+\//,()=>{});
+ await page.route('**/src/main.tsx*',r=>r.fulfill({contentType:'application/javascript',body:''}));await page.goto(process.env.PRODUCER_TEST_URL??'http://127.0.0.1:1451');
  await page.evaluate(async()=>{
   await import('/src/App.css');const React=(await import('/node_modules/.vite/deps/react.js')).default,DOM=await import('/node_modules/.vite/deps/react-dom_client.js'),{ProducerJoin}=await import('/src/features/network/ProducerJoin.tsx');
   const host=document.createElement('main');host.className='producer-network-sheet join-sheet';document.body.replaceChildren(host);const root=(DOM.createRoot??DOM.default.createRoot)(host);window.entered=[];window.requests=[];
