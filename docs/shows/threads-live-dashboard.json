@@ -1,0 +1,3961 @@
+{
+  "schema": "producer.presentation/2",
+  "integrations": {
+    "schema": "producer.integrations/1",
+    "requirements": [
+      {
+        "role": "threads",
+        "label": "Threads account",
+        "capability": "data.social@1",
+        "input": "social.selection@1",
+        "output": "social.dashboard@1",
+        "delivery": "snapshot",
+        "optional": false,
+        "transport": "poll",
+        "refresh": true
+      }
+    ]
+  },
+  "requires": [],
+  "runtime": {
+    "schema": "producer.modules/1",
+    "definitions": {
+      "social": {
+        "label": "Threads dashboard",
+        "state": {
+          "username": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "name": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "period": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "status": {
+            "type": "text",
+            "default": "Connect your Threads account",
+            "maxLength": 1024
+          },
+          "error": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "accountUpdated": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "postUpdated": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "repliesUpdated": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "postText": {
+            "type": "text",
+            "default": "Choose a post in Data connections",
+            "maxLength": 1024
+          },
+          "postDate": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "postUrl": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "replyCount": {
+            "type": "text",
+            "default": "0",
+            "maxLength": 1024
+          },
+          "fetchedAt": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "account_views": {
+            "type": "text",
+            "default": "—",
+            "maxLength": 1024
+          },
+          "account_likes": {
+            "type": "text",
+            "default": "—",
+            "maxLength": 1024
+          },
+          "account_replies": {
+            "type": "text",
+            "default": "—",
+            "maxLength": 1024
+          },
+          "account_reposts": {
+            "type": "text",
+            "default": "—",
+            "maxLength": 1024
+          },
+          "account_quotes": {
+            "type": "text",
+            "default": "—",
+            "maxLength": 1024
+          },
+          "account_clicks": {
+            "type": "text",
+            "default": "—",
+            "maxLength": 1024
+          },
+          "account_followers_count": {
+            "type": "text",
+            "default": "—",
+            "maxLength": 1024
+          },
+          "post_views": {
+            "type": "text",
+            "default": "—",
+            "maxLength": 1024
+          },
+          "post_likes": {
+            "type": "text",
+            "default": "—",
+            "maxLength": 1024
+          },
+          "post_replies": {
+            "type": "text",
+            "default": "—",
+            "maxLength": 1024
+          },
+          "post_reposts": {
+            "type": "text",
+            "default": "—",
+            "maxLength": 1024
+          },
+          "post_quotes": {
+            "type": "text",
+            "default": "—",
+            "maxLength": 1024
+          },
+          "post_shares": {
+            "type": "text",
+            "default": "—",
+            "maxLength": 1024
+          },
+          "reply0_name": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "reply0_text": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "reply0_at": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "reply1_name": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "reply1_text": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "reply1_at": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "reply2_name": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "reply2_text": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "reply2_at": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "reply3_name": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "reply3_text": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "reply3_at": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "reply4_name": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "reply4_text": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "reply4_at": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "reply5_name": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "reply5_text": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          },
+          "reply5_at": {
+            "type": "text",
+            "default": "",
+            "maxLength": 1024
+          }
+        },
+        "publicFields": [
+          "username",
+          "name",
+          "period",
+          "status",
+          "error",
+          "accountUpdated",
+          "postUpdated",
+          "repliesUpdated",
+          "postText",
+          "postDate",
+          "postUrl",
+          "replyCount",
+          "fetchedAt",
+          "account_views",
+          "account_likes",
+          "account_replies",
+          "account_reposts",
+          "account_quotes",
+          "account_clicks",
+          "account_followers_count",
+          "post_views",
+          "post_likes",
+          "post_replies",
+          "post_reposts",
+          "post_quotes",
+          "post_shares",
+          "reply0_name",
+          "reply0_text",
+          "reply0_at",
+          "reply1_name",
+          "reply1_text",
+          "reply1_at",
+          "reply2_name",
+          "reply2_text",
+          "reply2_at",
+          "reply3_name",
+          "reply3_text",
+          "reply3_at",
+          "reply4_name",
+          "reply4_text",
+          "reply4_at",
+          "reply5_name",
+          "reply5_text",
+          "reply5_at"
+        ],
+        "actions": {},
+        "controls": [],
+        "capabilities": [
+          "data.social@1"
+        ],
+        "behavior": {
+          "type": "social",
+          "integrationRole": "threads"
+        }
+      }
+    },
+    "instances": [
+      {
+        "id": "threads",
+        "definition": "social",
+        "owner": "set",
+        "hidden": "continue",
+        "onExit": "continue",
+        "reenter": "resume"
+      }
+    ]
+  },
+  "id": "threads-live-dashboard",
+  "version": "1.0.0",
+  "name": "Threads · Live Dashboard",
+  "set": {
+    "views": {
+      "overview": {
+        "landscape": "overview-landscape",
+        "portrait": "overview-portrait"
+      },
+      "spotlight": {
+        "landscape": "spotlight-landscape",
+        "portrait": "spotlight-portrait"
+      },
+      "replies": {
+        "landscape": "replies-landscape",
+        "portrait": "replies-portrait"
+      }
+    },
+    "initialView": "overview",
+    "assets": {},
+    "initialLayout": "overview-landscape",
+    "values": {},
+    "feeds": {},
+    "slots": [
+      {
+        "id": "host",
+        "label": "Host camera"
+      }
+    ],
+    "components": {},
+    "layouts": [
+      {
+        "id": "overview-landscape",
+        "label": "Channel overview · Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "root",
+          "styles": {
+            "position": "absolute",
+            "left": 0,
+            "top": 0,
+            "width": 1920,
+            "height": 1080,
+            "background": "#0c110e",
+            "overflow": "hidden"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "ambient",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1920,
+                "height": 1080,
+                "background": "linear-gradient(135deg,#18251a,#101511 45%,#0b0f0d)"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "edition",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 54,
+                "width": 1792,
+                "height": 32,
+                "color": "#c5ff77",
+                "fontSize": 22,
+                "fontWeight": 700,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2,
+                "letterSpacing": 3
+              },
+              "type": "text",
+              "text": "THREADS  /  CHANNEL OVERVIEW"
+            },
+            {
+              "id": "title",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 106,
+                "width": 1792,
+                "height": 94,
+                "color": "#f4f4ef",
+                "fontSize": 78,
+                "fontWeight": 700,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2,
+                "letterSpacing": -3
+              },
+              "type": "text",
+              "text": "Your channel. In focus."
+            },
+            {
+              "id": "handle",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 225,
+                "width": 1280,
+                "height": 44,
+                "color": "#a4aaa7",
+                "fontSize": 32,
+                "fontWeight": 500,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "get": "modules.threads.username"
+              }
+            },
+            {
+              "id": "header-line",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 294,
+                "width": 1792,
+                "height": 1,
+                "background": "#303732"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "period",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 332,
+                "width": 1200,
+                "height": 40,
+                "color": "#c5ff77",
+                "fontSize": 30,
+                "fontWeight": 600,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "get": "modules.threads.period"
+              }
+            },
+            {
+              "id": "host-card",
+              "styles": {
+                "position": "absolute",
+                "left": 1440,
+                "top": 332,
+                "width": 416,
+                "height": 536,
+                "background": "#101611",
+                "overflow": "hidden",
+                "border": "1px solid #303732",
+                "borderRadius": 18
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "host-camera",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 0,
+                    "top": 0,
+                    "width": 416,
+                    "height": 486
+                  },
+                  "type": "slot",
+                  "slotId": "host",
+                  "framing": {
+                    "mode": "fill",
+                    "x": 0.5,
+                    "y": 0.5
+                  }
+                },
+                {
+                  "id": "host-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 20,
+                    "top": 500,
+                    "width": 376,
+                    "height": 26,
+                    "color": "#a4aaa7",
+                    "fontSize": 18,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "HOST / LIVE DESK"
+                }
+              ]
+            },
+            {
+              "id": "metric-views",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 402,
+                "width": 420,
+                "height": 218,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 16
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "metric-views-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 23,
+                    "width": 372,
+                    "height": 30,
+                    "color": "#a4aaa7",
+                    "fontSize": 20,
+                    "fontWeight": 600,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "PROFILE VIEWS"
+                },
+                {
+                  "id": "metric-views-value",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 66,
+                    "width": 372,
+                    "height": 140,
+                    "color": "#f4f4ef",
+                    "fontSize": 66,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.account_views"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "metric-followers_count",
+              "styles": {
+                "position": "absolute",
+                "left": 508,
+                "top": 402,
+                "width": 420,
+                "height": 218,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 16
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "metric-followers_count-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 23,
+                    "width": 372,
+                    "height": 30,
+                    "color": "#a4aaa7",
+                    "fontSize": 20,
+                    "fontWeight": 600,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "CURRENT FOLLOWERS"
+                },
+                {
+                  "id": "metric-followers_count-value",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 66,
+                    "width": 372,
+                    "height": 140,
+                    "color": "#f4f4ef",
+                    "fontSize": 66,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.account_followers_count"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "metric-likes",
+              "styles": {
+                "position": "absolute",
+                "left": 952,
+                "top": 402,
+                "width": 420,
+                "height": 218,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 16
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "metric-likes-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 23,
+                    "width": 372,
+                    "height": 30,
+                    "color": "#a4aaa7",
+                    "fontSize": 20,
+                    "fontWeight": 600,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "LIKES"
+                },
+                {
+                  "id": "metric-likes-value",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 66,
+                    "width": 372,
+                    "height": 140,
+                    "color": "#f4f4ef",
+                    "fontSize": 66,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.account_likes"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "metric-replies",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 644,
+                "width": 420,
+                "height": 218,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 16
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "metric-replies-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 23,
+                    "width": 372,
+                    "height": 30,
+                    "color": "#a4aaa7",
+                    "fontSize": 20,
+                    "fontWeight": 600,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "TOP-LEVEL REPLIES"
+                },
+                {
+                  "id": "metric-replies-value",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 66,
+                    "width": 372,
+                    "height": 140,
+                    "color": "#f4f4ef",
+                    "fontSize": 66,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.account_replies"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "metric-reposts",
+              "styles": {
+                "position": "absolute",
+                "left": 508,
+                "top": 644,
+                "width": 420,
+                "height": 218,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 16
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "metric-reposts-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 23,
+                    "width": 372,
+                    "height": 30,
+                    "color": "#a4aaa7",
+                    "fontSize": 20,
+                    "fontWeight": 600,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "REPOSTS"
+                },
+                {
+                  "id": "metric-reposts-value",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 66,
+                    "width": 372,
+                    "height": 140,
+                    "color": "#f4f4ef",
+                    "fontSize": 66,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.account_reposts"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "metric-quotes",
+              "styles": {
+                "position": "absolute",
+                "left": 952,
+                "top": 644,
+                "width": 420,
+                "height": 218,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 16
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "metric-quotes-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 23,
+                    "width": 372,
+                    "height": 30,
+                    "color": "#a4aaa7",
+                    "fontSize": 20,
+                    "fontWeight": 600,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "QUOTES"
+                },
+                {
+                  "id": "metric-quotes-value",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 66,
+                    "width": 372,
+                    "height": 140,
+                    "color": "#f4f4ef",
+                    "fontSize": 66,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.account_quotes"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "click-label",
+              "styles": {
+                "position": "absolute",
+                "left": 1440,
+                "top": 900,
+                "width": 416,
+                "height": 32,
+                "color": "#c5ff77",
+                "fontSize": 24,
+                "fontWeight": 700,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "op": "concat",
+                "args": [
+                  "LINK CLICKS  ",
+                  {
+                    "get": "modules.threads.account_clicks"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "observed",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 922,
+                "width": 1162,
+                "height": 27,
+                "color": "#a4aaa7",
+                "fontSize": 17,
+                "fontWeight": 400,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "op": "concat",
+                "args": [
+                  "OBSERVED  ",
+                  {
+                    "get": "modules.threads.accountUpdated"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "account-note",
+              "styles": {
+                "position": "absolute",
+                "left": 1440,
+                "top": 940,
+                "width": 416,
+                "height": 25,
+                "color": "#a4aaa7",
+                "fontSize": 18,
+                "fontWeight": 400,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": "Provider metrics · background refresh"
+            },
+            {
+              "id": "footer-line",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 977,
+                "width": 1792,
+                "height": 1,
+                "background": "#303732"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer-brand",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1003,
+                "width": 1792,
+                "height": 26,
+                "color": "#a4aaa7",
+                "fontSize": 17,
+                "fontWeight": 600,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2,
+                "letterSpacing": 2
+              },
+              "type": "text",
+              "text": "GENERATED ON PRODUCER.DEV"
+            },
+            {
+              "id": "footer-status",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1036,
+                "width": 1792,
+                "height": 24,
+                "color": "#c5ff77",
+                "fontSize": 17,
+                "fontWeight": 400,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "get": "modules.threads.status"
+              }
+            }
+          ]
+        },
+        "animation": {
+          "tracks": [],
+          "transition": {
+            "type": "crossfade",
+            "durationMs": 360,
+            "contentDurationMs": 220
+          }
+        }
+      },
+      {
+        "id": "overview-portrait",
+        "label": "Channel overview · Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "root",
+          "styles": {
+            "position": "absolute",
+            "left": 0,
+            "top": 0,
+            "width": 1080,
+            "height": 1920,
+            "background": "#0c110e",
+            "overflow": "hidden"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "ambient",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1080,
+                "height": 1920,
+                "background": "linear-gradient(135deg,#18251a,#101511 45%,#0b0f0d)"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "edition",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 130,
+                "width": 952,
+                "height": 32,
+                "color": "#c5ff77",
+                "fontSize": 22,
+                "fontWeight": 700,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2,
+                "letterSpacing": 3
+              },
+              "type": "text",
+              "text": "THREADS  /  CHANNEL OVERVIEW"
+            },
+            {
+              "id": "title",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 188,
+                "width": 952,
+                "height": 94,
+                "color": "#f4f4ef",
+                "fontSize": 72,
+                "fontWeight": 700,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2,
+                "letterSpacing": -3
+              },
+              "type": "text",
+              "text": "Your channel. In focus."
+            },
+            {
+              "id": "handle",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 304,
+                "width": 700,
+                "height": 44,
+                "color": "#a4aaa7",
+                "fontSize": 32,
+                "fontWeight": 500,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "get": "modules.threads.username"
+              }
+            },
+            {
+              "id": "header-line",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 378,
+                "width": 952,
+                "height": 1,
+                "background": "#303732"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "host-card",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 418,
+                "width": 370,
+                "height": 290,
+                "background": "#101611",
+                "overflow": "hidden",
+                "border": "1px solid #303732",
+                "borderRadius": 18
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "host-camera",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 0,
+                    "top": 0,
+                    "width": 370,
+                    "height": 240
+                  },
+                  "type": "slot",
+                  "slotId": "host",
+                  "framing": {
+                    "mode": "fill",
+                    "x": 0.5,
+                    "y": 0.5
+                  }
+                },
+                {
+                  "id": "host-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 20,
+                    "top": 254,
+                    "width": 330,
+                    "height": 26,
+                    "color": "#a4aaa7",
+                    "fontSize": 18,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "HOST / LIVE DESK"
+                }
+              ]
+            },
+            {
+              "id": "followers",
+              "styles": {
+                "position": "absolute",
+                "left": 458,
+                "top": 418,
+                "width": 558,
+                "height": 290,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 16
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "followers-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 23,
+                    "width": 510,
+                    "height": 30,
+                    "color": "#a4aaa7",
+                    "fontSize": 20,
+                    "fontWeight": 600,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "CURRENT FOLLOWERS"
+                },
+                {
+                  "id": "followers-value",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 66,
+                    "width": 510,
+                    "height": 212,
+                    "color": "#f4f4ef",
+                    "fontSize": 84,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.account_followers_count"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "period",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 754,
+                "width": 952,
+                "height": 44,
+                "color": "#c5ff77",
+                "fontSize": 32,
+                "fontWeight": 600,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "get": "modules.threads.period"
+              }
+            },
+            {
+              "id": "metric-views",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 832,
+                "width": 464,
+                "height": 218,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 16
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "metric-views-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 23,
+                    "width": 416,
+                    "height": 30,
+                    "color": "#a4aaa7",
+                    "fontSize": 20,
+                    "fontWeight": 600,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "PROFILE VIEWS"
+                },
+                {
+                  "id": "metric-views-value",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 66,
+                    "width": 416,
+                    "height": 140,
+                    "color": "#f4f4ef",
+                    "fontSize": 66,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.account_views"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "metric-likes",
+              "styles": {
+                "position": "absolute",
+                "left": 552,
+                "top": 832,
+                "width": 464,
+                "height": 218,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 16
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "metric-likes-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 23,
+                    "width": 416,
+                    "height": 30,
+                    "color": "#a4aaa7",
+                    "fontSize": 20,
+                    "fontWeight": 600,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "LIKES"
+                },
+                {
+                  "id": "metric-likes-value",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 66,
+                    "width": 416,
+                    "height": 140,
+                    "color": "#f4f4ef",
+                    "fontSize": 66,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.account_likes"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "metric-replies",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1078,
+                "width": 464,
+                "height": 218,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 16
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "metric-replies-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 23,
+                    "width": 416,
+                    "height": 30,
+                    "color": "#a4aaa7",
+                    "fontSize": 20,
+                    "fontWeight": 600,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "TOP-LEVEL REPLIES"
+                },
+                {
+                  "id": "metric-replies-value",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 66,
+                    "width": 416,
+                    "height": 140,
+                    "color": "#f4f4ef",
+                    "fontSize": 66,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.account_replies"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "metric-reposts",
+              "styles": {
+                "position": "absolute",
+                "left": 552,
+                "top": 1078,
+                "width": 464,
+                "height": 218,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 16
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "metric-reposts-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 23,
+                    "width": 416,
+                    "height": 30,
+                    "color": "#a4aaa7",
+                    "fontSize": 20,
+                    "fontWeight": 600,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "REPOSTS"
+                },
+                {
+                  "id": "metric-reposts-value",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 66,
+                    "width": 416,
+                    "height": 140,
+                    "color": "#f4f4ef",
+                    "fontSize": 66,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.account_reposts"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "metric-quotes",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1324,
+                "width": 464,
+                "height": 218,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 16
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "metric-quotes-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 23,
+                    "width": 416,
+                    "height": 30,
+                    "color": "#a4aaa7",
+                    "fontSize": 20,
+                    "fontWeight": 600,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "QUOTES"
+                },
+                {
+                  "id": "metric-quotes-value",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 66,
+                    "width": 416,
+                    "height": 140,
+                    "color": "#f4f4ef",
+                    "fontSize": 66,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.account_quotes"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "metric-clicks",
+              "styles": {
+                "position": "absolute",
+                "left": 552,
+                "top": 1324,
+                "width": 464,
+                "height": 218,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 16
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "metric-clicks-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 23,
+                    "width": 416,
+                    "height": 30,
+                    "color": "#a4aaa7",
+                    "fontSize": 20,
+                    "fontWeight": 600,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "LINK CLICKS"
+                },
+                {
+                  "id": "metric-clicks-value",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 66,
+                    "width": 416,
+                    "height": 140,
+                    "color": "#f4f4ef",
+                    "fontSize": 66,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.account_clicks"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "observed",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1624,
+                "width": 952,
+                "height": 27,
+                "color": "#a4aaa7",
+                "fontSize": 17,
+                "fontWeight": 400,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "op": "concat",
+                "args": [
+                  "OBSERVED  ",
+                  {
+                    "get": "modules.threads.accountUpdated"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "metric-note",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1674,
+                "width": 952,
+                "height": 72,
+                "color": "#a4aaa7",
+                "fontSize": 21,
+                "fontWeight": 400,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": "Profile views cover this account. Post views appear in Spotlight. Unavailable metrics are shown as —."
+            },
+            {
+              "id": "footer-line",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1817,
+                "width": 952,
+                "height": 1,
+                "background": "#303732"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer-brand",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1843,
+                "width": 952,
+                "height": 26,
+                "color": "#a4aaa7",
+                "fontSize": 17,
+                "fontWeight": 600,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2,
+                "letterSpacing": 2
+              },
+              "type": "text",
+              "text": "GENERATED ON PRODUCER.DEV"
+            },
+            {
+              "id": "footer-status",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1876,
+                "width": 952,
+                "height": 24,
+                "color": "#c5ff77",
+                "fontSize": 17,
+                "fontWeight": 400,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "get": "modules.threads.status"
+              }
+            }
+          ]
+        },
+        "animation": {
+          "tracks": [],
+          "transition": {
+            "type": "crossfade",
+            "durationMs": 360,
+            "contentDurationMs": 220
+          }
+        }
+      },
+      {
+        "id": "spotlight-landscape",
+        "label": "Post spotlight · Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "root",
+          "styles": {
+            "position": "absolute",
+            "left": 0,
+            "top": 0,
+            "width": 1920,
+            "height": 1080,
+            "background": "#0c110e",
+            "overflow": "hidden"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "ambient",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1920,
+                "height": 1080,
+                "background": "linear-gradient(135deg,#18251a,#101511 45%,#0b0f0d)"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "edition",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 54,
+                "width": 1792,
+                "height": 32,
+                "color": "#c5ff77",
+                "fontSize": 22,
+                "fontWeight": 700,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2,
+                "letterSpacing": 3
+              },
+              "type": "text",
+              "text": "THREADS  /  POST SPOTLIGHT · LIFETIME"
+            },
+            {
+              "id": "title",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 106,
+                "width": 1792,
+                "height": 94,
+                "color": "#f4f4ef",
+                "fontSize": 78,
+                "fontWeight": 700,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2,
+                "letterSpacing": -3
+              },
+              "type": "text",
+              "text": "One post. The whole story."
+            },
+            {
+              "id": "handle",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 225,
+                "width": 1280,
+                "height": 44,
+                "color": "#a4aaa7",
+                "fontSize": 32,
+                "fontWeight": 500,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "get": "modules.threads.username"
+              }
+            },
+            {
+              "id": "header-line",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 294,
+                "width": 1792,
+                "height": 1,
+                "background": "#303732"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "post-card",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 332,
+                "width": 1304,
+                "height": 576,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 20
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "quote",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 32,
+                    "top": 12,
+                    "width": 80,
+                    "height": 90,
+                    "color": "#c5ff77",
+                    "fontSize": 72,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "“"
+                },
+                {
+                  "id": "post-text",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 38,
+                    "top": 101,
+                    "width": 1228,
+                    "height": 398,
+                    "color": "#f4f4ef",
+                    "fontSize": 32,
+                    "fontWeight": 500,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.postText"
+                  }
+                },
+                {
+                  "id": "post-date",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 38,
+                    "top": 522,
+                    "width": 1228,
+                    "height": 30,
+                    "color": "#a4aaa7",
+                    "fontSize": 19,
+                    "fontWeight": 400,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.postDate"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "host-card",
+              "styles": {
+                "position": "absolute",
+                "left": 1440,
+                "top": 332,
+                "width": 416,
+                "height": 300,
+                "background": "#101611",
+                "overflow": "hidden",
+                "border": "1px solid #303732",
+                "borderRadius": 18
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "host-camera",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 0,
+                    "top": 0,
+                    "width": 416,
+                    "height": 250
+                  },
+                  "type": "slot",
+                  "slotId": "host",
+                  "framing": {
+                    "mode": "fill",
+                    "x": 0.5,
+                    "y": 0.5
+                  }
+                },
+                {
+                  "id": "host-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 20,
+                    "top": 264,
+                    "width": 376,
+                    "height": 26,
+                    "color": "#a4aaa7",
+                    "fontSize": 18,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "HOST / LIVE DESK"
+                }
+              ]
+            },
+            {
+              "id": "post-views",
+              "styles": {
+                "position": "absolute",
+                "left": 1440,
+                "top": 654,
+                "width": 416,
+                "height": 70,
+                "background": "#151b17",
+                "borderRadius": 10
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "label-views",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 18,
+                    "top": 24,
+                    "width": 230,
+                    "height": 26,
+                    "color": "#a4aaa7",
+                    "fontSize": 19,
+                    "fontWeight": 600,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "POST VIEWS"
+                },
+                {
+                  "id": "value-views",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 260,
+                    "top": 13,
+                    "width": 135,
+                    "height": 48,
+                    "color": "#f4f4ef",
+                    "fontSize": 36,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2,
+                    "textAlign": "right"
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.post_views"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "post-likes",
+              "styles": {
+                "position": "absolute",
+                "left": 1440,
+                "top": 738,
+                "width": 416,
+                "height": 70,
+                "background": "#151b17",
+                "borderRadius": 10
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "label-likes",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 18,
+                    "top": 24,
+                    "width": 230,
+                    "height": 26,
+                    "color": "#a4aaa7",
+                    "fontSize": 19,
+                    "fontWeight": 600,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "LIKES"
+                },
+                {
+                  "id": "value-likes",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 260,
+                    "top": 13,
+                    "width": 135,
+                    "height": 48,
+                    "color": "#f4f4ef",
+                    "fontSize": 36,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2,
+                    "textAlign": "right"
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.post_likes"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "post-replies",
+              "styles": {
+                "position": "absolute",
+                "left": 1440,
+                "top": 822,
+                "width": 416,
+                "height": 70,
+                "background": "#151b17",
+                "borderRadius": 10
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "label-replies",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 18,
+                    "top": 24,
+                    "width": 230,
+                    "height": 26,
+                    "color": "#a4aaa7",
+                    "fontSize": 19,
+                    "fontWeight": 600,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "REPLIES"
+                },
+                {
+                  "id": "value-replies",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 260,
+                    "top": 13,
+                    "width": 135,
+                    "height": 48,
+                    "color": "#f4f4ef",
+                    "fontSize": 36,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2,
+                    "textAlign": "right"
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.post_replies"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "observed",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 934,
+                "width": 1172,
+                "height": 27,
+                "color": "#a4aaa7",
+                "fontSize": 17,
+                "fontWeight": 400,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "op": "concat",
+                "args": [
+                  "OBSERVED  ",
+                  {
+                    "get": "modules.threads.postUpdated"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "footer-line",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 977,
+                "width": 1792,
+                "height": 1,
+                "background": "#303732"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer-brand",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1003,
+                "width": 1792,
+                "height": 26,
+                "color": "#a4aaa7",
+                "fontSize": 17,
+                "fontWeight": 600,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2,
+                "letterSpacing": 2
+              },
+              "type": "text",
+              "text": "GENERATED ON PRODUCER.DEV"
+            },
+            {
+              "id": "footer-status",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1036,
+                "width": 1792,
+                "height": 24,
+                "color": "#c5ff77",
+                "fontSize": 17,
+                "fontWeight": 400,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "get": "modules.threads.status"
+              }
+            }
+          ]
+        },
+        "animation": {
+          "tracks": [],
+          "transition": {
+            "type": "crossfade",
+            "durationMs": 360,
+            "contentDurationMs": 220
+          }
+        }
+      },
+      {
+        "id": "spotlight-portrait",
+        "label": "Post spotlight · Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "root",
+          "styles": {
+            "position": "absolute",
+            "left": 0,
+            "top": 0,
+            "width": 1080,
+            "height": 1920,
+            "background": "#0c110e",
+            "overflow": "hidden"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "ambient",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1080,
+                "height": 1920,
+                "background": "linear-gradient(135deg,#18251a,#101511 45%,#0b0f0d)"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "edition",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 130,
+                "width": 952,
+                "height": 32,
+                "color": "#c5ff77",
+                "fontSize": 22,
+                "fontWeight": 700,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2,
+                "letterSpacing": 3
+              },
+              "type": "text",
+              "text": "THREADS  /  POST SPOTLIGHT · LIFETIME"
+            },
+            {
+              "id": "title",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 188,
+                "width": 952,
+                "height": 102,
+                "color": "#f4f4ef",
+                "fontSize": 76,
+                "fontWeight": 700,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2,
+                "letterSpacing": -3
+              },
+              "type": "text",
+              "text": "One post. In focus."
+            },
+            {
+              "id": "handle",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 304,
+                "width": 700,
+                "height": 44,
+                "color": "#a4aaa7",
+                "fontSize": 32,
+                "fontWeight": 500,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "get": "modules.threads.username"
+              }
+            },
+            {
+              "id": "header-line",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 378,
+                "width": 952,
+                "height": 1,
+                "background": "#303732"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "post-card",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 418,
+                "width": 952,
+                "height": 780,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 20
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "quote",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 32,
+                    "top": 20,
+                    "width": 80,
+                    "height": 90,
+                    "color": "#c5ff77",
+                    "fontSize": 72,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "“"
+                },
+                {
+                  "id": "post-text",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 38,
+                    "top": 115,
+                    "width": 876,
+                    "height": 588,
+                    "color": "#f4f4ef",
+                    "fontSize": 36,
+                    "fontWeight": 500,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.postText"
+                  }
+                },
+                {
+                  "id": "post-date",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 38,
+                    "top": 727,
+                    "width": 876,
+                    "height": 30,
+                    "color": "#a4aaa7",
+                    "fontSize": 18,
+                    "fontWeight": 400,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.postDate"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "post-views",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1230,
+                "width": 304,
+                "height": 180,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 16
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "post-views-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 23,
+                    "width": 256,
+                    "height": 30,
+                    "color": "#a4aaa7",
+                    "fontSize": 20,
+                    "fontWeight": 600,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "POST VIEWS"
+                },
+                {
+                  "id": "post-views-value",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 66,
+                    "width": 256,
+                    "height": 102,
+                    "color": "#f4f4ef",
+                    "fontSize": 66,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.post_views"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "post-likes",
+              "styles": {
+                "position": "absolute",
+                "left": 388,
+                "top": 1230,
+                "width": 304,
+                "height": 180,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 16
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "post-likes-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 23,
+                    "width": 256,
+                    "height": 30,
+                    "color": "#a4aaa7",
+                    "fontSize": 20,
+                    "fontWeight": 600,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "LIKES"
+                },
+                {
+                  "id": "post-likes-value",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 66,
+                    "width": 256,
+                    "height": 102,
+                    "color": "#f4f4ef",
+                    "fontSize": 66,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.post_likes"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "post-replies",
+              "styles": {
+                "position": "absolute",
+                "left": 712,
+                "top": 1230,
+                "width": 304,
+                "height": 180,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 16
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "post-replies-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 23,
+                    "width": 256,
+                    "height": 30,
+                    "color": "#a4aaa7",
+                    "fontSize": 20,
+                    "fontWeight": 600,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "REPLIES"
+                },
+                {
+                  "id": "post-replies-value",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 66,
+                    "width": 256,
+                    "height": 102,
+                    "color": "#f4f4ef",
+                    "fontSize": 66,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.post_replies"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "host-card",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1442,
+                "width": 360,
+                "height": 274,
+                "background": "#101611",
+                "overflow": "hidden",
+                "border": "1px solid #303732",
+                "borderRadius": 18
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "host-camera",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 0,
+                    "top": 0,
+                    "width": 360,
+                    "height": 224
+                  },
+                  "type": "slot",
+                  "slotId": "host",
+                  "framing": {
+                    "mode": "fill",
+                    "x": 0.5,
+                    "y": 0.5
+                  }
+                },
+                {
+                  "id": "host-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 20,
+                    "top": 238,
+                    "width": 320,
+                    "height": 26,
+                    "color": "#a4aaa7",
+                    "fontSize": 18,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "HOST / LIVE DESK"
+                }
+              ]
+            },
+            {
+              "id": "secondary-metrics",
+              "styles": {
+                "position": "absolute",
+                "left": 462,
+                "top": 1470,
+                "width": 554,
+                "height": 180,
+                "color": "#a4aaa7",
+                "fontSize": 27,
+                "fontWeight": 500,
+                "fontFamily": "Arial",
+                "lineHeight": 1.6,
+                "whiteSpace": "pre-wrap"
+              },
+              "type": "text",
+              "text": {
+                "op": "concat",
+                "args": [
+                  "REPOSTS  ",
+                  {
+                    "get": "modules.threads.post_reposts"
+                  },
+                  "\nQUOTES  ",
+                  {
+                    "get": "modules.threads.post_quotes"
+                  },
+                  "\nSHARES  ",
+                  {
+                    "get": "modules.threads.post_shares"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "observed",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1745,
+                "width": 952,
+                "height": 27,
+                "color": "#a4aaa7",
+                "fontSize": 17,
+                "fontWeight": 400,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "op": "concat",
+                "args": [
+                  "OBSERVED  ",
+                  {
+                    "get": "modules.threads.postUpdated"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "footer-line",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1817,
+                "width": 952,
+                "height": 1,
+                "background": "#303732"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer-brand",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1843,
+                "width": 952,
+                "height": 26,
+                "color": "#a4aaa7",
+                "fontSize": 17,
+                "fontWeight": 600,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2,
+                "letterSpacing": 2
+              },
+              "type": "text",
+              "text": "GENERATED ON PRODUCER.DEV"
+            },
+            {
+              "id": "footer-status",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1876,
+                "width": 952,
+                "height": 24,
+                "color": "#c5ff77",
+                "fontSize": 17,
+                "fontWeight": 400,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "get": "modules.threads.status"
+              }
+            }
+          ]
+        },
+        "animation": {
+          "tracks": [],
+          "transition": {
+            "type": "crossfade",
+            "durationMs": 360,
+            "contentDurationMs": 220
+          }
+        }
+      },
+      {
+        "id": "replies-landscape",
+        "label": "Live replies · Landscape",
+        "width": 1920,
+        "height": 1080,
+        "root": {
+          "id": "root",
+          "styles": {
+            "position": "absolute",
+            "left": 0,
+            "top": 0,
+            "width": 1920,
+            "height": 1080,
+            "background": "#0c110e",
+            "overflow": "hidden"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "ambient",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1920,
+                "height": 1080,
+                "background": "linear-gradient(135deg,#18251a,#101511 45%,#0b0f0d)"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "edition",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 54,
+                "width": 1792,
+                "height": 32,
+                "color": "#c5ff77",
+                "fontSize": 22,
+                "fontWeight": 700,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2,
+                "letterSpacing": 3
+              },
+              "type": "text",
+              "text": "THREADS  /  LIVE REPLIES"
+            },
+            {
+              "id": "title",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 106,
+                "width": 1792,
+                "height": 94,
+                "color": "#f4f4ef",
+                "fontSize": 78,
+                "fontWeight": 700,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2,
+                "letterSpacing": -3
+              },
+              "type": "text",
+              "text": "The conversation, live."
+            },
+            {
+              "id": "handle",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 225,
+                "width": 1280,
+                "height": 44,
+                "color": "#a4aaa7",
+                "fontSize": 32,
+                "fontWeight": 500,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "get": "modules.threads.username"
+              }
+            },
+            {
+              "id": "header-line",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 294,
+                "width": 1792,
+                "height": 1,
+                "background": "#303732"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "context",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 329,
+                "width": 1300,
+                "height": 66,
+                "color": "#a4aaa7",
+                "fontSize": 27,
+                "fontWeight": 400,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "get": "modules.threads.postText"
+              }
+            },
+            {
+              "id": "host-card",
+              "styles": {
+                "position": "absolute",
+                "left": 1440,
+                "top": 332,
+                "width": 416,
+                "height": 430,
+                "background": "#101611",
+                "overflow": "hidden",
+                "border": "1px solid #303732",
+                "borderRadius": 18
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "host-camera",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 0,
+                    "top": 0,
+                    "width": 416,
+                    "height": 380
+                  },
+                  "type": "slot",
+                  "slotId": "host",
+                  "framing": {
+                    "mode": "fill",
+                    "x": 0.5,
+                    "y": 0.5
+                  }
+                },
+                {
+                  "id": "host-label",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 20,
+                    "top": 394,
+                    "width": 376,
+                    "height": 26,
+                    "color": "#a4aaa7",
+                    "fontSize": 18,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": "HOST / LIVE DESK"
+                }
+              ]
+            },
+            {
+              "id": "reply-0",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 422,
+                "width": 648,
+                "height": 158,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 14
+              },
+              "when": {
+                "op": "if",
+                "args": [
+                  {
+                    "op": "eq",
+                    "args": [
+                      {
+                        "get": "modules.threads.reply0_text"
+                      },
+                      ""
+                    ]
+                  },
+                  false,
+                  true
+                ]
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "reply-0-name",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 22,
+                    "top": 16,
+                    "width": 604,
+                    "height": 26,
+                    "color": "#c5ff77",
+                    "fontSize": 20,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply0_name"
+                  }
+                },
+                {
+                  "id": "reply-0-text",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 22,
+                    "top": 51,
+                    "width": 604,
+                    "height": 96,
+                    "color": "#f4f4ef",
+                    "fontSize": 20,
+                    "fontWeight": 400,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply0_text"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "reply-1",
+              "styles": {
+                "position": "absolute",
+                "left": 736,
+                "top": 422,
+                "width": 648,
+                "height": 158,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 14
+              },
+              "when": {
+                "op": "if",
+                "args": [
+                  {
+                    "op": "eq",
+                    "args": [
+                      {
+                        "get": "modules.threads.reply1_text"
+                      },
+                      ""
+                    ]
+                  },
+                  false,
+                  true
+                ]
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "reply-1-name",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 22,
+                    "top": 16,
+                    "width": 604,
+                    "height": 26,
+                    "color": "#c5ff77",
+                    "fontSize": 20,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply1_name"
+                  }
+                },
+                {
+                  "id": "reply-1-text",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 22,
+                    "top": 51,
+                    "width": 604,
+                    "height": 96,
+                    "color": "#f4f4ef",
+                    "fontSize": 20,
+                    "fontWeight": 400,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply1_text"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "reply-2",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 596,
+                "width": 648,
+                "height": 158,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 14
+              },
+              "when": {
+                "op": "if",
+                "args": [
+                  {
+                    "op": "eq",
+                    "args": [
+                      {
+                        "get": "modules.threads.reply2_text"
+                      },
+                      ""
+                    ]
+                  },
+                  false,
+                  true
+                ]
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "reply-2-name",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 22,
+                    "top": 16,
+                    "width": 604,
+                    "height": 26,
+                    "color": "#c5ff77",
+                    "fontSize": 20,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply2_name"
+                  }
+                },
+                {
+                  "id": "reply-2-text",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 22,
+                    "top": 51,
+                    "width": 604,
+                    "height": 96,
+                    "color": "#f4f4ef",
+                    "fontSize": 20,
+                    "fontWeight": 400,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply2_text"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "reply-3",
+              "styles": {
+                "position": "absolute",
+                "left": 736,
+                "top": 596,
+                "width": 648,
+                "height": 158,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 14
+              },
+              "when": {
+                "op": "if",
+                "args": [
+                  {
+                    "op": "eq",
+                    "args": [
+                      {
+                        "get": "modules.threads.reply3_text"
+                      },
+                      ""
+                    ]
+                  },
+                  false,
+                  true
+                ]
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "reply-3-name",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 22,
+                    "top": 16,
+                    "width": 604,
+                    "height": 26,
+                    "color": "#c5ff77",
+                    "fontSize": 20,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply3_name"
+                  }
+                },
+                {
+                  "id": "reply-3-text",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 22,
+                    "top": 51,
+                    "width": 604,
+                    "height": 96,
+                    "color": "#f4f4ef",
+                    "fontSize": 20,
+                    "fontWeight": 400,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply3_text"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "reply-4",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 770,
+                "width": 648,
+                "height": 158,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 14
+              },
+              "when": {
+                "op": "if",
+                "args": [
+                  {
+                    "op": "eq",
+                    "args": [
+                      {
+                        "get": "modules.threads.reply4_text"
+                      },
+                      ""
+                    ]
+                  },
+                  false,
+                  true
+                ]
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "reply-4-name",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 22,
+                    "top": 16,
+                    "width": 604,
+                    "height": 26,
+                    "color": "#c5ff77",
+                    "fontSize": 20,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply4_name"
+                  }
+                },
+                {
+                  "id": "reply-4-text",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 22,
+                    "top": 51,
+                    "width": 604,
+                    "height": 96,
+                    "color": "#f4f4ef",
+                    "fontSize": 20,
+                    "fontWeight": 400,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply4_text"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "reply-5",
+              "styles": {
+                "position": "absolute",
+                "left": 736,
+                "top": 770,
+                "width": 648,
+                "height": 158,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 14
+              },
+              "when": {
+                "op": "if",
+                "args": [
+                  {
+                    "op": "eq",
+                    "args": [
+                      {
+                        "get": "modules.threads.reply5_text"
+                      },
+                      ""
+                    ]
+                  },
+                  false,
+                  true
+                ]
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "reply-5-name",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 22,
+                    "top": 16,
+                    "width": 604,
+                    "height": 26,
+                    "color": "#c5ff77",
+                    "fontSize": 20,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply5_name"
+                  }
+                },
+                {
+                  "id": "reply-5-text",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 22,
+                    "top": 51,
+                    "width": 604,
+                    "height": 96,
+                    "color": "#f4f4ef",
+                    "fontSize": 20,
+                    "fontWeight": 400,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply5_text"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "note",
+              "styles": {
+                "position": "absolute",
+                "left": 1440,
+                "top": 808,
+                "width": 416,
+                "height": 90,
+                "color": "#a4aaa7",
+                "fontSize": 22,
+                "fontWeight": 500,
+                "fontFamily": "Arial",
+                "lineHeight": 1.5,
+                "whiteSpace": "pre-wrap"
+              },
+              "type": "text",
+              "text": "LATEST SIX REPLIES\nWebhook-backed · automatic refresh"
+            },
+            {
+              "id": "observed",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 934,
+                "width": 1172,
+                "height": 27,
+                "color": "#a4aaa7",
+                "fontSize": 17,
+                "fontWeight": 400,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "op": "concat",
+                "args": [
+                  "OBSERVED  ",
+                  {
+                    "get": "modules.threads.repliesUpdated"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "empty-replies",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 450,
+                "width": 1304,
+                "height": 110,
+                "color": "#a4aaa7",
+                "fontSize": 32,
+                "fontWeight": 400,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "when": {
+                "op": "eq",
+                "args": [
+                  {
+                    "get": "modules.threads.replyCount"
+                  },
+                  "0"
+                ]
+              },
+              "type": "text",
+              "text": "Replies will appear here after you choose a post."
+            },
+            {
+              "id": "footer-line",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 977,
+                "width": 1792,
+                "height": 1,
+                "background": "#303732"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer-brand",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1003,
+                "width": 1792,
+                "height": 26,
+                "color": "#a4aaa7",
+                "fontSize": 17,
+                "fontWeight": 600,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2,
+                "letterSpacing": 2
+              },
+              "type": "text",
+              "text": "GENERATED ON PRODUCER.DEV"
+            },
+            {
+              "id": "footer-status",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1036,
+                "width": 1792,
+                "height": 24,
+                "color": "#c5ff77",
+                "fontSize": 17,
+                "fontWeight": 400,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "get": "modules.threads.status"
+              }
+            }
+          ]
+        },
+        "animation": {
+          "tracks": [],
+          "transition": {
+            "type": "crossfade",
+            "durationMs": 360,
+            "contentDurationMs": 220
+          }
+        }
+      },
+      {
+        "id": "replies-portrait",
+        "label": "Live replies · Portrait",
+        "width": 1080,
+        "height": 1920,
+        "root": {
+          "id": "root",
+          "styles": {
+            "position": "absolute",
+            "left": 0,
+            "top": 0,
+            "width": 1080,
+            "height": 1920,
+            "background": "#0c110e",
+            "overflow": "hidden"
+          },
+          "type": "box",
+          "children": [
+            {
+              "id": "ambient",
+              "styles": {
+                "position": "absolute",
+                "left": 0,
+                "top": 0,
+                "width": 1080,
+                "height": 1920,
+                "background": "linear-gradient(135deg,#18251a,#101511 45%,#0b0f0d)"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "edition",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 130,
+                "width": 952,
+                "height": 32,
+                "color": "#c5ff77",
+                "fontSize": 22,
+                "fontWeight": 700,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2,
+                "letterSpacing": 3
+              },
+              "type": "text",
+              "text": "THREADS  /  LIVE REPLIES"
+            },
+            {
+              "id": "title",
+              "styles": {
+                "position": "absolute",
+                "left": 60,
+                "top": 188,
+                "width": 952,
+                "height": 100,
+                "color": "#f4f4ef",
+                "fontSize": 72,
+                "fontWeight": 700,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2,
+                "letterSpacing": -3
+              },
+              "type": "text",
+              "text": "Keep the thread going."
+            },
+            {
+              "id": "handle",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 304,
+                "width": 700,
+                "height": 44,
+                "color": "#a4aaa7",
+                "fontSize": 32,
+                "fontWeight": 500,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "get": "modules.threads.username"
+              }
+            },
+            {
+              "id": "header-line",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 378,
+                "width": 952,
+                "height": 1,
+                "background": "#303732"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "context",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 408,
+                "width": 952,
+                "height": 78,
+                "color": "#a4aaa7",
+                "fontSize": 26,
+                "fontWeight": 400,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "get": "modules.threads.postText"
+              }
+            },
+            {
+              "id": "reply-0",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 526,
+                "width": 952,
+                "height": 163,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 14
+              },
+              "when": {
+                "op": "if",
+                "args": [
+                  {
+                    "op": "eq",
+                    "args": [
+                      {
+                        "get": "modules.threads.reply0_text"
+                      },
+                      ""
+                    ]
+                  },
+                  false,
+                  true
+                ]
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "reply-0-name",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 17,
+                    "width": 904,
+                    "height": 28,
+                    "color": "#c5ff77",
+                    "fontSize": 21,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply0_name"
+                  }
+                },
+                {
+                  "id": "reply-0-text",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 54,
+                    "width": 904,
+                    "height": 89,
+                    "color": "#f4f4ef",
+                    "fontSize": 23,
+                    "fontWeight": 400,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply0_text"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "reply-1",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 709,
+                "width": 952,
+                "height": 163,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 14
+              },
+              "when": {
+                "op": "if",
+                "args": [
+                  {
+                    "op": "eq",
+                    "args": [
+                      {
+                        "get": "modules.threads.reply1_text"
+                      },
+                      ""
+                    ]
+                  },
+                  false,
+                  true
+                ]
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "reply-1-name",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 17,
+                    "width": 904,
+                    "height": 28,
+                    "color": "#c5ff77",
+                    "fontSize": 21,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply1_name"
+                  }
+                },
+                {
+                  "id": "reply-1-text",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 54,
+                    "width": 904,
+                    "height": 89,
+                    "color": "#f4f4ef",
+                    "fontSize": 23,
+                    "fontWeight": 400,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply1_text"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "reply-2",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 892,
+                "width": 952,
+                "height": 163,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 14
+              },
+              "when": {
+                "op": "if",
+                "args": [
+                  {
+                    "op": "eq",
+                    "args": [
+                      {
+                        "get": "modules.threads.reply2_text"
+                      },
+                      ""
+                    ]
+                  },
+                  false,
+                  true
+                ]
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "reply-2-name",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 17,
+                    "width": 904,
+                    "height": 28,
+                    "color": "#c5ff77",
+                    "fontSize": 21,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply2_name"
+                  }
+                },
+                {
+                  "id": "reply-2-text",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 54,
+                    "width": 904,
+                    "height": 89,
+                    "color": "#f4f4ef",
+                    "fontSize": 23,
+                    "fontWeight": 400,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply2_text"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "reply-3",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1075,
+                "width": 952,
+                "height": 163,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 14
+              },
+              "when": {
+                "op": "if",
+                "args": [
+                  {
+                    "op": "eq",
+                    "args": [
+                      {
+                        "get": "modules.threads.reply3_text"
+                      },
+                      ""
+                    ]
+                  },
+                  false,
+                  true
+                ]
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "reply-3-name",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 17,
+                    "width": 904,
+                    "height": 28,
+                    "color": "#c5ff77",
+                    "fontSize": 21,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply3_name"
+                  }
+                },
+                {
+                  "id": "reply-3-text",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 54,
+                    "width": 904,
+                    "height": 89,
+                    "color": "#f4f4ef",
+                    "fontSize": 23,
+                    "fontWeight": 400,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply3_text"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "reply-4",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1258,
+                "width": 952,
+                "height": 163,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 14
+              },
+              "when": {
+                "op": "if",
+                "args": [
+                  {
+                    "op": "eq",
+                    "args": [
+                      {
+                        "get": "modules.threads.reply4_text"
+                      },
+                      ""
+                    ]
+                  },
+                  false,
+                  true
+                ]
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "reply-4-name",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 17,
+                    "width": 904,
+                    "height": 28,
+                    "color": "#c5ff77",
+                    "fontSize": 21,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply4_name"
+                  }
+                },
+                {
+                  "id": "reply-4-text",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 54,
+                    "width": 904,
+                    "height": 89,
+                    "color": "#f4f4ef",
+                    "fontSize": 23,
+                    "fontWeight": 400,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply4_text"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "reply-5",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1441,
+                "width": 952,
+                "height": 163,
+                "background": "#151b17",
+                "border": "1px solid #303732",
+                "borderRadius": 14
+              },
+              "when": {
+                "op": "if",
+                "args": [
+                  {
+                    "op": "eq",
+                    "args": [
+                      {
+                        "get": "modules.threads.reply5_text"
+                      },
+                      ""
+                    ]
+                  },
+                  false,
+                  true
+                ]
+              },
+              "type": "box",
+              "children": [
+                {
+                  "id": "reply-5-name",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 17,
+                    "width": 904,
+                    "height": 28,
+                    "color": "#c5ff77",
+                    "fontSize": 21,
+                    "fontWeight": 700,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply5_name"
+                  }
+                },
+                {
+                  "id": "reply-5-text",
+                  "styles": {
+                    "position": "absolute",
+                    "left": 24,
+                    "top": 54,
+                    "width": 904,
+                    "height": 89,
+                    "color": "#f4f4ef",
+                    "fontSize": 23,
+                    "fontWeight": 400,
+                    "fontFamily": "Arial",
+                    "lineHeight": 1.2
+                  },
+                  "type": "text",
+                  "text": {
+                    "get": "modules.threads.reply5_text"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "observed",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1660,
+                "width": 952,
+                "height": 27,
+                "color": "#a4aaa7",
+                "fontSize": 17,
+                "fontWeight": 400,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "op": "concat",
+                "args": [
+                  "OBSERVED  ",
+                  {
+                    "get": "modules.threads.repliesUpdated"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "note",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1710,
+                "width": 952,
+                "height": 60,
+                "color": "#a4aaa7",
+                "fontSize": 23,
+                "fontWeight": 400,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": "Latest six replies · synced from Threads webhooks"
+            },
+            {
+              "id": "empty-replies",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 550,
+                "width": 952,
+                "height": 110,
+                "color": "#a4aaa7",
+                "fontSize": 34,
+                "fontWeight": 400,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "when": {
+                "op": "eq",
+                "args": [
+                  {
+                    "get": "modules.threads.replyCount"
+                  },
+                  "0"
+                ]
+              },
+              "type": "text",
+              "text": "Replies will appear here after you choose a post."
+            },
+            {
+              "id": "footer-line",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1817,
+                "width": 952,
+                "height": 1,
+                "background": "#303732"
+              },
+              "type": "box",
+              "children": []
+            },
+            {
+              "id": "footer-brand",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1843,
+                "width": 952,
+                "height": 26,
+                "color": "#a4aaa7",
+                "fontSize": 17,
+                "fontWeight": 600,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2,
+                "letterSpacing": 2
+              },
+              "type": "text",
+              "text": "GENERATED ON PRODUCER.DEV"
+            },
+            {
+              "id": "footer-status",
+              "styles": {
+                "position": "absolute",
+                "left": 64,
+                "top": 1876,
+                "width": 952,
+                "height": 24,
+                "color": "#c5ff77",
+                "fontSize": 17,
+                "fontWeight": 400,
+                "fontFamily": "Arial",
+                "lineHeight": 1.2
+              },
+              "type": "text",
+              "text": {
+                "get": "modules.threads.status"
+              }
+            }
+          ]
+        },
+        "animation": {
+          "tracks": [],
+          "transition": {
+            "type": "crossfade",
+            "durationMs": 360,
+            "contentDurationMs": 220
+          }
+        }
+      }
+    ],
+    "controls": [],
+    "controlArrangement": {
+      "sections": [
+        {
+          "id": "views",
+          "label": "On output",
+          "controls": [
+            "builtin:layout"
+          ]
+        },
+        {
+          "id": "data",
+          "label": "Threads data",
+          "controls": [
+            "module:threads:$behavior-tools"
+          ]
+        }
+      ],
+      "minimized": [
+        "builtin:layout"
+      ]
+    }
+  }
+}

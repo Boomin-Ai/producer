@@ -825,17 +825,17 @@ function ChannelsBlock({
             <div key={ep.id} className="set-sub">
               <div className="set-sub-h">
                 <span className="set-sub-t">Posting channels</span>
-                <span className="set-sub-k">{boomin ? "Instagram, through Boomin" : "your server — Instagram, Facebook, Threads"}</span>
+                <span className="set-sub-k">{boomin ? "Instagram and Threads, through Boomin" : "your server — Instagram, Facebook, Threads"}</span>
               </div>
               <div className="cr-channels">
                 {mine.map((c) => (
-                  <ChannelChip key={c.id} channel={c} endpointId={ep.id} canPull={boomin && c.platform === "instagram" && c.status === "active"} onError={setConnectError} onChanged={onChanged} />
+                  <ChannelChip key={c.id} channel={c} endpointId={ep.id} canPull={boomin && ["instagram", "threads"].includes(c.platform) && c.status === "active"} onError={setConnectError} onChanged={onChanged} />
                 ))}
                 {/* One native path for both backends: ask the workspace for an
                     OAuth url, open the user's browser, the token lands server
                     side. No embedded console, no second sign-in. */}
-                {/* Boomin's brand OAuth is Instagram; the open server takes all three (BYO app). */}
-                {((boomin ? ["instagram"] : ["instagram", "facebook", "threads"]) as ("instagram" | "facebook" | "threads")[])
+                {/* Hosted accounts use the workspace's managed OAuth grants. */}
+                {((boomin ? ["instagram", "threads"] : ["instagram", "facebook", "threads"]) as ("instagram" | "facebook" | "threads")[])
                   .filter((pl) => !mine.some((c) => c.platform === pl))
                   .map((pl) => (
                     <button

@@ -67,7 +67,9 @@
     "test:mcp": "node tools/producer-mcp/test.mjs",
     "test:authoring-visual": "node scripts/test-authoring-visual.mjs",
     "test:visual-review-browser": "node scripts/test-visual-review-browser.mjs",
-    "test:roster-poll": "node scripts/test-roster-poll.mjs"
+    "test:roster-poll": "node scripts/test-roster-poll.mjs",
+    "test:threads-social": "node scripts/test-threads-social.mjs",
+    "test:threads-browser": "node scripts/test-threads-browser.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.0",

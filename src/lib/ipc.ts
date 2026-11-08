@@ -28,8 +28,8 @@ export interface Channel {
   status: "active" | "needs_reconnect" | "disabled";
   capabilities?: {
     rateLimit?: { type: string; max: number; windowSeconds: number };
-    media?: { kinds?: string[] };
-    text?: { maxChars?: number };
+    media?: { kinds?: string[]; required?: boolean };
+    text?: { maxChars?: number }; features?: Record<string, boolean>;
   };
   /** Added client-side: which endpoint this channel lives on. */
   endpoint_id: string;

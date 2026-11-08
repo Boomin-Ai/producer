@@ -186,7 +186,7 @@ export class RehearsalSession {
     const variants=this.package.set.views?.[view],current=this.package.set.layouts.find(l=>l.id===this.state.layoutId);if(!variants||!current)return;
     const orientation=current.width>current.height?'landscape':current.width<current.height?'portrait':'square',layout=variants[orientation];if(layout&&layout!==this.state.layoutId)this.send({type:'control',action:{type:'layout.select',layoutId:layout}});
   }
-  private createModules(){return new SetRuntime(this.package.runtime,{epoch:++moduleEpoch,domain:this.workspaceMode==='live'?'live':'rehearsal',capabilities:['audience.vote@1','audience.text@1','data.weather@1','data.agent@1','room.chat@1']});}
+  private createModules(){return new SetRuntime(this.package.runtime,{epoch:++moduleEpoch,domain:this.workspaceMode==='live'?'live':'rehearsal',capabilities:['audience.vote@1','audience.text@1','data.weather@1','data.agent@1','data.social@1','room.chat@1']});}
   private observeModules(){this.lastControllerState=this.controllerState(this.moduleRuntime.snapshot());this.stopModules=this.moduleRuntime.subscribe(()=>{this.state=freeze({...this.state,moduleCommit:{setEpoch:this.moduleRuntime.snapshot().setEpoch,revision:this.moduleRuntime.snapshot().revision},modules:runtimeFields(this.moduleRuntime.snapshot(),this.package.runtime),revision:this.state.revision+1});this.applyModuleView(this.moduleRuntime.snapshot());this.emit();});}
   private moduleLifecycleTransport?: (state:{segment:string;running:boolean;paused:boolean})=>void;
   attachModuleLifecycle=(send:typeof this.moduleLifecycleTransport)=>{this.moduleLifecycleTransport=send;if(send)this.syncModuleLifecycle();};

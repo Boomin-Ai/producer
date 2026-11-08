@@ -1,7 +1,9 @@
+import {validModuleBindings} from '../../shared/set-runtime/social';
+import type {ModuleBindings} from '../../shared/set-runtime/contract';
 import {SetRuntime,type Command,type Principal,type RuntimeCheckpoint} from '../../shared/set-runtime/runtime';
 import {parseRuntimeDefinition} from '../../shared/set-runtime/contract';
-const capabilities=['audience.vote@1','audience.text@1','data.weather@1','data.agent@1','room.chat@1'];
-interface Stored {effects?:Record<string,true>;deployment:string;bindings:Record<string,{id:string;revision:number}>;checkpoint:RuntimeCheckpoint}
+const capabilities=['audience.vote@1','audience.text@1','data.weather@1','data.agent@1','data.social@1','room.chat@1'];
+interface Stored {effects?:Record<string,true>;deployment:string;bindings:ModuleBindings;checkpoint:RuntimeCheckpoint}
 interface Storage {get<T>(key:string):Promise<T|undefined>;put(key:string,value:unknown):Promise<void>;delete?(key:string):Promise<boolean>}
 /** Serialized authority inside the room DO. Storage commits precede acknowledgements. */
 export class SetRuntimeService {
@@ -23,8 +25,8 @@ export class SetRuntimeService {
    if(url.pathname.endsWith('/install')){
     if(typeof body.deployment!=='string'||!/^[A-Za-z0-9_-]{1,120}$/.test(body.deployment))return this.error('Invalid deployment identity',400);
     const definition=parseRuntimeDefinition(body.definition);
-    const bindings=(body.bindings??{}) as Record<string,{id:string;revision:number}>;
-    if(!bindings||typeof bindings!=='object'||Array.isArray(bindings)||Object.keys(bindings).length>64||Object.entries(bindings).some(([role,b])=>!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(role)||!b||typeof b.id!=='string'||!Number.isSafeInteger(b.revision)||b.revision<1))return this.error('Invalid connection bindings',400);
+    const bindings=(body.bindings??{}) as ModuleBindings;
+    if(!validModuleBindings(bindings))return this.error('Invalid connection bindings',400);
     if(stored?.deployment===body.deployment){if((JSON.stringify(stored.checkpoint.definition)!==JSON.stringify(definition)||JSON.stringify(stored.bindings)!==JSON.stringify(bindings)))return this.error('Deployment identity reused',409);return Response.json({deployment:stored.deployment,snapshot:SetRuntime.restore(stored.checkpoint,capabilities).operator()});}
     if((stored?.checkpoint.state.setEpoch??0)!==body.expectedEpoch)return this.error('Set was replaced; reload before applying',409);
     const runtime=new SetRuntime(definition,{epoch:(stored?.checkpoint.state.setEpoch??0)+1,domain:'live',capabilities});

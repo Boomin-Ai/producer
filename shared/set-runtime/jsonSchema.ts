@@ -17,6 +17,7 @@ const behavior={oneOf:[
  object({type:{const:'vote'},question:text(240),options:{...array(option,12),minItems:2},maxParticipants:{type:'integer',minimum:1,maximum:100000},allowChange:{type:'boolean'},showView:id},['type','question','options','maxParticipants','allowChange']),
  object({type:{const:'submissions'},prompt:text(240),maxLength:{type:'integer',minimum:1,maximum:1000},capacity:{type:'integer',minimum:1,maximum:500},showView:id,sources:{type:'array',items:{enum:['submissions','chat']},maxItems:2}},['type','prompt','maxLength','capacity']),
  object({type:{const:'weather'},integrationRole:id}),
+ object({type:{const:'social'},integrationRole:id}),
  object({type:{const:'agent'},integrationRole:id,prompt:text(1000),mode:{enum:['answer','factCheck']},maxLength:{type:'number',minimum:240,maximum:16000},showView:id,initialQuestion:text(1000),researchView:id},['type','integrationRole','prompt','mode','maxLength']),
 ]};
 const definition=object({label:text(80),state:dictionary(ref('Field'),64),publicFields:array(id,64),initialView:id,views:array(id,32),actions:dictionary(object({roles:array(role,4),steps:array(step,32),when:ref('Expression')},['roles','steps']),64),controls:array(object({id,label:text(80),audience:role,controls:array(control,32)}),16),capabilities:array({type:'string',maxLength:80,pattern:'^[a-z][a-z0-9.-]+@[1-9][0-9]*$'},16),behavior},['label','state','actions','controls','capabilities']);

@@ -18,10 +18,10 @@ export interface RuntimeCheckpoint {version:1;definition:RuntimeDefinition;contr
 interface Secret {ballots:Map<string,string>;submissions:Map<string,string>}
 const own=(o:object,k:string)=>Object.prototype.hasOwnProperty.call(o,k);
 const freeze=<T>(v:T):T=>{if(v&&typeof v==='object'){Object.values(v).forEach(freeze);Object.freeze(v);}return v;};
-const scalarInput=(input:unknown):Record<string,Scalar>=>{
+const scalarInput=(input:unknown,max=32):Record<string,Scalar>=>{
  if(!input||typeof input!=='object'||Array.isArray(input)||![Object.prototype,null].includes(Object.getPrototypeOf(input)))throw Error('Invalid input');
  if(JSON.stringify(input).length>64000)throw Error('Input byte budget exceeded');
- if(Object.keys(input).length>32)throw Error('Input budget exceeded');for(const[k,v]of Object.entries(input)){if(!key(k)||!['string','number','boolean'].includes(typeof v)||typeof v==='string'&&v.length>16000||typeof v==='number'&&!Number.isFinite(v))throw Error('Invalid input field');}return input as Record<string,Scalar>;
+ if(Object.keys(input).length>max)throw Error('Input budget exceeded');for(const[k,v]of Object.entries(input)){if(!key(k)||!['string','number','boolean'].includes(typeof v)||typeof v==='string'&&v.length>16000||typeof v==='number'&&!Number.isFinite(v))throw Error('Invalid input field');}return input as Record<string,Scalar>;
 };
 /** Synchronous commit authority shared by server execution and isolated rehearsal.
  * No module may call network/device APIs here. Adapters deliver checked results. */
@@ -75,7 +75,7 @@ export class SetRuntime {
    const source=this.state.modules[command.module];if(!source||command.epoch!==source.epoch)throw Error('Module epoch expired');
    if(command.expectedRevision!==undefined&&command.expectedRevision!==this.state.revision)throw Error('State revision conflict');
    if(source.execution==='disposed')throw Error('Module disposed');
-   const input=scalarInput(command.input??{}),next=structuredClone(source),definition=this.definition.definitions[source.definition];
+   const input=scalarInput(command.input??{},command.op==='social.update'&&principal.role==='connector'?64:32),next=structuredClone(source),definition=this.definition.definitions[source.definition];
    const secret=this.secrets.get(source.id)!;const staged={ballots:new Map(secret.ballots),submissions:new Map(secret.submissions)};
    this.apply(next,definition,command.op,input,principal,staged,now,command.id);
    if(this.state.revision>=Number.MAX_SAFE_INTEGER)throw Error('Revision limit reached');
@@ -120,6 +120,14 @@ export class SetRuntime {
    if(op==='agent.show'){m.agent.page=0;if(m.agent.status!=='completed')throw Error('No completed response to show');m.agent.displayedQuestion=m.agent.question;m.agent.displayedResponse=m.agent.response;m.agent.displayedCitations=structuredClone(m.agent.citations);if(d.behavior.showView)m.view=d.behavior.showView;return;}
    if(op==='agent.clear'){m.agent.displayedQuestion='';m.agent.displayedResponse='';m.agent.displayedCitations=[];return;}
    throw Error('Unknown agent action');
+  }
+  if(op==='social.update'||op==='social.error'){
+   if(p.role!=='connector'||d.behavior?.type!=='social'||m.execution!=='running')throw Error('Running social connector authority required');
+   if(op==='social.error'){m.error=String(input.message??'Social data unavailable').slice(0,240);m.dataStatus='stale';if(d.state.status)m.values.status=fieldValue(d.state.status,'Connection needs attention');if(d.state.error)m.values.error=fieldValue(d.state.error,m.error);return;}
+   if(Object.keys(input).length>64||Object.keys(input).some(k=>!Object.prototype.hasOwnProperty.call(d.state,k)))throw Error('Unknown social field');
+   const at=Number(input.fetchedAt),last=Number(m.values.fetchedAt??0);if(!Number.isSafeInteger(at)||at<0||at>now+300000||at<last)throw Error('Expired social snapshot');
+   const fields={...m.values};for(const [k,v]of Object.entries(input))fields[k]=fieldValue(d.state[k],v);
+   m.values=fields;m.dataStatus='fresh';m.error='';return;
   }
   if(op==='weather.selectLocation'||op==='weather.clearLocation'){
    operator();if(d.behavior?.type!=='weather'||m.execution!=='running')throw Error('Start the weather module before selecting a city');
