@@ -69,6 +69,17 @@ fn observe_command_dispatch<R: tauri::Runtime>(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(all(feature = "sets-v2-dev", have_engine, debug_assertions, target_os = "macos"))]
+    if std::env::var("PRODUCER_THUMB_RESTORE_SELFTEST").as_deref() == Ok("1") {
+        // libobs stays on one worker while Cocoa tasks have a live main queue.
+        // Rust's unit-test runner blocks that queue while joining its workers.
+        std::thread::spawn(|| {
+            let result = std::panic::catch_unwind(live::graph::thumbnail_restore_selftest);
+            std::process::exit(if result.is_ok() { 0 } else { 1 });
+        });
+        extern "C" { fn dispatch_main() -> !; }
+        unsafe { dispatch_main(); }
+    }
     #[cfg(feature = "guest-rtc-production")]
     {
         // Configure the timestamped SDK adapter before any native factory is
