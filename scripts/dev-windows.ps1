@@ -19,15 +19,14 @@ Write-Host "engine: $eng"
 
 Push-Location $RepoRoot
 try {
-  # The hardware-encoder plugins run obs-nvenc-test.exe / obs-qsv-test.exe /
-  # obs-amf-test.exe from the EXECUTABLE's directory (the installer flattens
-  # bin/ beside producer.exe). The dev exe lives in target\debug, so without
-  # this copy every probe fails and a GPU box silently streams x264.
+  # OBS resolves encoder probes AND the recording muxer beside the executable.
+  # PATH is enough for engine DLLs, but not these explicitly resolved helpers.
+  # The installer flattens bin/ there; dev must stage the same subprocesses.
   $dbg = Join-Path (Get-CargoTargetDir) "debug"
   New-Item -ItemType Directory -Force $dbg | Out-Null
   Sync-WindowsCutout $dbg
-  Get-ChildItem (Join-Path $eng "bin") -Filter "obs-*-test.exe" | ForEach-Object { Copy-Item $_.FullName $dbg -Force }
-  Write-Host "encoder probe helpers beside the dev exe: $((Get-ChildItem $dbg -Filter 'obs-*-test.exe').Name -join ', ')"
+  $helpers = @(Sync-WindowsDevHelpers -EngineDir $eng -OutputDir $dbg)
+  Write-Host "Windows runtime helpers beside the dev exe: $($helpers -join ', ')"
   if ($Build) {
     cargo build --manifest-path src-tauri\Cargo.toml --features guest-rtc-production
     if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }

@@ -50,6 +50,8 @@ export class ProgramCapture {
   private starting: Promise<void> | null = null;
   private running = false;
   private generation = 0;
+  /** Call from an explicit gesture after a green-room wait loses activation. */
+  async resumeAudio(): Promise<void> { await this.context?.resume(); }
   setPortrait(on:boolean):void {
     if(this.portrait===on)return;
     this.portrait=on;

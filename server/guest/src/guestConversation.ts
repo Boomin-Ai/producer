@@ -25,6 +25,8 @@ export class GuestConversation {
     this.mesh?.setMicrophoneEnabled(enabled);
   }
   refreshMicrophone(): void { this.mesh?.refreshMicrophone(); }
+  /** Resume only already-authorized peer players from an operator gesture. */
+  async resumeAudio(): Promise<void> { await Promise.all([...this.players.values()].map(player=>player.play())); }
   applyStage(update: StageUpdate, _source?: "host"): void {
     if (this.stage && update.version < this.stage.version) return;
     this.stage = update;
@@ -46,7 +48,7 @@ export class GuestConversation {
     const generation = ++this.generation;
     const current = () => this.running && generation === this.generation;
     try {
-      const response = await fetch(`${this.options.api}/guest/${encodeURIComponent(this.options.code)}/room-session`, { method: "POST" });
+      const response = await fetch(`${this.options.api}/guest/${encodeURIComponent(this.options.code)}/room-session`, { method: "POST", credentials: "omit", redirect: "error", referrerPolicy: "no-referrer" });
       if (!response.ok) throw new Error(`Room conversation ${response.status}`);
       const session = await response.json() as {
         signaling_url: string; peer_id: string; stage: StageUpdate; ice_servers?: RTCIceServer[];
