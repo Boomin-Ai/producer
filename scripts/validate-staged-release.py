@@ -69,8 +69,9 @@ def validate(repo, run_id, version):
 
     step(job('validate-public-source', 'success'), 'Validate stable source and reserve one release draft')
     step(job('build (ubuntu-latest)', 'success'), 'Run tauri-apps/tauri-action@v0')
-    intel = job('build (macos-latest, --target x86_64-apple-darwin, x86_64-apple-darwin)', 'success')
-    step(intel, 'Notarize and staple Intel installer image')
+    intel = job('build-macos-intel-live', 'success')
+    step(intel, 'Stage Intel installer in the release draft')
+    step(intel, 'Stage notarized Intel updater archive')
     arm = job('build-macos-arm64-live', 'success')
     step(arm, 'Stage Apple Silicon installer in the release draft')
     step(arm, 'Stage notarized Apple Silicon updater archive')

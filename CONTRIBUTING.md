@@ -15,6 +15,11 @@ PRs land quickest.
 
 ## Development loop
 
+For macOS native live/camera work on Intel or Apple Silicon, read
+[the shared Mac build requirements](docs/MACOS-BUILDS.md) and use `make setup`,
+`make check`, then `make dev`. A frontend-only/no-engine build does not qualify
+permissions, room output or the virtual camera.
+
 ```sh
 bun install
 bun run tauri dev    # full app (Rust + webview, hot reload)

@@ -10,7 +10,7 @@ on:
         type: boolean
         default: false
       native_guest:
-        description: "Include the native LiveKit guest runtime in the Apple Silicon candidate"
+        description: "Include native LiveKit guest runtime in both Mac candidates (required for public releases)"
         type: boolean
         default: false
       windows_only:
@@ -170,7 +170,7 @@ jobs:
             assert any(a['name'] == file.name and a['state'] == 'uploaded' and a['size'] == file.stat().st_size for a in release['assets'])
           PY
           gh release edit "$CANDIDATE_TAG" --draft=false --prerelease --latest=false --repo Boomin-Ai/producer
-  # ── Linux / Intel-mac (engine-less, unchanged path) ────────────────────────
+  # ── Linux (engine-less) ──────────────────────────────────────────────────
   # Skipped on dry-runs so a dispatch can't clobber public release assets.
   # Windows left this matrix when build-windows-live landed: an engine-less
   # Windows exe here would race the live one for the same asset names, and
@@ -184,9 +184,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: macos-latest
-            args: "--target x86_64-apple-darwin"
-            targets: x86_64-apple-darwin
           - platform: ubuntu-latest
             args: ""
             targets: ""
@@ -237,20 +234,6 @@ jobs:
           includeUpdaterJson: false
           args: ${{ matrix.args }}
 
-      - name: Notarize and staple Intel installer image
-        if: runner.os == 'macOS'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          NOTARY_ID: ${{ secrets.APPLE_ID }}
-          NOTARY_PW: ${{ secrets.APPLE_PASSWORD }}
-          NOTARY_TEAM: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          set -euo pipefail
-          VERSION="$(python3 -c "import json;print(json.load(open('src-tauri/tauri.conf.json'))['version'])")"
-          DMG="Producer_${VERSION}_x64.dmg"
-          gh release download "v$VERSION" --pattern "$DMG"
-          bash scripts/notarize-intel-dmg.sh "$DMG"
-          gh release upload "v$VERSION" "$DMG" --clobber
 
   # ── macOS arm64 + Live engine (Producer Live) ──────────────────────────────
   # Ordering is load-bearing (see docs/LIVE-REVIEW.md §5.2/D5):
@@ -267,6 +250,8 @@ jobs:
     # names and would sign/notarize the engine-less intermediate build.
     env:
       GH_TOKEN: ${{ github.token }}
+      PRODUCER_REQUIRE_ENGINE: '1'
+      PRODUCER_NOTARY_RECEIPT_DIR: macos-notary-receipts
       SIGN_IDENT: ${{ secrets.APPLE_SIGNING_IDENTITY }}
       CERT_B64: ${{ secrets.APPLE_CERTIFICATE }}
       CERT_PW: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -321,6 +306,7 @@ jobs:
           test -d "engine/artifacts/$NAME/Frameworks/libobs.framework" \
             || { echo "FATAL: engine artifact missing after fetch — refusing to ship a stub build" >&2; exit 1; }
           echo "ENGINE_NAME=$NAME" >> "$GITHUB_ENV"
+          bash scripts/check-macos-engine.sh "engine/artifacts/$NAME" arm64
 
       - name: Build single camera and retired-device migration from pinned source
         run: |
@@ -460,20 +446,7 @@ jobs:
         if: env.SIGN_IDENT != ''
         run: |
           set -euo pipefail
-          ditto -c -k --keepParent "$APP" /tmp/Producer.zip
-          xcrun notarytool submit /tmp/Producer.zip \
-            --apple-id "$NOTARY_ID" --password "$NOTARY_PW" --team-id "$NOTARY_TEAM" \
-            --wait --output-format json | tee /tmp/notary.json
-          SUB_ID="$(python3 -c "import json;print(json.load(open('/tmp/notary.json'))['id'])")"
-          STATUS="$(python3 -c "import json;print(json.load(open('/tmp/notary.json'))['status'])")"
-          if [ "$STATUS" != "Accepted" ]; then
-            echo "Notarization $STATUS — per-file issues:" >&2
-            xcrun notarytool log "$SUB_ID" \
-              --apple-id "$NOTARY_ID" --password "$NOTARY_PW" --team-id "$NOTARY_TEAM" || true
-            exit 1
-          fi
-          xcrun stapler staple "$APP"
-          spctl -a -t exec -vv "$APP"
+          bash scripts/notarize-macos-artifact.sh "$APP"
 
       - name: Package DMG (+ sign, notarize, staple)
         run: |
@@ -487,10 +460,7 @@ jobs:
           hdiutil create -volname "Producer" -srcfolder "$ROOT" -ov -format UDZO "$DMG"
           if [ -n "${SIGN_IDENT:-}" ]; then
             codesign --force --timestamp --sign "$SIGN_IDENT" "$DMG"
-            xcrun notarytool submit "$DMG" \
-              --apple-id "$NOTARY_ID" --password "$NOTARY_PW" --team-id "$NOTARY_TEAM" \
-              --wait
-            xcrun stapler staple "$DMG"
+            bash scripts/notarize-macos-artifact.sh "$DMG"
           fi
           echo "DMG=$DMG" >> "$GITHUB_ENV"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
@@ -519,6 +489,245 @@ jobs:
           bun run tauri signer sign "$UPD" --password "" >/dev/null
           test -f "$UPD.sig" || { echo "FATAL: updater signature not produced" >&2; exit 1; }
           gh release upload "v$VERSION" "$UPD" "$UPD.sig" --clobber
+
+      - name: Preserve accepted Mac artifacts after ticket delivery failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Producer-macos-silicon-notary-recovery-${{ github.sha }}
+          path: macos-notary-receipts/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ── Intel macOS + Live engine; same signing and publication gates ─────────
+  build-macos-intel-live:
+    if: ${{ !cancelled() && !inputs.windows_only && inputs.promote_run == '' && inputs.resume_windows_run == '' && (needs.validate-public-source.result == 'success' || (github.event_name == 'workflow_dispatch' && !inputs.publish)) }}
+    needs: [validate-public-source]
+    permissions:
+      contents: write
+    runs-on: macos-15-intel
+    timeout-minutes: 90
+    # Deliberately NOT named APPLE_* at job scope: tauri's bundler reads those
+    # names and would sign/notarize the engine-less intermediate build.
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PRODUCER_REQUIRE_ENGINE: '1'
+      PRODUCER_NOTARY_RECEIPT_DIR: macos-notary-receipts
+      SIGN_IDENT: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      CERT_B64: ${{ secrets.APPLE_CERTIFICATE }}
+      CERT_PW: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      PROFILE_B64: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+      NOTARY_ID: ${{ secrets.APPLE_ID }}
+      NOTARY_PW: ${{ secrets.APPLE_PASSWORD }}
+      NOTARY_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: bun install --frozen-lockfile
+
+      - name: Prepare complete pinned Intel live engine
+        env:
+          PRODUCER_METAL_COMPILE_ONLY: '1'
+          PRODUCER_ENGINE_PACK: '0'
+        run: |
+          bash scripts/extract-engine.sh
+          source scripts/engine-lib.sh
+          NAME="$(artifact_name)"
+          bash scripts/check-macos-engine.sh "engine/artifacts/$NAME" x86_64
+          echo "ENGINE_NAME=$NAME" >> "$GITHUB_ENV"
+          echo "PRODUCER_ENGINE_DIR=$ARTIFACT_DIR/$NAME" >> "$GITHUB_ENV"
+
+      - name: Require Apple signing and notarization credentials
+        run: |
+          set -euo pipefail
+          for KEY in SIGN_IDENT CERT_B64 PROFILE_B64 NOTARY_ID NOTARY_PW NOTARY_TEAM; do
+            test -n "${!KEY:-}" || { echo "FATAL: $KEY is required for an Apple-signed release" >&2; exit 1; }
+          done
+
+      - name: Import signing certificate
+        if: env.CERT_B64 != ''
+        run: |
+          set -euo pipefail
+          KC=build.keychain
+          security create-keychain -p ci "$KC"
+          security default-keychain -s "$KC"
+          security unlock-keychain -p ci "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          echo "$CERT_B64" | base64 --decode > /tmp/cert.p12
+          security import /tmp/cert.p12 -k "$KC" -P "$CERT_PW" -T /usr/bin/codesign
+          rm /tmp/cert.p12
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ci "$KC" >/dev/null
+
+      - name: Restore camera provisioning profile
+        run: |
+          set -euo pipefail
+          test -n "$PROFILE_B64" || { echo "FATAL: APPLE_PROVISIONING_PROFILE is required for camera installation" >&2; exit 1; }
+          printf '%s' "$PROFILE_B64" | base64 --decode > scripts/embedded.provisionprofile
+          security cms -D -i scripts/embedded.provisionprofile > /tmp/producer-profile.plist
+          python3 - <<'PY'
+          import datetime, os, plistlib
+          with open('/tmp/producer-profile.plist', 'rb') as f:
+              profile = plistlib.load(f)
+          ent = profile['Entitlements']
+          assert profile['ExpirationDate'] > datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None), 'Provisioning profile expired'
+          assert profile['TeamIdentifier'] == [os.environ['NOTARY_TEAM']], 'Wrong provisioning team'
+          assert ent.get('com.apple.application-identifier') == os.environ['NOTARY_TEAM'] + '.ai.boomin.producer', 'Wrong provisioning app'
+          assert ent.get('com.apple.developer.system-extension.install') is True, 'System Extension capability missing'
+          PY
+
+      # No APPLE_* env here on purpose: tauri must NOT sign/notarize the
+      # engine-less intermediate app; signing happens after engine assembly.
+      - name: Check native preview coordinate mapping
+        run: |
+          clang -fobjc-arc -fblocks scripts/test-preview-geometry.m src-tauri/src/live/shim.m \
+            -framework AppKit -framework WebKit -framework AVFoundation \
+            -framework CoreMediaIO -framework SystemExtensions -framework CoreGraphics -framework Security \
+            -o /tmp/producer-preview-geometry-test
+          /tmp/producer-preview-geometry-test
+          node scripts/test-preview-session.mjs
+
+      - name: Build app (engine linked, unsigned)
+        env:
+          INCLUDE_NATIVE_GUEST: ${{ (github.event_name == 'push' || inputs.native_guest) && '1' || '0' }}
+          # Keep release optimization and archive line symbols separately.
+          CARGO_PROFILE_RELEASE_DEBUG: line-tables-only
+          CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO: packed
+        run: |
+          if [ "$INCLUDE_NATIVE_GUEST" = "1" ]; then
+            bun run tauri build --target x86_64-apple-darwin --config '{"bundle":{"macOS":{"minimumSystemVersion":"13.0"}}}' --features guest-rtc-production
+          else
+            bun run tauri build --target x86_64-apple-darwin --config '{"bundle":{"macOS":{"minimumSystemVersion":"13.0"}}}'
+          fi
+
+      - name: Archive matching production symbols
+        run: |
+          set -euo pipefail
+          APP="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/Producer.app"
+          SYMBOLS="src-tauri/target/x86_64-apple-darwin/release/producer.dSYM"
+          # Cargo preserves its artifact hash in the inner DWARF filename.
+          # Validate the actual file; the binary/dSYM UUID check below remains authoritative.
+          python3 - "$SYMBOLS" <<'PY'
+          import pathlib, sys
+          files = [p for p in (pathlib.Path(sys.argv[1]) / 'Contents/Resources/DWARF').glob('*') if p.is_file()]
+          assert len(files) == 1 and files[0].stat().st_size > 0, 'Missing or ambiguous release DWARF file'
+          PY
+          mkdir -p /tmp/producer-symbols
+          ditto "$SYMBOLS" /tmp/producer-symbols/Producer.app.dSYM
+          xcrun dwarfdump --uuid "$APP/Contents/MacOS/Producer" > /tmp/producer-symbols/binary-uuid.txt
+          xcrun dwarfdump --uuid /tmp/producer-symbols/Producer.app.dSYM > /tmp/producer-symbols/symbol-uuid.txt
+          python3 - <<'PY'
+          import pathlib, re
+          root = pathlib.Path('/tmp/producer-symbols')
+          uuids = lambda name: set(re.findall(r'UUID: ([A-Fa-f0-9-]+)', (root / name).read_text()))
+          binary, symbols = uuids('binary-uuid.txt'), uuids('symbol-uuid.txt')
+          assert binary and binary == symbols, 'Release symbol UUID mismatch'
+          PY
+          printf '%s\n' "$PRODUCER_SOURCE_SHA" > /tmp/producer-symbols/source-revision.txt
+
+      - name: Retain production symbols for diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: producer-macos-intel-symbols-${{ github.sha }}
+          path: /tmp/producer-symbols
+          retention-days: 90
+
+      - name: Guard — refuse stub build
+        run: |
+          APP="src-tauri/target/x86_64-apple-darwin/release/bundle/macos/Producer.app"
+          test -d "$APP" || { echo "FATAL: app bundle not found" >&2; exit 1; }
+          otool -L "$APP/Contents/MacOS/Producer" | grep -q libobs \
+            || { echo "FATAL: binary not linked against libobs — stub build (have_engine cfg absent)" >&2; exit 1; }
+          echo "APP=$APP" >> "$GITHUB_ENV"
+
+      - name: Assemble engine into bundle + sign inner→outer
+        run: CODESIGN_IDENT="${SIGN_IDENT:--}" ./scripts/assemble-engine-bundle.sh "$APP"
+
+      - name: Re-sign app with hardened runtime entitlements
+        if: env.SIGN_IDENT != ''
+        run: |
+          codesign --force --options runtime --timestamp \
+            --entitlements .github/macos/producer.entitlements \
+            --sign "$SIGN_IDENT" "$APP"
+
+      - name: Gates — dependency closure + no-Qt + deep-strict verify
+        run: |
+          # engine-closure.sh enforces that every @rpath dep EXISTS in the
+          # assembled bundle — the gate that turns v0.2.0's launch crash red.
+          ./scripts/engine-closure.sh "$APP/Contents"
+          ./scripts/check-no-qt.sh "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          python3 scripts/check-camera-bundle.py "$APP"
+
+      - name: Notarize + staple app
+        if: env.SIGN_IDENT != ''
+        run: |
+          set -euo pipefail
+          bash scripts/notarize-macos-artifact.sh "$APP"
+
+      - name: Package DMG (+ sign, notarize, staple)
+        run: |
+          set -euo pipefail
+          VERSION="$(python3 -c "import json;print(json.load(open('src-tauri/tauri.conf.json'))['version'])")"
+          DMG="Producer_${VERSION}_x64.dmg"
+          ROOT=/tmp/dmgroot
+          rm -rf "$ROOT" && mkdir -p "$ROOT"
+          cp -R "$APP" "$ROOT/"
+          ln -s /Applications "$ROOT/Applications"
+          hdiutil create -volname "Producer" -srcfolder "$ROOT" -ov -format UDZO "$DMG"
+          if [ -n "${SIGN_IDENT:-}" ]; then
+            codesign --force --timestamp --sign "$SIGN_IDENT" "$DMG"
+            bash scripts/notarize-macos-artifact.sh "$DMG"
+          fi
+          echo "DMG=$DMG" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Upload DMG as Actions artifact (dry-run proof)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Producer-macos-intel-live
+          path: ${{ env.DMG }}
+
+      - name: Stage Intel installer in the release draft
+        if: ${{ github.event_name == 'push' || inputs.publish }}
+        run: |
+          set -euo pipefail
+          gh release upload "v$VERSION" "$DMG" --clobber
+
+      # Auto-update leg: the updater archive must contain the ASSEMBLED,
+      # notarized app (tauri's auto-generated one is the engine-less
+      # intermediate — never ship that).
+      - name: Stage notarized Intel updater archive
+        if: ${{ github.event_name == 'push' || inputs.publish }}
+        run: |
+          set -euo pipefail
+          UPD="Producer_x64.app.tar.gz"
+          tar -czf "$UPD" -C "$(dirname "$APP")" "$(basename "$APP")"
+          bun run tauri signer sign "$UPD" --password "" >/dev/null
+          test -f "$UPD.sig" || { echo "FATAL: updater signature not produced" >&2; exit 1; }
+          gh release upload "v$VERSION" "$UPD" "$UPD.sig" --clobber
+
+      - name: Preserve accepted Mac artifacts after ticket delivery failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Producer-macos-intel-notary-recovery-${{ github.sha }}
+          path: macos-notary-receipts/
+          if-no-files-found: ignore
+          retention-days: 14
 
   # ── Windows x64 + Live engine (Producer Live) ──────────────────────────────
   # Mirror of build-macos-arm64-live for the Windows engine. Same rule set:
@@ -778,8 +987,8 @@ jobs:
 
   # Keep the previous public release current until every new platform passes.
   publish-verified-release:
-    if: ${{ !cancelled() && inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) && needs.validate-public-source.result == 'success' && needs.build-windows-live.result == 'success' && ((!inputs.windows_only && inputs.resume_windows_run == '' && needs.build.result == 'success' && needs.build-macos-arm64-live.result == 'success') || ((inputs.windows_only || inputs.resume_windows_run != '') && needs.build.result == 'skipped' && needs.build-macos-arm64-live.result == 'skipped')) }}
-    needs: [validate-public-source, build, build-macos-arm64-live, build-windows-live]
+    if: ${{ !cancelled() && inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) && needs.validate-public-source.result == 'success' && needs.build-windows-live.result == 'success' && ((!inputs.windows_only && inputs.resume_windows_run == '' && needs.build.result == 'success' && needs.build-macos-arm64-live.result == 'success' && needs.build-macos-intel-live.result == 'success') || ((inputs.windows_only || inputs.resume_windows_run != '') && needs.build.result == 'skipped' && needs.build-macos-arm64-live.result == 'skipped' && needs.build-macos-intel-live.result == 'skipped')) }}
+    needs: [validate-public-source, build, build-macos-arm64-live, build-macos-intel-live, build-windows-live]
     runs-on: ubuntu-latest
     permissions:
       actions: read

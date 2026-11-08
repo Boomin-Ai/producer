@@ -52,6 +52,7 @@ fn link_live_engine() {
 
 fn link_live_engine_macos() {
     println!("cargo:rerun-if-env-changed=PRODUCER_ENGINE_DIR");
+    println!("cargo:rerun-if-env-changed=PRODUCER_REQUIRE_ENGINE");
     println!("cargo:rerun-if-changed=../engine/obs.lock");
 
     let engine_dir = std::env::var("PRODUCER_ENGINE_DIR")
@@ -59,17 +60,40 @@ fn link_live_engine_macos() {
         .ok()
         .or_else(|| find_default_artifact("macos"));
     let Some(engine_dir) = engine_dir else {
+        assert!(
+            std::env::var("PRODUCER_REQUIRE_ENGINE").as_deref() != Ok("1"),
+            "live Mac build requires its native engine; run make setup first"
+        );
         println!("cargo:warning=live engine artifact not found; building without live support");
         return;
     };
     let frameworks = engine_dir.join("Frameworks");
     if !frameworks.join("libobs.framework").exists() {
+        assert!(
+            std::env::var("PRODUCER_REQUIRE_ENGINE").as_deref() != Ok("1"),
+            "live Mac build is missing libobs.framework under {}",
+            frameworks.display()
+        );
         println!(
             "cargo:warning=no libobs.framework under {}; building without live support",
             frameworks.display()
         );
         return;
     }
+
+    let arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+    let arch = if arch == "aarch64" { "arm64" } else { &arch };
+    let binary = frameworks.join("libobs.framework/Versions/A/libobs");
+    let status = std::process::Command::new("lipo")
+        .arg(&binary)
+        .args(["-verify_arch", arch])
+        .status()
+        .expect("lipo is required to validate the macOS engine architecture");
+    assert!(
+        status.success(),
+        "engine {} does not support {arch}",
+        binary.display()
+    );
 
     println!("cargo:rustc-cfg=have_engine");
     compile_sets_v2();
@@ -128,7 +152,13 @@ fn link_live_engine_macos() {
 /// asymmetry is intentional.
 fn find_default_artifact(os: &str) -> Option<PathBuf> {
     let artifacts = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../engine/artifacts");
-    let prefix = format!("producer-libobs-{os}-");
+    let prefix = if os == "macos" {
+        let arch = std::env::var("CARGO_CFG_TARGET_ARCH").ok()?;
+        let arch = if arch == "aarch64" { "arm64" } else { &arch };
+        format!("producer-libobs-{os}-{arch}-")
+    } else {
+        format!("producer-libobs-{os}-")
+    };
     let mut candidates: Vec<PathBuf> = std::fs::read_dir(&artifacts)
         .ok()?
         .filter_map(|e| e.ok())

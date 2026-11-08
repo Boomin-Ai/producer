@@ -18,12 +18,12 @@ fi
 
 EXT_ID="ai.boomin.producer.camera-extension"
 PLUGIN_BUNDLE_ID="ai.boomin.producer.mac-virtualcam"
-SRC="engine/obs-studio/plugins/mac-virtualcam/src"
-LIBOBS="engine/obs-studio/libobs"
+SRC="${PRODUCER_OBS_SOURCE:-engine/obs-studio}/plugins/mac-virtualcam/src"
+LIBOBS="${PRODUCER_OBS_SOURCE:-engine/obs-studio}/libobs"
 # Never hardcode the artifact hash — it changes with every obs.lock edit.
 source scripts/engine-lib.sh
 ART="${STAGE_DIR:-engine/artifacts/$(artifact_name)}"
-OUT="engine/virtualcam-plugin/mac-virtualcam.plugin"
+OUT="src-tauri/target/virtualcam-plugin/mac-virtualcam.plugin"
 # UUIDs must match the extension's Info.plist exactly — they are the device
 # identity both halves agree on.
 DEV_UUID="7626645E-4425-469E-9D8B-97E0FA59AC75"
@@ -272,7 +272,7 @@ mkdir -p "$OUT/Contents/MacOS" "$OUT/Contents/Resources/locale"
 
 # simde: header-only SSE shim libobs needs on arm64; a CMake build gets it
 # from obs-deps, we get it from brew.
-SIMDE="$(brew --prefix)/include"
+SIMDE="${PRODUCER_SIMDE_INCLUDE:-$(brew --prefix)/include}"
 [[ -f "$SIMDE/simde/x86/sse2.h" ]] || { echo "FATAL: brew install simde first" >&2; exit 1; }
 
 clang++ -bundle -std=c++17 -fobjc-arc -ObjC++ \
