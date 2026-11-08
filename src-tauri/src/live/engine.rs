@@ -647,6 +647,10 @@ fn bootstrap_inner(
     // F3 ★: validate required IDs, then obs_post_load_modules. VideoToolbox
     // registers its encoders during post-load, so VT is re-checked after it.
     unsafe { ffi::obs_post_load_modules() };
+    #[cfg(target_os = "windows")]
+    unsafe {
+        ffi::producer_window_capture_register();
+    }
     unsafe { ffi::obs_log_loaded_modules() };
     phase(&mut report, "post_load");
 

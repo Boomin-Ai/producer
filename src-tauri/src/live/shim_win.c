@@ -41,6 +41,182 @@
 
 #include "obs_min.h"
 #include <shellapi.h>
+#include <stdlib.h>
+#include <string.h>
+
+/* Use the engine's WGC backend with the exact HWND selected by the picker.
+ * OBS's window_capture expects a title/class/executable string instead. */
+struct winrt_capture;
+typedef enum gs_color_space capture_color_space;
+struct producer_window_capture {
+    HWND window;
+    obs_source_t *source;
+    struct winrt_capture *capture;
+    float retry;
+    LONG width;
+    LONG height;
+    LONG color_space;
+};
+
+OBS_IMPORT long long obs_data_get_int(obs_data_t *, const char *);
+OBS_IMPORT bool obs_source_showing(obs_source_t *);
+
+static struct {
+    BOOL (*supported)(void);
+    struct winrt_capture *(*open)(BOOL, HWND, BOOL, BOOL);
+    void (*close)(struct winrt_capture *);
+    BOOL (*active)(const struct winrt_capture *);
+    void (*render)(struct winrt_capture *);
+    uint32_t (*width)(const struct winrt_capture *);
+    uint32_t (*height)(const struct winrt_capture *);
+    capture_color_space (*color_space)(const struct winrt_capture *);
+} wgc;
+static bool wgc_available;
+
+static bool load_window_capture(void)
+{
+    HMODULE module = GetModuleHandleW(L"libobs-winrt.dll");
+    if (!module)
+        return false;
+#define IMPORT(member, symbol)                                  \
+    do {                                                        \
+        FARPROC proc = GetProcAddress(module, "winrt_capture_" #symbol); \
+        if (!proc)                                               \
+            return false;                                       \
+        memcpy(&wgc.member, &proc, sizeof(proc));                 \
+    } while (0)
+    IMPORT(supported, supported);
+    IMPORT(open, init_window);
+    IMPORT(close, free);
+    IMPORT(active, active);
+    IMPORT(render, render);
+    IMPORT(width, width);
+    IMPORT(height, height);
+    IMPORT(color_space, get_color_space);
+#undef IMPORT
+    return wgc.supported();
+}
+
+int producer_window_capture_available(void *window)
+{
+    return wgc_available && IsWindow((HWND)window) &&
+           GetAncestor((HWND)window, GA_ROOT) == (HWND)window;
+}
+
+static const char *window_capture_name(void *type_data)
+{
+    (void)type_data;
+    return "Producer Window Capture";
+}
+
+static void *window_capture_create(obs_data_t *settings, obs_source_t *source)
+{
+    HWND window = (HWND)(uintptr_t)obs_data_get_int(settings, "window");
+    if (!producer_window_capture_available(window))
+        return NULL;
+    struct producer_window_capture *state = calloc(1, sizeof(*state));
+    if (state) {
+        state->window = window;
+        state->source = source;
+        state->color_space = GS_CS_SRGB;
+    }
+    return state;
+}
+
+static void window_capture_close(struct producer_window_capture *state)
+{
+    if (state->capture) {
+        wgc.close(state->capture);
+        state->capture = NULL;
+        InterlockedExchange(&state->width, 0);
+        InterlockedExchange(&state->height, 0);
+        InterlockedExchange(&state->color_space, GS_CS_SRGB);
+    }
+}
+
+static void window_capture_destroy(void *data)
+{
+    struct producer_window_capture *state = data;
+    obs_enter_graphics();
+    window_capture_close(state);
+    obs_leave_graphics();
+    free(state);
+}
+
+static void window_capture_tick(void *data, float seconds)
+{
+    struct producer_window_capture *state = data;
+    obs_enter_graphics();
+    if (!obs_source_showing(state->source) || !IsWindowVisible(state->window) ||
+        IsIconic(state->window)) {
+        window_capture_close(state);
+        state->retry = 0;
+    } else {
+        if (state->capture && !wgc.active(state->capture))
+            window_capture_close(state);
+        if (!state->capture && (state->retry -= seconds) <= 0) {
+            state->capture = wgc.open(FALSE, state->window, TRUE, FALSE);
+            state->retry = 1;
+        }
+        if (state->capture) {
+            InterlockedExchange(&state->width, (LONG)wgc.width(state->capture));
+            InterlockedExchange(&state->height, (LONG)wgc.height(state->capture));
+            InterlockedExchange(&state->color_space, (LONG)wgc.color_space(state->capture));
+        }
+    }
+    obs_leave_graphics();
+}
+
+static uint32_t window_capture_width(void *data)
+{
+    struct producer_window_capture *state = data;
+    return (uint32_t)InterlockedCompareExchange(&state->width, 0, 0);
+}
+
+static uint32_t window_capture_height(void *data)
+{
+    struct producer_window_capture *state = data;
+    return (uint32_t)InterlockedCompareExchange(&state->height, 0, 0);
+}
+
+static void window_capture_render(void *data, gs_effect_t *effect)
+{
+    struct producer_window_capture *state = data;
+    (void)effect;
+    if (state->capture && wgc.active(state->capture))
+        wgc.render(state->capture);
+}
+
+static enum gs_color_space window_capture_color_space(void *data, size_t count,
+                                                      const enum gs_color_space *spaces)
+{
+    struct producer_window_capture *state = data;
+    capture_color_space space = (capture_color_space)InterlockedCompareExchange(&state->color_space, 0, 0);
+    for (size_t i = 0; i < count; i++)
+        if (spaces[i] == space)
+            return space;
+    return count ? spaces[count - 1] : space;
+}
+
+void producer_window_capture_register(void)
+{
+    wgc_available = load_window_capture();
+    if (!wgc_available)
+        return;
+    struct obs_source_info info = {0};
+    info.id = "producer_window_capture";
+    info.type = OBS_SOURCE_TYPE_INPUT;
+    info.output_flags = OBS_SOURCE_VIDEO | OBS_SOURCE_CUSTOM_DRAW | OBS_SOURCE_SRGB;
+    info.get_name = window_capture_name;
+    info.create = window_capture_create;
+    info.destroy = window_capture_destroy;
+    info.get_width = window_capture_width;
+    info.get_height = window_capture_height;
+    info.video_tick = window_capture_tick;
+    info.video_render = window_capture_render;
+    info.video_get_color_space = window_capture_color_space;
+    obs_register_source_s(&info, sizeof(info));
+}
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -342,9 +518,7 @@ void producer_preview_detach(void *view_ptr)
         DestroyWindow(child);
 }
 
-/* Studio output: macOS answers the CGWindowID here. win-capture's window_capture
- * selects by `title:class:exe`, not by HWND, so the Rust side builds that
- * string from the Tauri window title and this stays 0 (see WINDOWS-ENGINE.md). */
+/* Only macOS needs to convert its native window to a capture ID. */
 uint32_t producer_window_id(void *ns_window)
 {
     (void)ns_window;

@@ -879,12 +879,32 @@ pub mod ids {
     pub const CAMERA: &str = "dshow_input";
     pub const MIC: &str = "wasapi_input_capture";
     pub const SCREEN: &str = "monitor_capture";
-    pub const WINDOW: &str = "window_capture";
+    pub const WINDOW: &str = "producer_window_capture";
     pub const CAMERA_KEYS: &[&str] = &["video_device_id"];
     pub const MIC_KEYS: &[&str] = &["device_id"];
     pub const SCREEN_KEYS: &[&str] = &["monitor_id"];
     /// monitor_capture selects by monitor id, not by a CoreGraphics UUID.
     pub const SCREEN_KEY: &str = "monitor_id";
+}
+
+pub(super) unsafe fn window_capture_settings(
+    window: usize,
+) -> Result<*mut ffi::obs_data_t, String> {
+    #[cfg(target_os = "windows")]
+    if ffi::producer_window_capture_available(window as *mut std::ffi::c_void) == 0 {
+        return Err(
+            "Window capture requires an open window and Windows Graphics Capture support".into(),
+        );
+    }
+    let settings = ffi::obs_data_create();
+    ffi::obs_data_set_int(settings, c"window".as_ptr(), window as i64);
+    #[cfg(target_os = "macos")]
+    {
+        // ScreenCaptureKit's window stream.
+        ffi::obs_data_set_int(settings, c"type".as_ptr(), 1);
+        ffi::obs_data_set_bool(settings, c"show_cursor".as_ptr(), false);
+    }
+    Ok(settings)
 }
 
 /// The source type + candidate property names behind each picker. libobs
@@ -1359,20 +1379,8 @@ impl SceneGraph {
                     id: window_id,
                     color_key,
                 } => {
-                    let settings = ffi::obs_data_create();
-                    // mac-sck-common.h: ScreenCaptureWindowStream = 1
-                    ffi::obs_data_set_int(settings, CString::new("type").unwrap().as_ptr(), 1);
-                    ffi::obs_data_set_int(
-                        settings,
-                        CString::new("window").unwrap().as_ptr(),
-                        *window_id as i64,
-                    );
-                    ffi::obs_data_set_bool(
-                        settings,
-                        CString::new("show_cursor").unwrap().as_ptr(),
-                        false,
-                    );
-                    let id = CString::new(ids::SCREEN).unwrap();
+                    let settings = window_capture_settings(*window_id as usize)?;
+                    let id = CString::new(ids::WINDOW).unwrap();
                     let name = CString::new("Overlay").unwrap();
                     let src = ffi::obs_source_create(
                         id.as_ptr(),
@@ -1841,18 +1849,11 @@ impl SceneGraph {
                     );
                     ("browser_source", "overlay", d)
                 }
-                ExtraSpec::Window { window } => {
-                    let d = ffi::obs_data_create();
-                    // mac-sck-common.h: ScreenCaptureWindowStream = 1
-                    ffi::obs_data_set_int(d, CString::new("type").unwrap().as_ptr(), 1);
-                    ffi::obs_data_set_int(
-                        d,
-                        CString::new("window").unwrap().as_ptr(),
-                        *window as i64,
-                    );
-                    ffi::obs_data_set_bool(d, CString::new("show_cursor").unwrap().as_ptr(), false);
-                    (ids::WINDOW, "window", d)
-                }
+                ExtraSpec::Window { window } => (
+                    ids::WINDOW,
+                    "window",
+                    window_capture_settings(*window as usize)?,
+                ),
             };
             let tid = CString::new(type_id).unwrap();
             let mic_trace = (kind == "mic").then(SyncMicTrace::begin).flatten();

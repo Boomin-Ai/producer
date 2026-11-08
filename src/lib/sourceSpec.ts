@@ -1,3 +1,8 @@
+/** Native window enumeration on Windows may supply only the title. */
+export function windowSourceLabel(window: { owner?: string; title?: string }): string {
+  return window.owner?.trim() || window.title?.trim() || "Window";
+}
+
 /** Open-list source spec (UI-P2.10 item-list model). Tagged for serde —
  * the Rust twin is `ExtraSpec` in src-tauri/src/live/graph.rs. DOM-free so
  * the room document (lib/roomConfig.ts) and its tests can import it. */

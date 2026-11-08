@@ -12,6 +12,7 @@
   "scripts": {
     "test:performance-trace": "node scripts/test-performance-trace.mjs",
     "test:updater": "node scripts/test-updater.mjs",
+    "test:window-source-label": "node scripts/test-window-source-label.mjs",
     "test:manager-cache": "node scripts/test-manager-cache.mjs",
     "test:prepared-scenes": "node scripts/test-prepared-scenes.mjs",
     "dev": "vite",
