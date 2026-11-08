@@ -5,9 +5,32 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      network_mac_source_sha:
+        description: "Unreleased Mac dev candidate only (integration branch); full source SHA, blank runs normal CI"
+        required: false
+        type: string
+        default: ""
+      network_mac_notarize:
+        description: "Notarize/staple the unreleased Mac dev candidate"
+        required: false
+        type: boolean
+        default: true
 
 jobs:
+  network-mac-dev:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feat/producer-network-links' && inputs.network_mac_source_sha != '' }}
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/network-mac-dev.yml
+    with:
+      source_sha: ${{ inputs.network_mac_source_sha }}
+      notarize: ${{ inputs.network_mac_notarize }}
+    secrets: inherit
+
   frontend:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feat/producer-network-links' && inputs.network_mac_source_sha != '') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -58,8 +81,10 @@ jobs:
       - run: node --experimental-strip-types --test tests/featureFlags.test.ts
       - run: node --experimental-strip-types --test tests/shareDomain.test.ts
       - run: node --test tests/siteRoomRoutes.test.mjs
+      - run: node scripts/test-site-public-routes.mjs
 
   server:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feat/producer-network-links' && inputs.network_mac_source_sha != '') }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -80,6 +105,7 @@ jobs:
       - run: npx vitest run
 
   sound-library-preview:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feat/producer-network-links' && inputs.network_mac_source_sha != '') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -102,6 +128,7 @@ jobs:
           node scripts/test-sound-library-preview.mjs
 
   rust:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feat/producer-network-links' && inputs.network_mac_source_sha != '') }}
     strategy:
       fail-fast: false
       matrix:

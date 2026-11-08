@@ -13,7 +13,7 @@ Before a measured run, each owner records:
 * Selected workspace/room, orientation, resolution/FPS, Set and layout, active sources, network workload and output state. Source dimensions and admission/ON state are not fresh-media evidence.
 * The current physical camera, moving pixels, microphone and speaker route. Keep unrelated recording, streaming and virtual-camera output off unless the named stage measures them.
 
-Private CI artifacts are candidates, not native-runtime acceptance. A signed/notarized artifact still needs actual camera/audio/RTC verification. Reuse the existing isolated application identifier and profile; a signing/executable change can still cause macOS permission or Keychain prompts.
+Unreleased CI artifacts are candidates, not native-runtime acceptance. On this public repository, Actions artifacts are not collaborator-private; include no customer profiles or credentials. A signed/notarized artifact still needs actual camera/audio/RTC verification. Reuse the existing isolated application identifier and profile; a signing/executable change can still cause macOS permission or Keychain prompts.
 
 ## Requested measurements and their limits
 
