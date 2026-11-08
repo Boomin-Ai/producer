@@ -14,6 +14,7 @@
     "test:updater": "node scripts/test-updater.mjs",
     "test:manager-cache": "node scripts/test-manager-cache.mjs",
     "test:prepared-scenes": "node scripts/test-prepared-scenes.mjs",
+    "test:set-capture-recovery-browser": "node scripts/test-set-capture-recovery-browser.mjs",
     "dev": "vite",
     "dev:room": "bash scripts/dev-room.sh",
     "build": "tsc && vite build",
