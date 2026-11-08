@@ -54,13 +54,10 @@ pub const STUDIO_CHANNEL: u32 = 2;
 /// not the main texture.
 pub static STUDIO_ON: AtomicBool = AtomicBool::new(false);
 
-/// What to capture. macOS: the CGWindowID of our NSWindow (ScreenCaptureKit
-/// window stream). Windows: win-capture's `window_capture` selects by
-/// `title:class:exe`, so the title is what travels.
+/// Producer's own window, a CGWindowID on macOS and HWND on Windows.
 #[derive(Debug, Clone)]
 pub struct StudioSpec {
-    pub window_id: u32,
-    pub title: String,
+    pub window_id: usize,
 }
 
 /// The pure decision every output-facing path asks: which scene does this
@@ -273,17 +270,6 @@ impl RoomMix {
     }
 }
 
-/// win-capture's window id string: `title:class:exe`, `:` in the title
-/// escaped as `#3A` (docs/WINDOWS-ENGINE.md). Measured on a real box against
-/// the shipped v0.4.40 build: tao registers our top-level window under the
-/// class "Tauri Window" (GetClassName on the main HWND), not "Window Class".
-/// The title still carries the match (`priority` = WINDOW_PRIORITY_TITLE), so
-/// a future tao rename degrades to a title-only match rather than breaking.
-#[cfg_attr(target_os = "macos", allow(dead_code))]
-pub fn windows_capture_id(title: &str) -> String {
-    format!("{}:Tauri Window:producer.exe", title.replace(':', "#3A"))
-}
-
 impl Studio {
     /// The studio scene as a source, for whoever needs to render it — the
     /// program takes it on [`STUDIO_CHANNEL`], and (v0.4.48) the room mix
@@ -346,32 +332,14 @@ impl Studio {
 
         // The capture of our own window, cursor hidden.
         {
-            let d = ffi::obs_data_create();
-            #[cfg(target_os = "macos")]
-            let type_id = {
-                // mac-sck-common.h: ScreenCaptureWindowStream = 1
-                ffi::obs_data_set_int(d, CString::new("type").unwrap().as_ptr(), 1);
-                ffi::obs_data_set_int(
-                    d,
-                    CString::new("window").unwrap().as_ptr(),
-                    spec.window_id as i64,
-                );
-                ffi::obs_data_set_bool(d, CString::new("show_cursor").unwrap().as_ptr(), false);
-                "screen_capture"
+            let d = match super::graph::window_capture_settings(spec.window_id) {
+                Ok(settings) => settings,
+                Err(error) => {
+                    me.teardown();
+                    return Err(error);
+                }
             };
-            #[cfg(not(target_os = "macos"))]
-            let type_id = {
-                let w = CString::new(windows_capture_id(&spec.title))
-                    .map_err(|_| "bad window title")?;
-                ffi::obs_data_set_string(d, CString::new("window").unwrap().as_ptr(), w.as_ptr());
-                // window-helper.h: WINDOW_PRIORITY_TITLE = 1 — the title is
-                // the one part we know for certain.
-                ffi::obs_data_set_int(d, CString::new("priority").unwrap().as_ptr(), 1);
-                ffi::obs_data_set_bool(d, CString::new("cursor").unwrap().as_ptr(), false);
-                ffi::obs_data_set_bool(d, CString::new("client_area").unwrap().as_ptr(), true);
-                "window_capture"
-            };
-            let id = CString::new(type_id).unwrap();
+            let id = CString::new(super::graph::ids::WINDOW).unwrap();
             let n = CString::new("studio-window").unwrap();
             me.cap = ffi::obs_source_create(id.as_ptr(), n.as_ptr(), d, ptr::null_mut());
             ffi::obs_data_release(d);
@@ -630,17 +598,5 @@ mod tests {
         assert_eq!(output_scene_for(Consumer::Program, true), SceneFor::Studio);
         assert_eq!(output_scene_for(Consumer::Stage, true), SceneFor::Room);
         assert_eq!(output_scene_for(Consumer::ReturnFeed, true), SceneFor::Room);
-    }
-
-    #[test]
-    fn windows_capture_id_escapes_colons() {
-        assert_eq!(
-            windows_capture_id("Producer"),
-            "Producer:Tauri Window:producer.exe"
-        );
-        assert_eq!(
-            windows_capture_id("Room: A"),
-            "Room#3A A:Tauri Window:producer.exe"
-        );
     }
 }

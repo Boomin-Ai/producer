@@ -3645,7 +3645,6 @@ pub fn start(
                                 let same = match (&studio_out, &spec) {
                                     (Some(st), Some(sp)) => {
                                         st.spec.window_id == sp.window_id
-                                            && st.spec.title == sp.title
                                     }
                                     (None, None) => true,
                                     _ => false,
