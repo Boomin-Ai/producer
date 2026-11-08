@@ -1679,7 +1679,7 @@ function WindowSourceForm({ onAdd }: { onAdd: (id: number, title: string) => voi
  * interface, second display — appears here without Producer knowing the
  * hardware. Switching applies in place: the source keeps its position, size
  * and place in the stack. */
-function DevicePicker({ itemId, kind, onClose }: { itemId: string; kind: CaptureKind; onClose: () => void }) {
+function DevicePicker({ itemId, kind, device, onClose }: { itemId: string; kind: CaptureKind; device?: string | null; onClose: () => void }) {
   const [list, setList] = useState<DeviceOption[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -1751,6 +1751,7 @@ function DevicePicker({ itemId, kind, onClose }: { itemId: string; kind: Capture
         <button
           key={d.id}
           className="rm-device"
+          aria-pressed={d.id === device}
           disabled={d.disabled || busy !== null}
           onClick={async () => {
             setBusy(d.id);
@@ -1764,7 +1765,7 @@ function DevicePicker({ itemId, kind, onClose }: { itemId: string; kind: Capture
             }
           }}
         >
-          <span className="rm-device-name">{d.name}</span>
+          <span className="rm-device-name">{d.name}{d.id === device ? " · Selected" : ""}</span>
         </button>
       ))}
     </div>
@@ -7433,7 +7434,7 @@ export function LiveView({
                 (() => {
                   const it = (sources.items ?? []).find((i) => i.id === deviceFor.key);
                   return it && isCaptureKind(it.kind) ? (
-                    <DevicePicker itemId={it.id} kind={it.kind} onClose={() => setDeviceFor(null)} />
+                    <DevicePicker itemId={it.id} kind={it.kind} device={it.device} onClose={() => setDeviceFor(null)} />
                   ) : (
                     <div className="rm-devices-empty">That source is gone.</div>
                   );
@@ -9495,7 +9496,7 @@ export function LiveView({
             (() => {
               const it = (sources.items ?? []).find((i) => i.id === deviceMenu);
               return it && isCaptureKind(it.kind) ? (
-                <DevicePicker itemId={it.id} kind={it.kind} onClose={() => setDeviceMenu(null)} />
+                <DevicePicker itemId={it.id} kind={it.kind} device={it.device} onClose={() => setDeviceMenu(null)} />
               ) : null;
             })()
           )}
