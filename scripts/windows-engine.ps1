@@ -12,6 +12,7 @@
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 . "$PSScriptRoot\windows-cutout.ps1"
+. "$PSScriptRoot\windows-dev-helpers.ps1"
 
 function Get-CargoTargetDir {
   # Respect CARGO_TARGET_DIR, including a build cache moved off a full C: drive.

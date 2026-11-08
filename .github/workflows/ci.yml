@@ -109,6 +109,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Verify Windows dev runtime helper staging
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/test-windows-dev-helpers.ps1
       # ffi.rs <-> shim parity. The Windows leg is an engine-less `cargo check`
       # that never compiles shim_win.c, so a producer_* extern missing from it
       # only fails at the real release link (#27). This needs no engine and
