@@ -46,3 +46,6 @@ src-tauri/windows-bundle/
 
 # Local generated test/build outputs
 /target/
+
+# Local Cloudflare tooling cache (agent bridge and site commands)
+/.wrangler/
