@@ -96,6 +96,61 @@ test('observed zero frame/audio deltas remain zero with valid coverage rather th
  });
  const run=driver.run();await h.advance(60000);const result=await run;assert.equal(result.summary.decodedFrames,0);assert.equal(result.summary.decodedAudioSeconds,0);assert.equal(result.summary.videoDeltaSamples,60);assert.equal(result.summary.audioDeltaSamples,60);
 });
+test('passive reports preserve numeric receiver timing distributions, privacy, compact budget and overlapping coverage',async()=>{
+ const h=fixture(),driver=h.exports.createNetworkDiagnosticsProof(h.deps);let index=0;
+ h.sample(async options=>{
+  if(!options.enabled)return null;
+  const value=index++,video=receiver('video'),audio=receiver('audio');
+  Object.assign(video.delta,{jitterBufferAverageMs:value,jitterBufferTargetAverageMs:value+10,jitterBufferMinimumAverageMs:value/2,decodeAverageMs:value/10,processingAverageMs:value+20});
+  Object.assign(audio.delta,{jitterBufferAverageMs:value*2,jitterBufferTargetAverageMs:value*2+10,jitterBufferMinimumAverageMs:0,decodeAverageMs:999,processingAverageMs:999});
+  return {status:'sampled',video,audio};
+ });
+ const run=driver.run();await h.advance(60000);const result=await run,timing=result.summary.receiverTimingMs;
+ assert.equal(result.coverage.receiverTiming,'overlapping_receiver_components_ms_not_end_to_end');
+ assert.equal(timing.video.jitterBufferAverageMs.count,60);assert.equal(timing.video.jitterBufferAverageMs.minimum,0);
+ assert.equal(timing.video.jitterBufferAverageMs.median,29.5);assert.equal(timing.video.jitterBufferAverageMs.p95,56);assert.equal(timing.video.jitterBufferAverageMs.maximum,59);
+ assert.equal(timing.video.jitterBufferTargetAverageMs.median,39.5);assert.equal(timing.video.jitterBufferMinimumAverageMs.median,14.75);
+ assert.equal(timing.video.decodeAverageMs.median,2.95);assert.equal(timing.video.processingAverageMs.median,49.5);
+ assert.equal(timing.audio.jitterBufferAverageMs.median,59);assert.equal(timing.audio.jitterBufferMinimumAverageMs.count,60);assert.equal(timing.audio.jitterBufferMinimumAverageMs.median,0);
+ assert.equal(timing.audio.decodeAverageMs.count,0);assert.equal(timing.audio.decodeAverageMs.median,null);assert.equal(timing.audio.processingAverageMs.count,0);
+ assert.equal(result.samples[59].audio.processingAverageMs,null);assert.equal(h.reports[0].samples.length,8);
+ assert(Buffer.byteLength(JSON.stringify(h.reports[0],null,2))<64*1024);
+ assert.equal(h.logs.length,62);assert.ok(h.logs.every(line=>line.length<=2000));
+ for(const line of h.logs)assert.doesNotThrow(()=>JSON.parse(line.slice('[network-diagnostics] '.length)));
+ const end=JSON.parse(h.logs.at(-1).slice('[network-diagnostics] '.length));assert.equal(end.value.summary.receiverTimingMs,undefined);
+ assert.doesNotMatch(JSON.stringify(result),/SECRET|receiverId|candidate|address/);assert.doesNotMatch(h.logs.join(''),/SECRET/);
+});
+test('long numeric sample and summary fields stay valid JSON within the native per-line log budget',async t=>{
+ const h=fixture(),driver=h.exports.createNetworkDiagnosticsProof(h.deps);
+ h.engine(async()=>({engine_ready:true,cpu:123.12345678901234,fps:59.98765432109876,render_time_us:123456.12345678901,
+  skipped_frames:Number.MAX_SAFE_INTEGER,total_frames:Number.MAX_SAFE_INTEGER,video_height:7680,video_fps:120,sources:{items:[]}}));
+ h.sample(async options=>{
+  if(!options.enabled)return null;
+  const video=receiver('video'),audio=receiver('audio');
+  for(const item of [video,audio]){
+   item.lastDecodeAdvanceAgeMs=123456.12345678901;
+   Object.assign(item.delta,{windowMs:1234.1234567890123,framesDecoded:Number.MAX_SAFE_INTEGER,framesReceived:Number.MAX_SAFE_INTEGER,
+    bytesReceived:Number.MAX_SAFE_INTEGER,totalSamplesDuration:1234.1234567890123,totalAudioEnergy:1234.1234567890123,audioRms:0.12345678901234567,
+    concealedSamples:Number.MAX_SAFE_INTEGER,jitterBufferAverageMs:1234.1234567890123,jitterBufferTargetAverageMs:1234.1234567890123,
+    jitterBufferMinimumAverageMs:1234.1234567890123,decodeAverageMs:1234.1234567890123,processingAverageMs:1234.1234567890123});
+  }
+  return {status:'sampled',video,audio};
+ });
+ const run=driver.run();await h.advance(60000);await run;
+ const longest=Math.max(...h.logs.map(line=>line.length));assert.ok(longest<=2000,`longest native log line: ${longest}`);
+ for(const line of h.logs)assert.doesNotThrow(()=>JSON.parse(line.slice('[network-diagnostics] '.length)));
+ const bytes=Buffer.byteLength(JSON.stringify(h.reports[0],null,2));assert(bytes<64*1024);
+ t.diagnostic(`longest sample/end log line ${longest}/2000 characters; compact report ${bytes}/65536 bytes`);
+});
+test('missing or invalid receiver timings remain null with zero observed coverage, not zero latency',async()=>{
+ const h=fixture(),driver=h.exports.createNetworkDiagnosticsProof(h.deps);
+ h.sample(async options=>{if(!options.enabled)return null;const video=receiver('video');Object.assign(video.delta,{jitterBufferAverageMs:NaN,jitterBufferTargetAverageMs:Infinity,jitterBufferMinimumAverageMs:-1,decodeAverageMs:'SECRET'});return {status:'sampled',video};});
+ const run=driver.run();await h.advance(60000);const result=await run;
+ for(const kind of ['video','audio'])for(const value of Object.values(result.summary.receiverTimingMs[kind])){
+  assert.equal(value.count,0);assert.equal(value.minimum,null);assert.equal(value.median,null);assert.equal(value.p95,null);assert.equal(value.maximum,null);
+ }
+ assert.equal(result.samples[0].video.jitterBufferAverageMs,null);assert.doesNotMatch(JSON.stringify(result),/SECRET/);
+});
 test('HMR disposes an installed running driver and cannot install after late bundle-ID resolution',async()=>{
  const h=fixture();await h.exports.installNetworkDiagnosticsProof();const run=h.window.__producerNetworkDiagnostics.run();await flush();h.disposeModule();await flush();assert.equal((await run).reason,'disposed');assert.equal(h.window.__producerNetworkDiagnostics,undefined);assert.equal(h.timers.size,0);
  let resolve;const late=fixture({appId:()=>new Promise(done=>{resolve=done;})});const pending=late.exports.installNetworkDiagnosticsProof();await flush();late.disposeModule();resolve('ai.boomin.producer.sets-v2-dev');await pending;assert.equal(late.window.__producerNetworkDiagnostics,undefined);

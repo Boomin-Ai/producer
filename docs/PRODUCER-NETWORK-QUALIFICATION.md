@@ -2,6 +2,30 @@
 
 The first delivery is Boomin workspace to Boomin workspace. New beta installations enter through Boomin sign-in; existing self-hosted connections remain usable. Persistent local studios, federation and device-only hosting are later milestones in `PRODUCER-CONNECTION-ARCHITECTURE.md`.
 
+## Launch focus: measured media latency and reliable recovery
+
+The launch priority is sustained Boomin-to-Boomin polish. Keep the currently working pair stable while preparing changes in a separate checkout. Optimize for responsive conversation, clean audio, synchronized video and reliable Set recovery together. LiveKit supplies the media transport; it does not remove Producer's capture, scheduling, conversion, rendering or playback delays.
+
+Measure these separately:
+
+| Timing | Start and end | Required distinction |
+| --- | --- | --- |
+| Entry | User's room/Join action to usable media | Separate room authorization, native device readiness, Set preparation, capture, SDK loading, connection and publication. |
+| Steady media | Source audio/video event to receiver speaker/presented frame | Receiver counters and RTT are partial observations. A valid one-way result needs an actual matched source/output observation and a clock-alignment bound or one common recording clock. |
+| Recovery | Host availability restored to fresh media on the retained guest | Report host downtime separately. A reconnect span ending or a track becoming available does not prove the first decoded/presented frame. |
+
+Current code audit identifies tuning candidates, not measured end-to-end results:
+
+* Native host program publication schedules audio and video against captured timestamps plus a 400 ms lead (`rtc_program.rs`). The actual remaining wait depends on callback age. OBS's configured 200 ms fixed mixer buffering consumes part of that timestamp-relative budget; adding 200 and 400 as independent delays would double-count it. This protects scheduling and synchronization; reducing it requires measured capture age, queue occupancy, audio underruns/concealment, dropped video and lip-sync under load.
+* Native guest receive uses a 120 ms presentation schedule (`crates/guest-runtime/src/media.rs`) and the OBS ingest source has a local render-clock offset of approximately 60 ms (`guest_ingest.c`). Validate these against the SDK pull timeline and OBS output/monitor clocks before assigning a combined physical-speaker delay. Async OBS video caching is another timestamp-aware stage; cache capacity is not its occupied delay.
+* The guest program bridge redraws a 960×540 canvas at a nominal 20 fps, swapping dimensions for portrait (`programCapture.ts`). Each loop does draw/IPC work and then waits 50 ms, so its actual cadence also includes that work; this is not a measured fixed added delay. Portrait also has a JPEG read/decode stage. Higher FPS can increase CPU, GPU and bandwidth; measure the whole path.
+* The browser audio worklet has a 9,600-frame high-water bound at 48 kHz, approximately 200 ms. That is a backlog/drop limit, not a deliberate 200 ms prefill or an observed steady delay. Preserve the single native PCM-drain owner.
+* Receiver jitter-buffer, target/minimum-buffer, video decode and video processing statistics are optional browser observations. Derive interval averages from matching counter deltas with positive denominators; unsupported or stale observations remain unknown. Their summary distributions describe sampled interval averages, not per-frame/packet latency percentiles. Processing includes some other stages, so these metrics must not be added together as independent latency components. See the [W3C statistics definitions](https://www.w3.org/TR/webrtc-stats/).
+
+Use the existing general LiveKit Cloud endpoint while verifying actual routing; do not assume region pinning lowers latency. LiveKit normally chooses the closest available edge. Playout/jitter changes require client-version support and a loss/jitter test, rather than globally removing buffering. See [regions](https://docs.livekit.io/deploy/admin/regions/) and [low-latency trade-offs](https://docs.livekit.io/robotics/media/performance/low-latency/).
+
+The next comparison needs agreed native/frontend provenance on both machines, both appearance directions, fixed resolution/FPS/Set/source/device routes, and separate cold/warm and steady stages. Establish median/p95 with repeat counts and missing coverage, then change one measured bottleneck at a time. Include a complex Set, multiple guests, muted/unmuted audio, foreground/background behavior and host reopen. Reduced delay is acceptable only alongside preserved audio continuity, source framing/binding, synchronization and recovery. Preserve the current known-good configuration for comparison.
+
 ## Two owners, one agreed application revision
 
 Use issue [#131](https://github.com/Boomin-Ai/producer/issues/131) for the human-readable test ledger and [#133](https://github.com/Boomin-Ai/producer/issues/133) for agent-bridge setup. The relay wakes a separate restricted worker only for explicit handoff markers; ordinary comments and acknowledgments do not recursively start agents. The interactive owners retain control of apps, profiles, media, builds and releases.
@@ -19,7 +43,7 @@ Unreleased CI artifacts are candidates, not native-runtime acceptance. On this p
 
 | Measurement | Actual evidence | Does not establish |
 | --- | --- | --- |
-| Existing SDK receiver | Whitelisted inbound RTC counters, decode progress, dimensions, track state, audio duration/energy and concealment deltas | Native OBS ingestion, selected Set binding, presented pixels, a known sound or physical speaker playback |
+| Existing SDK receiver | Whitelisted inbound RTC counters, decode progress, optional interval jitter-buffer/target/minimum/video-processing averages, dimensions, track state, audio duration/energy and concealment deltas | End-to-end latency, native OBS ingestion, selected Set binding, presented pixels, a known sound or physical speaker playback |
 | Native engine snapshot | Render/FPS/CPU counters and source counts/dimensions | A camera producing new pixels or a guest making it into the audience mix |
 | Passive OS sampler | Explicit PID and current descendants, per-platform CPU semantics, RSS sum, median/p95 and coverage | Unique physical memory, reparented WebKit services, cross-platform raw-CPU equivalence or end-to-end latency |
 | Known-tone analyzer | A supplied, aligned, bounded PCM pattern matches its expected frequencies and silence | Playback/capture, network timing or audibility; the analyzer performs none of those actions |
@@ -74,7 +98,7 @@ node scripts/network-tone-proof.mjs probe /absolute/completed-recording-copy.wav
 
 Generation refuses overwrite. Probe accepts bounded mono/stereo PCM16 WAVs, searches their initial offset, and reports `matched`, `no_match`, `insufficient` or `unsupported`. Compressed/float containers need a separate local PCM16 copy; keep the original recording. Search work, file size and duration are bounded. A match proves only that the supplied samples contain the expected tone/silence sequence. The recording-relative offset is not network latency. This tool does not perform the actual tone transmission, native mute check or speaker check.
 
-## Real paired sequence still required
+## Real paired acceptance sequence
 
 1. Both owners confirm responsive hosts, exact provenance, workload and no active stream/recording. Agree one appearance; Windows admits the Mac through normal controls.
 2. Establish moving composed Set video and both audio directions. Separate decoder progress, native mix and actual playback checks. A pre-fader meter may move even when the audience mix is muted.

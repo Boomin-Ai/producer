@@ -23,7 +23,8 @@ type Dependencies={now:()=>number;setTimer:(fn:()=>void,ms:number)=>ReturnType<t
  getSession:()=>GuestSeatDiagnosticSession|null;subscribeSession:(fn:()=>void)=>()=>void;
  readEngine:()=>Promise<LiveSnapshot>;log:(line:string)=>void;report?:(result:unknown)=>Promise<unknown>};
 const COVERAGE={receiver:'decoded_stats_only',sourceFreshness:'dimensions_only',nativeIngest:'unavailable',nativeMixer:'unavailable',
- presentedVideo:'unavailable',speakerAudibility:'unavailable',outboundPublishing:'unavailable'} as const;
+ presentedVideo:'unavailable',speakerAudibility:'unavailable',outboundPublishing:'unavailable',
+ receiverTiming:'overlapping_receiver_components_ms_not_end_to_end'} as const;
 const n=(value:unknown)=>typeof value==='number'&&Number.isFinite(value)&&value>=0?value:null;
 function receiverFields(receiver?:ReceiverObservation){
  return {status:receiver?.status??'absent',trackLive:receiver?.trackLive??null,enabled:receiver?.enabled??null,muted:receiver?.muted??null,
@@ -31,7 +32,11 @@ function receiverFields(receiver?:ReceiverObservation){
   width:n(receiver?.counters?.width),height:n(receiver?.counters?.height),windowMs:n(receiver?.delta?.windowMs),
   framesDecoded:n(receiver?.delta?.framesDecoded),framesReceived:n(receiver?.delta?.framesReceived),bytesReceived:n(receiver?.delta?.bytesReceived),
   audioDuration:n(receiver?.delta?.totalSamplesDuration),audioEnergy:n(receiver?.delta?.totalAudioEnergy),audioRms:n(receiver?.delta?.audioRms),
-  concealedSamples:n(receiver?.delta?.concealedSamples)};
+  concealedSamples:n(receiver?.delta?.concealedSamples),
+  jitterBufferAverageMs:n(receiver?.delta?.jitterBufferAverageMs),jitterBufferTargetAverageMs:n(receiver?.delta?.jitterBufferTargetAverageMs),
+  jitterBufferMinimumAverageMs:n(receiver?.delta?.jitterBufferMinimumAverageMs),
+  decodeAverageMs:receiver?.kind==='video'?n(receiver.delta?.decodeAverageMs):null,
+  processingAverageMs:receiver?.kind==='video'?n(receiver.delta?.processingAverageMs):null};
 }
 function engineFields(engine:LiveSnapshot|null){
  const items=engine?.sources?.items??[];
@@ -52,8 +57,16 @@ function distribution(values:(number|null)[]){
 function summarize(samples:Sample[]){
  const sum=(values:(number|null)[])=>{const observed=values.filter((value):value is number=>value!==null);return observed.length?observed.reduce((total,value)=>total+value,0):null;};
  const increase=(values:(number|null)[])=>{const counters=values.filter((value):value is number=>value!==null);return counters.length>1&&counters.every((value,i)=>!i||value>=counters[i-1])?counters[counters.length-1]-counters[0]:null;};
+ const timing=(kind:'video'|'audio')=>({
+  jitterBufferAverageMs:distribution(samples.map(s=>s[kind].jitterBufferAverageMs)),
+  jitterBufferTargetAverageMs:distribution(samples.map(s=>s[kind].jitterBufferTargetAverageMs)),
+  jitterBufferMinimumAverageMs:distribution(samples.map(s=>s[kind].jitterBufferMinimumAverageMs)),
+  decodeAverageMs:distribution(samples.map(s=>s[kind].decodeAverageMs)),
+  processingAverageMs:distribution(samples.map(s=>s[kind].processingAverageMs)),
+ });
  return {cpuMachinePercent:distribution(samples.map(s=>s.engine.cpuMachinePercent)),fps:distribution(samples.map(s=>s.engine.fps)),
   renderTimeUs:distribution(samples.map(s=>s.engine.renderTimeUs)),
+  receiverTimingMs:{video:timing('video'),audio:timing('audio')},
   engineSamples:samples.filter(s=>s.engine.available).length,videoStatsSamples:samples.filter(s=>s.video.status==='available').length,
   audioStatsSamples:samples.filter(s=>s.audio.status==='available').length,videoDeltaSamples:samples.filter(s=>s.video.framesDecoded!==null).length,
   audioDeltaSamples:samples.filter(s=>s.audio.audioDuration!==null).length,
@@ -137,7 +150,9 @@ export function createNetworkDiagnosticsProof(deps:Dependencies):NetworkDiagnost
    const report:Report={kind:'producer-network-passive',version:1,run,reason:reason??'failed',durationMs:Math.max(0,ended-started),
     waitMs:Math.max(0,(measurementStarted??ended)-started),measurementMs:measurementStarted===null?0:Math.max(0,ended-measurementStarted),
     sampleCount:samples.length,coverage:COVERAGE,summary:summarize(samples),samples};
-   log('end',run,{...report,samples:undefined});
+   // Native ui_log allows 2000 characters per line. The 60 sample lines retain
+   // timings for reconstruction; their distributions stay in the full report.
+   log('end',run,{...report,summary:{...report.summary,receiverTimingMs:undefined},samples:undefined});
    // Existing dev report has a 64KiB budget. Every sample is in uiLog; the
    // optional convenience report stores summary and only the last 8 samples.
    if(deps.report)void Promise.resolve().then(()=>deps.report!({...report,samples:samples.slice(-8)})).catch(()=>{});

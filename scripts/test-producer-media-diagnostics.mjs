@@ -92,6 +92,64 @@ test('pure deltas reject zero windows, clock reversal and counter regressions',(
  const before=receiverCounters('video',video()),after=receiverCounters('video',video({timestamp:2000,framesDecoded:40}));assert.equal(receiverDelta(after,before,0),null);assert.equal(receiverDelta(before,after,1000),null);
 });
 
+const timingKeys=['jitterBufferDelay','jitterBufferEmittedCount','jitterBufferTargetDelay','jitterBufferMinimumDelay','totalDecodeTime','totalProcessingDelay'];
+const averageKeys=['jitterBufferAverageMs','jitterBufferTargetAverageMs','jitterBufferMinimumAverageMs','decodeAverageMs','processingAverageMs'];
+const timingBase={jitterBufferDelay:2,jitterBufferEmittedCount:100,jitterBufferTargetDelay:3,jitterBufferMinimumDelay:1,totalDecodeTime:1,totalProcessingDelay:4};
+const close=(actual,expected)=>assert.ok(Math.abs(actual-expected)<1e-8,`${actual} != ${expected}`);
+test('receiver timing keeps only finite nonnegative standard counters; audio decode/processing remain unsupported',()=>{
+ const counters=receiverCounters('video',video(timingBase));for(const key of timingKeys)assert.equal(counters[key],timingBase[key]);
+ const unsupported=receiverCounters('audio',audio(timingBase));assert.equal(unsupported.totalDecodeTime,null);assert.equal(unsupported.totalProcessingDelay,null);
+ for(const value of [undefined,null,'SECRET-TIMING',Infinity,NaN,-1]){
+  const invalid=receiverCounters('video',Object.fromEntries(timingKeys.map(key=>[key,value])));
+  for(const key of timingKeys)assert.equal(invalid[key],null);
+ }
+ for(const key of timingKeys)assert.equal(receiverCounters('video',{[key]:0})[key],0);
+});
+test('video timing uses matching interval deltas and the correct emitted/decoded denominators',async()=>{
+ const h=fixture();h.row(video({...timingBase,framesDecoded:10}));assert.equal((await h.sample()).video.delta,null);
+ h.at(2000);h.row(video({timestamp:2000,framesDecoded:20,...timingBase,jitterBufferDelay:2.4,jitterBufferEmittedCount:120,
+  jitterBufferTargetDelay:3.6,jitterBufferMinimumDelay:1.2,totalDecodeTime:1.05,totalProcessingDelay:4.6}));
+ const result=await h.sample(),d=result.video.delta;
+ for(const [key,value]of Object.entries({jitterBufferAverageMs:20,jitterBufferTargetAverageMs:30,jitterBufferMinimumAverageMs:10,decodeAverageMs:5,processingAverageMs:60}))close(d[key],value);
+ assert.equal(d.jitterBufferEmittedCount,20);close(d.totalDecodeTime,0.05);close(d.totalProcessingDelay,0.6);
+ assert.equal(result.video.decodeProgress,'advancing');assert.equal(h.reads,2);
+});
+test('audio jitter averages use emitted audio samples, never received samples or elapsed duration',async()=>{
+ const h=fixture('audio');h.row(audio({jitterBufferDelay:2400,jitterBufferTargetDelay:2880,jitterBufferMinimumDelay:960,jitterBufferEmittedCount:48000,totalDecodeTime:1,totalProcessingDelay:1}));await h.sample();
+ h.at(2000);h.row(audio({timestamp:2000,totalSamplesDuration:2,totalSamplesReceived:72000,jitterBufferDelay:4800,jitterBufferTargetDelay:5760,
+  jitterBufferMinimumDelay:1920,jitterBufferEmittedCount:96000,totalDecodeTime:2,totalProcessingDelay:2}));
+ const d=(await h.sample()).audio.delta;assert.equal(d.jitterBufferAverageMs,50);assert.equal(d.jitterBufferTargetAverageMs,60);assert.equal(d.jitterBufferMinimumAverageMs,20);
+ assert.equal(d.totalDecodeTime,null);assert.equal(d.totalProcessingDelay,null);assert.equal(d.decodeAverageMs,null);assert.equal(d.processingAverageMs,null);
+});
+test('zero or missing denominator never invents timing; observed zero delay stays zero with valid progress',()=>{
+ const before=receiverCounters('video',video(timingBase));
+ const noProgress=receiverDelta(receiverCounters('video',video({timestamp:2000,...timingBase,jitterBufferDelay:3,totalDecodeTime:2})),before,1000);
+ for(const key of averageKeys)assert.equal(noProgress[key],null);
+ const zero=receiverDelta(receiverCounters('video',video({timestamp:2000,framesDecoded:28,...timingBase,jitterBufferEmittedCount:120})),before,1000);
+ for(const key of averageKeys)assert.equal(zero[key],0);
+ for(const key of ['jitterBufferEmittedCount','framesDecoded']){
+  const missing=receiverDelta(receiverCounters('video',video({timestamp:2000,...timingBase,[key]:undefined})),before,1000);
+  for(const name of key==='framesDecoded'?['decodeAverageMs','processingAverageMs']:averageKeys.slice(0,3))assert.equal(missing[name],null);
+ }
+ const newlySupported=receiverDelta(receiverCounters('video',video({timestamp:2000,...timingBase,jitterBufferEmittedCount:120,framesDecoded:28})),receiverCounters('video',video()),1000);
+ for(const key of averageKeys)assert.equal(newlySupported[key],null);
+});
+for(const key of timingKeys)test(`a reset in ${key} invalidates the whole timing interval and decoder freshness`,async()=>{
+ const h=fixture();h.row(video(timingBase));await h.sample();h.at(2000);
+ h.row(video({timestamp:2000,framesDecoded:28,...timingBase,[key]:timingBase[key]-1}));
+ const reset=await h.sample();assert.equal(reset.video.delta,null);assert.equal(reset.video.decodeProgress,'reset');assert.equal(reset.video.lastDecodeAdvanceAgeMs,null);
+});
+test('stale reports or a changed private binding cannot supply receiver timing averages',async()=>{
+ const h=fixture();h.row(video(timingBase));await h.sample();h.at(1500);assert.equal((await h.sample()).video.delta,null);
+ h.at(2000);h.row(video({timestamp:2000,id:'SECRET-NEW-RECEIVER',framesDecoded:28,...timingBase,jitterBufferEmittedCount:120,totalProcessingDelay:5}));
+ const changed=await h.sample();assert.equal(changed.video.delta,null);assert.equal(changed.video.decodeProgress,'unknown');assert.doesNotMatch(JSON.stringify(changed),/SECRET/);
+});
+test('extreme finite counters cannot overflow an interval timing result',()=>{
+ const before=receiverCounters('video',video({...timingBase,jitterBufferDelay:0,totalDecodeTime:0}));
+ const after=receiverCounters('video',video({timestamp:2000,framesDecoded:19,...timingBase,jitterBufferEmittedCount:101,jitterBufferDelay:Number.MAX_VALUE,totalDecodeTime:Number.MAX_VALUE}));
+ const d=receiverDelta(after,before,1000);assert.equal(d.jitterBufferAverageMs,null);assert.equal(d.decodeAverageMs,null);
+});
+
 const rate=48000,pattern=[{kind:'tone',durationMs:160,frequencyHz:440},{kind:'silence',durationMs:80},{kind:'tone',durationMs:160,frequencyHz:880}];
 function synth(segments,{channels=1,amplitude=0.05,wrong=false,antiphase=false}={}){
  const out=new Float32Array(Math.round(segments.reduce((n,s)=>n+s.durationMs,0)*rate/1000)*channels);let offset=0;

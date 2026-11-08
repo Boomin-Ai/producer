@@ -7,12 +7,22 @@ export interface ReceiverCounters {
  framesReceived:number|null;framesDecoded:number|null;framesDropped:number|null;width:number|null;height:number|null;
  totalAudioEnergy:number|null;totalSamplesDuration:number|null;totalSamplesReceived:number|null;
  concealedSamples:number|null;concealmentEvents:number|null;silentConcealedSamples:number|null;
+ /** Standard cumulative seconds and emitted frame/sample count, if supported. */
+ jitterBufferDelay:number|null;jitterBufferEmittedCount:number|null;jitterBufferTargetDelay:number|null;jitterBufferMinimumDelay:number|null;
+ /** Video only here: audio has no whitelisted decoded-sample denominator. */
+ totalDecodeTime:number|null;totalProcessingDelay:number|null;
 }
 export interface ReceiverDelta {
  windowMs:number;statsIntervalMs:number|null;bytesReceived:number|null;packetsReceived:number|null;packetsLost:number|null;
  framesReceived:number|null;framesDecoded:number|null;framesDropped:number|null;
  totalAudioEnergy:number|null;totalSamplesDuration:number|null;totalSamplesReceived:number|null;
  concealedSamples:number|null;concealmentEvents:number|null;silentConcealedSamples:number|null;
+ jitterBufferDelay:number|null;jitterBufferEmittedCount:number|null;jitterBufferTargetDelay:number|null;jitterBufferMinimumDelay:number|null;
+ totalDecodeTime:number|null;totalProcessingDelay:number|null;
+ /** Interval receiver averages, not end-to-end latency. Processing includes
+  * jitter-buffer/assembly/decode work: these components must not be added. */
+ jitterBufferAverageMs:number|null;jitterBufferTargetAverageMs:number|null;jitterBufferMinimumAverageMs:number|null;
+ decodeAverageMs:number|null;processingAverageMs:number|null;
  /** Derived from the energy/duration deltas, not proof of a known sound. */
  audioRms:number|null;
 }
@@ -47,10 +57,14 @@ export function receiverCounters(kind:ReceiverKind,row:Row):ReceiverCounters {
   framesDropped:kind==='video'?n('framesDropped'):null,width:kind==='video'?n('frameWidth'):null,height:kind==='video'?n('frameHeight'):null,
   totalAudioEnergy:kind==='audio'?n('totalAudioEnergy'):null,totalSamplesDuration:kind==='audio'?n('totalSamplesDuration'):null,
   totalSamplesReceived:kind==='audio'?n('totalSamplesReceived'):null,concealedSamples:kind==='audio'?n('concealedSamples'):null,
-  concealmentEvents:kind==='audio'?n('concealmentEvents'):null,silentConcealedSamples:kind==='audio'?n('silentConcealedSamples'):null};
+  concealmentEvents:kind==='audio'?n('concealmentEvents'):null,silentConcealedSamples:kind==='audio'?n('silentConcealedSamples'):null,
+  jitterBufferDelay:n('jitterBufferDelay'),jitterBufferEmittedCount:n('jitterBufferEmittedCount'),
+  jitterBufferTargetDelay:n('jitterBufferTargetDelay'),jitterBufferMinimumDelay:n('jitterBufferMinimumDelay'),
+  totalDecodeTime:kind==='video'?n('totalDecodeTime'):null,totalProcessingDelay:kind==='video'?n('totalProcessingDelay'):null};
 }
 const counterKeys=['bytesReceived','packetsReceived','framesReceived','framesDecoded','framesDropped','totalAudioEnergy',
- 'totalSamplesDuration','totalSamplesReceived','concealedSamples','concealmentEvents','silentConcealedSamples'] as const;
+ 'totalSamplesDuration','totalSamplesReceived','concealedSamples','concealmentEvents','silentConcealedSamples',
+ 'jitterBufferDelay','jitterBufferEmittedCount','jitterBufferTargetDelay','jitterBufferMinimumDelay','totalDecodeTime','totalProcessingDelay'] as const;
 /** Counter resets, clock regressions and stale (unchanged) report timestamps
  * never create rates or false decoder-progress evidence. */
 export function receiverDelta(current:ReceiverCounters,previous:ReceiverCounters,windowMs:number):ReceiverDelta|null {
@@ -59,6 +73,9 @@ export function receiverDelta(current:ReceiverCounters,previous:ReceiverCounters
  if(counterKeys.some(key=>current[key]!==null&&previous[key]!==null&&current[key]!<previous[key]!))return null;
  const d=(key:typeof counterKeys[number])=>current[key]!==null&&previous[key]!==null?current[key]!-previous[key]!:null;
  const duration=d('totalSamplesDuration'),energy=d('totalAudioEnergy');
+ const emitted=d('jitterBufferEmittedCount'),frames=d('framesDecoded'),buffer=d('jitterBufferDelay'),
+  target=d('jitterBufferTargetDelay'),minimum=d('jitterBufferMinimumDelay'),decode=d('totalDecodeTime'),processing=d('totalProcessingDelay');
+ const averageMs=(seconds:number|null,count:number|null)=>seconds!==null&&count!==null&&count>0?monotonic(seconds/count*1000):null;
  return {windowMs,statsIntervalMs:current.timestampMs!==null&&previous.timestampMs!==null?current.timestampMs-previous.timestampMs:null,
   bytesReceived:d('bytesReceived'),packetsReceived:d('packetsReceived'),
   // RFC packet loss can decrease as late packets arrive; keep the signed delta.
@@ -66,6 +83,10 @@ export function receiverDelta(current:ReceiverCounters,previous:ReceiverCounters
   framesReceived:d('framesReceived'),framesDecoded:d('framesDecoded'),framesDropped:d('framesDropped'),
   totalAudioEnergy:energy,totalSamplesDuration:duration,totalSamplesReceived:d('totalSamplesReceived'),
   concealedSamples:d('concealedSamples'),concealmentEvents:d('concealmentEvents'),silentConcealedSamples:d('silentConcealedSamples'),
+  jitterBufferDelay:buffer,jitterBufferEmittedCount:emitted,jitterBufferTargetDelay:target,jitterBufferMinimumDelay:minimum,
+  totalDecodeTime:decode,totalProcessingDelay:processing,
+  jitterBufferAverageMs:averageMs(buffer,emitted),jitterBufferTargetAverageMs:averageMs(target,emitted),jitterBufferMinimumAverageMs:averageMs(minimum,emitted),
+  decodeAverageMs:averageMs(decode,frames),processingAverageMs:averageMs(processing,frames),
   audioRms:duration!==null&&duration>0&&energy!==null?monotonic(Math.sqrt(energy/duration)):null};
 }
 function emptyReceiver(kind:ReceiverKind,status:ReceiverStatus='absent',track?:DiagnosticReceiver|null):ReceiverObservation {
