@@ -65,6 +65,15 @@ node scripts/network-performance-sample.mjs \
 
 It refuses to overwrite either trace or summary. Use a new stage/path per run. Keep these local unless the user explicitly chooses to share a sanitized trace.
 
+The offline sound verifier can prepare a deterministic 1.3-second, ramped, low-level three-tone fixture and later inspect a supplied completed PCM16 WAV. Neither command plays, records or controls an app:
+
+```sh
+node scripts/network-tone-proof.mjs generate /absolute/new-test-tone.wav
+node scripts/network-tone-proof.mjs probe /absolute/completed-recording-copy.wav
+```
+
+Generation refuses overwrite. Probe accepts bounded mono/stereo PCM16 WAVs, searches their initial offset, and reports `matched`, `no_match`, `insufficient` or `unsupported`. Compressed/float containers need a separate local PCM16 copy; keep the original recording. Search work, file size and duration are bounded. A match proves only that the supplied samples contain the expected tone/silence sequence. The recording-relative offset is not network latency. This tool does not perform the actual tone transmission, native mute check or speaker check.
+
 ## Real paired sequence still required
 
 1. Both owners confirm responsive hosts, exact provenance, workload and no active stream/recording. Agree one appearance; Windows admits the Mac through normal controls.
