@@ -10,6 +10,7 @@ import {resolveGrants,type ParticipantLike} from '../../server/guest/src/partici
 import type {StageUpdate} from '../../server/guest/src/guestMesh';
 import {sharedProgramCapture,type ProgramLease} from './programCapture';
 import type {ProducerGuestRtc} from './producerGuestRtc';
+import {GuestSeatTrace} from './guestSeatTrace';
 
 export type SeatPhase='starting'|'waiting'|'connecting'|'live'|'gone'|'error';
 export type GuestVideoSource='program'|'webcam';
@@ -51,6 +52,7 @@ export class GuestSeat {
  readonly spec:GuestSeatSpec;
  private readonly api:string;private readonly code:string|null;
  private state:SeatState;private listeners=new Set<()=>void>();
+ private readonly trace=new GuestSeatTrace();
  private alive=true;private started=false;private terminal=false;private polling=false;
  private request=new AbortController();private timer=0;private callGeneration=0;
  private local:MediaStream|null=null;private program:MediaStream|null=null;private hostAudio:MediaStream|null=null;
@@ -66,15 +68,16 @@ export class GuestSeat {
  localStream():MediaStream|null{return this.local;}
  programStream():MediaStream|null{return this.program;}
  hostAudioStream():MediaStream|null{return this.hostAudio;}
- private set(patch:Partial<SeatState>){if(!this.alive)return;this.state={...this.state,...patch};for(const fn of this.listeners)fn();}
+ private set(patch:Partial<SeatState>){if(!this.alive)return;if(patch.phase)this.trace.phase(patch.phase);this.state={...this.state,...patch};for(const fn of this.listeners)fn();}
  async start():Promise<void>{
-  if(this.started||!this.alive)return;this.started=true;
+  if(this.started||!this.alive)return;this.started=true;this.trace.start(this.state.mediaMode==='program');
   if(!this.code){this.fail('The join link has no valid invite code.');return;}
   await this.poll();
  }
  leave():void{
   if(!this.alive)return;this.alive=false;this.terminal=true;this.request.abort();window.clearTimeout(this.timer);
-  this.teardownCall();this.releaseMedia();this.listeners.clear();
+  this.trace.cancel();this.trace.begin('peer.leave');
+  const retiring=this.teardownCall();this.releaseMedia();this.listeners.clear();this.trace.leave(retiring);
  }
  toggleMute():void{const muted=!this.state.muted;this.local?.getAudioTracks().forEach(t=>{t.enabled=!muted;});this.conversation?.setMicrophoneEnabled(!muted);this.set({muted});}
  toggleCamera():void{const cameraOff=!this.state.cameraOff;this.local?.getVideoTracks().forEach(t=>{t.enabled=!cameraOff;});this.set({cameraOff});}
@@ -82,8 +85,8 @@ export class GuestSeat {
  async resumeAudio():Promise<void>{await Promise.all([
   this.rtc?.resumeAudio(),this.conversation?.resumeAudio(),this.lease?sharedProgramCapture.resumeAudio():undefined,
  ]);}
- private fail(message:string){this.teardownCall();this.releaseMedia();this.terminal=true;this.set({phase:'error',message,onStage:false,hasProgram:false});}
- private gone(message:string){this.teardownCall();this.releaseMedia();this.terminal=true;this.set({phase:'gone',message,onStage:false,hasProgram:false});}
+ private fail(message:string){this.trace.cancel('error');this.teardownCall();this.releaseMedia();this.terminal=true;this.set({phase:'error',message,onStage:false,hasProgram:false});}
+ private gone(message:string){this.trace.cancel();this.teardownCall();this.releaseMedia();this.terminal=true;this.set({phase:'gone',message,onStage:false,hasProgram:false});}
  private async json(suffix:string,method:'GET'|'POST'='GET'):Promise<{status:number;body:unknown}>{
   const res=await fetch(`${this.api}/guest/${encodeURIComponent(this.code!)}${suffix}`,{method,credentials:'omit',referrerPolicy:'no-referrer',cache:'no-store',redirect:'error',signal:AbortSignal.any([this.request.signal,AbortSignal.timeout(8000)])});
   if(!res.ok){await res.body?.cancel();return {status:res.status,body:null};}
@@ -106,16 +109,18 @@ export class GuestSeat {
    this.set({guestStatus:guest.status,transport});
    if(!['accepted','waiting','invited'].includes(guest.status)){this.gone(`${this.spec.hostName} closed your seat.`);return;}
    if(guest.status!=='accepted'){
+    this.trace.waiting();
     this.teardownCall();this.releaseMedia();this.set({phase:'waiting',message:'',onStage:false});
     if(guest.status==='invited')await this.json('/accept','POST');return;
    }
+   this.trace.admitted();
    const grants=resolveGrants(guest),key=[...grants].sort().join('|');
    if(this.peerId!==guest.id||this.mediaKey!==key){this.teardownCall();this.releaseMedia();this.peerId=guest.id;this.mediaKey=key;}
    const actual=this.rtc?'livekit':this.link?'legacy':null;
    if(actual&&actual!==transport)this.teardownCall();
    if(!this.local){
     this.set({phase:'starting',message:''});
-    try{await this.openMedia(grants);}catch{if(this.alive)this.fail(this.state.mediaMode==='program'?'Your program output is unavailable. Start and authorize Producer Virtual Camera, or explicitly choose Webcam when joining.':'Camera or microphone access is unavailable. Check your selected devices and join again.');return;}
+    try{await this.trace.measure(this.state.mediaMode==='program'?'peer.capture.program':'peer.capture.webcam',()=>this.openMedia(grants));}catch{if(this.alive)this.fail(this.state.mediaMode==='program'?'Your program output is unavailable. Start and authorize Producer Virtual Camera, or explicitly choose Webcam when joining.':'Camera or microphone access is unavailable. Check your selected devices and join again.');return;}
    }
    if(!this.alive)return;
    if(transport==='livekit'){if(!this.rtc)await this.connectNative(guest.id);}
@@ -133,7 +138,7 @@ export class GuestSeat {
   const video=grants.has('media.camera'),audio=grants.has('media.mic');
   if(!video&&!audio){this.local=new MediaStream();return;}
   if(this.state.mediaMode==='program'){
-   if(this.spec.prepareProgram){this.programPrepared=true;await this.spec.prepareProgram();if(!this.alive)return;}
+   if(this.spec.prepareProgram){this.programPrepared=true;await this.trace.measure('peer.program.prepare',()=>this.spec.prepareProgram!());if(!this.alive)return;}
    const lease=await sharedProgramCapture.acquire(1,this.spec.camLabel||'Producer Virtual Camera');
    if(!this.alive){lease.release();return;}this.lease=lease;
    this.local=new MediaStream([...(video?[lease.video.clone()]:[]),...(audio?[lease.audio.clone()]:[])]);
@@ -150,9 +155,10 @@ export class GuestSeat {
  }
  private async connectNative(participantId:string):Promise<void>{
   const gen=++this.callGeneration;this.set({phase:'connecting',message:''});
-  const {ProducerGuestRtc}=await import('./producerGuestRtc');if(!this.alive||gen!==this.callGeneration)return;
+  const {ProducerGuestRtc}=await this.trace.measure('peer.sdk.load',()=>import('./producerGuestRtc'));if(!this.alive||gen!==this.callGeneration)return;
   const current=()=>this.alive&&gen===this.callGeneration;
   const rtc=new ProducerGuestRtc({api:this.api,invite:this.code!,participantId,endpoint:BOOMIN_RTC,localStream:()=>this.local,
+   onDiagnostic:phase=>{if(current())this.trace.diagnostic(phase);},
    onState:phase=>{if(!current())return;if(phase==='gone'){this.gone(`${this.spec.hostName} ended your seat.`);return;}this.set({phase:phase==='reconnecting'?'connecting':phase,message:phase==='reconnecting'?'Reconnecting…':'',...(phase==='live'?{}:{onStage:false})});},
    onStage:onStage=>{if(current())this.set({onStage});},
    onProgram:stream=>{if(current())this.setProgram(stream,gen);},
@@ -160,7 +166,7 @@ export class GuestSeat {
   });this.rtc=rtc;rtc.start();
  }
  private async legacySession():Promise<Session>{
-  const res=await this.json('/session','POST'),s=res.body as Session;
+  const res=await this.trace.measure('peer.legacy.session',()=>this.json('/session','POST')),s=res.body as Session;
   if(res.status!==200||!s||typeof s.signaling_url!=='string'||!Array.isArray(s.ice_servers))throw Error('Guest session unavailable');
   return s;
  }
@@ -179,14 +185,16 @@ export class GuestSeat {
   });
  }
  private setProgram(stream:MediaStream|null,gen:number){
+  if(stream&&this.program!==stream)this.trace.trackAvailable(true);
   this.program=stream;const track=stream?.getVideoTracks()[0];
   const sync=()=>{if(this.alive&&gen===this.callGeneration&&this.program===stream)this.set({hasProgram:!!track&&track.readyState==='live'&&!track.muted});};
   track?.addEventListener('unmute',sync,{once:true});track?.addEventListener('ended',sync,{once:true});sync();
  }
  private teardownCall(){
-  this.callGeneration++;const rtc=this.rtc;this.rtc=null;void rtc?.close().catch(()=>{});
+  this.callGeneration++;const rtc=this.rtc;this.rtc=null;const retiring=rtc?.close()??Promise.resolve();void retiring.catch(()=>{});
   const link=this.link;this.link=null;link?.close();this.conversation?.stop();this.conversation=null;
   this.program=null;this.hostAudio=null;this.downSince=0;this.set({hasProgram:false,onStage:false});
+  return retiring;
  }
  private releaseMedia(){this.local?.getTracks().forEach(t=>t.stop());this.local=null;this.lease?.release();this.lease=null;if(this.programPrepared){this.programPrepared=false;this.spec.releaseProgram?.();}}
 }
