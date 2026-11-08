@@ -1,3 +1,4 @@
+import { windowSourceLabel } from "../lib/sourceSpec";
 import { listen as listenSoundboard } from "@tauri-apps/api/event";
 import {LiveCaptions} from '../features/transcription/LiveCaptions';
 import {PresentationRelay} from "../features/presentation/presentationRelay";
@@ -423,7 +424,7 @@ function WindowPickerList({
           onClick={async () => {
             setBusy(true);
             try {
-              await onPick(itemId, w.id, w.owner);
+              await onPick(itemId, w.id, windowSourceLabel(w));
               onPicked();
             } finally {
               setBusy(false);
@@ -431,8 +432,8 @@ function WindowPickerList({
           }}
         >
           <span className="rm-device-name">
-            {w.owner}
-            {w.title ? ` — ${w.title}` : ""}
+            {w.owner || (!w.title ? "Window" : "")}
+            {w.title ? `${w.owner ? " — " : ""}${w.title}` : ""}
             {selfCaptureNote(w)}
           </span>
         </button>
@@ -445,7 +446,7 @@ function WindowPickerList({
  * inside the preview: every frame contains the last one, so dragging any
  * source looks like an explosion of copies. That is the mirror, not a
  * transform bug — the chip says so before the click. */
-function selfCaptureNote(w: { owner: string }) {
+function selfCaptureNote(w: { owner?: string }) {
   return w.owner === "Producer" ? " (this app — captures itself)" : "";
 }
 
@@ -486,15 +487,15 @@ function WindowStripList({
           onClick={async () => {
             setBusy(true);
             try {
-              await onPick(itemId, w.id, w.owner);
+              await onPick(itemId, w.id, windowSourceLabel(w));
               onPicked();
             } finally {
               setBusy(false);
             }
           }}
         >
-          {w.owner}
-          {w.title ? ` — ${w.title}` : ""}
+          {w.owner || (!w.title ? "Window" : "")}
+          {w.title ? `${w.owner ? " — " : ""}${w.title}` : ""}
           {selfCaptureNote(w)}
         </button>
       ))}
@@ -1659,10 +1660,10 @@ function WindowSourceForm({ onAdd }: { onAdd: (id: number, title: string) => voi
         <div className="rm-devices-empty">No windows found — needs the screen-recording grant.</div>
       )}
       {windows?.map((w) => (
-        <button key={w.id} className="rm-device" onClick={() => onAdd(w.id, w.owner)}>
+        <button key={w.id} className="rm-device" onClick={() => onAdd(w.id, windowSourceLabel(w))}>
           <span className="rm-device-name">
-            {w.owner}
-            {w.title ? ` — ${w.title}` : ""}
+            {w.owner || (!w.title ? "Window" : "")}
+            {w.title ? `${w.owner ? " — " : ""}${w.title}` : ""}
             {selfCaptureNote(w)}
           </span>
         </button>
@@ -1934,7 +1935,7 @@ function PermBanner({
 function OverlayPicker({ activeWindow, activeUrl }: { activeWindow: number | null; activeUrl: string | null }) {
   const [mode, setMode] = useState<"window" | "browser">(activeUrl ? "browser" : "window");
   const [url, setUrl] = useState(activeUrl ?? "");
-  const [windows, setWindows] = useState<{ id: number; owner: string; title: string }[]>([]);
+  const [windows, setWindows] = useState<LiveWindow[]>([]);
   const [selected, setSelected] = useState<number | "">("");
   const [colorKey, setColorKey] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1969,7 +1970,7 @@ function OverlayPicker({ activeWindow, activeUrl }: { activeWindow: number | nul
               onChange={(v) => setSelected(v === "" ? "" : Number(v))}
               placeholder="Choose a window…"
               title="Window"
-              options={[{ value: "", label: "Choose a window…" }, ...windows.map((w) => ({ value: String(w.id), label: `${w.owner}${w.title ? ` — ${w.title}` : ""}` }))]}
+              options={[{ value: "", label: "Choose a window…" }, ...windows.map((w) => ({ value: String(w.id), label: w.owner && w.title ? `${w.owner} — ${w.title}` : windowSourceLabel(w) }))]}
             />
             <button onClick={load} title="Refresh window list">
               ↻

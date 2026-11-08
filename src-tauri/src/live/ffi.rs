@@ -568,6 +568,10 @@ extern "C" {
     #[cfg(target_os = "windows")]
     pub fn producer_vcam_mirror_register();
     #[cfg(target_os = "windows")]
+    pub fn producer_window_capture_register();
+    #[cfg(target_os = "windows")]
+    pub fn producer_window_capture_available(window: *mut c_void) -> c_int;
+    #[cfg(target_os = "windows")]
     pub fn producer_vcam_in_use() -> c_int;
     #[cfg(target_os = "windows")]
     pub fn producer_vcam_mirror_source(
