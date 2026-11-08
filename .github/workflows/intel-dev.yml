@@ -29,6 +29,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          cache-on-failure: true
       - name: Build frontend
         run: |
           bun install --frozen-lockfile
@@ -99,7 +100,16 @@ jobs:
           print('Notarization:', result['status'])
           assert result['status']=='Accepted', 'Development candidate was not accepted'
           PY
-          xcrun stapler staple "$APP"
+          mkdir -p candidate
+          cp "$RUNNER_TEMP/Producer-submission.zip" candidate/Producer-Intel-Dev-accepted.zip
+          cp "$RUNNER_TEMP/notary.json" candidate/notarization.json
+          STAPLED=0
+          for attempt in 1 2 3 4 5; do
+            if xcrun stapler staple "$APP"; then STAPLED=1; break; fi
+            echo "Ticket delivery attempt $attempt failed; retrying in 10 seconds"
+            sleep 10
+          done
+          test "$STAPLED" = 1
           xcrun stapler validate "$APP"
           spctl -a -t exec -vv "$APP"
           mkdir -p candidate
@@ -112,4 +122,12 @@ jobs:
           name: Producer-Intel-Dev-${{ github.sha }}
           path: candidate/
           if-no-files-found: error
+          retention-days: 14
+      - name: Preserve accepted bundle if ticket delivery fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Producer-Intel-Dev-accepted-${{ github.sha }}
+          path: candidate/
+          if-no-files-found: ignore
           retention-days: 14
