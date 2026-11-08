@@ -29,7 +29,8 @@ Edits, ordinary `[MAC]`/`[WINDOWS]` updates and `[WINDOWS BRIDGE ACK]` or
 personal recordings, SDP/ICE or credentials in comments. Use `gh issue comment
 --body-file` to preserve the marker/newlines.
 
-The worker owns its **separate checkout**, not the live dev app's source tree.
+The worker owns its **independent clone**, not the live dev app's source tree or
+shared writable Git metadata. A Git worktree is refused for the worker checkout.
 It may investigate, test, make reversible platform fixes and commit there.
 Shared-file changes must be coordinated. It reports exact SHAs for the existing
 desktop owner to adopt into its Vite/native dev loop. Workers never publish,
@@ -37,7 +38,8 @@ sign, deploy, merge integration/main or restart the user's Producer sessions.
 The host listener uses its existing GitHub CLI login to fetch the fixed issue
 and revalidate the handoff author. It passes a bounded reference snapshot to
 Codex, then posts one bounded structured result as the ACK. GitHub tokens and
-CLI credential files are not copied into the worker sandbox. A completed model
+CLI credential files are denied to worker tools, and GH/Cloudflare/cloud-token
+environment variables are not inherited by the App Server child. A completed model
 turn that reports blocked is a blocked task, not a successful handoff.
 
 ## Windows installation already provisioned on the user's PC
@@ -74,9 +76,10 @@ not `model/list` alone, proves model access.
    node --test tools/agent-bridge/bridge.test.mjs
    ```
 
-2. Create an isolated Mac worker worktree from the **agreed integration SHA**,
+2. Create an independent Mac worker clone from the **agreed integration SHA**,
    e.g. `037db9c` plus reviewed Windows fixes as appropriate. Give it a dedicated
-   `mac/bridge-handoffs` branch. The worker will read issue #131 for current
+   `mac/bridge-handoffs` branch. Read-only Git object alternates are permitted,
+   but `.git` itself must be a directory owned by that clone. The worker will read issue #131 for current
    revision/ownership; it must not use this installation example as release
    authority.
 
@@ -105,13 +108,41 @@ not `model/list` alone, proves model access.
      "stateDir": "/Users/YOU/.codex/producer-bridge",
      "tokenFile": "/Users/YOU/.codex/producer-bridge/mac-token",
      "workerCwd": "/absolute/path/to/producer-mac-bridge-worker",
+     "workerReadableRoots": ["/absolute/vetted/node24-runtime", "/absolute/vetted/test-dependencies/node_modules"],
      "codex": "/absolute/path/to/codex",
      "maxRunsPerHour": 6,
      "turnTimeoutMs": 600000
    }
    ```
 
-   Keep this file mode 600. The CLI model preference is retained if advertised
+   Keep this file mode 600. `workerReadableRoots` defaults to an empty array.
+   Add only inspected runtime/test dependencies the worker needs; never grant
+   a home directory, broad project parent, credentials directory or bridge
+   state. Roots are canonicalized so a symlink cannot alias private state.
+   Shared Git read access, if needed, is limited to `.git/objects`, never its
+   config/refs/worktree metadata. Existing profile IDs and actual selected
+   permission behavior must be tested before installing unattended execution.
+
+   The bridge supplies a named `producer_bridge` permission profile to its own
+   App Server process. It denies root reads, allows the platform minimal runtime,
+   makes only `workerCwd` writable (including that independent clone's `.git`),
+   adds the vetted dependencies read-only, and disables network. Every thread
+   and turn explicitly selects it with approval policy `never`. Legacy sandbox
+   fields are not mixed with named permissions. Old CLI versions that ignore
+   or cannot enforce this profile fail the mandatory pre-inference canary:
+   private-state reads/writes must be denied and a checkout write must succeed.
+   This uses non-secret random files, never real credentials.
+
+   The child uses a small OS/runtime environment allowlist. Its OpenSSL config
+   is explicitly `/dev/null` (`NUL` on Windows) to avoid needing a broad system
+   configuration read grant. This changes no global environment or config.
+   Apps, plugins and web search are disabled for this process; effective config
+   is inspected by the host, inherited MCP names are explicitly disabled on a
+   restart if needed, and active MCP tools are checked before inference. An
+   unverified tool configuration stops the handoff. The broker retains its
+   own GitHub/relay access; that does not grant the worker network access.
+
+   The CLI model preference is retained if advertised
    by the account; otherwise the bridge explicitly uses the advertised account
    default for its own turns, without rewriting global Codex config. It does
    not assume a stale CLI default model is supported by a ChatGPT account.
@@ -130,7 +161,10 @@ not `model/list` alone, proves model access.
 
    Verify relay `online.mac=true`, then post a bounded `[BRIDGE TO MAC]` smoke
    handoff on #131: read the checkout SHA and return a completed structured
-   result, with no file/production changes. The host bridge posts the ordinary
+   result, with no file/production changes. Also qualify a bounded temporary
+   edit/commit in the independent clone before claiming autonomous commit
+   support; a read-only smoke alone proves neither Git writes nor production
+   media behavior. The host bridge posts the ordinary
    `[MAC BRIDGE ACK]`; the sandboxed worker must not invoke gh or post it itself.
    Confirm `worker_completed` and that actual ACK.
 
@@ -175,6 +209,12 @@ and cannot be used to read another peer's queue. Signed GitHub deliveries are
 filtered before queueing; explicit GitHub comments are proposals/data, not
 permission to bypass the worker's fixed scope.
 
+Public ACK reuse requires the allowlisted host author as well as the exact event
+marker. Result text additionally removes private-key blocks, token/password/key
+assignments and bare peer-token shapes. Redaction is defense in depth; the
+filesystem, environment and tool boundaries must prevent credential access in
+the first place. Do not treat a text scrubber as comprehensive secret detection.
+
 ## Relay maintenance
 
 Deploy only this dedicated bridge worker with
@@ -196,5 +236,6 @@ drain the peer queue and manually redeliver the GitHub hook delivery.
 Official protocol references:
 
 - https://developers.openai.com/codex/app-server
+- https://learn.chatgpt.com/docs/permissions
 - https://developers.cloudflare.com/durable-objects/examples/websocket-hibernation-server/
 - https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries

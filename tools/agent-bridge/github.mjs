@@ -16,10 +16,20 @@ export async function command(executable, args, cwd) {
 const ghName = process.platform === 'win32' ? 'gh.exe' : 'gh';
 export async function gh(args) { return JSON.parse(await command(ghName,args)); }
 export function safeText(text) {
-  return String(text).replace(/https?:\/\/\S+/g,'[link omitted]')
+  return String(text).replace(/-----BEGIN (?:[A-Z0-9 ]* )?PRIVATE KEY-----[\s\S]*?(?:-----END (?:[A-Z0-9 ]* )?PRIVATE KEY-----|$)/g,'[private key omitted]')
+    .replace(/(["']?\b([A-Za-z_][A-Za-z0-9_-]*)["']?\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;}]+)/g,
+      (whole,prefix,key)=>/token|secret|password|credential|api[_-]?key|private[_-]?key/i.test(key)?prefix+'[credential omitted]':whole)
+    .replace(/\b[a-f0-9]{64,}\b/gi,'[credential omitted]')
+    .replace(/https?:\/\/\S+/g,'[link omitted]')
     .replace(/\b(?:github_pat_|gh[pousr]_)[A-Za-z0-9_]+/g,'[credential omitted]')
-    .replace(/\bBearer\s+\S+/gi,'Bearer [omitted]')
+    .replace(/\bsk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{16,}/g,'[credential omitted]')
+    .replace(/\b(?:Bearer|Basic)\s+\S+/gi,'[authorization omitted]')
     .replace(/\b(?:gr_|gi_)[A-Za-z0-9_-]+/g,'[invite omitted]');
+}
+export function trustedAcknowledgement(comments, config, packet) {
+  const prefix=`[${config.peer.toUpperCase()} BRIDGE ACK]`, actors=config.actors.map(actor=>actor.toLowerCase());
+  return comments.find(comment=>actors.includes(comment.user?.login?.toLowerCase()) && comment.body?.startsWith(prefix)
+    && comment.body.split(/\r?\n/).includes(`Event: ${packet.id}`));
 }
 export async function reference(config, packet) {
   const comment = await gh(['api',`repos/${config.repo}/issues/comments/${packet.commentId}`]);
@@ -35,7 +45,7 @@ export function resultFrom(report) {
 export async function acknowledge(config, packet, outcome) {
   const prefix=`[${config.peer.toUpperCase()} BRIDGE ACK]`;
   const pages=await gh(['api',`repos/${config.repo}/issues/${packet.issue}/comments?per_page=100`,'--paginate','--slurp']);
-  const prior=pages.flat().find(c=>c.body?.startsWith(prefix) && c.body.split(/\r?\n/).includes(`Event: ${packet.id}`));
+  const prior=trustedAcknowledgement(pages.flat(),config,packet);
   if(prior)return {url:prior.html_url,duplicate:true};
   const branch=(await command('git',['branch','--show-current'],config.workerCwd)).trim();
   const sha=(await command('git',['rev-parse','HEAD'],config.workerCwd)).trim();

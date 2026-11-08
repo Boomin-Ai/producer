@@ -1,13 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile, symlink, readdir, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { handoff, validSignature, validatePacket } from './protocol.mjs';
 import { Bridge } from './relay.mjs';
 import { Listener } from './client.mjs';
-import { resultFrom, safeText } from './github.mjs';
+import { resultFrom, safeText, trustedAcknowledgement } from './github.mjs';
+import { Codex, workerEnvironment, workerSandbox, workerArguments, inspectWorkerTools, verifyWorkerSandbox } from './codex.mjs';
+import { EventEmitter } from 'node:events';
 
 const secret = 'test-only-credential-with-sufficient-entropy';
 const env = { REPO:'Boomin-Ai/producer', ALLOWED_ISSUES:'131', ALLOWED_ACTORS:'ikleveland', WINDOWS_TOKEN:secret, MAC_TOKEN:'another-test-credential', GITHUB_WEBHOOK_SECRET:secret };
@@ -86,7 +88,8 @@ test('one-time WebSocket tickets require peer auth and preserve unacknowledged r
 async function local(t){
  const directory=await mkdtemp(join(tmpdir(),'producer-bridge-test-'));
  t.after(async()=>{assert(resolve(directory).startsWith(resolve(tmpdir())+sep));assert(directory.includes('producer-bridge-test-'));await rm(directory,{recursive:true,force:true});});
- const config={peer:'windows',repo:env.REPO,issues:[131],actors:['ikleveland'],stateDir:directory,workerCwd:directory,maxRunsPerHour:6};
+ const stateDir=join(directory,'state'),workerCwd=join(directory,'worker');await mkdir(stateDir);await mkdir(join(workerCwd,'.git'),{recursive:true});
+ const config={peer:'windows',repo:env.REPO,issues:[131],actors:['ikleveland'],stateDir,workerCwd,maxRunsPerHour:6};
  const listener=new Listener(config);listener.state={pending:[],completed:[],failed:[],runs:[]};
  return listener;
 }
@@ -128,4 +131,51 @@ test('host broker bounds structured results and removes credential/invitation/li
  assert.throws(()=>resultFrom(JSON.stringify({status:'completed',summary:'x'.repeat(2001),checks:[]})));
  const text=safeText('https://secret.example/gi_private ghp_abcdefghijklmnopqrstuvwxyz Bearer private gr_private');
  assert(!text.includes('secret.example'));assert(!text.includes('ghp_'));assert(!text.includes('gr_private'));assert(!text.includes('Bearer private'));
+});
+test('worker environment omits inherited provider secrets and process injection settings',()=>{
+ const clean=workerEnvironment({PATH:'/safe/bin',HOME:'/home/operator',LANG:'en_US.UTF-8',GH_TOKEN:'private-gh',GITHUB_TOKEN:'private-gh2',CLOUDFLARE_API_TOKEN:'private-cf',AWS_SECRET_ACCESS_KEY:'private-aws',OPENAI_API_KEY:'private-model-key',NODE_OPTIONS:'--require=/private/injection.js',DYLD_INSERT_LIBRARIES:'/private/injection',OPENSSL_CONF:'/private/config'},'darwin');
+ assert.deepEqual(clean,{PATH:'/safe/bin',HOME:'/home/operator',LANG:'en_US.UTF-8',OPENSSL_CONF:'/dev/null',NODE_OPTIONS:'--openssl-config=/dev/null'});
+});
+test('worker scope denies credential ancestors, private state, symlink aliases and shared Git metadata',async t=>{
+ const l=await local(t),home=join(l.config.workerCwd,'..','operator');await mkdir(join(home,'.config','gh'),{recursive:true});
+ const deps=join(home,'runtime');await mkdir(deps);
+ const context={home,environment:{}};
+ const scope=await workerSandbox({...l.config,workerReadableRoots:[deps]},context);
+ assert.equal(scope.permissions,'producer_bridge');assert.equal(scope.profile.filesystem[':root'],'deny');assert.equal(scope.profile.filesystem[scope.cwd],'write');assert.equal(scope.profile.filesystem[await realpath(deps)],'read');assert.equal(scope.profile.network.enabled,false);assert.equal(scope.profile.extends,undefined);
+ for(const root of [home,join(home,'.config'),join(home,'.config','gh'),l.config.stateDir])await assert.rejects(workerSandbox({...l.config,workerReadableRoots:[root]},context),/private host credentials/);
+ const metadata=join(home,'repo','.git');await mkdir(join(metadata,'objects'),{recursive:true});await assert.rejects(workerSandbox({...l.config,workerReadableRoots:[metadata]},context),/Only shared Git objects/);
+ assert.equal((await workerSandbox({...l.config,workerReadableRoots:[join(metadata,'objects')]},context)).profile.filesystem[await realpath(join(metadata,'objects'))],'read');
+ const alias=join(home,'credential-alias');await symlink(join(home,'.config','gh'),alias,process.platform==='win32'?'junction':'dir');await assert.rejects(workerSandbox({...l.config,workerReadableRoots:[alias]},context),/private host credentials/);
+ await writeFile(join(l.config.workerCwd,'.git-file'),'gitdir: elsewhere');await rm(join(l.config.workerCwd,'.git'),{recursive:true});await writeFile(join(l.config.workerCwd,'.git'),'gitdir: elsewhere');await assert.rejects(workerSandbox(l.config),/independent clone/);
+});
+test('every worker turn selects the named profile, never legacy sandbox fields or automatic approval',async t=>{
+ const l=await local(t),execution=await workerSandbox(l.config),args=workerArguments(execution,['node_repl']);
+ assert(args.includes('features.apps=false'));assert(args.includes('features.plugins=false'));assert.deepEqual(args.slice(args.indexOf('mcp_servers={}')+1,-2),['-c','mcp_servers.node_repl.enabled=false']);assert(!args.some(arg=>arg.includes('mcp_servers."')));assert(args.includes('default_permissions="producer_bridge"'));assert(!args.includes('--sandbox'));
+ for(const name of ['node.repl','"node_repl"','node_repl.enabled','node repl','node_repl\n','x'.repeat(201)])assert.throws(()=>workerArguments(execution,[name]),/Invalid MCP server name/);
+ const rpc=new EventEmitter();let sent;
+ rpc.call=async(method,params)=>{assert.equal(method,'turn/start');sent=params;queueMicrotask(()=>{rpc.emit('notification',{method:'item/completed',params:{threadId:'thread',item:{type:'agentMessage',text:'{"status":"completed"}'}}});rpc.emit('notification',{method:'turn/completed',params:{threadId:'thread',turn:{id:'turn',status:'completed'}}});});return {turn:{id:'turn'}};};
+ const result=await Codex.prototype.run.call(rpc,'thread','inspect only',1000,'test-model',undefined,execution);
+ assert.equal(result.turnId,'turn');assert.equal(sent.permissions,'producer_bridge');assert.equal(sent.approvalPolicy,'never');assert.equal(sent.cwd,execution.cwd);assert.equal(sent.sandbox,undefined);assert.equal(sent.sandboxPolicy,undefined);
+ await assert.rejects(Codex.prototype.run.call(rpc,'thread','unsafe',1000),/restricted named worker profile/);
+});
+test('unsupported or ignored permission profiles fail a non-secret canary before inference',async t=>{
+ const l=await local(t),execution=await workerSandbox(l.config);let calls=0;
+ const rpc={call:async(method,params)=>{calls++;assert.equal(method,'command/exec');assert.equal(params.permissionProfile,'producer_bridge');assert.equal(params.sandboxPolicy,undefined);return {exitCode:41,stdout:''};}};
+ await assert.rejects(verifyWorkerSandbox(rpc,execution,l.config.stateDir),/probe failed/);assert.equal(calls,1);assert.deepEqual(await readdir(l.config.stateDir),[]);
+ rpc.call=async()=>({exitCode:0,stdout:'restricted-worker-sandbox-verified'});await verifyWorkerSandbox(rpc,execution,l.config.stateDir);assert.deepEqual(await readdir(l.config.stateDir),[]);
+});
+test('worker tool configuration is checked, inherited MCP names require explicit disable, and enabled apps fail closed',async()=>{
+ const config={features:{apps:false,plugins:false},web_search:'disabled',mcp_servers:{node_repl:{command:'not forwarded'},off:{enabled:false}}};
+ const rpc={call:async()=>({config})};assert.deepEqual(await inspectWorkerTools(rpc),['node_repl']);config.mcp_servers.node_repl.enabled=false;assert.deepEqual(await inspectWorkerTools(rpc),[]);config.features.apps=true;await assert.rejects(inspectWorkerTools(rpc),/not explicitly disabled/);
+});
+test('only a trusted host author can satisfy public ACK deduplication',()=>{
+ const config={peer:'mac',actors:['ikleveland']},event={id:'github-123'},body='[MAC BRIDGE ACK]\nEvent: github-123\nResult: completed';
+ assert.equal(trustedAcknowledgement([{body,user:{login:'outsider'}}],config,event),undefined);
+ const real={body,user:{login:'iKleveland'},html_url:'https://github.com/trusted'};
+ assert.equal(trustedAcknowledgement([{body,user:{login:'outsider'}},real],config,event),real);
+});
+test('public results redact private key blocks, token assignments and bare peer credentials without losing commit SHA',()=>{
+ const values=['private-mac','private-cf','private-camel','private-password','private-api', 'test-key-material'];
+ const text=safeText('MAC_TOKEN=private-mac CLOUDFLARE_API_TOKEN="private-cf" apiKey:private-camel password=private-password "api_key":"private-api"\n-----BEGIN OPENSSH PRIVATE KEY-----\ntest-key-material\n-----END OPENSSH PRIVATE KEY-----\n'+ 'a'.repeat(64)+'\nCheckout: '+ 'b'.repeat(40));
+ for(const value of values)assert(!text.includes(value));assert(!text.includes('a'.repeat(64)));assert(text.includes('b'.repeat(40)));
 });
