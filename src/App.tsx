@@ -36,8 +36,8 @@ function App() {
     try {
       const list = await ipc.listEndpoints();
       setEndpoints(list);
-      // No workspaces: a machine that has signed in before gets the plain
-      // sign-in screen; a fresh one gets the full front door.
+      // New beta installations start with Boomin. Existing connections,
+      // including owned servers, keep their normal Home entry.
       setView(list.length === 0 ? (hasSignedInBefore() ? "signin" : "onboarding") : "home");
     } catch {
       setView("onboarding");
@@ -87,7 +87,7 @@ function App() {
   if (view === "signin") {
     return (
       <main className="shell">
-        <SignIn onConnected={refresh} onModLink={(link) => setView({ kind: "modseat", link, from: "signin" })} />
+        <SignIn allowServerConnection={endpoints.length > 0} onConnected={refresh} onModLink={(link) => setView({ kind: "modseat", link, from: "signin" })} />
       </main>
     );
   }
@@ -96,6 +96,7 @@ function App() {
     return (
       <main className="shell">
         <Onboarding
+          allowServerConnection={endpoints.length > 0}
           // Someone who already has a workspace and picked "Connect a server"
           // has made the choice — land on the form, not on the chooser.
           start={view === "onboarding-server" ? "server" : undefined}

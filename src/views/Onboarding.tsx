@@ -8,6 +8,7 @@ import type { ModLink } from "../lib/modSeat";
 /** The self-hosting walkthrough — deploy the open producer-server, then
  * connect it here with its URL + PRIMARY_TOKEN. */
 export const SELF_HOSTING_GUIDE_URL = "https://github.com/Boomin-Ai/producer/blob/main/server/SELF_HOSTING.md";
+export const BOOMIN_SIGNUP_URL = "https://boomin.ai/signup";
 
 /** The name, with where it stands. `big` is the first-impression form
  *  (sign-in, first run); everywhere else it is the same mark at a quieter
@@ -45,17 +46,16 @@ function rememberSignedIn() {
   }
 }
 
-/** The sign-in screen: straight to email + code, no pitch, no network
- * opt-in — for someone who already knows the product (signed out, or a
- * returning machine). "Use my own server" is a first-class door beside it,
- * not a footnote: a self-hoster never needs a Boomin account to get in. */
-export function SignIn({ onConnected, onModLink }: { onConnected: () => void; onModLink?: (link: ModLink) => void }) {
+/** Returning beta users sign in with Boomin. Connecting another owned server
+ * remains available from an existing workspace, not the initial welcome. */
+export function SignIn({ onConnected, onModLink, allowServerConnection = false }: { onConnected: () => void; onModLink?: (link: ModLink) => void; allowServerConnection?: boolean }) {
   const [door, setDoor] = useState<"boomin" | "server">("boomin");
-  if (door === "server") return <ServerForm onBack={() => setDoor("boomin")} onConnected={onConnected} />;
+  if (allowServerConnection && door === "server") return <ServerForm onBack={() => setDoor("boomin")} onConnected={onConnected} />;
   return (
     <BoominLogin
       direct
-      onBack={() => setDoor("server")}
+      betaRequired={!allowServerConnection}
+      onBack={allowServerConnection ? () => setDoor("server") : undefined}
       backLabel="Use my own server"
       onConnected={onConnected}
       onModLink={onModLink}
@@ -63,10 +63,11 @@ export function SignIn({ onConnected, onModLink }: { onConnected: () => void; on
   );
 }
 
-export function Onboarding({ onConnected, onCancel, onModLink, start }: { onConnected: () => void; onCancel?: () => void; onModLink?: (link: ModLink) => void; start?: "server" }) {
+export function Onboarding({ onConnected, onCancel, onModLink, start, allowServerConnection = false }: { onConnected: () => void; onCancel?: () => void; onModLink?: (link: ModLink) => void; start?: "server"; allowServerConnection?: boolean }) {
   const [door, setDoor] = useState<Door>(start ?? "chooser");
 
-  if (door === "boomin") return <BoominLogin onBack={() => setDoor("chooser")} onConnected={onConnected} />;
+  if (!allowServerConnection) return <BoominLogin betaRequired onConnected={onConnected} onModLink={onModLink} />;
+  if (door === "boomin") return <BoominLogin onBack={() => setDoor("chooser")} onConnected={onConnected} onModLink={onModLink} />;
   // Arriving straight on the server form (the account sheet's "Connect a
   // server") means there is no chooser behind it — Back returns to where the
   // click came from, the dashboard.
@@ -129,14 +130,18 @@ function BoominLogin({
   onBack,
   onConnected,
   direct = false,
+  betaRequired = false,
   backLabel = "Back",
   onModLink,
 }: {
-  onBack: () => void;
+  onBack?: () => void;
   onConnected: () => void;
   /** Sign-in mode: skip the network opt-in step — you're coming back, not
    *  joining. */
   direct?: boolean;
+  /** The beta's primary workspace entry requires Boomin; invitation seats
+   * still use their own capability and existing connections are preserved. */
+  betaRequired?: boolean;
   backLabel?: string;
   onModLink?: (link: ModLink) => void;
 }) {
@@ -184,7 +189,7 @@ function BoominLogin({
     setBusy(true);
     setError(null);
     try {
-      await ipc.boominRequestOtp(email.trim(), apiRoot.trim() || undefined);
+      await ipc.boominRequestOtp(email.trim(), betaRequired ? undefined : apiRoot.trim() || undefined);
       setStep("code");
     } catch (e) {
       setError(String(e));
@@ -197,7 +202,7 @@ function BoominLogin({
     setBusy(true);
     setError(null);
     try {
-      const result = await ipc.boominConnect(email.trim(), code.trim(), apiRoot.trim() || undefined);
+      const result = await ipc.boominConnect(email.trim(), code.trim(), betaRequired ? undefined : apiRoot.trim() || undefined);
       rememberSignedIn();
       // The workspace just connected becomes the active one.
       if ((result as { id?: string } | null)?.id) setActiveEndpointId(String((result as { id?: string }).id));
@@ -306,8 +311,8 @@ function BoominLogin({
         </div>
         {error && <p className="error">{error}</p>}
         <div className="form-actions" style={{ justifyContent: "center", marginTop: 16 }}>
-          <button type="button" className="ghost" onClick={onBack}>
-            Cancel
+          <button type="button" className="ghost" onClick={onBack ?? (() => setStep("email"))}>
+            {onBack ? "Cancel" : "Use a different email"}
           </button>
         </div>
       </div>
@@ -318,13 +323,14 @@ function BoominLogin({
     <div className={`onboarding${direct ? " signin" : ""}`}>
       <Wordmark big />
       <h1>
-        <strong>{direct ? "Welcome back." : "Sign in with Boomin."}</strong>
+        <strong>{betaRequired && !direct ? "Start with Boomin." : direct ? "Welcome back." : "Sign in with Boomin."}</strong>
       </h1>
-      {direct && <p className="muted">Sign in with the email on your Boomin account.</p>}
+      {betaRequired ? <p className="muted">New installations require a Boomin account during the beta. Sign in with your Boomin email, or set up an account and workspace first.</p> : direct && <p className="muted">Sign in with the email on your Boomin account.</p>}
       <form
         className="server-form signin-card"
         onSubmit={(e) => {
           e.preventDefault();
+          if (!hasTauri()) return;
           if (step === "email") requestCode();
           else verify();
         }}
@@ -354,7 +360,7 @@ function BoominLogin({
             />
           </label>
         )}
-        {showAdvanced && (
+        {showAdvanced && !betaRequired && (
           <label>
             API root (advanced)
             <input
@@ -364,7 +370,7 @@ function BoominLogin({
             />
           </label>
         )}
-        {!showAdvanced && !direct && (
+        {!showAdvanced && !direct && !betaRequired && (
           <button type="button" className="linkish" onClick={() => setShowAdvanced(true)}>
             Advanced: custom API root
           </button>
@@ -373,28 +379,32 @@ function BoominLogin({
         {/* One primary, full width: the email step has exactly one thing to do.
           * Every other door lives in the quiet list below the card. */}
         {direct && step === "email" ? (
-          <button type="submit" className="signin-go" disabled={busy}>
-            {busy ? "Working…" : "Email me a code"}
+          <button type="submit" className="signin-go" disabled={busy || !hasTauri()}>
+            {!hasTauri() ? "Open the desktop app" : busy ? "Working…" : "Email me a code"}
           </button>
         ) : (
           <div className="form-actions">
-            <button type="button" className="ghost" onClick={step === "code" ? () => setStep("email") : onBack}>
+            {(step === "code" || onBack) && <button type="button" className="ghost" onClick={step === "code" ? () => setStep("email") : onBack}>
               {step === "code" ? "Back" : backLabel}
-            </button>
-            <button type="submit" disabled={busy}>
-              {busy ? "Working…" : step === "email" ? "Email me a code" : "Verify & connect"}
+            </button>}
+            <button type="submit" disabled={busy || !hasTauri()}>
+              {!hasTauri() ? "Open the desktop app" : busy ? "Working…" : step === "email" ? "Email me a code" : "Verify & connect"}
             </button>
           </div>
         )}
       </form>
-      {direct && (
+      {(direct || betaRequired) && (
         <>
           <div className="signin-or"><span>or</span></div>
           <div className="signin-alt">
-            <button type="button" className="signin-alt-row" onClick={onBack}>
+            {betaRequired && <button type="button" className="signin-alt-row" onClick={() => openUrl(BOOMIN_SIGNUP_URL).catch(() => setError("Could not open Boomin. Visit boomin.ai/signup to set up your account and workspace, then return here."))}>
+              <span className="signin-alt-t">Create a Boomin account</span>
+              <span className="signin-alt-s">Set up your workspace on boomin.ai, then sign in here</span>
+            </button>}
+            {!betaRequired && onBack && <button type="button" className="signin-alt-row" onClick={onBack}>
               <span className="signin-alt-t">Use my own server</span>
               <span className="signin-alt-s">Run producer-server yourself — nothing touches Boomin</span>
-            </button>
+            </button>}
             {onModLink && (
               <div className={`signin-alt-row static${modOpen ? " open" : ""}`}>
                 <button type="button" className="signin-alt-head" onClick={() => setModOpen((v) => !v)}>
@@ -405,7 +415,7 @@ function BoominLogin({
               </div>
             )}
           </div>
-          <div className="signin-foot">
+          {!betaRequired && <div className="signin-foot">
             <button type="button" className="linkish" onClick={() => setShowAdvanced((v) => !v)}>
               {showAdvanced ? "Hide advanced" : "Advanced"}
             </button>
@@ -413,7 +423,7 @@ function BoominLogin({
             <button type="button" className="linkish" onClick={() => openUrl(SELF_HOSTING_GUIDE_URL).catch(() => {})}>
               Self-hosting guide
             </button>
-          </div>
+          </div>}
         </>
       )}
     </div>
