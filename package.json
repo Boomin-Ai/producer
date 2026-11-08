@@ -1,7 +1,7 @@
 {
   "name": "producer",
   "private": true,
-  "version": "0.4.87",
+  "version": "0.4.88",
   "description": "Producer by Boomin — the open-source studio for creators: post everywhere, stream everywhere.",
   "license": "AGPL-3.0-only",
   "repository": {
@@ -12,6 +12,8 @@
   "scripts": {
     "test:performance-trace": "node scripts/test-performance-trace.mjs",
     "test:updater": "node scripts/test-updater.mjs",
+    "test:window-source-label": "node scripts/test-window-source-label.mjs",
+    "test:room-opening": "node scripts/test-room-opening.mjs",
     "test:manager-cache": "node scripts/test-manager-cache.mjs",
     "test:prepared-scenes": "node scripts/test-prepared-scenes.mjs",
     "test:set-capture-recovery-browser": "node scripts/test-set-capture-recovery-browser.mjs",

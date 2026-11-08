@@ -251,7 +251,7 @@ export const ipc = {
 
 export interface LiveWindow {
   id: number;
-  owner: string;
+  owner?: string;
   title: string;
 }
 

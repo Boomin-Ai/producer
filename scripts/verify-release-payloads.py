@@ -13,6 +13,7 @@ repo = os.environ['GITHUB_REPOSITORY']
 sha = os.environ['GITHUB_SHA']
 config = json.loads(Path('src-tauri/tauri.conf.json').read_text())
 version = config['version']
+windows_only = os.environ.get('PRODUCER_WINDOWS_ONLY') == 'true'
 assert '-' not in version, 'Public promotion requires a stable version'
 assert json.loads(Path('package.json').read_text())['version'] == version
 assert tomllib.loads(Path('src-tauri/Cargo.toml').read_text())['package']['version'] == version
@@ -50,12 +51,14 @@ platforms = {
     'windows-x86_64': nsis, 'windows-x86_64-nsis': nsis,
     'linux-x86_64': appimage, 'linux-x86_64-appimage': appimage,
 }
+if windows_only:
+    platforms = {key: value for key, value in platforms.items() if key.startswith('windows-')}
 for platform, name in {
     'windows-x86_64-msi': f'Producer_{version}_x64_en-US.msi',
     'linux-x86_64-deb': f'Producer_{version}_amd64.deb',
     'linux-x86_64-rpm': f'Producer-{version}-1.x86_64.rpm',
 }.items():
-    if name in assets:
+    if name in assets and (not windows_only or platform.startswith('windows-')):
         platforms[platform] = name
 manifest = {
     'version': version,
@@ -92,14 +95,20 @@ for platform, name in platforms.items():
     encoded, sha256 = verified[name]
     manifest['platforms'][platform] = {'signature': encoded, 'url': f'https://github.com/{repo}/releases/download/{tag}/{name}'}
     checks.append({'platform': platform, 'asset': name, 'sha256': sha256, 'signatureVerified': True})
-for name in [f'Producer_{version}_aarch64.dmg', f'Producer_{version}_x64.dmg']:
+for name in ([] if windows_only else [f'Producer_{version}_aarch64.dmg', f'Producer_{version}_x64.dmg']):
     _, sha256 = checked_asset(name)
     checks.append({'asset': name, 'sha256': sha256})
 receipt = {'version': version, 'sha': sha, 'releaseId': int(release_id), 'checks': checks}
+receipt['windowsOnly'] = windows_only
 (out / 'latest.json').write_text(json.dumps(manifest, indent=2) + '\n')
 (out / 'verification.json').write_text(json.dumps(receipt, indent=2) + '\n')
 notes_path = Path('docs') / f'RELEASE-{version}.md'
 assert notes_path.is_file(), f'Missing release notes: {notes_path}'
-(out / 'release-notes.md').write_text(notes_path.read_text() + "\n\nUpdater payloads passed signature verification against Producer’s pinned public key before publication. macOS installers passed signing, notarization and stapling. See verification.json for exact artifact hashes.\n")
+verification_note = (
+    "Windows updater payloads passed signature verification against Producer’s pinned public key before publication. This Windows patch is available as a manual installer. See verification.json for exact artifact hashes."
+    if windows_only else
+    "Updater payloads passed signature verification against Producer’s pinned public key before publication. macOS installers passed signing, notarization and stapling. See verification.json for exact artifact hashes."
+)
+(out / 'release-notes.md').write_text(notes_path.read_text() + "\n\n" + verification_note + "\n")
 subprocess.run(['gh', 'release', 'upload', tag, str(out / 'latest.json'), str(out / 'verification.json'), '--clobber', '--repo', repo], check=True)
 print(json.dumps(receipt, indent=2))

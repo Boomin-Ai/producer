@@ -34,6 +34,7 @@ jobs:
       - run: node scripts/test-atmosphere.mjs
       - run: node scripts/scene3d/test.mjs
       - run: node scripts/test-windows-native-imports.mjs
+      - run: python3 scripts/test-release-windows.py
       - run: node scripts/validate-set.mjs assets/creator-library/sets/*.set.json
       - run: npm ci --prefix tools/producer-streamdeck/ai.boomin.producer.sounds.sdPlugin
       - run: node tools/producer-streamdeck/test.mjs

@@ -201,11 +201,16 @@ export function Home({
     if (view.kind !== "opening") return;
     const opening = view;
     let frame = 0;
-    const mountRoom = () => {
+    const mountRoom = async () => {
       window.cancelAnimationFrame(frame);
       window.clearTimeout(fallback);
+      // A card can still carry the document from before the last visit while
+      // the home refresh is in flight. Restore the latest saved room.
+      const room = await ipc.liveListRooms(opening.room.endpoint_id ?? undefined)
+        .then(rooms => rooms.find(room => room.id === opening.room.id) ?? opening.room)
+        .catch(() => opening.room);
       startTransition(() => {
-        setView(current => current === opening ? { ...opening, kind: "room" } : current);
+        setView(current => current === opening ? { ...opening, kind: "room", room } : current);
       });
     };
     // Give the shell a paint before React builds the full room. WebKit can
@@ -2402,7 +2407,7 @@ const NetworkRail = memo(function NetworkRail({
       <aside className="net-rail">
         <div className="net-rail-head">NETWORK</div>
         <div className="cr-hint">
-          List your brand on the Boomin network to connect with other producers and open your stages to them.
+          List your brand on the Boomin Network to connect with other producers and open your stages to them.
         </div>
         <button
           className="cr-primary"
