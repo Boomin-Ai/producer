@@ -23,7 +23,7 @@ function App() {
     }).catch(() => { if (alive) setEntryReview('closed'); });
     return () => { alive = false; };
   }, [entryReviewRequested]);
-  useEffect(() => { if (entryReview === 'open') uiLog('[entry-review] Sign-in screen opened in the development bundle; saved workspace routing retained.'); }, [entryReview]);
+  useEffect(() => { if (import.meta.env.DEV && entryReview === 'open') uiLog('[entry-review] Sign-in screen opened in the development bundle; saved workspace routing retained.'); }, [entryReview]);
   const [setsDevelopment,setSetsDevelopment]=useState(false);
   useEffect(()=>{
     if(!hasTauri())return;
@@ -74,7 +74,7 @@ function App() {
     await refresh();
   }
 
-  if (entryReview !== 'closed') {
+  if (import.meta.env.DEV && entryReview !== 'closed') {
     return <main className="shell">{entryReview === 'checking' ? <div className="boot"><Wordmark /></div> : <>
       <Onboarding onConnected={() => { setEntryReview('closed'); void refresh(); }} />
       <button type="button" className="entry-review-exit" onClick={() => setEntryReview('closed')}>Back to studio</button>
