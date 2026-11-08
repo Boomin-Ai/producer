@@ -16,6 +16,10 @@ adoption did not by itself coordinate that legacy credential writer.
 
 ## Implemented in this branch
 
+- Boomin messaging and official destination invitations use **Boomin Network**
+  branding. Manual and independent-server appearances use neutral Producer
+  labels. The [architecture proposal](PRODUCER-CONNECTION-ARCHITECTURE.md)
+  separates the local studio, portable collaboration and network services.
 - Messages opens a light sheet beside the Home icon rail. Conversations use the
   existing authenticated endpoint bridge. Reads are cursor-based and bounded;
   send retries reuse the same message ID. Read receipts require a focused,
@@ -48,6 +52,14 @@ adoption did not by itself coordinate that legacy credential writer.
   without starting the local host roster, heartbeat or scene publisher. Set
   module data reads continue; this mode does not host a second guest roster or
   load that local room's saved vote history through the host control channel.
+- Native guest recovery replaces a fenced connection ticket after host restart,
+  preserving the admitted guest and owned capture. Rejected renewals retire
+  stale RTC; missing/revoked admission stays terminal. Consent-gated guest-stage
+  spans reuse the existing diagnostic pipeline without tracing poll traffic.
+- A missing Set capture may retry once when the exact bound source becomes ready.
+  Current output is retained; unrelated errors, hidden output and stale room or
+  session operations cannot authorize a retry. This does not detect native source
+  recreation with identical observable metadata.
 
 The companion API change requires migration
 `0187_live_rtc_network_entry.sql` and its coordinated network-entry adapter. It
@@ -126,10 +138,22 @@ measurement. Acquiring the shared program took about 589 ms after local restore,
 excluding room loading and admission. An already-accepted guest was resumed;
 this does not qualify first-time admission. Backend observation confirmed stable
 admission, stage placement, host lease and current guest identity after five
-minutes. Audible routing, host-reopen recovery, the reverse appearance direction
-and comparative performance remain separate qualification items.
+minutes. The user also heard audio in both directions; initial Windows silence
+was its guest mute/fader setting. Same-run recovery was later observed without a
+new network knock. Deliberate host-run restart exposed the fenced-ticket defect;
+the corrected final matching clients still need another paired run. Reverse
+appearance direction and comparative performance remain separate qualification
+items.
+
+The synthetic legacy fixture now preserves the negotiated media order across
+recreation of the same logical peer. An earlier 13.6-second run included an
+invalid replacement offer and is not a clean production reconnect benchmark.
+Matched baseline/candidate observations recover at about 1.65 seconds; a separate
+concurrent-load run takes longer. These prove functional continuity and cleanup,
+not a measured product performance improvement.
 
 The companion API is deployed at main revision `9ff3e38`, after applying only
 migration 0187. Authenticated entry capability returns protocol 1; unauthenticated
 requests are refused. Existing conversations, native room preflights and Threads
-posts passed post-deployment reads. No public desktop release was made.
+posts passed post-deployment reads. The network changes have not been published
+as a public desktop release.

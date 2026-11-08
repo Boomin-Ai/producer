@@ -29,6 +29,21 @@ Keep three separately testable layers:
    identity/directory/messaging services. Their optional capabilities sit above
    the common collaboration contract.
 
+Target decomposition; the device and portable-native adapters still require
+implementation and qualification:
+
+```mermaid
+flowchart LR
+  Producer --> Local[Local studio runtime]
+  Producer --> Sessions[Connection and session runtime]
+  Sessions --> Boomin[Boomin adapter]
+  Sessions --> Owned[Owned-server adapter]
+  Sessions --> Device[Device-session adapter]
+  Boomin --> Network[Boomin Network]
+  Owned --> Server[Independent server]
+  Device --> Reachability[LAN or selected Internet relay]
+```
+
 ## What exists
 
 | Area | Current evidence | Remaining boundary |
