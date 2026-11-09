@@ -14,7 +14,8 @@ export type PendingMessage={clientId:string;text:string;status:'sending'|'failed
 export type MessagesState={status:'loading'|'ready'|'unavailable'|'error';conversations:NetworkConversation[];selected:string|null;messages:NetworkMessage[];loadingThread:boolean;loadingOlder:boolean;hasOlder:boolean;draft:string;pending?:PendingMessage;error:string;realtime:boolean};
 const messageLimit=500;
 const last=<T,>(rows:T[])=>rows[rows.length-1];
-const failure=(error:unknown)=>error instanceof Error?error.message:'Messages could not load. Try again.';
+// Native EngineError rejects with a string across Tauri IPC, not an Error.
+const failure=(error:unknown)=>error instanceof Error?error.message:typeof error==='string'&&error.trim()?error.trim():'Messages could not load. Try again.';
 const unavailable=(error:unknown)=>error instanceof MessagesUnavailable||!!error&&typeof error==='object'&&'code'in error&&error.code==='network_messages_unavailable';
 function merge(before:NetworkMessage[],after:NetworkMessage[]){
  const rows=new Map(before.map(row=>[row.id,row]));for(const row of after)rows.set(row.id,row);
