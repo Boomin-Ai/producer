@@ -67,6 +67,12 @@ jobs, and coordinate a fresh version for the combined production release.
 The single release publisher waits for Linux, Windows, Silicon **and Intel**
 and verifies all updater bytes before changing the shared manifest.
 
+Use `scripts/codesign-with-retry.sh` for explicit signing operations. It keeps
+all signing arguments and secure timestamps, retrying only the exact Apple
+“timestamp service is not available” diagnostic, at most three times with
+5/15-second delays. Other diagnostics and signature failures stop immediately.
+Never remove timestamps to recover a production signing outage.
+
 Use `scripts/notarize-macos-artifact.sh` for accepted app/installer submissions.
 It retries only known transient Apple ticket errors with fixed bounded
 delays, and separately staples and validates unchanged accepted bytes.

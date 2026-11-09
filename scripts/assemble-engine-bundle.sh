@@ -115,10 +115,10 @@ fi
 # Local dev iteration: CODESIGN_TIMESTAMP=none skips the per-file network
 # roundtrip to Apple's timestamp server (NEVER set it for release builds).
 TS_FLAG="--timestamp${CODESIGN_TIMESTAMP:+=$CODESIGN_TIMESTAMP}"
-sign() { codesign --force "$TS_FLAG" --options runtime --sign "$IDENT" "$@"; }
+sign() { bash "$(dirname "${BASH_SOURCE[0]}")/codesign-with-retry.sh" --force "$TS_FLAG" --options runtime --sign "$IDENT" "$@"; }
 if [[ $IDENT == "-" ]]; then
   # ad-hoc signatures cannot carry the hardened runtime flag usefully in dev
-  sign() { codesign --force --sign - "$@"; }
+  sign() { bash "$(dirname "${BASH_SOURCE[0]}")/codesign-with-retry.sh" --force --sign - "$@"; }
 fi
 
 # M-L7.1: CEF framework and helper apps sign before everything that loads
@@ -145,7 +145,7 @@ for helper in "$CONTENTS/Frameworks/"*" Helper"*.app; do
     *) ent="$STAGE/signing/entitlements-helper.plist" ;;
   esac
   if [[ $IDENT != "-" && -f $ent ]]; then
-    codesign --force "$TS_FLAG" --options runtime --entitlements "$ent" --sign "$IDENT" "$helper"
+    bash "$(dirname "${BASH_SOURCE[0]}")/codesign-with-retry.sh" --force "$TS_FLAG" --options runtime --entitlements "$ent" --sign "$IDENT" "$helper"
   else
     sign "$helper"
   fi
@@ -167,9 +167,9 @@ for ext in "$CONTENTS/Library/SystemExtensions/"*.systemextension; do
     # the result as "code signature invalid" — sign the executable first.
     for exe in "$ext/Contents/MacOS/"*; do
       [[ -f $exe ]] || continue
-      codesign --force "$TS_FLAG" --options runtime --entitlements "$ext_ent" --sign "$IDENT" "$exe"
+      bash "$(dirname "${BASH_SOURCE[0]}")/codesign-with-retry.sh" --force "$TS_FLAG" --options runtime --entitlements "$ext_ent" --sign "$IDENT" "$exe"
     done
-    codesign --force "$TS_FLAG" --options runtime --entitlements "$ext_ent" --sign "$IDENT" "$ext"
+    bash "$(dirname "${BASH_SOURCE[0]}")/codesign-with-retry.sh" --force "$TS_FLAG" --options runtime --entitlements "$ext_ent" --sign "$IDENT" "$ext"
   else
     sign "$ext"
   fi
@@ -179,7 +179,7 @@ done
 # not allowed to use.
 APP_ENT="$(cd "$(dirname "$0")" && pwd)/entitlements-app.plist"
 if [[ $IDENT != "-" && -f $APP_ENT ]]; then
-  codesign --force "$TS_FLAG" --options runtime --entitlements "$APP_ENT" --sign "$IDENT" "$APP"
+  bash "$(dirname "${BASH_SOURCE[0]}")/codesign-with-retry.sh" --force "$TS_FLAG" --options runtime --entitlements "$APP_ENT" --sign "$IDENT" "$APP"
 else
   sign "$APP"
 fi

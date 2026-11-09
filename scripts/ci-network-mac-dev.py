@@ -171,7 +171,7 @@ def receipt(source, app, output, tools):
         'updater_artifacts': False, 'production_updater_endpoints': False, 'public_release': False,
         'application_launched': True, 'native_runtime_acceptance': 'core+custom IPC smoke only; devices and RTC not qualified',
         'native_origin_smoke_sha256': digest(smoke_path),
-        'tooling_sha256': {name: digest(tools / name) for name in ['ci-network-mac-dev.sh', 'ci-network-mac-dev.py', 'ci-network-mac-dev-origin-smoke.mjs']},
+        'tooling_sha256': {name: digest(tools / name) for name in ['ci-network-mac-dev.sh', 'ci-network-mac-dev.py', 'ci-network-mac-dev-origin-smoke.mjs', 'macos-ticket-retry.sh', 'codesign-with-retry.sh']},
     }
     (output / 'provenance.json').write_text(json.dumps(value, indent=2) + '\n')
     print('Wrote unreleased candidate provenance; source/native/engine/signature/symbol gates passed.')

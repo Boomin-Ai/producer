@@ -429,7 +429,7 @@ jobs:
       - name: Re-sign app with hardened runtime entitlements
         if: env.SIGN_IDENT != ''
         run: |
-          codesign --force --options runtime --timestamp \
+          bash scripts/codesign-with-retry.sh --force --options runtime --timestamp \
             --entitlements .github/macos/producer.entitlements \
             --sign "$SIGN_IDENT" "$APP"
 
@@ -459,7 +459,7 @@ jobs:
           ln -s /Applications "$ROOT/Applications"
           hdiutil create -volname "Producer" -srcfolder "$ROOT" -ov -format UDZO "$DMG"
           if [ -n "${SIGN_IDENT:-}" ]; then
-            codesign --force --timestamp --sign "$SIGN_IDENT" "$DMG"
+            bash scripts/codesign-with-retry.sh --force --timestamp --sign "$SIGN_IDENT" "$DMG"
             bash scripts/notarize-macos-artifact.sh "$DMG"
           fi
           echo "DMG=$DMG" >> "$GITHUB_ENV"
@@ -659,7 +659,7 @@ jobs:
       - name: Re-sign app with hardened runtime entitlements
         if: env.SIGN_IDENT != ''
         run: |
-          codesign --force --options runtime --timestamp \
+          bash scripts/codesign-with-retry.sh --force --options runtime --timestamp \
             --entitlements .github/macos/producer.entitlements \
             --sign "$SIGN_IDENT" "$APP"
 
@@ -689,7 +689,7 @@ jobs:
           ln -s /Applications "$ROOT/Applications"
           hdiutil create -volname "Producer" -srcfolder "$ROOT" -ov -format UDZO "$DMG"
           if [ -n "${SIGN_IDENT:-}" ]; then
-            codesign --force --timestamp --sign "$SIGN_IDENT" "$DMG"
+            bash scripts/codesign-with-retry.sh --force --timestamp --sign "$SIGN_IDENT" "$DMG"
             bash scripts/notarize-macos-artifact.sh "$DMG"
           fi
           echo "DMG=$DMG" >> "$GITHUB_ENV"

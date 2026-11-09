@@ -75,7 +75,7 @@ jobs:
           CODESIGN_IDENT: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           bash scripts/assemble-engine-bundle.sh "$APP" "$PRODUCER_ENGINE_DIR"
-          codesign --force --options runtime --timestamp --entitlements .github/macos/producer.entitlements --sign "$CODESIGN_IDENT" "$APP"
+          bash scripts/codesign-with-retry.sh --force --options runtime --timestamp --entitlements .github/macos/producer.entitlements --sign "$CODESIGN_IDENT" "$APP"
           bash scripts/engine-closure.sh "$APP/Contents"
           bash scripts/check-no-qt.sh "$APP"
           codesign --verify --deep --strict --verbose=2 "$APP"
