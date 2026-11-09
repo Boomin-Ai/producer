@@ -97,6 +97,27 @@ test('native startup failure and unsupported transport never fall back to browse
   assert.equal(h.timers.size,0);s.leave();
  }
 });
+test('native leave retains the exact owner through pending and failed retirement and can retry safely',async()=>{
+ const h=harness({transport:'livekit'}),s=h.seat({videoSource:'program',nativeProgram:true,localRoomId:'local-room'});await s.start();const owner=h.nativePrograms[0];
+ let rejectStop,attempts=0;owner.close=()=>{attempts++;return new Promise((_,reject)=>{rejectStop=reject;});};
+ let settled=false;const first=s.leave().then(()=>{settled=true;}),second=s.leave();await flush();assert.equal(attempts,1);assert.equal(settled,false);
+ rejectStop(Error('stop failed'));await assert.rejects(first);await assert.rejects(second);assert.equal(settled,false);
+ owner.close=async()=>{attempts++;owner.closed=true;};await s.leave();assert.equal(attempts,2);assert.equal(owner.closed,true);
+ await s.leave();assert.equal(attempts,2);assert.equal(h.captures.length,0);assert.equal(h.leases.length,0);
+});
+test('terminal native status stays terminal while retirement is pending and exposes its stop receipt',async()=>{
+ const h=harness({transport:'livekit'}),s=h.seat({videoSource:'program',nativeProgram:true,localRoomId:'local-room'});await s.start();const owner=h.nativePrograms[0];
+ let resolveStop;owner.close=()=>new Promise(resolve=>{resolveStop=resolve;});owner.update({phase:'error',onStage:false,hasProgram:false,hasAudio:false},null,false);
+ assert.equal(s.snapshot().phase,'error');let retired=false;const stopping=s.leave().then(()=>{retired=true;});await flush();assert.equal(retired,false);
+ owner.update({phase:'live',onStage:true,hasProgram:true,hasAudio:true},'blob:stale',true);assert.equal(s.snapshot().phase,'error');assert.equal(s.snapshot().programPreview,null);
+ resolveStop();await stopping;assert.equal(retired,true);assert.equal(h.nativePrograms.length,1);
+});
+test('explicit retry can obtain an exact native stop receipt after an earlier stop acknowledgement hangs',async()=>{
+ const h=harness({transport:'livekit'}),s=h.seat({videoSource:'program',nativeProgram:true,localRoomId:'local-room'});await s.start();const owner=h.nativePrograms[0],retries=[];
+ owner.close=retry=>{retries.push(retry);return retry?Promise.resolve():new Promise(()=>{});};
+ void s.leave();await flush();await s.leave(true);assert.deepEqual(retries,[false,true]);await s.leave();assert.equal(retries.length,2);
+ assert.equal(h.nativePrograms.length,1);assert.equal(h.captures.length,0);
+});
 test('waiting seat opens neither camera, program capture nor media transport before admission',async()=>{
  const h=harness({status:'waiting'}),s=h.seat({videoSource:'program'});await s.start();assert.equal(s.snapshot().phase,'waiting');assert.equal(h.captures.length,0);assert.equal(h.leases.length,0);assert.equal(h.links.length,0);
  h.status('accepted');await h.advance(2500);assert.equal(h.leases.length,1);assert.equal(h.links.length,1);s.leave();

@@ -24,6 +24,24 @@ Joining from a running room attaches to that same controller; it does not
 restore a room, swap the scene, or stop the local host roster/heartbeat. A
 different room or an unknown/unready retained controller is rejected.
 
+Host absence expires the old publication, not the appearance owner. Recovery
+joins the old workers before requesting a session bound to the newly authorized
+host run/epoch. Old credentials are never replayed into that new run. Genuine
+retirement failures keep the owner quarantined; a repeated Stop cannot turn a
+failed cleanup into a successful empty-slot receipt.
+
+The room cards retain explicit Return/Leave controls for a collapsed appearance.
+Pending or failed retirement continues to block another appearance. A successful
+exact-owner stop clears that guard; terminal media errors alone do not. Initial
+room readiness remains required, while later Set readiness changes keep the same
+native owner. Live-room, deal and manual entry actions check this ownership
+before issuing a new knock, which can replace the current guest credential.
+
+Entry rejections preserve their machine-readable server code in bounded local
+diagnostics. Lost/uncertain responses replay the same request ID. A definitively
+invalid receipt is retired for a later manual action; there is no automatic
+reknock and no change to server admission, revocation or native host-lease checks.
+
 Native video follows the selected room-only landscape or portrait output to a
 bounded raw-frame tap and the native LiveKit publisher. A single unmirrored
 room-only view is shared by appearances, independent of Studio and Virtual
@@ -80,6 +98,10 @@ case, not an assumed recovery pass.
   monitoring controls with simulated media/IPC. No hardware audibility proof.
 - Rust authority, profile, capture queue/lifetime, receiver isolation and lease
   policy tests. Native test compilation is distinct from executing those tests.
+- Recovery policy and supervised-retirement tests cover expected lease expiry,
+  sticky cleanup failure, canceled waiters, stale Stop IDs and new host epochs.
+  Browser cases also cover collapsed exit, pending/failed stop, fresh retry,
+  readiness changes and rejected entry actions producing no network knock.
 
 ## Paired acceptance before default enablement
 

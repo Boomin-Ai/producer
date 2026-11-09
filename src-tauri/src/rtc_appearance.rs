@@ -6,6 +6,12 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use tauri::State;
+#[cfg(all(feature = "guest-rtc-pilot", have_engine))]
+#[path = "rtc_appearance_recovery.rs"]
+mod recovery;
+#[cfg(all(feature = "guest-rtc-pilot", have_engine))]
+#[path = "rtc_appearance_retirement.rs"]
+mod retirement;
 
 #[derive(Clone, Copy, Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -134,7 +140,13 @@ mod native {
                 Ok((200, bytes)) => {
                     Authority::parse(&bytes, participant, ENDPOINT, started, Instant::now())
                         .map(|v| ReadState::Current(Arc::new(v)))
-                        .unwrap_or(ReadState::Invalid)
+                        .unwrap_or_else(|error| {
+                            if error == "Native appearance authority expired" {
+                                ReadState::Unavailable
+                            } else {
+                                ReadState::Invalid
+                            }
+                        })
                 }
                 Ok((404 | 410, _)) => ReadState::Gone,
                 Ok((409, _)) => ReadState::Waiting,
@@ -185,15 +197,41 @@ mod native {
             _ => None,
         }
     }
-    async fn close_publisher(publisher: &mut Option<Publisher>) -> Result<(), &'static str> {
+    fn quiesce_capture(capture: &Mutex<Option<Sources>>) {
+        if let Ok(mut capture) = capture.lock() {
+            if let Some(source) = capture.take() {
+                source.set_enabled(false, false);
+            }
+        }
+    }
+    fn reconnecting(statuses: &watch::Sender<AppearanceStatus>) {
+        let mut status = statuses.borrow().clone();
+        status.phase = "reconnecting".into();
+        status.on_stage = false;
+        status.has_program = false;
+        status.has_audio = false;
+        status.return_source_id = None;
+        statuses.send_replace(status);
+    }
+    async fn close_publisher(
+        publisher: &mut Option<Publisher>,
+        diagnostics: &mut recovery::Diagnostics,
+        cleanup: &recovery::CleanupFailure,
+    ) -> Result<(), &'static str> {
         if let Some(mut publisher) = publisher.take() {
             publisher.request_stop();
-            let closed = tokio::task::spawn_blocking(move || publisher.close())
+            let joined = tokio::task::spawn_blocking(move || publisher.close())
                 .await
-                .map_err(|_| "Native appearance publisher retirement failed")?;
-            if closed != Err("Native program audio publication deadline missed") {
-                closed?;
+                .map_err(|_| "Native appearance publisher retirement failed");
+            if let Err(error) = joined {
+                cleanup.record(error);
             }
+            let closed = joined?;
+            cleanup.publication(&closed);
+            if let Err(error) = closed {
+                diagnostics.note(recovery::failure_code(error));
+            }
+            recovery::publication_retired(closed)?;
         }
         Ok(())
     }
@@ -201,20 +239,26 @@ mod native {
         connection: &mut Option<Connection>,
         publisher: &mut Option<Publisher>,
         outputs: &AppearanceOutputs,
+        diagnostics: &mut recovery::Diagnostics,
+        cleanup: &recovery::CleanupFailure,
     ) -> Result<(), &'static str> {
         // Fence subscriptions first, then join callbacks/SDK capture before any
         // engine lease or private monitor source can be released.
         if let Some(connection) = connection.as_mut() {
             connection.begin_close();
         }
-        let published = close_publisher(publisher).await;
+        let published = close_publisher(publisher, diagnostics, cleanup).await;
         let received = if let Some(mut connection) = connection.take() {
             connection.close().await
         } else {
             Ok(())
         };
+        cleanup.connection(&received);
         outputs.clear();
-        published.and(received)
+        if let Err(error) = received {
+            diagnostics.note(recovery::failure_code(error));
+        }
+        recovery::retirement_result(published, received)
     }
     pub struct AppearanceOwner {
         id: String,
@@ -224,6 +268,7 @@ mod native {
         task: Option<JoinHandle<()>>,
         outputs: Arc<AppearanceOutputs>,
         capture: Arc<Mutex<Option<Sources>>>,
+        cleanup: Arc<recovery::CleanupFailure>,
     }
     impl AppearanceOwner {
         pub fn start(
@@ -260,8 +305,12 @@ mod native {
             let returned = outputs.clone();
             let capture = Arc::new(Mutex::new(None::<Sources>));
             let active_capture = capture.clone();
+            let cleanup = Arc::new(recovery::CleanupFailure::default());
+            let cleanup_state = cleanup.clone();
             let id = spec.appearance_id.clone();
             let task = tokio::spawn(async move {
+                let mut diagnostics = recovery::Diagnostics::new();
+                diagnostics.note("starting");
                 // Retain the master lease across publisher recovery and all
                 // receiver retirement. Only dropping the owner releases it.
                 let target = target;
@@ -300,11 +349,14 @@ mod native {
                             let authority=current(&reads);
                             let incompatible=binding.as_ref().is_some_and(|b|authority.as_ref().is_none_or(|a|!a.same_binding(b)));
                             if incompatible||connection.as_ref().is_some_and(|c|!c.healthy())||publisher.as_ref().is_some_and(|p|p.failed()) {
-                                if let Ok(mut capture)=active_capture.lock(){if let Some(s)=capture.take(){s.set_enabled(false,false);}}
-                                retire(&mut connection,&mut publisher,&returned).await?;binding=None;published_audience=None;
+                                diagnostics.note(if incompatible {if authority.is_some(){"binding_changed"}else{"authority_gap"}}else if connection.as_ref().is_some_and(|c|!c.healthy()) {"transport_lost"}else{"publisher_stopped"});
+                                reconnecting(&statuses);
+                                quiesce_capture(&active_capture);
+                                retire(&mut connection,&mut publisher,&returned,&mut diagnostics,&cleanup_state).await?;binding=None;published_audience=None;
                                 next_attempt=Instant::now()+Duration::from_millis(250);
                             }
                             let Some(authority)=authority else {
+                                diagnostics.note(if matches!(read,ReadState::Waiting){"host_wait"}else{"authority_gap"});
                                 let mut status=statuses.borrow().clone();status.phase=if matches!(read,ReadState::Waiting){"waiting"}else{"reconnecting"}.into();
                                 status.on_stage=false;status.has_program=false;status.has_audio=false;statuses.send_replace(status);continue;
                             };
@@ -333,18 +385,33 @@ mod native {
                                             Some(Publisher::start_target(s.clone(),publication_deadline(&live),target.clone())?)}else{None};
                                         Ok((publishing,live))
                                     }.await;
-                                    match prepared {Ok((publishing,live))=>Ok((joined,publishing,live)),Err(error)=>{let _=joined.close().await;Err(error)}}
+                                    match prepared {
+                                        Ok((publishing,live))=>Ok((joined,publishing,live)),
+                                        Err(error)=>{
+                                            quiesce_capture(&active_capture);
+                                            let closed=joined.close().await;
+                                            cleanup_state.connection(&closed);
+                                            returned.clear();
+                                            if closed.is_err(){Err("Native appearance connection retirement failed")}else{Err(error)}
+                                        }
+                                    }
                                 }.await;
                                 match joined {
                                     Ok((joined,publishing,live))=>{connection=Some(joined);publisher=publishing;binding=Some(live);},
                                     Err(error)=>{
-                                        if matches!(error,"Native appearance session mismatch"|"Native appearance connection invalid"|"Timestamped native receive pipeline is not configured"|"Native receive pipeline already owned"|"Native receive worker unavailable") {return Err(error);}
-                                        next_attempt=Instant::now()+Duration::from_secs(1);let mut status=statuses.borrow().clone();status.phase="reconnecting".into();statuses.send_replace(status);continue;
+                                        diagnostics.note(recovery::failure_code(error));
+                                        match recovery::operation_failed(error,stopped.load(Ordering::Acquire)) {
+                                            recovery::OperationFailure::Fatal=>return Err(error),
+                                            recovery::OperationFailure::Stopped=>break,
+                                            recovery::OperationFailure::Retry=>{}
+                                        }
+                                        next_attempt=Instant::now()+Duration::from_secs(1);reconnecting(&statuses);continue;
                                     }
                                 }
                             }
                             let Some(authority)=current(&reads).filter(|a|binding.as_ref().is_some_and(|b|a.same_binding(b))) else {continue;};
                             let controls=*control.borrow();
+                            let refreshed=async {
                             if let Some(connection)=connection.as_ref() {
                                 connection.appearance_controls(controls.muted,controls.camera_off);
                                 connection.media_authority(Snapshot::for_appearance(&authority,wall_ms())?)?;
@@ -362,6 +429,22 @@ mod native {
                                 let (video,audio)=returned.fresh();let mut status=statuses.borrow().clone();status.phase="live".into();status.on_stage=authority.on_stage;
                                 status.has_program=video;status.has_audio=audio;status.return_source_id=Some(format!("guest-{}",authority.producer_participant_id));statuses.send_replace(status);
                             }
+                            Ok::<(),&'static str>(())
+                            }.await;
+                            if let Err(error)=refreshed {
+                                diagnostics.note(recovery::failure_code(error));
+                                reconnecting(&statuses);
+                                quiesce_capture(&active_capture);
+                                retire(&mut connection,&mut publisher,&returned,&mut diagnostics,&cleanup_state).await?;
+                                binding=None;published_audience=None;
+                                match recovery::operation_failed(error,stopped.load(Ordering::Acquire)) {
+                                    recovery::OperationFailure::Fatal=>return Err(error),
+                                    recovery::OperationFailure::Stopped=>break,
+                                    recovery::OperationFailure::Retry=>{}
+                                }
+                                next_attempt=Instant::now()+Duration::from_secs(1);continue;
+                            }
+                            diagnostics.note("live");
                         }
                         Ok::<(),&'static str>(())
                     }.await;
@@ -373,8 +456,8 @@ mod native {
                     if let Some(publisher)=publisher.as_ref(){publisher.request_stop();}
                     if let Some(connection)=connection.as_mut(){connection.begin_close();}
                     let _=reader.await;drop(initial_receiver.take());
-                    let closed=retire(&mut connection,&mut publisher,&returned).await;
-                    result.and(closed)
+                    let closed=retire(&mut connection,&mut publisher,&returned,&mut diagnostics,&cleanup_state).await;
+                    closed.and(result)
                 }.await;
                 returned.stop_playback();
                 if let Ok(mut capture) = active_capture.lock() {
@@ -386,11 +469,18 @@ mod native {
                 status.has_audio = false;
                 status.has_program = false;
                 status.on_stage = false;
-                if run.is_err() {
+                if let Err(error) = run {
+                    diagnostics.note(recovery::failure_code(error));
+                    diagnostics.terminal(error);
                     status.phase = "error".into();
                 } else if status.phase != "gone" {
                     status.phase = "gone".into();
                 }
+                diagnostics.note(if status.phase == "gone" {
+                    "stopped"
+                } else {
+                    "terminal_error"
+                });
                 statuses.send_replace(status);
                 drop(target);
             });
@@ -402,13 +492,28 @@ mod native {
                 task: Some(task),
                 outputs,
                 capture,
+                cleanup,
             })
         }
         pub fn id(&self) -> &str {
             &self.id
         }
         pub fn status(&self) -> AppearanceStatus {
-            self.status.borrow().clone()
+            let mut status = self.status.borrow().clone();
+            if self.cleanup.result().is_err() {
+                status.phase = "error".into();
+                status.on_stage = false;
+                status.has_program = false;
+                status.has_audio = false;
+            }
+            status
+        }
+        pub fn terminal_finished(&self) -> bool {
+            self.cleanup.result().is_ok()
+                && recovery::terminal_finished(
+                    &self.status.borrow().phase,
+                    self.task.as_ref().is_none_or(|task| task.is_finished()),
+                )
         }
         pub fn controls(&self, controls: Controls) {
             self.controls.send_replace(controls);
@@ -432,10 +537,12 @@ mod native {
             }
             self.outputs.stop_playback();
             if let Some(task) = self.task.take() {
-                task.await
-                    .map_err(|_| "Native appearance retirement task failed")?;
+                let joined = task
+                    .await
+                    .map_err(|_| "Native appearance retirement task failed");
+                self.cleanup.connection(&joined);
             }
-            Ok(())
+            self.cleanup.result()
         }
     }
     impl Drop for AppearanceOwner {
@@ -454,6 +561,17 @@ mod native {
                     });
                 }
             }
+        }
+    }
+    impl retirement::Owner for AppearanceOwner {
+        fn id(&self) -> &str {
+            AppearanceOwner::id(self)
+        }
+        fn terminal_finished(&self) -> bool {
+            AppearanceOwner::terminal_finished(self)
+        }
+        fn close(&mut self) -> retirement::Close<'_> {
+            Box::pin(AppearanceOwner::close(self))
         }
     }
 }
@@ -484,6 +602,12 @@ pub async fn live_appearance_start(
         uuid::Uuid::parse_str(&appearance_id)
             .map_err(|_| EngineError::Other("Invalid appearance ID".into()))?;
         let mut owner = state.rtc_appearance.lock().await;
+        if retirement::reap_finished(&mut owner, &appearance_id)
+            .await
+            .map_err(|error| EngineError::Other(error.into()))?
+        {
+            eprintln!("[native-appearance] terminal_owner_reaped");
+        }
         if let Some(owner) = owner.as_ref() {
             return if owner.id() == appearance_id {
                 Ok(owner.status())
@@ -610,13 +734,9 @@ pub async fn live_appearance_preview(
 pub async fn stop_all(state: &State<'_, AppState>) -> EngineResult<()> {
     #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
     {
-        let mut owner = state.rtc_appearance.lock().await;
-        if let Some(mut existing) = owner.take() {
-            existing
-                .close()
-                .await
-                .map_err(|e| EngineError::Other(e.into()))?;
-        }
+        retirement::retire(state.rtc_appearance.clone(), None)
+            .await
+            .map_err(|error| EngineError::Other(error.into()))?;
     }
     let _ = state;
     Ok(())
@@ -628,15 +748,11 @@ pub async fn live_appearance_stop(
 ) -> EngineResult<()> {
     #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
     {
-        let mut owner = state.rtc_appearance.lock().await;
-        if owner.as_ref().is_some_and(|o| o.id() == appearance_id) {
-            if let Some(mut existing) = owner.take() {
-                existing
-                    .close()
-                    .await
-                    .map_err(|e| EngineError::Other(e.into()))?;
-            }
-        }
+        // The supervisor retains the slot lock through actual retirement even
+        // when this IPC waiter disappears. A stale ID cannot close a successor.
+        retirement::retire(state.rtc_appearance.clone(), Some(appearance_id.clone()))
+            .await
+            .map_err(|error| EngineError::Other(error.into()))?;
     }
     let _ = (state, appearance_id);
     Ok(())

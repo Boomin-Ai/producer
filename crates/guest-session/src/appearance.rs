@@ -304,4 +304,32 @@ mod tests {
         assert_ne!(before.publication_audience(), after.publication_audience());
         assert!(after.publication_audience().1.is_empty());
     }
+    #[test]
+    fn reopened_host_requires_a_new_binding_and_rejects_the_previous_run_session() {
+        let now = Instant::now();
+        let old_wire = wire();
+        let old = parse(&old_wire, now, now).unwrap();
+        let mut next_wire = old_wire.clone();
+        next_wire["expected"]["run_id"] = json!("33333333-3333-4333-8333-333333333333");
+        next_wire["expected"]["host_lease_epoch"] = json!(3);
+        next_wire["expected"]["control_revision"] = json!(1);
+        next_wire["producer_identity"] = json!(format!("producer-{HOST}-e3-g1"));
+        let reopened = parse(&next_wire, now, now).unwrap();
+        assert!(!reopened.same_binding(&old));
+        let mut session = next_wire["expected"].clone();
+        let fields = json!({"schema_version":1,"transport":"livekit",
+            "issued_at_ms":1791700000000u64,"expires_at_ms":1791700120000u64,
+            "provider_room":format!("b_{HOST}_r_{HOST}_run_33333333-3333-4333-8333-333333333333_stage"),
+            "rtc_identity":format!("guest-{GUEST}-e3-g3"),"join_token":"fixture.payload.signature"});
+        for (key, value) in fields.as_object().unwrap() {
+            session[key] = value.clone();
+        }
+        let bytes = serde_json::to_vec(&session).unwrap();
+        assert!(reopened.session(&bytes, 1791700000500).is_ok());
+        assert!(old.session(&bytes, 1791700000500).is_err());
+        session["host_lease_epoch"] = json!(2);
+        assert!(reopened
+            .session(&serde_json::to_vec(&session).unwrap(), 1791700000500)
+            .is_err());
+    }
 }

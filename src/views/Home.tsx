@@ -60,7 +60,7 @@ import { HostedManager } from "../features/manager/HostedManager";
 import { ModSeat } from "./ModSeat";
 import { ModLinkDrop } from "./ModLinkDrop";
 import type { ModLink } from "../lib/modSeat";
-import type { GuestSeatSpec } from "../lib/guestSeat";
+import type { GuestSeat, GuestSeatSpec, SeatState } from "../lib/guestSeat";
 import { NetworkMessages } from "../features/network/NetworkMessages";
 import { ProducerJoin } from "../features/network/ProducerJoin";
 import { ProducerGuestView } from "./GuestSeat";
@@ -187,12 +187,70 @@ export function Home({
   onEndpointsChanged?: () => void;
 }) {
   const [view, setView] = useState<MainView>({ kind: "home" });
+  const viewRef = useRef(view);
+  viewRef.current = view;
   // The opt-in native appearance candidate keeps the actual room controller
   // while its UI is collapsed. The native engine alone cannot retain the Set
   // clock, host heartbeat, recording controls or document readiness.
   const [nativeAppearances, setNativeAppearances] = useState(false);
   const [retainedRoom, setRetainedRoom] = useState<HostedRoom | null>(null);
   const [outgoingSeat, setOutgoingSeat] = useState<GuestSeatSpec>();
+  const outgoingSeatRef = useRef(outgoingSeat);
+  outgoingSeatRef.current = outgoingSeat;
+  const beforeEnterSeat = useCallback(()=>{
+    if(outgoingSeatRef.current||viewRef.current.kind==='seat')
+      throw Error('Return to the current appearance or leave it before entering another room.');
+  },[]);
+  const [outgoingRuntime, setOutgoingRuntime] = useState<{spec:GuestSeatSpec;owner:GuestSeat} | null>(null);
+  const outgoingRuntimeRef = useRef(outgoingRuntime);
+  const outgoingOwners = useRef(new Map<GuestSeatSpec,Set<GuestSeat>>());
+  const retiringAppearance = useRef<GuestSeatSpec | null>(null);
+  const [outgoingState, setOutgoingState] = useState<Pick<SeatState,'phase'|'message'> | null>(null);
+  const [appearanceExit, setAppearanceExit] = useState<'idle'|'closing'|'error'>('idle');
+  const appearanceLeaving = useRef<{spec:GuestSeatSpec;promise:Promise<void>} | null>(null);
+  const leaveOutgoingAppearance = useCallback((retry=false):Promise<void> => {
+    const spec=outgoingSeatRef.current;
+    if(!spec)return Promise.resolve();
+    if(appearanceLeaving.current?.spec===spec)return appearanceLeaving.current.promise;
+    const runtime=outgoingRuntimeRef.current;
+    const owner=runtime?.spec===spec?runtime.owner:null;
+    retiringAppearance.current=spec;
+    const owners=[...(outgoingOwners.current.get(spec)??[])];
+    setAppearanceExit('closing');
+    const pending=Promise.resolve().then(()=>Promise.all(owners.map(owned=>owned.leave(retry)))).then(()=>{
+      if(outgoingSeatRef.current!==spec)return;
+      const terminal=owner?.snapshot();
+      outgoingSeatRef.current=undefined;outgoingRuntimeRef.current=null;
+      outgoingOwners.current.delete(spec);retiringAppearance.current=null;
+      setOutgoingSeat(undefined);setOutgoingRuntime(null);setOutgoingState(null);setAppearanceExit('idle');
+      if(terminal?.phase==='error'||terminal?.phase==='gone')
+        notify(terminal.message||'The appearance ended.',{key:'appearance',tone:terminal.phase==='error'?'error':'info'});
+    },()=>{
+      if(outgoingSeatRef.current===spec&&appearanceLeaving.current?.promise===pending)setAppearanceExit('error');
+    });
+    const attempt={spec,promise:pending};appearanceLeaving.current=attempt;
+    const timer=window.setTimeout(()=>{
+      if(outgoingSeatRef.current===spec&&appearanceLeaving.current===attempt){
+        // Keep the ownership guard. An unknown stop result is never a release.
+        appearanceLeaving.current=null;setAppearanceExit('error');
+      }
+    },5000);
+    void pending.finally(()=>{window.clearTimeout(timer);if(appearanceLeaving.current===attempt)appearanceLeaving.current=null;});
+    return pending;
+  }, []);
+  useEffect(()=>{
+    if(!outgoingRuntime||outgoingRuntime.spec!==outgoingSeat)return;
+    const {spec,owner}=outgoingRuntime;let terminalRequested=false;
+    const reflect=()=>{
+      if(outgoingSeatRef.current!==spec)return;
+      const next=owner.snapshot();
+      setOutgoingState(previous=>previous?.phase===next.phase&&previous.message===next.message?previous:{phase:next.phase,message:next.message});
+      if(!terminalRequested&&(next.phase==='gone'||next.phase==='error')){
+        terminalRequested=true;void leaveOutgoingAppearance();
+      }
+    };
+    const unsubscribe=owner.subscribe(reflect);reflect();return unsubscribe;
+  },[outgoingRuntime,outgoingSeat,leaveOutgoingAppearance]);
   const [roomRuntime, setRoomRuntime] = useState<RoomRuntimeState | null>(null);
   const roomRuntimeRef = useRef<RoomRuntimeState | null>(null);
   const onRoomRuntime = useCallback((next: RoomRuntimeState) => {
@@ -523,15 +581,16 @@ export function Home({
    * no popout window. Room-less when this workspace has no rooms yet. */
   const enterSeat = useCallback((seat: GuestSeatSpec) => {
     if(seat.endpointId!==activeEndpointId())return;
+    try{beforeEnterSeat();}catch(error){notify(String(error).replace(/^Error:\s*/,''),{key:'appearance',tone:'warning'});return;}
     // A server-side knock is not a camera choice. Confirm the local room and
     // media before mounting a live seat or touching this computer's devices.
     setPendingSeat(seat);setNetworkSheet('join');
-  }, []);
+  }, [beforeEnterSeat]);
   const startSeat = useCallback(async(seat: GuestSeatSpec,signal:AbortSignal) => {
     const current=()=>{if(signal.aborted)throw new DOMException('The invitation was closed.','AbortError');};
     current();
     if(seat.endpointId!==activeEndpointId())throw Error('The workspace changed. Open the invitation again.');
-    if(outgoingSeat)throw Error('Leave the current appearance before joining another room.');
+    if(outgoingSeatRef.current)throw Error('Leave the current appearance before joining another room.');
     // This candidate has a pinned Boomin guest issuer. Independent servers
     // retain the existing transport instead of being silently opted into it.
     const nativeProgram=nativeAppearances&&(()=>{try{
@@ -575,7 +634,19 @@ export function Home({
     if(nativeProgram&&seat.videoSource==='program'&&own){
       const currentRoom=view.kind==='room'?view:retainedRoom;
       const runtime=roomRuntimeRef.current;
-      setOutgoingSeat({...seat,nativeProgram:true,portrait:runtime?.roomId===own.id?runtime.outputPortrait:false,quality:720});
+      const appearance:GuestSeatSpec={...seat,nativeProgram:true,portrait:runtime?.roomId===own.id?runtime.outputPortrait:false,quality:720,
+        onRuntime:(owner,retiredOwner)=>{
+          if(outgoingSeatRef.current!==appearance)return false;
+          if(owner&&retiringAppearance.current===appearance)return false;
+          const owners=outgoingOwners.current.get(appearance)!;
+          if(owner)owners.add(owner);else if(retiredOwner)owners.delete(retiredOwner);
+          if(!owner&&retiredOwner&&outgoingRuntimeRef.current?.owner!==retiredOwner)return;
+          const next=owner?{spec:appearance,owner}:null;
+          outgoingRuntimeRef.current=next;setOutgoingRuntime(next);
+        }};
+      outgoingSeatRef.current=appearance;outgoingRuntimeRef.current=null;
+      outgoingOwners.current.set(appearance,new Set());retiringAppearance.current=null;
+      setOutgoingRuntime(null);setOutgoingState(null);setAppearanceExit('idle');setOutgoingSeat(appearance);
       setView({kind:'room',room:currentRoom?.room??own,access:currentRoom?.access??access});
     }else setView({ kind: "seat", room: own, seat, access });
   }, [endpoints,nativeAppearances,view,retainedRoom,outgoingSeat]);
@@ -588,13 +659,23 @@ export function Home({
       entryAccess={hostedRoom.access}
       visible={view.kind==='room'}
       outgoingSeat={outgoingSeat}
-      onLeaveAppearance={()=>setOutgoingSeat(undefined)}
+      onLeaveAppearance={()=>{void leaveOutgoingAppearance();}}
       onRuntimeState={onRoomRuntime}
       onLeave={back}
       onOpenRecording={isBoomin(endpoints.find((ep) => ep.id === activeId)) ? (captureId) => { setManagerRecordingId(captureId); setSurface("manager"); back(); } : undefined}
       onOpenIntegrations={()=>{back();setSettingsSection('integrations');openSettings();}}
       onOpenAccess={()=>{back();setSettingsSection('access');openSettings();}}
     />}
+    {outgoingSeat&&(view.kind!=='room'||appearanceExit!=='idle')&&<section className="sys-banner" style={{background:'var(--surface-1)',borderColor:'var(--line-2)'}} aria-label="Current appearance">
+      <span className="sys-banner-text">{appearanceExit==='closing'?'Leaving the appearance…':appearanceExit==='error'?
+        'The appearance has not confirmed it stopped. Retry leaving.':
+        outgoingState?.phase==='connecting'?`Reconnecting to ${outgoingSeat.hostName}…`:
+        `Appearance with ${outgoingSeat.hostName}${outgoingState?.phase==='waiting'?' — waiting for the host':''}`}</span>
+      {view.kind!=='room'&&<button className="cr-ghost" disabled={!retainedRoom} onClick={()=>{if(retainedRoom)openRoom(retainedRoom.room);}}>Return to appearance</button>}
+      <button className="cr-ghost" disabled={appearanceExit==='closing'} onClick={()=>{void leaveOutgoingAppearance(appearanceExit==='error');}}>
+        {appearanceExit==='error'?'Retry leaving':'Leave appearance'}
+      </button>
+    </section>}
     {content}{exitCover}
   </>;
 
@@ -707,7 +788,10 @@ export function Home({
           messagesOpen={networkSheet==='messages'}
           unread={networkUnread}
           onMessages={()=>{closeSettings();setAccountOpen(false);setView({kind:'home'});setNetworkSheet(current=>current==='messages'?null:'messages');}}
-          onJoin={()=>{closeSettings();setAccountOpen(false);setView({kind:'home'});setPendingSeat(undefined);setNetworkSheet('join');}}
+          onJoin={()=>{
+            try{beforeEnterSeat();}catch(error){notify(String(error).replace(/^Error:\s*/,''),{key:'appearance',tone:'warning'});return;}
+            closeSettings();setAccountOpen(false);setView({kind:'home'});setPendingSeat(undefined);setNetworkSheet('join');
+          }}
         />
       )}
       {networkSheet==='messages'&&<aside className="producer-network-sheet" aria-label="Producer messages"><NetworkMessages endpoint={endpoints.find(e=>e.id===activeId)??null} onClose={()=>setNetworkSheet(null)} onConnections={()=>{setNetworkSheet(null);setSurface('rooms');setView({kind:'home'});}} onUnreadChange={setNetworkUnread}/></aside>}
@@ -764,6 +848,8 @@ export function Home({
           onOpenRoom={openRoom}
           onRoomsChanged={loadLive}
           onEnterSeat={enterSeat}
+          onBeforeEnterSeat={beforeEnterSeat}
+          entryBlocked={!!outgoingSeat}
           onModLink={(link) => setView({ kind: "modseat", link })}
           offNetwork={offNetwork}
           onCompose={() => { closeSettings(); setView({ kind: "compose" }); }}
@@ -1445,6 +1531,8 @@ function ControlRoomHome({
   onOpenRoom,
   onRoomsChanged,
   onEnterSeat,
+  onBeforeEnterSeat,
+  entryBlocked,
   onModLink,
   offNetwork,
   onCompose,
@@ -1460,6 +1548,8 @@ function ControlRoomHome({
   onRoomsChanged: () => void;
   /** Open our room in guest mode on a seat we just took (deal / knock). */
   onEnterSeat: (seat: GuestSeatSpec) => void;
+  onBeforeEnterSeat: () => void;
+  entryBlocked: boolean;
   onModLink: (link: ModLink) => void;
   /** Local rooms whose server row is gone (room sync); shown as a chip. */
   offNetwork: Set<string>;
@@ -1526,9 +1616,9 @@ function ControlRoomHome({
       {/* Gated: without the flag the Network rail is not rendered at all —
         * not collapsed, not empty, absent. `hasRail` already carries the flag
         * (it drives the gutter), so this is the same single truth. */}
-      {hasRail && <NetworkRail rooms={rooms} onAddEndpoint={onAddEndpoint} onEnterSeat={onEnterSeat} />}
+      {hasRail && <NetworkRail rooms={rooms} onAddEndpoint={onAddEndpoint} onEnterSeat={onEnterSeat} onBeforeEnterSeat={onBeforeEnterSeat} entryBlocked={entryBlocked} />}
       <FirewallBanner />
-      <LiveNowStrip onEnterSeat={onEnterSeat} />
+      <LiveNowStrip onEnterSeat={onEnterSeat} onBeforeEnterSeat={onBeforeEnterSeat} entryBlocked={entryBlocked} />
       <section className="cr-section" id="sec-onair">
         <div className="cr-label" data-tauri-drag-region>
           ON AIR
@@ -2133,10 +2223,14 @@ const NetworkRail = memo(function NetworkRail({
   rooms,
   onAddEndpoint,
   onEnterSeat,
+  onBeforeEnterSeat,
+  entryBlocked,
 }: {
   rooms: LiveRoom[];
   onAddEndpoint: (door?: "server") => void;
   onEnterSeat: (seat: GuestSeatSpec) => void;
+  onBeforeEnterSeat: () => void;
+  entryBlocked: boolean;
 }) {
   const activeEp = useActiveEndpoint();
   // Boomin-only surface. On a self-hosted endpoint NOTHING here is called —
@@ -2307,6 +2401,7 @@ const NetworkRail = memo(function NetworkRail({
     setEntering(d.id);
     setNote(null);
     try {
+      onBeforeEnterSeat();
       const res = await network.enterDeal(endpointId, d.id);
       onEnterSeat({
         joinUrl: res.join_url,
@@ -2831,7 +2926,7 @@ const NetworkRail = memo(function NetworkRail({
             note={note}
             onAct={(a) => void dealAct(d.id, a).then(() => setDealOpen(null))}
             onSendLink={() => void sendLink(d, other?.name ?? "Guest")}
-            onEnter={canEnterDeal(d) ? () => void enterDeal(d, other?.name ?? "The host") : undefined}
+            onEnter={canEnterDeal(d)&&!entryBlocked ? () => void enterDeal(d, other?.name ?? "The host") : undefined}
             entering={entering === d.id}
             onClose={() => setDealOpen(null)}
           />
@@ -3103,7 +3198,7 @@ function NetworkInviteCard({ onJoin }: { onJoin: () => void }) {
   );
 }
 
-function LiveNowStrip({ onEnterSeat }: { onEnterSeat: (seat: GuestSeatSpec) => void }) {
+function LiveNowStrip({ onEnterSeat, onBeforeEnterSeat, entryBlocked }: { onEnterSeat: (seat: GuestSeatSpec) => void; onBeforeEnterSeat: () => void; entryBlocked: boolean }) {
   // Boomin-only (/v1/app/network/rooms/live): never polled on a self-hosted
   // endpoint — the id is null there, so the effect below never fires.
   const activeEp = useActiveEndpoint();
@@ -3142,6 +3237,7 @@ function LiveNowStrip({ onEnterSeat }: { onEnterSeat: (seat: GuestSeatSpec) => v
     setEntering(r.room_id);
     setNote(null);
     try {
+      onBeforeEnterSeat();
       const res = await network.enterRoom(endpointId, r.room_id);
       onEnterSeat({
         joinUrl: res.join_url,
@@ -3181,7 +3277,7 @@ function LiveNowStrip({ onEnterSeat }: { onEnterSeat: (seat: GuestSeatSpec) => v
               className="cr-primary"
               data-producer-network-room-id={r.room_id}
               data-producer-endpoint-id={endpointId}
-              disabled={entering === r.room_id}
+              disabled={entryBlocked||entering === r.room_id}
               onClick={() => void enter(r)}
             >
               {entering === r.room_id ? "Knocking…" : "Enter"}

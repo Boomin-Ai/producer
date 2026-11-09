@@ -28,6 +28,9 @@ export interface GuestSeatSpec {
  /** Runtime-only local output ownership; never sent to the remote server. */
  prepareProgram?:()=>Promise<void>;
  releaseProgram?:()=>void;
+ /** Local UI lifecycle only. The exact owner stays reachable until retirement
+  * is acknowledged, including a collapsed room or failed native stop. */
+ onRuntime?:(owner:GuestSeat|null,retiredOwner?:GuestSeat)=>boolean|void;
 }
 export interface SeatState {
  phase:SeatPhase;message:string;muted:boolean;cameraOff:boolean;hasProgram:boolean;
@@ -76,6 +79,8 @@ export class GuestSeat {
  private lease:ProgramLease|null=null;private programPrepared=false;private link:HostLink|null=null;private conversation:GuestConversation|null=null;
  private rtc:ProducerGuestRtc|null=null;private peerId='';private mediaKey='';private downSince=0;
  private native:NativeAppearance|null=null;
+ private retiringOwners=new Set<{close:(retry?:boolean)=>Promise<void>}>();
+ private retirementFlight:Promise<void>|null=null;
  private diagnosticSession:GuestSeatDiagnosticSession|null=null;
  constructor(spec:GuestSeatSpec){
   this.spec=spec;this.api=connectApiBase(spec.apiBase);this.code=inviteCodeFromJoinUrl(spec.joinUrl);
@@ -109,10 +114,12 @@ export class GuestSeat {
   if(!this.code){this.fail('The join link has no valid invite code.');return;}
   await this.poll();
  }
- leave():void{
-  if(!this.alive)return;this.alive=false;this.terminal=true;this.syncDiagnosticSession();this.request.abort();window.clearTimeout(this.timer);
-  this.trace.cancel();this.trace.begin('peer.leave');
-  const retiring=this.teardownCall();this.releaseMedia();this.listeners.clear();this.trace.leave(retiring);
+ leave(retry=false):Promise<void>{
+  const first=this.alive;
+  if(first){this.alive=false;this.terminal=true;this.syncDiagnosticSession();this.request.abort();window.clearTimeout(this.timer);
+   this.trace.cancel();this.trace.begin('peer.leave');}
+  const retiring=this.teardownCall(retry);this.releaseMedia();this.listeners.clear();if(first)this.trace.leave(retiring);
+  return retiring;
  }
  toggleMute():void{const muted=!this.state.muted;this.local?.getAudioTracks().forEach(t=>{t.enabled=!muted;});this.conversation?.setMicrophoneEnabled(!muted);this.set({muted});const owner=this.native,gen=this.callGeneration;if(owner)void owner.controls(muted,this.state.cameraOff).catch(()=>{if(this.alive&&this.native===owner&&this.callGeneration===gen)this.fail('Appearance audio controls became unavailable. Join again.');});}
  toggleCamera():void{const cameraOff=!this.state.cameraOff;this.local?.getVideoTracks().forEach(t=>{t.enabled=!cameraOff;});this.set({cameraOff});const owner=this.native,gen=this.callGeneration;if(owner)void owner.controls(this.state.muted,cameraOff).catch(()=>{if(this.alive&&this.native===owner&&this.callGeneration===gen)this.fail('Appearance video controls became unavailable. Join again.');});}
@@ -247,12 +254,21 @@ export class GuestSeat {
   const sync=()=>{if(this.alive&&gen===this.callGeneration&&this.program===stream)this.set({hasProgram:!!track&&track.readyState==='live'&&!track.muted});};
   track?.addEventListener('unmute',sync,{once:true});track?.addEventListener('ended',sync,{once:true});sync();
  }
- private teardownCall(){
+ private teardownCall(retry=false){
   this.callGeneration++;const rtc=this.rtc;this.rtc=null;const native=this.native;this.native=null;
-  const retiring=Promise.all([rtc?.close(),native?.close()]).then(()=>{});void retiring.catch(()=>{});
+  if(rtc)this.retiringOwners.add(rtc);if(native)this.retiringOwners.add(native);
+  const retiring=this.retireOwners(retry);void retiring.catch(()=>{});
   const link=this.link;this.link=null;link?.close();this.conversation?.stop();this.conversation=null;
   this.program=null;this.hostAudio=null;this.downSince=0;this.set({hasProgram:false,onStage:false,programPreview:null,nativeAudioAvailable:false,nativePlayback:false});
   return retiring;
+ }
+ private async retireOwners(retry=false):Promise<void>{
+  if(this.retirementFlight&&!retry){await this.retirementFlight;if(this.retiringOwners.size)return this.retireOwners();return;}
+  const owners=[...this.retiringOwners];
+  const attempt=Promise.all(owners.map(async owner=>{await owner.close(retry);this.retiringOwners.delete(owner);})).then(()=>{});
+  this.retirementFlight=attempt;
+  try{await attempt;}finally{if(this.retirementFlight===attempt)this.retirementFlight=null;}
+  if(this.retiringOwners.size)await this.retireOwners();
  }
  private releaseMedia(){this.local?.getTracks().forEach(t=>t.stop());this.local=null;this.lease?.release();this.lease=null;if(this.programPrepared){this.programPrepared=false;this.spec.releaseProgram?.();}}
 }

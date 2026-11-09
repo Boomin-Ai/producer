@@ -62,7 +62,7 @@ export class NativeAppearance {
    }
    this.reflect(status);
    if(['gone','error'].includes(status.phase)){await this.close();return;}
-  }catch{if(this.alive){this.failed();await this.close();return;}}
+  }catch{if(this.alive){this.failed();await this.close().catch(()=>{});return;}}
   if(this.alive)this.timer=window.setTimeout(()=>void this.poll(),300);
  }
  controls(muted:boolean,cameraOff:boolean,playback=this.desiredPlayback):Promise<void>{
@@ -78,15 +78,20 @@ export class NativeAppearance {
   this.commands=result.catch(()=>{});return result;
  }
  async enableAudio():Promise<void>{await this.controls(this.muted,this.cameraOff,true);}
- close():Promise<void>{
-  if(this.retiring)return this.retiring;
+ close(retry=false):Promise<void>{
+  if(this.retiring&&!retry)return this.retiring;
   this.alive=false;window.clearTimeout(this.timer);
   if(this.previewUrl){URL.revokeObjectURL(this.previewUrl);this.previewUrl=null;}
   this.retiring=(async()=>{
    // A successor must not start until an older in-flight start has settled
    // and its exact owner ID has received a final native retirement receipt.
-   await this.startup?.catch(()=>{});await this.commands.catch(()=>{});
+   // Already-dispatched control acknowledgements cannot keep capture owned.
+   // The native stop fences them; queued commands see alive=false and skip.
+   await this.startup?.catch(()=>{});
    await invoke<void>('live_appearance_stop',{appearanceId:this.id});
-  })();return this.retiring;
+  })();
+  const attempt=this.retiring;
+  void attempt.catch(()=>{if(this.retiring===attempt)this.retiring=null;});
+  return attempt;
  }
 }

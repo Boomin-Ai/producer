@@ -11,25 +11,37 @@ import { ExpandableProgram } from "../components/ExpandableProgram";
 import { useReturnAudio } from "../features/network/useReturnAudio";
 
 /** One seat per mounted view; created on mount, left on unmount. */
-export function useGuestSeat(spec: GuestSeatSpec | undefined, camLabel?: string | null): GuestSeat | null {
+export function useGuestSeat(spec: GuestSeatSpec | undefined, camLabel?: string | null, ready=true): GuestSeat | null {
   const [seat, setSeat] = useState<GuestSeat | null>(null);
   const started = useRef<string | null>(null);
+  // Readiness gates the initial local binding. A transient Set update must
+  // never close and recreate an already-bound native appearance.
+  const boundNative = useRef<GuestSeatSpec | undefined>(undefined);
+  if(!spec?.nativeProgram)boundNative.current=undefined;
+  else if(ready)boundNative.current=spec;
+  const nativeBound=!!spec?.nativeProgram&&boundNative.current?.joinUrl===spec.joinUrl&&
+    boundNative.current?.localRoomId===spec.localRoomId&&boundNative.current?.onRuntime===spec.onRuntime;
+  const requested=ready||nativeBound?spec:undefined;
   useEffect(() => {
-    if (!spec) return;
-    const key = spec.joinUrl;
+    if (!requested) return;
+    const spec=requested,key = spec.joinUrl;
     if (started.current === key) return;
     started.current = key;
     const s = new GuestSeat({ ...spec, camLabel: spec.camLabel ?? camLabel ?? null });
     setSeat(s);
-    void s.start();
+    let accepted=true;
+    try { accepted=spec.onRuntime?.(s)!==false; } catch { accepted=false; /* A failed ownership handoff cannot start a publisher. */ }
+    if(accepted)void s.start();else void s.leave().catch(()=>{});
     return () => {
-      s.leave();
+      void s.leave().then(() => {
+        try { spec.onRuntime?.(null,s); } catch { /* Keep teardown independent of UI observation. */ }
+      }, () => { /* Keep the exact owner available for an explicit retirement retry. */ });
       started.current = null;
       setSeat(null);
     };
     // camLabel is read once, when the seat opens its camera.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spec?.joinUrl]);
+  }, [requested?.joinUrl,requested?.onRuntime]);
   return seat;
 }
 

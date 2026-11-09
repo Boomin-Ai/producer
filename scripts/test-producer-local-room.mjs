@@ -14,9 +14,9 @@ const deferred=()=>{let resolve;return {promise:new Promise(r=>resolve=r),resolv
 function harness({rooms,access,streaming=false,recording=false,native=false,retained=false,visible=false,ready=true,portrait=false,existingSeat}={}){
  const calls=[],appearances=[],exports={},room={id:'selected',endpoint_id:'local',config:'{}'};let active='local';
  const endpoint={id:'local',kind:'connected',base_url:'https://local.example/v1/app/producer'},context={exports,DOMException,Error,Promise,URL,producerLocalAccess,useCallback:fn=>fn,endpoints:[endpoint],activeEndpointId:()=>active,
-  nativeAppearances:native,view:visible?{kind:'room',room}:{kind:'home'},retainedRoom:retained?{room}:null,outgoingSeat:existingSeat,roomRuntimeRef:{current:retained||visible?{roomId:room.id,outputsActive:streaming||recording,programReady:ready,outputPortrait:portrait}:null},
+  nativeAppearances:native,view:visible?{kind:'room',room}:{kind:'home'},retainedRoom:retained?{room}:null,outgoingSeat:existingSeat,outgoingSeatRef:{current:existingSeat},outgoingRuntimeRef:{current:null},outgoingOwners:{current:new Map()},retiringAppearance:{current:null},roomRuntimeRef:{current:retained||visible?{roomId:room.id,outputsActive:streaming||recording,programReady:ready,outputPortrait:portrait}:null},
   ipc:{liveListRooms:async()=>rooms??[room],liveEngineStatus:async()=>({session_state:streaming?'streaming':'idle'})},guests:{access:async()=>access??hostAccess},recording:{list:async()=>recording?[{status:'recording'}]:[]},roomMetadata:()=>({server_room_id:'server-room'}),isBoomin:()=>true,
-  roomExit:{current:{cancel:()=>calls.push('cancelExit')}},markRoomClick:()=>{},setNetworkSheet:()=>{},setPendingSeat:()=>{},setOutgoingSeat:value=>appearances.push(value),setView:value=>calls.push(value)};
+  roomExit:{current:{cancel:()=>calls.push('cancelExit')}},markRoomClick:()=>{},setNetworkSheet:()=>{},setPendingSeat:()=>{},setOutgoingSeat:value=>appearances.push(value),setOutgoingRuntime:()=>{},setOutgoingState:()=>{},setAppearanceExit:()=>{},setView:value=>calls.push(value)};
  vm.runInNewContext(code,context);return {start:exports.start,calls,appearances,room,switchWorkspace:()=>active='other'};
 }
 const seat={endpointId:'local',videoSource:'program',localRoomId:'selected',apiBase:'https://api.boomin.ai/v1/app/producer'};

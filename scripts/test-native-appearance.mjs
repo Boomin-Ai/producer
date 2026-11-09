@@ -5,18 +5,19 @@ import {test} from 'node:test';
 import ts from 'typescript';
 
 const flush=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
-function harness({enabled=true,deferredStart=false,deferredEnabled=false}={}){
- const calls=[],updates=[],revoked=[],timers=new Map();let next=1,failures=0,resolveStart,resolveEnabled;
- let phase='live',hasProgram=false,previewBytes=new ArrayBuffer(8),statusId='appearance-one',clock=0;
+function harness({enabled=true,deferredStart=false,deferredEnabled=false,stopFailures=0,deferredControls=false,hangFirstStop=false}={}){
+ const calls=[],updates=[],revoked=[],timers=new Map();let next=1,failures=0,resolveStart,resolveEnabled,resolveControls;
+ let phase='live',hasProgram=false,previewBytes=new ArrayBuffer(8),statusId='appearance-one',clock=0,statusFailure=false,stops=0;
  const status=()=>({appearanceId:statusId,phase,onStage:true,hasProgram,hasAudio:true,returnSourceId:'private-return',width:1280,height:720,fps:30});
  const exports={};
  const invoke=async(command,args)=>{
   calls.push({command,args});
   if(command==='live_appearance_enabled')return deferredEnabled?new Promise(resolve=>{resolveEnabled=resolve;}):enabled;
   if(command==='live_appearance_start')return deferredStart?new Promise(resolve=>{resolveStart=()=>resolve(status());}):status();
-  if(command==='live_appearance_status')return status();
+  if(command==='live_appearance_status'){if(statusFailure)throw Error('native status unavailable');return status();}
   if(command==='live_appearance_preview')return previewBytes;
-  if(command==='live_appearance_controls'||command==='live_appearance_stop')return;
+  if(command==='live_appearance_controls')return deferredControls?new Promise(resolve=>{resolveControls=resolve;}):undefined;
+  if(command==='live_appearance_stop'){stops++;if(hangFirstStop&&stops===1)return new Promise(()=>{});if(stopFailures-->0)throw Error('native stop unavailable');return;}
   throw Error('Unexpected native operation '+command);
  };
  vm.runInNewContext(ts.transpileModule(readFileSync(new URL('../src/lib/nativeAppearance.ts',import.meta.url),'utf8'),{
@@ -29,7 +30,8 @@ function harness({enabled=true,deferredStart=false,deferredEnabled=false}={}){
   (s,preview,playback)=>updates.push({status:s,preview,playback}),()=>{failures++;});
  return {owner,calls,updates,revoked,timers,get failures(){return failures;},setPhase:value=>{phase=value;},
   setHasProgram:value=>{hasProgram=value;},setBytes:value=>{previewBytes=value;},wrongOwner:()=>{statusId='replacement';},
-  resolveStart:()=>resolveStart(),resolveEnabled:value=>resolveEnabled(value),
+  setStatusFailure:value=>{statusFailure=value;},
+  resolveStart:()=>resolveStart(),resolveEnabled:value=>resolveEnabled(value),resolveControls:()=>resolveControls(),
   async tick(){clock+=600;const work=[...timers.values()];timers.clear();for(const fn of work)fn();await flush();},
  };
 }
@@ -88,4 +90,24 @@ test('wrong-owner responses or oversized previews terminate only the outgoing ow
 test('repeated close shares the retirement receipt and stops once',async()=>{
  const h=harness();await h.owner.start();await flush();const a=h.owner.close(),b=h.owner.close();assert.equal(a,b);await a;
  assert.equal(h.calls.filter(c=>c.command==='live_appearance_stop').length,1);
+});
+test('a rejected native stop can be explicitly retried for the same owned ID',async()=>{
+ const h=harness({stopFailures:1});await h.owner.start();await flush();await assert.rejects(h.owner.close());
+ await h.owner.close();assert.equal(h.calls.filter(c=>c.command==='live_appearance_stop').length,2);
+ assert.ok(h.calls.filter(c=>c.command==='live_appearance_stop').every(c=>c.args.appearanceId==='appearance-one'));
+ assert.equal(h.calls.filter(c=>c.command==='live_appearance_start').length,1);assert.equal(h.timers.size,0);
+});
+test('an unacknowledged control cannot block the exact native stop receipt',async()=>{
+ const h=harness({deferredControls:true});await h.owner.start();await flush();const control=h.owner.enableAudio();await flush();
+ await h.owner.close();assert.equal(h.calls.filter(c=>c.command==='live_appearance_stop').length,1);
+ h.resolveControls();await control;assert.equal(h.timers.size,0);assert.equal(h.updates.at(-1).playback,false);
+});
+test('explicit retry sends the same exact native stop even if an earlier response never settles',async()=>{
+ const h=harness({hangFirstStop:true});await h.owner.start();await flush();void h.owner.close();await flush();
+ await h.owner.close(true);const stops=h.calls.filter(c=>c.command==='live_appearance_stop');assert.equal(stops.length,2);assert.ok(stops.every(c=>c.args.appearanceId==='appearance-one'));
+ await h.owner.close();assert.equal(h.calls.filter(c=>c.command==='live_appearance_stop').length,2);
+});
+test('status failure plus stop rejection remains terminal and available for explicit stop retry',async()=>{
+ const h=harness({stopFailures:1});await h.owner.start();await flush();h.setStatusFailure(true);await h.tick();await flush();
+ assert.equal(h.failures,1);assert.equal(h.timers.size,0);await h.owner.close();assert.equal(h.calls.filter(c=>c.command==='live_appearance_stop').length,2);
 });

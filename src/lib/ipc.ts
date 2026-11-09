@@ -1,5 +1,5 @@
 import { invoke } from "./nativeInvoke";
-import { NetworkEntryRequests } from "./networkEntry";
+import { NetworkEntryError, NetworkEntryRequests } from "./networkEntry";
 
 /** What an endpoint IS, derived (Rust-side) from whether it carries a brand
  * scope: "boomin" = a Boomin workspace (network, deals, room visibility);
@@ -745,8 +745,7 @@ export const network = {
   /** Beneficiary enters the show THROUGH the deal using a retry-safe knock.
    * The UI confirms the chosen local room/feed before capture; the host still
    * controls admission. No external browser is opened.
-   * Rejects with a message starting `network_room_closed:` while the host's
-   * room isn't open. */
+   * Rejects with code `network_room_closed` while the native host isn't ready. */
   enterDeal: (endpointId: string, dealId: string) =>
     enterNetworkSeat(endpointId, `/v1/app/network/deals/${encodeURIComponent(dealId)}/enter`),
 };
@@ -755,12 +754,16 @@ const networkEntries = new NetworkEntryRequests();
 async function enterNetworkSeat(endpointId:string,path:string):Promise<NetworkSeat>{
  const endpoint=(await ipc.listEndpoints()).find(e=>e.id===endpointId);
  if(!endpoint)throw Error('Reconnect to this workspace first.');
- const result=await networkEntries.enter<NetworkSeat>(`${endpointId}:${path}`,async requestId=>{
+ let result:NetworkSeat;
+ try{result=await networkEntries.enter<NetworkSeat>(`${endpointId}:${path}`,async requestId=>{
    const capability=await guests.request(endpointId,'GET','/v1/app/network/entry-capabilities');
    if(capability.status!==200||(capability.body as {network_entry_protocol?:number}|undefined)?.network_entry_protocol!==1)
      throw Error('This server needs the coordinated Producer network update before a network appearance can start.');
    return guests.request(endpointId,'POST',path,{request_id:requestId});
- });
+ });}catch(error){
+   if(error instanceof NetworkEntryError)uiLog(`[network-entry] ${JSON.stringify({event:'rejected',status:error.status,code:error.code||'unknown'})}`);
+   throw error;
+ }
  // Joining grants a seat, not permission to start this computer's devices.
  return {...result,api_base:endpoint.base_url,producer_cam:false};
 }
@@ -777,7 +780,7 @@ export interface NetworkSeat {
 }
 
 /** True when an `enterDeal` rejection means the host hasn't opened the room. */
-export const isRoomClosedError = (e: unknown) => String(e).includes("network_room_closed");
+export const isRoomClosedError = (e: unknown) => e instanceof NetworkEntryError ? e.code === 'network_room_closed' : String(e).includes("network_room_closed");
 
 export interface NetworkDeal {
   id: string;

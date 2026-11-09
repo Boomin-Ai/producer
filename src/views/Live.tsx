@@ -3454,8 +3454,7 @@ export function LiveView({
   };
   // Never publish the engine's previous room while this room is restoring.
   const appearance = outgoingSeat ?? seat;
-  const guestSeat = useGuestSeat(appearance && (appearance.videoSource==='webcam' ||
-    (outgoingSeat || producerLocalAuthorized) && snapshot?.engine_ready && docApplied && sceneSettled && framesReady) ? {
+  const guestSeat = useGuestSeat(appearance ? {
       ...appearance,
       ...(appearance.nativeProgram ? {} : {
       prepareProgram:async()=>{
@@ -3480,7 +3479,8 @@ export function LiveView({
         }).catch(()=>{});
       },
       }),
-    }:undefined, vcamState?.device_name);
+    }:undefined, vcamState?.device_name, appearance?.videoSource==='webcam'||
+      !!((outgoingSeat||producerLocalAuthorized)&&snapshot?.engine_ready&&docApplied&&sceneSettled&&framesReady));
   const toggleVcam = async () => {
     if (vcamFlight.current) return;
     vcamAutoRef.current = false;
