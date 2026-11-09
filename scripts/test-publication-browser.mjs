@@ -16,21 +16,21 @@ const bundle=await build({stdin:{resolveDir:root,loader:'tsx',contents:`
  const doc=parsePackage({schema:'producer.presentation/2',id:'publication-test',version:'1',name:'Studio Set',set:{initialLayout:'landscape',values:{headline:{type:'text',default:'Original',maxLength:120}},feeds:{},slots:[],components:{},layouts:[{id:'landscape',label:'Landscape',width:1280,height:720,root:{id:'root',type:'box',styles:{position:'relative',width:1280,height:720},children:[{id:'title',type:'text',text:{get:'values.headline'}}]}}],controls:[]}});
  const session=new RehearsalSession(doc,undefined,'prepare');session.send({type:'field',key:'headline',value:'Configured publication caption'});
  window.session=session;const root=createRoot(document.getElementById('root'));
- window.mountEditor=()=>root.render(<SetConfiguration session={session} onChange={()=>window.forbidden.push('onChange')}/>);
+ window.mountEditor=()=>root.render(<div className="set-preview-dialog"><div className="set-preview-dialog-content"><SetConfiguration session={session} hideOutputAction onChange={()=>window.forbidden.push('onChange')} actions={<div className="set-editor-top-actions"><button type="button" onClick={()=>window.forbidden.push('rehearse')}>Rehearse</button><div className="set-editor-publish" role="group" aria-label="Room output"><span className="set-editor-apply-status changed">Changes not on output</span><button type="button" className="set-editor-apply" onClick={()=>window.forbidden.push('output')}>Show on output</button></div><button type="button" className="set-editor-close" onClick={()=>window.forbidden.push('close-editor')}>Close editor</button></div>}/></div></div>);
  window.mountDialog=(invalid=false)=>{const next=session.exportPreparedPackage();if(invalid)next.name='producer-media:12345678-1234-4234-8234-123456789012';root.render(<PublishSetDialog doc={next} endpointId="workspace-a" onClose={()=>{window.publicationClosed++;root.render(<p>Closed</p>);}}/>);};
  `},bundle:true,write:false,format:'iife',platform:'browser',define:{'import.meta.env.DEV':'false'},plugins:[{name:'publication-fixtures',setup(b){
  b.onResolve({filter:/\.css$/},()=>({path:'css',namespace:'fixture'}));
  b.onResolve({filter:/^@tauri-apps\/plugin-opener$/},()=>({path:'opener',namespace:'fixture'}));
  b.onResolve({filter:/\/lib\/ipc$/},()=>({path:'ipc',namespace:'fixture'}));
- b.onResolve({filter:/^\.\/(catalog|SetPicker|MediaAssetsDialog|PackageAuthoringDialog)$/},args=>({path:args.path.slice(2),namespace:'fixture'}));
+ b.onResolve({filter:/^\.\/(catalog|MediaAssetsDialog|PackageAuthoringDialog)$/},args=>({path:args.path.slice(2),namespace:'fixture'}));
  b.onLoad({filter:/.*/,namespace:'fixture'},args=>({contents:args.path==='ipc'?fakeIpc:args.path==='opener'?'export async function openUrl(url){window.openedUrls.push(url);}':args.path==='catalog'?'export const BUILTIN_SETS=[];':args.path==='css'?'':`export function ${args.path}(){return null;}`,loader:'js'}));
  }}]});
 const playwright=process.env.PRODUCER_PLAYWRIGHT_MODULE;
 const {chromium}=await import(playwright?(playwright.startsWith('file:')?playwright:pathToFileURL(resolve(playwright)).href):new URL('../tools/producer-mcp/node_modules/playwright-core/index.mjs',import.meta.url).href);
 const browser=await chromium.launch({headless:true,...(process.env.PRODUCER_TEST_CHROME?{executablePath:process.env.PRODUCER_TEST_CHROME}:{channel:process.env.PRODUCER_BROWSER_CHANNEL??'chrome'})});
 const checks=[];
-async function fixture({rows=false,selfhost=false,editor=false,invalid=false}={}){
- const page=await browser.newPage({viewport:{width:1000,height:800}});const errors=[],requests=[];page.on('pageerror',error=>errors.push(error.message));
+async function fixture({rows=false,selfhost=false,editor=false,invalid=false,open=true,viewport={width:1000,height:800}}={}){
+ const page=await browser.newPage({viewport});const errors=[],requests=[];page.on('pageerror',error=>errors.push(error.message));
  await page.route('**/*',route=>{requests.push(route.request().url());return route.request().url()==='https://publication-fixture.invalid/'?route.fulfill({contentType:'text/html',body:'<main id="root"></main>'}):route.abort();});
  await page.goto('https://publication-fixture.invalid/');
  await page.evaluate(({rows,selfhost})=>{
@@ -49,16 +49,38 @@ async function fixture({rows=false,selfhost=false,editor=false,invalid=false}={}
    return {available:true,status:200,body:{publication:next}};
   };
  },{rows,selfhost});
+ await page.addStyleTag({content:':root{--h-ctl:36px;--line-1:#283541;--line-2:#34424d;--r-ctl:8px;--surface-1:#101923;--surface-2:#172633;--fg-1:#eef4f7;--fg-2:#aebdca}*{box-sizing:border-box}body{margin:0;background:#0a131c;color:#eef4f7;font:13px system-ui}button{font:inherit}'});
+ await page.addStyleTag({content:await readFile(new URL('../src/features/presentation/presentation.css',import.meta.url),'utf8')});
  await page.addStyleTag({content:await readFile(new URL('../src/features/presentation/publication.css',import.meta.url),'utf8')});
  await page.addScriptTag({content:bundle.outputFiles[0].text});
  await page.evaluate(({editor,invalid})=>editor?window.mountEditor():window.mountDialog(invalid),{editor,invalid});
- if(editor){await page.getByRole('button',{name:'Files ▾'}).click();await page.getByRole('button',{name:'Publish to producer.dev',exact:true}).click();}
- await page.getByRole('dialog',{name:'Publish Set to producer.dev'}).waitFor();
- await page.getByRole('status').filter({hasText:'Loading your publications…'}).waitFor({state:'hidden'});
+ if(editor){await page.getByRole('toolbar',{name:'Set configuration'}).waitFor();if(open)await page.getByRole('button',{name:'Publish to producer.dev',exact:true}).click();}
+ if(open){await page.getByRole('dialog',{name:'Publish Set to producer.dev'}).waitFor();await page.getByRole('status').filter({hasText:'Loading your publications…'}).waitFor({state:'hidden'});}
  return {page,async close(){assert.deepEqual(errors,[]);assert.deepEqual(await page.evaluate(()=>window.forbidden),[]);assert(requests.every(url=>url==='https://publication-fixture.invalid/'));await page.close();}};
 }
 async function run(name,fn){await fn();checks.push(name);}
 try{
+ await run('visible Publish toolbar control supports keyboard entry and restores focus without room-output actions',async()=>{
+  const h=await fixture({editor:true,open:false}),publish=h.page.getByRole('button',{name:'Publish to producer.dev',exact:true});
+  assert.equal(await publish.innerText(),'Publish');assert.equal(await publish.getAttribute('title'),'Publish to producer.dev');assert.equal(await publish.getAttribute('aria-haspopup'),'dialog');
+  await h.page.getByRole('button',{name:'Files ▾'}).focus();await h.page.keyboard.press('Tab');assert(await publish.evaluate(element=>document.activeElement===element));await h.page.keyboard.press('Enter');
+  await h.page.getByRole('dialog',{name:'Publish Set to producer.dev'}).waitFor();await h.page.getByRole('status').filter({hasText:'Loading your publications…'}).waitFor({state:'hidden'});
+  assert((await h.page.evaluate(()=>window.calls)).every(call=>call.method==='GET'));await h.page.keyboard.press('Escape');await h.page.getByRole('dialog',{name:'Publish Set to producer.dev'}).waitFor({state:'hidden'});assert(await publish.evaluate(element=>document.activeElement===element));await h.close();
+ });
+ await run('Files shortcut uses the same publication dialog and restores the visible Files trigger',async()=>{
+  const h=await fixture({editor:true,open:false}),files=h.page.getByRole('button',{name:'Files ▾'});await files.click();await h.page.locator('.set-files-popover').getByRole('button',{name:'Publish to producer.dev',exact:true}).click();
+  await h.page.getByRole('dialog',{name:'Publish Set to producer.dev'}).waitFor();await h.page.getByRole('status').filter({hasText:'Loading your publications…'}).waitFor({state:'hidden'});await h.page.getByRole('button',{name:'Close',exact:true}).click();
+  await h.page.getByRole('dialog',{name:'Publish Set to producer.dev'}).waitFor({state:'hidden'});assert(await files.evaluate(element=>document.activeElement===element));await h.close();
+ });
+ await run('real toolbar CSS keeps Publish, output and Close editor visible without overlap at desktop and compact widths',async()=>{
+  for(const width of [1280,960,640,390]){
+   const h=await fixture({editor:true,open:false,viewport:{width,height:600}});
+   const controls=await Promise.all(['Publish to producer.dev','Show on output','Close editor'].map(async name=>{const button=h.page.getByRole('button',{name,exact:true});assert(await button.isVisible());assert.equal(await button.isDisabled(),false);return button.boundingBox();}));
+   for(const box of controls){assert(box);assert(box.x>=0&&box.y>=0&&box.x+box.width<=width&&box.y+box.height<=600,`control within ${width}px viewport`);}
+   for(let a=0;a<controls.length;a++)for(let b=a+1;b<controls.length;b++){const x=controls[a],y=controls[b];assert(x.x+x.width<=y.x||y.x+y.width<=x.x||x.y+x.height<=y.y||y.y+y.height<=x.y,`controls do not overlap at ${width}px`);}
+   assert.equal(await h.page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);assert.equal(await h.page.evaluate(()=>window.calls.length),0);await h.close();
+  }
+ });
  await run('actual editor entry snapshots configured values; private save never applies output or lists publicly',async()=>{
   const h=await fixture({editor:true});await h.page.getByRole('button',{name:'Save private Set',exact:true}).click();await h.page.getByRole('status').filter({hasText:'Private Set saved'}).waitFor();
   const write=await h.page.evaluate(()=>window.calls.find(call=>call.method==='POST'));assert.equal(write.endpoint,'workspace-a');assert.equal(write.path,'/v1/app/producer/v1/sets/publications');assert.equal(write.body.visibility,'private');assert(write.body.idempotency_key);

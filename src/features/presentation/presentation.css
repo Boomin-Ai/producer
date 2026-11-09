@@ -650,6 +650,8 @@
 .set-configuration > .set-menu-section select { flex:1; width:0; min-width:0; height:var(--h-ctl); padding:5px 8px; color:var(--fg-1); background:var(--surface-2); border:1px solid var(--line-1); border-radius:var(--r-ctl); font:inherit; }
 .set-configuration-file-actions { display:flex; align-items:center; gap:6px; }
 .set-configuration > button,.set-configuration-file-actions > button { min-height:var(--h-ctl); flex:0 0 auto; padding:6px 10px; }
+.set-configuration > .set-publish-library { white-space:nowrap; color:var(--fg-1); background:transparent; border:1px solid var(--line-2); border-radius:var(--r-ctl); }
+.set-configuration > .set-publish-library:hover { background:var(--surface-2); }
 .set-configuration-popover { position:fixed; inset:auto; margin:0; width:min(320px,calc(100vw - 16px)); padding:14px; border:1px solid var(--line-2); border-radius:var(--r-card); color:var(--fg-1); background:#171f2b; overflow:auto; font:12px system-ui,sans-serif; box-shadow:0 12px 35px #0007; }
 .set-configuration-popover:popover-open { display:flex; flex-direction:column; gap:12px; }
 .set-configuration-popover .set-menu-advanced { margin:0; border-top:1px solid var(--line-1); }
@@ -728,7 +730,7 @@
  .set-configuration .set-picker-label { display:none; }
  .set-configuration > .set-menu-section { min-width:80px; }
 }
-@media(max-width:780px) {
+@media(max-width:1000px) {
  .set-preview-dialog .set-configuration:has(> .set-editor-top-actions) { flex-wrap:wrap; }
  .set-preview-dialog .set-configuration:has(> .set-editor-top-actions) > .set-menu-section { flex-basis:120px; }
  .set-editor-top-actions { flex:1 1 100%; margin-left:0; padding-top:8px; border-top:1px solid var(--line-1); }
