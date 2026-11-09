@@ -14,6 +14,8 @@ pub(crate) mod portrait_camera_probe;
 pub mod transcription;
 #[cfg(feature = "guest-rtc-pilot")]
 pub use producer_guest_session as guest_session;
+#[cfg(all(have_engine, feature = "guest-rtc-pilot"))]
+pub mod appearance_media;
 #[cfg(have_engine)]
 pub mod dj;
 #[cfg(have_engine)]
@@ -144,6 +146,25 @@ impl Live {
             let _ = portrait;
             Err("engine unavailable".into())
         }
+    }
+    #[cfg(all(have_engine, feature = "guest-rtc-pilot"))]
+    pub fn appearance_media(
+        &self,
+        local_room_id: String,
+        portrait: bool,
+        quality: u32,
+        appearance_id: String,
+    ) -> Result<
+        (
+            rtc_program::CaptureTarget,
+            std::sync::Arc<appearance_media::AppearanceOutputs>,
+        ),
+        String,
+    > {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .appearance_media(local_room_id, portrait, quality, appearance_id)
     }
     pub fn replace_extra(
         &self,
@@ -354,6 +375,13 @@ impl Live {
         }
     }
     pub fn restore_room(&self, restore: serde_json::Value) -> Result<serde_json::Value, String> {
+        self.restore_room_bound(restore, None)
+    }
+    pub fn restore_room_bound(
+        &self,
+        restore: serde_json::Value,
+        local_room_id: Option<String>,
+    ) -> Result<serde_json::Value, String> {
         #[cfg(have_engine)]
         {
             let restore =
@@ -362,12 +390,12 @@ impl Live {
                 .handle
                 .as_ref()
                 .ok_or("live engine not running")?
-                .restore_room(restore)?;
+                .restore_room_bound(restore, local_room_id)?;
             serde_json::to_value(result).map_err(|e| e.to_string())
         }
         #[cfg(not(have_engine))]
         {
-            let _ = restore;
+            let _ = (restore, local_room_id);
             Err("live engine not bundled in this build".into())
         }
     }

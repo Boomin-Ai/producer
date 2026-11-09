@@ -99,6 +99,13 @@ newly mounted view has adopted the running room safely. Webcam-only entry does
 not change the active OBS graph. Proven adoption of a retained live program is
 an additional qualification item.
 
+An opt-in native appearance candidate now exists behind
+`PRODUCER_NATIVE_APPEARANCE=1` in the native process. It uses a server-authorized
+guest publisher with native 720p30 capture and can attach to the retained running
+room controller without restoration. It is not enabled by default or qualified
+as a production replacement. The local return preview and end-to-end latency
+still require qualification; see [the native appearance acceptance matrix](NATIVE-APPEARANCE-QUALIFICATION.md).
+
 ## Independent servers and federation
 
 Guest-link participation works without joining Boomin. The same message client

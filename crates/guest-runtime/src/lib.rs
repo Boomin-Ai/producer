@@ -79,6 +79,8 @@ pub struct Connection {
     program_allowed: bool,
     program_started: bool,
     program_ids: Option<(livekit::id::TrackSid, livekit::id::TrackSid)>,
+    appearance_grants: Option<Vec<producer_guest_session::PublishSource>>,
+    appearance_ids: Vec<livekit::id::TrackSid>,
 }
 #[derive(Clone, Copy)]
 pub enum ClosePhase {
@@ -167,7 +169,131 @@ impl Connection {
             program_allowed: session.can_publish_program(),
             program_started: false,
             program_ids: None,
+            appearance_grants: session.appearance_sources().map(|s| s.to_vec()),
+            appearance_ids: Vec::new(),
         })
+    }
+    /// Only a server-issued Guest stage session can publish an appearance.
+    pub async fn publish_appearance(
+        &mut self,
+        authority: &producer_guest_session::appearance::Authority,
+        profile: program::VideoProfile,
+        muted: bool,
+        camera_off: bool,
+    ) -> Result<Option<program::Sources>, &'static str> {
+        use producer_guest_session::PublishSource;
+        let room = self.room.as_ref().ok_or("Native appearance unavailable")?;
+        let grants = self
+            .appearance_grants
+            .as_ref()
+            .ok_or("Native appearance requires guest authority")?;
+        if !self.healthy()
+            || !authority.current(std::time::Instant::now())
+            || !self.appearance_ids.is_empty()
+            || grants != &authority.expected.publish_sources
+            || room.local_participant().identity().as_str()
+                != format!(
+                    "guest-{}-e{}-g{}",
+                    authority.expected.participant_id,
+                    authority.expected.host_lease_epoch,
+                    authority.expected.authorization_generation
+                )
+        {
+            return Err("Native appearance publication unauthorized");
+        }
+        self.appearance_permissions(authority).await?;
+        let audio = grants.contains(&PublishSource::Microphone);
+        let video = grants.contains(&PublishSource::Camera);
+        if !audio && !video {
+            return Ok(None);
+        }
+        let (sources, ids) =
+            program::Sources::publish_guest(room, profile, audio, video, !muted, !camera_off)
+                .await?;
+        self.appearance_ids = ids;
+        self.appearance_permissions(authority).await?;
+        Ok(Some(sources))
+    }
+    pub async fn appearance_permissions(
+        &self,
+        authority: &producer_guest_session::appearance::Authority,
+    ) -> Result<(), &'static str> {
+        use livekit::participant::ParticipantTrackPermission;
+        if self.appearance_grants.is_none() || !authority.current(std::time::Instant::now()) {
+            return Err("Native appearance authority expired");
+        }
+        let room = self.room.as_ref().ok_or("Native appearance unavailable")?;
+        if self.appearance_grants.as_deref() != Some(authority.expected.publish_sources.as_slice())
+            || room.local_participant().identity().as_str()
+                != format!(
+                    "guest-{}-e{}-g{}",
+                    authority.expected.participant_id,
+                    authority.expected.host_lease_epoch,
+                    authority.expected.authorization_generation
+                )
+        {
+            return Err("Native appearance authority binding changed");
+        }
+        let (host, microphone, peers) = self.appearance_permission_key(authority)?;
+        let mut permissions = vec![ParticipantTrackPermission {
+            participant_identity: host.into(),
+            allow_all: true,
+            allowed_track_sids: Vec::new(),
+        }];
+        if let Some(microphone) = microphone {
+            permissions.extend(
+                peers
+                    .into_iter()
+                    .map(|identity| ParticipantTrackPermission {
+                        participant_identity: identity.into(),
+                        allow_all: false,
+                        allowed_track_sids: vec![microphone.clone()],
+                    }),
+            );
+        }
+        room.local_participant()
+            .set_track_subscription_permissions(false, permissions)
+            .await
+            .map_err(|_| "Native appearance subscription permissions failed")
+    }
+    /// Signature of the actual SDK permission body, including the owned mic
+    /// track. Peer expiry can narrow this body at the same control revision.
+    pub fn appearance_permission_key(
+        &self,
+        authority: &producer_guest_session::appearance::Authority,
+    ) -> Result<(String, Option<livekit::id::TrackSid>, Vec<String>), &'static str> {
+        let room = self.room.as_ref().ok_or("Native appearance unavailable")?;
+        let microphone = room
+            .local_participant()
+            .track_publications()
+            .into_values()
+            .find(|p| p.source() == livekit::track::TrackSource::Microphone)
+            .map(|p| p.sid());
+        let (host, peers) = authority.publication_audience();
+        Ok((host, microphone, peers))
+    }
+    /// User controls apply only to publications owned by this guest connection.
+    pub fn appearance_controls(&self, muted: bool, camera_off: bool) {
+        let Some(room) = self.room.as_ref() else {
+            return;
+        };
+        for publication in room.local_participant().track_publications().into_values() {
+            if !self.appearance_ids.contains(&publication.sid()) {
+                continue;
+            }
+            let disabled = match publication.source() {
+                livekit::track::TrackSource::Microphone => muted,
+                livekit::track::TrackSource::Camera => camera_off,
+                _ => true,
+            };
+            if publication.is_muted() != disabled {
+                if disabled {
+                    publication.mute();
+                } else {
+                    publication.unmute();
+                }
+            }
+        }
     }
     pub async fn publish_program(&mut self) -> Result<program::Sources, &'static str> {
         if !self.healthy() || !self.program_allowed || self.program_started {

@@ -8,15 +8,16 @@ const accessModule={};vm.runInNewContext(compile('../src/lib/producerLocalAccess
 const {producerLocalAccess}=accessModule;
 const hostAccess={available:true,access:{role:'host',via:'brand',can:{manage:true},grants:[{id:'local-grant'}]}};
 const readSource=file=>readFileSync(new URL(file,import.meta.url),'utf8').replace(/\r\n/g,'\n');
-const home=readSource('../src/views/Home.tsx'),start=home.indexOf('  const startSeat = useCallback('),end=home.indexOf('  if (view.kind === "opening")',start);
+const home=readSource('../src/views/Home.tsx'),start=home.indexOf('  const startSeat = useCallback('),end=home.indexOf('  const hostedRoom=',start);
 assert(start>0&&end>start);const code=ts.transpileModule(home.slice(start,end)+'\nexports.start=startSeat;',{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
 const deferred=()=>{let resolve;return {promise:new Promise(r=>resolve=r),resolve:v=>resolve(v)};};
-function harness({rooms,access,streaming=false,recording=false}={}){
- const calls=[],exports={},room={id:'selected',endpoint_id:'local',config:'{}'};let active='local';
+function harness({rooms,access,streaming=false,recording=false,native=false,retained=false,visible=false,ready=true,portrait=false,existingSeat}={}){
+ const calls=[],appearances=[],exports={},room={id:'selected',endpoint_id:'local',config:'{}'};let active='local';
  const endpoint={id:'local',kind:'connected',base_url:'https://local.example/v1/app/producer'},context={exports,DOMException,Error,Promise,producerLocalAccess,useCallback:fn=>fn,endpoints:[endpoint],activeEndpointId:()=>active,
+  nativeAppearances:native,view:visible?{kind:'room',room}:{kind:'home'},retainedRoom:retained?{room}:null,outgoingSeat:existingSeat,roomRuntimeRef:{current:retained||visible?{roomId:room.id,outputsActive:streaming||recording,programReady:ready,outputPortrait:portrait}:null},
   ipc:{liveListRooms:async()=>rooms??[room],liveEngineStatus:async()=>({session_state:streaming?'streaming':'idle'})},guests:{access:async()=>access??hostAccess},recording:{list:async()=>recording?[{status:'recording'}]:[]},roomMetadata:()=>({server_room_id:'server-room'}),isBoomin:()=>true,
-  roomExit:{current:{cancel:()=>calls.push('cancelExit')}},markRoomClick:()=>{},setNetworkSheet:()=>{},setPendingSeat:()=>{},setView:value=>calls.push(value)};
- vm.runInNewContext(code,context);return {start:exports.start,calls,room,switchWorkspace:()=>active='other'};
+  roomExit:{current:{cancel:()=>calls.push('cancelExit')}},markRoomClick:()=>{},setNetworkSheet:()=>{},setPendingSeat:()=>{},setOutgoingSeat:value=>appearances.push(value),setView:value=>calls.push(value)};
+ vm.runInNewContext(code,context);return {start:exports.start,calls,appearances,room,switchWorkspace:()=>active='other'};
 }
 const seat={endpointId:'local',videoSource:'program',localRoomId:'selected'};
 let h=harness();await h.start(seat,new AbortController().signal);assert.equal(h.calls[1].room.id,'selected');assert.equal(h.calls[1].access.endpointId,'local');assert.equal(h.calls[1].access.serverRoomId,'server-room');assert.equal(h.calls[1].access.endpointBaseUrl,'https://local.example/v1/app/producer');assert.equal(await h.calls[1].access.result,hostAccess);
@@ -26,6 +27,17 @@ for(const options of [{rooms:[]},{access:{available:false}},{access:{available:t
 h=harness();h.switchWorkspace();await assert.rejects(h.start(seat,new AbortController().signal));assert.equal(h.calls.length,0);
 h=harness({streaming:true,recording:true});await h.start({...seat,videoSource:'webcam'},new AbortController().signal);assert.equal(h.calls[1].room,undefined);
 console.log('PASS local program admission: exact room, cancellation during reads/authorization, workspace fencing, missing room, unknown/viewer access, stream/record safety and lightweight webcam.');
+
+for(const output of [{streaming:true},{recording:true},{streaming:true,recording:true}]){
+ h=harness({...output,native:true,retained:true,portrait:true});await h.start(seat,new AbortController().signal);
+ assert.equal(h.calls[1].kind,'room');assert.equal(h.calls[1].room,h.room,'attach preserves the existing controller document identity');
+ assert.equal(h.appearances[0].nativeProgram,true);assert.equal(h.appearances[0].localRoomId,'selected');assert.equal(h.appearances[0].portrait,true);assert.equal(h.appearances[0].quality,720);
+}
+for(const options of [{native:true,streaming:true},{native:true,recording:true},{native:true,retained:true,streaming:true,ready:false},{native:true,retained:true,recording:true,rooms:[{id:'different',endpoint_id:'local'}]},{native:true,retained:true,streaming:true,existingSeat:seat}]){
+ h=harness(options);await assert.rejects(h.start(options.rooms?{...seat,localRoomId:'different'}:seat,new AbortController().signal));assert.equal(h.calls.length,0);assert.equal(h.appearances.length,0);
+}
+h=harness({native:true});await h.start(seat,new AbortController().signal);assert.equal(h.calls[1].kind,'room');assert.equal(h.appearances[0].nativeProgram,true);assert.equal(h.appearances[0].portrait,false);
+console.log('PASS native appearance attachment: running stream/recording uses the retained controller and selected portrait; unknown, wrong or unready controllers fail before mutation.');
 
 // Execute the production seat bootstrap, not a facsimile: a cached access
 // receipt must settle the actual restore flags without starting the host poll.
@@ -53,4 +65,11 @@ const switched=deferred();boot=bootstrap({read:()=>switched.promise});await new 
 const tree=ts.createSourceFile('Live.tsx',live,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX),effects=[];
 function visit(node){if(ts.isCallExpression(node)&&node.expression.getText(tree)==='useEffect'&&node.arguments[0]&&ts.isArrowFunction(node.arguments[0])){const body=node.arguments[0].getText(tree);if(body.includes('new RoomControlLink')||body.includes('rosterPollRef.current!.generation')||body.includes('const config = boominStageConfig'))effects.push(body);}ts.forEachChild(node,visit);}visit(tree);assert.equal(effects.length,3);
 for(const effect of effects)vm.runInNewContext(ts.transpileModule('('+effect+')();',{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{seat:{},room:{id:'selected'},cfg:{server_room_id:'local-room'}});
-console.log('PASS local access bootstrap: exact raw receipt handoff, no duplicate fetch, strict host authorization, wrong-room receipt rejection, unmount/workspace cancellation and no host roster/control publisher during appearances.');
+// The candidate attaches an outgoing seat to a real local host. Each actual
+// host effect must pass its mode guard, independently of that remote seat.
+for(const effect of effects){
+ const reached=new Error('local host ownership reached'),owner=new Proxy({},{get(){throw reached;},set(){throw reached;}}),context={seat:undefined,outgoingSeat:{nativeProgram:true},room:{id:'selected'},cfg:{server_room_id:'local-room'},roomRole:'host',boominRoom:true,
+  sceneOrderRef:owner,controlRef:owner,rosterPollRef:owner};
+ assert.throws(()=>vm.runInNewContext(ts.transpileModule('('+effect+')();',{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,context),error=>error===reached);
+}
+console.log('PASS local access bootstrap: exact raw receipt handoff, strict local authorization, cancellation, legacy guest isolation and native outgoing appearances preserving local roster/control/scene publishers.');

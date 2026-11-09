@@ -12,6 +12,7 @@ mod outbox;
 mod performance_share;
 mod performance_trace;
 mod recordings;
+mod rtc_appearance;
 #[cfg(feature = "guest-rtc-pilot")]
 mod rtc_control;
 mod rtc_ipc;
@@ -33,6 +34,8 @@ use std::sync::Mutex;
 use tauri::Manager;
 
 pub struct AppState {
+    #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
+    pub rtc_appearance: std::sync::Arc<tokio::sync::Mutex<Option<rtc_appearance::AppearanceOwner>>>,
     #[cfg(feature = "guest-rtc-pilot")]
     pub rtc_host: std::sync::Arc<tokio::sync::Mutex<Option<rtc_owner::HostOwner>>>,
     #[cfg(feature = "guest-rtc-pilot")]
@@ -262,6 +265,8 @@ pub fn run() {
             };
 
             app.manage(AppState {
+                #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
+                rtc_appearance: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
                 #[cfg(feature = "guest-rtc-pilot")]
                 rtc_host: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
                 #[cfg(feature = "guest-rtc-pilot")]
@@ -307,6 +312,12 @@ pub fn run() {
             rtc_ipc::live_rtc_start,
             rtc_ipc::live_rtc_enabled,
             rtc_ipc::live_rtc_stop,
+            rtc_appearance::live_appearance_enabled,
+            rtc_appearance::live_appearance_start,
+            rtc_appearance::live_appearance_status,
+            rtc_appearance::live_appearance_controls,
+            rtc_appearance::live_appearance_preview,
+            rtc_appearance::live_appearance_stop,
             set_media::set_media_import,
             set_media::set_media_resolve,
             set_library::set_library_list,
@@ -529,6 +540,7 @@ pub fn run() {
                             // thread before the existing engine shutdown path.
                             tauri::async_runtime::spawn(async move {
                                 let state = app.state::<AppState>();
+                                let _ = rtc_appearance::stop_all(&state).await;
                                 let _ = rtc_ipc::stop_host(&state).await;
                                 CLOSING.store(2, std::sync::atomic::Ordering::Release);
                                 app.exit(0);

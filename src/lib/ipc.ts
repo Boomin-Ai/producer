@@ -216,13 +216,13 @@ export const ipc = {
     overlay_window: number | null;
     overlay_url: string | null;
     changes: { id: string; patch: LiveTransformPatch; muted?: boolean }[];
-  }) => invoke<{
+  }, roomId?: string) => invoke<{
     sources: LiveSources;
     warnings: string[];
     room_mic_starting_ids?: string[];
     room_mic_pending?: boolean;
     room_mic_failed?: boolean;
-  }>("live_restore_room", { restore }),
+  }>("live_restore_room", { restore, roomId: roomId ?? null }),
   livePortraitRoom: ()=>invoke<LiveSources>('live_portrait_room'),
   liveSelectOutput: (portrait:boolean)=>invoke<void>('live_select_output',{portrait}),
   liveVirtualCamMirror: (on?:boolean)=>invoke<boolean>('live_virtual_cam_mirror',{on:on??null}),

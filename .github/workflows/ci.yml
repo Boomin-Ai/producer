@@ -76,6 +76,7 @@ jobs:
       - run: node scripts/test-guest-return.mjs
       - run: node scripts/test-guest-reconnect.mjs
       - run: bun run test:producer-network
+      - run: node scripts/test-native-appearance.mjs
       - run: bun run --cwd server/guest typecheck
       - run: node --experimental-strip-types --test tests/slotMath.test.ts
       - run: node --experimental-strip-types --test tests/stageTruth.test.ts
@@ -126,6 +127,7 @@ jobs:
         run: |
           node scripts/test-return-audio-browser.mjs
           node scripts/test-program-expansion-browser.mjs
+          node scripts/test-appearance-room-lifecycle.mjs
       - name: Verify beta setup, consent and responsive entry screens
         env:
           PRODUCER_BROWSER_CHANNEL: chromium
@@ -178,6 +180,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libclang-dev
       - uses: dtolnay/rust-toolchain@stable
+      - name: Verify native appearance ownership, routing and quality policies
+        if: runner.os == 'Linux'
+        run: bash scripts/test-native-appearance-policy.sh
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri

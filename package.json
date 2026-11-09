@@ -55,6 +55,8 @@
     "test:producer-network": "node scripts/test-producer-network-links.mjs && node scripts/test-producer-local-room.mjs && node scripts/test-network-messages.mjs && node scripts/test-producer-seat.mjs && node scripts/test-producer-guest-rtc.mjs && node scripts/test-producer-media-diagnostics.mjs && node scripts/test-network-diagnostics-proof.mjs && node scripts/test-network-dev-report.mjs && node scripts/test-network-performance-sample.mjs && node scripts/test-network-tone-proof.mjs",
     "test:guest-reconnect-browser": "node scripts/test-guest-reconnect-browser.mjs",
     "test:producer-seat": "node scripts/test-producer-seat.mjs",
+    "test:native-appearances": "node scripts/test-native-appearance.mjs && node scripts/test-producer-seat.mjs && node scripts/test-producer-local-room.mjs",
+    "test:appearance-room-browser": "node scripts/test-appearance-room-lifecycle.mjs",
     "test:producer-seat-browser": "node scripts/test-producer-seat-browser.mjs",
     "test:sets-v2": "node scripts/test-sets-v2.mjs",
     "test:sets-v2-native": "bash scripts/sets-v2/run-native-probe.sh",

@@ -5,6 +5,8 @@
 use serde::Deserialize;
 use std::fmt;
 
+pub mod appearance;
+
 const MAX_BODY_BYTES: usize = 32_768;
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 const MAX_TTL_MS: u64 = 120_000;
@@ -79,7 +81,7 @@ struct WireSession {
 }
 
 /// From the current authenticated control snapshot, never this session response.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExpectedAuthority {
     pub brand_id: String,
@@ -575,9 +577,16 @@ impl Session {
         self.0.expires_at_ms
     }
     pub fn can_publish_program(&self) -> bool {
-        self.0.role == Role::Producer && self.0.scope == Scope::Stage
+        self.0.role == Role::Producer
+            && self.0.scope == Scope::Stage
             && self.0.publish_sources.contains(&PublishSource::Camera)
             && self.0.publish_sources.contains(&PublishSource::Microphone)
+    }
+
+    /// Guest grants remain distinct from the Producer's program authority.
+    pub fn appearance_sources(&self) -> Option<&[PublishSource]> {
+        (self.0.role == Role::Guest && self.0.scope == Scope::Stage)
+            .then_some(self.0.publish_sources.as_slice())
     }
 
     /// Preserve Producer's existing guest source ID across token/track changes.

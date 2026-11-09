@@ -1840,10 +1840,12 @@ function PermBanner({
   sources,
   micStarting,
   onGranted,
+  visible = true,
 }: {
   sources: LiveSources;
   micStarting?: boolean;
   onGranted?: (kind: "screen" | "camera" | "mic") => void;
+  visible?: boolean;
 }) {
   const [perms, setPerms] = useState<LivePermissions | null>(null);
   const prevPerms = useRef<LivePermissions | null>(null);
@@ -1851,6 +1853,7 @@ function PermBanner({
   onGrantedRef.current = onGranted;
 
   useEffect(() => {
+    if (!visible) return;
     let alive = true;
     const load = async () => {
       try {
@@ -1879,7 +1882,7 @@ function PermBanner({
       clearInterval(t);
       window.removeEventListener("focus", load);
     };
-  }, []);
+  }, [visible]);
 
   if (!perms) return null;
   const hasKind = (k: CaptureKind) => (sources.items ?? []).some((i) => i.kind === k);
@@ -2658,6 +2661,13 @@ export type RoomEntryAccess = {
   receivedAt?: number;
 };
 
+export type RoomRuntimeState = {
+  roomId: string;
+  outputsActive: boolean;
+  outputPortrait: boolean;
+  programReady: boolean;
+};
+
 export function LiveView({
   room,
   entryAccess,
@@ -2666,6 +2676,10 @@ export function LiveView({
   onOpenAccess,
   onOpenRecording,
   seat,
+  visible = true,
+  outgoingSeat,
+  onLeaveAppearance,
+  onRuntimeState,
 }: {
   room?: RoomInfo;
   entryAccess?: RoomEntryAccess;
@@ -2681,7 +2695,15 @@ export function LiveView({
    * stage is the guest's own scene (their camera); the green-room strip
    * above it is the seat. Leaving the view leaves the seat. */
   seat?: GuestSeatSpec;
+  /** Collapsing the candidate conceals previews while preserving its room controller. */
+  visible?: boolean;
+  /** An outgoing appearance does not change this local room's host authority. */
+  outgoingSeat?: GuestSeatSpec;
+  onLeaveAppearance?: () => void;
+  onRuntimeState?: (state: RoomRuntimeState) => void;
 }) {
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
   const traceVisit = useRef(currentRoomVisit());
   // Windows float mode: popovers/toasts over the stage are punched out of
   // the native preview so they stay visible. No-op elsewhere.
@@ -2690,6 +2712,7 @@ export function LiveView({
   }, []);
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
+  const [outputsStarting, setOutputsStarting] = useState(0);
   const deferredMicIds = useRef<string[]>([]);
   const entryAccessRef = useRef(entryAccess);
   const [producerLocalAuthorized,setProducerLocalAuthorized]=useState(()=>!seat);
@@ -2784,6 +2807,7 @@ export function LiveView({
    * that cannot paint for seconds is a MAIN-THREAD stall, not engine work. */
   const stallMax = useRef(0);
   useEffect(() => {
+    if (!visible) return;
     let last = performance.now();
     const t = window.setInterval(() => {
       const now = performance.now();
@@ -2792,7 +2816,7 @@ export function LiveView({
       last = now;
     }, 100);
     return () => window.clearInterval(t);
-  }, []);
+  }, [visible]);
   const [statuses, setStatuses] = useState<Map<string, LiveDestStatus>>(new Map());
 
   // Header health. Derived every render, never stored: a health number that
@@ -3044,11 +3068,11 @@ export function LiveView({
   // while the guests panel is somewhere visible. 0 on hide and on unmount.
   const guestsDock = dockOf(layout, "guests");
   useEffect(() => {
-    ipc.liveSetThumbRate(guestsDock === "hidden" ? 0 : 15).catch(() => {});
+    ipc.liveSetThumbRate(!visible || guestsDock === "hidden" ? 0 : 15).catch(() => {});
     return () => {
       ipc.liveSetThumbRate(0).catch(() => {});
     };
-  }, [guestsDock]);
+  }, [guestsDock, visible]);
   const layoutSaveTimer = useRef<number | undefined>(undefined);
   const saveRoomConfig = (next: RoomConfig) => {
     if (room) void ipc.liveUpdateRoom(room.id, { config: serializeConfig(next) }).catch(() => {});
@@ -3398,6 +3422,7 @@ export function LiveView({
   const vcamAutoNextTry = useRef(0);
 
   useEffect(() => {
+    if (!visible) return;
     let alive = true;
     const poll = () =>
       vcamIpc
@@ -3410,7 +3435,7 @@ export function LiveView({
       alive = false;
       clearInterval(t);
     };
-  }, []);
+  }, [visible]);
 
   const setCameraOutput = async (target: boolean): Promise<boolean> => {
     if (vcamFlight.current) throw new Error("Wait for the camera operation to finish.");
@@ -3428,9 +3453,11 @@ export function LiveView({
     }
   };
   // Never publish the engine's previous room while this room is restoring.
-  const guestSeat = useGuestSeat(seat && (seat.videoSource==='webcam' ||
-    producerLocalAuthorized && snapshot?.engine_ready && docApplied && sceneSettled && framesReady) ? {
-      ...seat,
+  const appearance = outgoingSeat ?? seat;
+  const guestSeat = useGuestSeat(appearance && (appearance.videoSource==='webcam' ||
+    (outgoingSeat || producerLocalAuthorized) && snapshot?.engine_ready && docApplied && sceneSettled && framesReady) ? {
+      ...appearance,
+      ...(appearance.nativeProgram ? {} : {
       prepareProgram:async()=>{
         const owner=roomEngineRef.current;if(!owner)throw Error('The local room is not ready.');
         producerProgramWantedRef.current=true;
@@ -3452,6 +3479,7 @@ export function LiveView({
           await setCameraOutput(false);vcamAutoRef.current=false;
         }).catch(()=>{});
       },
+      }),
     }:undefined, vcamState?.device_name);
   const toggleVcam = async () => {
     if (vcamFlight.current) return;
@@ -3513,10 +3541,10 @@ export function LiveView({
   const [savedRecording, setSavedRecording] = useState<LocalRecording | null>(null);
 
   useEffect(() => {
-    if (!recPath) return;
+    if (!recPath || !visible) return;
     const t = setInterval(() => setRecTick((n) => n + 1), 1000);
     return () => clearInterval(t);
-  }, [recPath]);
+  }, [recPath, visible]);
 
   const toggleRecord = async () => {
     if (recPath) {
@@ -3541,6 +3569,7 @@ export function LiveView({
     const pad = (n: number) => String(n).padStart(2, "0");
     const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}.${pad(d.getMinutes())}.${pad(d.getSeconds())}`;
     try {
+      setOutputsStarting(count=>count+1);
       const path = await recIpc.start(stamp, room?.id,outputView==='both');
       setRecPath(path);
       if(outputView==='both')notify("Recording landscape and portrait to separate files",{key:"banner",tone:"info"});
@@ -3548,6 +3577,8 @@ export function LiveView({
       setRecTick(0);
     } catch (e) {
       notifyError(e, { key: "banner" });
+    } finally {
+      setOutputsStarting(count=>Math.max(0,count-1));
     }
   };
 
@@ -4892,7 +4923,7 @@ export function LiveView({
         overlay_window: saved.overlay_window ?? null,
         overlay_url: saved.overlay_url ?? null,
         changes: scenePlan(mount?.look ?? {}, catalog, opened.slot_bindings ?? {}, true),
-      });
+      }, room.id);
       deferredMicIds.current = restored.room_mic_starting_ids ?? [];
       setSnapshot(previous => previous && {
         ...previous,
@@ -5035,6 +5066,7 @@ export function LiveView({
         window.dispatchEvent(new Event("producer.video-changed"));
         setSnapshot((s) => (s ? { ...s, video_height: ev.height, video_fps: ev.fps } : s));
       } else if (ev.type === "levels") {
+        if (!visibleRef.current) return;
         // peak → dB → 0..1 over a 50dB window, with a falling ballistic.
         if (ev.extra_peaks?.length) {
           setExtraLevels((prev) => {
@@ -5063,7 +5095,7 @@ export function LiveView({
             }
             continue;
           }
-          next[t.id] = `data:image/jpeg;base64,${t.jpeg}`;
+          if (visibleRef.current) next[t.id] = `data:image/jpeg;base64,${t.jpeg}`;
         }
         if (Object.keys(next).length) setGuestThumbs((prev) => ({ ...prev, ...next }));
       } else if (ev.type === "engine_error") {
@@ -5089,6 +5121,12 @@ export function LiveView({
   snapRef.current = snapshot;
   const state = snapshot?.session_state ?? "idle";
   const streaming = state === "streaming" || state === "starting" || state === "stopping";
+  useEffect(() => {
+    if (!room?.id) return;
+    onRuntimeState?.({roomId:room.id,outputsActive:streaming||recPath!==null||outputsStarting>0,
+      outputPortrait:outputView==='portrait',
+      programReady:!!snapshot?.engine_ready&&docApplied&&sceneSettled&&framesReady&&isHost});
+  }, [room?.id,streaming,recPath,outputsStarting,outputView,snapshot?.engine_ready,docApplied,sceneSettled,framesReady,isHost,onRuntimeState]);
 
   // OBS's network-quality model, followed exactly (OBSBasicStatusBar.cpp):
   // congestion is smoothed toward the worse of the last two samples, then
@@ -5170,6 +5208,7 @@ export function LiveView({
 
 
   useEffect(() => {
+    if (!visible) return;
     const t = window.setInterval(() => {
       const now = snapRef.current;
       // A stopped engine has no renderer: no sample, the chart holds still
@@ -5181,7 +5220,7 @@ export function LiveView({
     }, 1000);
     return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [visible]);
   useEffect(() => {
     if (engineOk) mark("engine");
   }, [engineOk]);
@@ -5256,6 +5295,7 @@ export function LiveView({
     if (room && !roomApplied.current) return;
     dismissKey("banner");
     try {
+      setOutputsStarting(count=>count+1);
       await roomEngineRef.current?.run(async () => {
         const ep = await resolveActiveEndpoint().catch(() => null);
         await ipc.liveGoLive(ep && isBoomin(ep) ? ep.id : undefined, cfgRef.current.server_room_id ?? undefined);
@@ -5266,6 +5306,8 @@ export function LiveView({
       });
     } catch (e) {
       notifyError(e, { key: "banner" });
+    } finally {
+      setOutputsStarting(count=>Math.max(0,count-1));
     }
   }
 
@@ -5725,6 +5767,7 @@ export function LiveView({
   // rename fields keep their own keys.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!visibleRef.current) return;
       if (!e.metaKey || e.altKey || e.ctrlKey) return;
       const el = document.activeElement as HTMLElement | null;
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
@@ -7207,6 +7250,16 @@ export function LiveView({
     // there would sit over the strip and eat every click.
     (sceneSettings !== null && dockOf(layout, "scenes") !== "bottom" && dockOf(layout, "scenes") !== "top") || panelMenu !== null || layoutMenu || addMenu !== null || adding || !!editing;
 
+  useEffect(() => {
+    if (visible) return;
+    closePops();
+    setSeatOpen(false);
+    setSrcSettings(null);
+    setFilterFor(null);
+    setRunReport(null);
+    setBugOpen(false);
+  }, [visible]);
+
 
 
   // ── Panels: everything that isn't the stage is a dockable panel ────────
@@ -7234,13 +7287,13 @@ export function LiveView({
   const panelBody = (id: PanelId) => {
     switch (id) {
       case "setControls":
-        return <SetControlsPanel preferenceRoomId={roomId??undefined} endpoint={endpointRef.current??activeEndpointId()??undefined} serverRoomId={cfg.server_room_id??undefined} moduleBindings={cfg.presentation?.moduleBindings} voting={roomAccess.can.interactions?<SetRoomVoting vote={vote} savedVotes={savedVotes} onSelectVote={selectSavedVote} onOpen={openVote} onTransition={(action,hold)=>void transitionVote(action,hold)}/>:undefined} sourceNames={setSourceNames} onFieldEdit={editSetField} session={setRehearsal} output={setOutput} blocked={!docApplied}
+        return visible?<SetControlsPanel preferenceRoomId={roomId??undefined} endpoint={endpointRef.current??activeEndpointId()??undefined} serverRoomId={cfg.server_room_id??undefined} moduleBindings={cfg.presentation?.moduleBindings} voting={roomAccess.can.interactions?<SetRoomVoting vote={vote} savedVotes={savedVotes} onSelectVote={selectSavedVote} onOpen={openVote} onTransition={(action,hold)=>void transitionVote(action,hold)}/>:undefined} sourceNames={setSourceNames} onFieldEdit={editSetField} session={setRehearsal} output={setOutput} blocked={!docApplied}
           blockedReason={!docApplied ? "Waiting for the room to finish loading." : undefined}
-          onChange={changeSet} />;
+          onChange={changeSet} />:null;
       case "sounds":
-        return isHost ? <SoundboardPanel key={roomId??"local"} roomId={roomId??"local"} enabled={docApplied} compact={formDockOf("sounds")==="top"}/> : <div className="rm-rows-empty">The host controls room sounds.</div>;
+        return isHost ? <SoundboardPanel key={roomId??"local"} roomId={roomId??"local"} enabled={docApplied} visible={visible} compact={formDockOf("sounds")==="top"}/> : <div className="rm-rows-empty">The host controls room sounds.</div>;
       case "dj":
-        return isHost ? <DJPanel key={roomId ?? "local"} roomId={roomId ?? "local"} enabled={docApplied} mini={formDockOf("dj") === "top"} /> : <div className="rm-rows-empty">The host controls the room’s DJ mix.</div>;
+        return isHost ? <DJPanel key={roomId ?? "local"} roomId={roomId ?? "local"} enabled={docApplied} visible={visible} mini={formDockOf("dj") === "top"} /> : <div className="rm-rows-empty">The host controls the room’s DJ mix.</div>;
       case "scenes":
         // A mod's Producer on Boomin: the HOST's scenes, read from the room's
         // directory, the active one lit by the server's `scene.cut` frames.
@@ -8660,7 +8713,7 @@ export function LiveView({
   }
 
   return (
-    <div className={`room${layoutEdit ? " layout-edit" : ""}`}>
+    <div hidden={!visible} style={visible?undefined:{display:'none'}} className={`room${layoutEdit ? " layout-edit" : ""}`}>
       {/* The first-room walkthrough. Renders over everything but the mount
         * veil — teaching a room that has not finished opening would point at
         * controls that are not there yet. */}
@@ -9058,7 +9111,7 @@ export function LiveView({
           )}
         </div>
       </header>
-      {seat && <GreenRoomBar seat={guestSeat} spec={seat} onLeave={() => onLeave?.()} />}
+      {visible&&appearance && <GreenRoomBar seat={guestSeat} spec={appearance} onLeave={() => outgoingSeat ? onLeaveAppearance?.() : onLeave?.()} />}
 
       {/* THE MOD VIEW (views/ModBoard.tsx): a non-host seat gets a board of
         * its own — host output, scene pads, people, my feeds, switches —
@@ -9174,7 +9227,7 @@ export function LiveView({
               <span className="rm-veil-note">{veilNote}</span>
             </div>
           )}
-          <RoomOutputView view={engineOk&&isHost?outputView:'landscape'} portrait={portraitMonitor} portraitContent={<PortraitCanvas canvasWidth={vh} selected={portraitSelected} onSelect={id=>{setPortraitSelected(id);setStageSel(null);}} monitor={portraitMonitor} onSources={sources=>setPortraitMonitor(previous=>({...previous,sources}))}/>}>
+          <RoomOutputView view={engineOk&&isHost?outputView:'landscape'} portrait={portraitMonitor} portraitContent={visible?<PortraitCanvas canvasWidth={vh} selected={portraitSelected} onSelect={id=>{setPortraitSelected(id);setStageSel(null);}} monitor={portraitMonitor} onSources={sources=>setPortraitMonitor(previous=>({...previous,sources}))}/>:null}>
             {/* Off-host the stage is a PROGRAM MONITOR, not an editor: the
               * native preview is never attached (there is no local set to
               * show — see localSetDecision) and the picture is the host's,
@@ -9184,7 +9237,7 @@ export function LiveView({
             {engineOk && !isHost && (
               <ProgramMonitorStage seat={monitorSeat} pending={accessPending} boomin={boominRoom} />
             )}
-            {engineOk && isHost && outputView!=='portrait' && (
+            {visible && engineOk && isHost && outputView!=='portrait' && (
               <div className="rm-landscape-monitor"><PreviewPanel>
                 <StageEditor
                   // A mic has no picture: never a box on the stage.
@@ -9301,6 +9354,7 @@ export function LiveView({
           )}
 
           <PermBanner
+            visible={visible}
             sources={sources}
             micStarting={missingMics.length > 0}
             onGranted={(kind) => {
@@ -9651,7 +9705,7 @@ export function LiveView({
         </span>
       </footer>
       <BugSheet
-        open={bugOpen}
+        open={visible&&bugOpen}
         onClose={() => setBugOpen(false)}
         version={appVersion}
         engine={snapshot?.graphics_backend}

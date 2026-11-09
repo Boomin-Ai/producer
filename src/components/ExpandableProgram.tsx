@@ -3,7 +3,7 @@ import "./ExpandableProgram.css";
 
 /** Changes presentation only: children remain in the same DOM location.
  * Stream attachment, playback and track ownership belong to the caller. */
-export function ExpandableProgram({ title, children }: { title: string; children: ReactNode }) {
+export function ExpandableProgram({ title, label = 'PROGRAM', children }: { title: string; label?: string; children: ReactNode }) {
   const [expanded, setExpanded] = useState(false);
   const id = useId();
   const panel = useRef<HTMLElement>(null);
@@ -55,7 +55,7 @@ export function ExpandableProgram({ title, children }: { title: string; children
         <div className="expandable-program-media">{children}</div>
         <button ref={trigger} type="button" className="expandable-program-trigger" hidden={expanded}
           onClick={() => setExpanded(true)} aria-label="Expand program output" aria-expanded={expanded} aria-controls={id} title={`Expand ${title}`}>
-          <span className="expandable-program-label">PROGRAM</span>
+          <span className="expandable-program-label">{label}</span>
           <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7" />
           </svg>

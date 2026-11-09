@@ -10,7 +10,7 @@ import { ChannelPostSettings, DEFAULT_CHANNEL_PARAMS, buildChannelOverrides, typ
 import { cached, reconcile, remember, swr } from "../lib/fetchCache";
 import { sortRooms } from "../lib/roomOrder";
 import { createPortal } from "react-dom";
-import { convertFileSrc } from "../lib/nativeInvoke";
+import { convertFileSrc, invoke } from "../lib/nativeInvoke";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ConsoleHost } from "./Console";
@@ -54,7 +54,7 @@ import { KEYMAP, getKey, setKey, resetKey, displayKey, type KeyBinding } from ".
 import { liveRoomId, parseConfig, serializeConfig } from "../lib/room";
 import { ROOMS_EVENT, deleteRoomEverywhere, notifyRoomsChanged, renameRoom, roomOccupancy, syncRooms } from "../lib/roomSync";
 import { useUpdater, type UpdaterStatus } from "../lib/updater";
-import { DestinationEditor, LiveView, type RoomEntryAccess } from "./Live";
+import { DestinationEditor, LiveView, type RoomEntryAccess, type RoomRuntimeState } from "./Live";
 import { RoomOpening } from "./RoomOpening";
 import { HostedManager } from "../features/manager/HostedManager";
 import { ModSeat } from "./ModSeat";
@@ -123,6 +123,8 @@ type MainView =
   /** A mod seat on someone else's open server (#47): roster + scene cuts, no engine. */
   | { kind: "modseat"; link: ModLink };
 
+type HostedRoom = { room: LiveRoom; access?: RoomEntryAccess };
+
 interface Attached {
   upload_id: string;
   filename: string;
@@ -185,6 +187,32 @@ export function Home({
   onEndpointsChanged?: () => void;
 }) {
   const [view, setView] = useState<MainView>({ kind: "home" });
+  // The opt-in native appearance candidate keeps the actual room controller
+  // while its UI is collapsed. The native engine alone cannot retain the Set
+  // clock, host heartbeat, recording controls or document readiness.
+  const [nativeAppearances, setNativeAppearances] = useState(false);
+  const [retainedRoom, setRetainedRoom] = useState<HostedRoom | null>(null);
+  const [outgoingSeat, setOutgoingSeat] = useState<GuestSeatSpec>();
+  const [roomRuntime, setRoomRuntime] = useState<RoomRuntimeState | null>(null);
+  const roomRuntimeRef = useRef<RoomRuntimeState | null>(null);
+  const onRoomRuntime = useCallback((next: RoomRuntimeState) => {
+    roomRuntimeRef.current = next;
+    setRoomRuntime(previous => previous && previous.roomId === next.roomId
+      && previous.outputsActive === next.outputsActive && previous.outputPortrait === next.outputPortrait
+      && previous.programReady === next.programReady ? previous : next);
+  }, []);
+  useEffect(() => {
+    let alive = true;
+    void invoke<boolean>('live_appearance_enabled').then(enabled => { if (alive) setNativeAppearances(enabled === true); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  useEffect(() => {
+    if (view.kind === 'room' || !retainedRoom || outgoingSeat) return;
+    if (roomRuntime?.roomId === retainedRoom.room.id && !roomRuntime.outputsActive) {
+      setRetainedRoom(null);
+      roomRuntimeRef.current = null;
+    }
+  }, [view.kind, retainedRoom, outgoingSeat, roomRuntime]);
   const [networkSheet,setNetworkSheet]=useState<'messages'|'join'|null>(null);
   const [pendingSeat,setPendingSeat]=useState<GuestSeatSpec>();
   const [networkUnread,setNetworkUnread]=useState(0);
@@ -196,7 +224,6 @@ export function Home({
     <div className="room-exit-cover" role="status" aria-live="polite">
       {exitState==='error'?<><span>Could not finish closing the room.</span><button onClick={()=>void roomExit.current!.retry()}>Try again</button></>:<span>Returning to rooms…</span>}
     </div>,document.body);
-  const withExitCover=(content:ReactNode)=><>{content}{exitCover}</>;
   useEffect(() => {
     if (view.kind !== "opening") return;
     const opening = view;
@@ -447,6 +474,15 @@ export function Home({
     snapshot?.session_state === "stopping";
 
   const openRoom = (room: LiveRoom) => {
+    if (retainedRoom && retainedRoom.room.id !== room.id) {
+      notify('Return to the active local room before opening another room.', { key: 'banner', tone: 'warning' });
+      return;
+    }
+    if (retainedRoom?.room.id === room.id) {
+      roomExit.current!.cancel();
+      setView({ kind: 'room', ...retainedRoom });
+      return;
+    }
     roomExit.current!.cancel();
     markRoomClick();
     const endpoint = endpoints.find((candidate) => candidate.id === activeEndpointId());
@@ -463,7 +499,19 @@ export function Home({
     setView({ kind: "opening", room, access });
   };
   const back = () => {
+    const retain = view.kind === 'room' && nativeAppearances &&
+      (roomRuntimeRef.current?.roomId === view.room.id && roomRuntimeRef.current.outputsActive || !!outgoingSeat);
+    // Settings shortcuts also navigate synchronously. Establish retention in
+    // this event before any surface change, rather than after async concealment.
+    if (view.kind === 'room' && retain) setRetainedRoom({room:view.room,access:view.access});
     void roomExit.current!.close(()=>{
+      if (view.kind === 'room' && retain) {
+        setRetainedRoom({ room: view.room, access: view.access });
+      } else if (view.kind === 'room') {
+        setRetainedRoom(null);
+        setOutgoingSeat(undefined);
+        roomRuntimeRef.current = null;
+      }
       setView({ kind: "home" });
       void loadLive();
     });
@@ -483,6 +531,7 @@ export function Home({
     const current=()=>{if(signal.aborted)throw new DOMException('The invitation was closed.','AbortError');};
     current();
     if(seat.endpointId!==activeEndpointId())throw Error('The workspace changed. Open the invitation again.');
+    if(outgoingSeat)throw Error('Leave the current appearance before joining another room.');
     let own:LiveRoom|undefined;
     let access:RoomEntryAccess|undefined;
     if(seat.videoSource==='program'){
@@ -491,8 +540,17 @@ export function Home({
       own=(await ipc.liveListRooms(endpoint.id)).find(room=>room.id===seat.localRoomId&&(!room.endpoint_id||room.endpoint_id===endpoint.id));
       current();
       if(!own)throw Error('The selected local room is no longer available. Choose another room.');
+      const currentRoom=view.kind==='room'?view:retainedRoom;
+      if(nativeAppearances&&currentRoom&&currentRoom.room.id!==own.id)
+        throw Error('Choose the currently active local room to send its running program.');
       const [engine,captures]=await Promise.all([ipc.liveEngineStatus(),Promise.all(endpoints.map(e=>recording.list(e.id)))]);current();
-      if(engine.session_state!=='idle'||captures.some(rows=>rows.some(row=>row.status==='recording')))throw Error('Start the program appearance before streaming or recording locally. Webcam-only appearances can join while output is active.');
+      const outputsActive=engine.session_state!=='idle'||captures.some(rows=>rows.some(row=>row.status==='recording'));
+      if(outputsActive){
+        const runtime=roomRuntimeRef.current;
+        if(!nativeAppearances)throw Error('Start the program appearance before streaming or recording locally. Webcam-only appearances can join while output is active.');
+        if(!currentRoom||currentRoom.room.id!==own.id||runtime?.roomId!==own.id||!runtime.programReady)
+          throw Error('Choose the currently active local room to send its running program.');
+      }
       const serverRoom=roomMetadata(own).server_room_id;
       if(serverRoom&&isBoomin(endpoint)){
         const authorized=await producerLocalAccess({endpointId:endpoint.id,serverRoomId:serverRoom,current:()=>!signal.aborted&&activeEndpointId()===endpoint.id,read:()=>guests.access(endpoint.id,serverRoom)});
@@ -506,8 +564,31 @@ export function Home({
     roomExit.current!.cancel();
     markRoomClick();
     setNetworkSheet(null);setPendingSeat(undefined);
-    setView({ kind: "seat", room: own, seat, access });
-  }, [endpoints]);
+    if(nativeAppearances&&seat.videoSource==='program'&&own){
+      const currentRoom=view.kind==='room'?view:retainedRoom;
+      const runtime=roomRuntimeRef.current;
+      setOutgoingSeat({...seat,nativeProgram:true,portrait:runtime?.roomId===own.id?runtime.outputPortrait:false,quality:720});
+      setView({kind:'room',room:currentRoom?.room??own,access:currentRoom?.access??access});
+    }else setView({ kind: "seat", room: own, seat, access });
+  }, [endpoints,nativeAppearances,view,retainedRoom,outgoingSeat]);
+
+  const hostedRoom=view.kind==='room'?view:retainedRoom;
+  const withExitCover=(content:ReactNode)=><>
+    {hostedRoom&&<LiveView
+      key={hostedRoom.room.id}
+      room={hostedRoom.room}
+      entryAccess={hostedRoom.access}
+      visible={view.kind==='room'}
+      outgoingSeat={outgoingSeat}
+      onLeaveAppearance={()=>setOutgoingSeat(undefined)}
+      onRuntimeState={onRoomRuntime}
+      onLeave={back}
+      onOpenRecording={isBoomin(endpoints.find((ep) => ep.id === activeId)) ? (captureId) => { setManagerRecordingId(captureId); setSurface("manager"); back(); } : undefined}
+      onOpenIntegrations={()=>{back();setSettingsSection('integrations');openSettings();}}
+      onOpenAccess={()=>{back();setSettingsSection('access');openSettings();}}
+    />}
+    {content}{exitCover}
+  </>;
 
 
   if (view.kind === "opening") return withExitCover(<RoomOpening name={view.room.name} onLeave={back} />);
@@ -518,29 +599,7 @@ export function Home({
 
   // The room owns the entire window, its own top bar included (mock-faithful).
   if (view.kind === "room") {
-    return withExitCover(
-      <>
-        <LiveView
-          key={view.room.id}
-          room={view.room}
-          entryAccess={view.access}
-          onLeave={back}
-          onOpenRecording={isBoomin(endpoints.find((ep) => ep.id === activeId)) ? (captureId) => { setManagerRecordingId(captureId); setSurface("manager"); back(); } : undefined}
-          onOpenIntegrations={() => {
-            // The collapse path first (the stream keeps running), then the
-            // rail-side Settings on its Integrations section.
-            back();
-            setSettingsSection("integrations");
-            openSettings();
-          }}
-          onOpenAccess={() => {
-            back();
-            setSettingsSection("access");
-            openSettings();
-          }}
-        />
-      </>
-    );
+    return withExitCover(null);
   }
   if (view.kind === "seat") {
     if(view.seat.videoSource==='webcam')return withExitCover(<ProducerGuestView spec={view.seat} onLeave={back}/>);
@@ -570,6 +629,11 @@ export function Home({
         endpoints={endpoints}
         activeId={activeId}
         onSwitch={(id) => {
+          if (nativeAppearances && retainedRoom && (retainedRoom.room.endpoint_id ?? activeId) !== id &&
+              (outgoingSeat || roomRuntimeRef.current?.outputsActive)) {
+            notify('Stop the active output and leave the appearance before switching workspaces.', {key:'banner',tone:'warning'});
+            return;
+          }
           setActiveEndpointId(id);
           setActiveId(id);
           setAccountOpen(false);
@@ -639,7 +703,7 @@ export function Home({
         />
       )}
       {networkSheet==='messages'&&<aside className="producer-network-sheet" aria-label="Producer messages"><NetworkMessages endpoint={endpoints.find(e=>e.id===activeId)??null} onClose={()=>setNetworkSheet(null)} onConnections={()=>{setNetworkSheet(null);setSurface('rooms');setView({kind:'home'});}} onUnreadChange={setNetworkUnread}/></aside>}
-      {networkSheet==='join'&&<aside className="producer-network-sheet join-sheet" data-producer-network-room-id={pendingSeat?.networkRoomId} data-producer-endpoint-id={pendingSeat?.endpointId}><ProducerJoin key={`${activeId}:${pendingSeat?.joinUrl??'link'}`} endpoint={endpoints.find(e=>e.id===activeId)??null} rooms={rooms.filter(r=>r.endpoint_id===activeId)} invitation={pendingSeat} onClose={()=>{setNetworkSheet(null);setPendingSeat(undefined);}} onEnter={startSeat}/></aside>}
+      {networkSheet==='join'&&<aside className="producer-network-sheet join-sheet" data-producer-network-room-id={pendingSeat?.networkRoomId} data-producer-endpoint-id={pendingSeat?.endpointId}><ProducerJoin key={`${activeId}:${pendingSeat?.joinUrl??'link'}`} endpoint={endpoints.find(e=>e.id===activeId)??null} rooms={rooms.filter(r=>r.endpoint_id===activeId)} nativeProgramAvailable={nativeAppearances} invitation={pendingSeat} onClose={()=>{setNetworkSheet(null);setPendingSeat(undefined);}} onEnter={startSeat}/></aside>}
       {view.kind === "console" && (
         <ConsoleHost
           endpoint={endpoints.find((e) => e.id === activeId) ?? endpoints.find((e) => e.kind === "connected") ?? null}

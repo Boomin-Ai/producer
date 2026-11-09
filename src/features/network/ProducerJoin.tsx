@@ -5,7 +5,7 @@ import {parseProducerJoinLink,resolveProducerInvitation} from '../../lib/produce
 import {producerInvitationLabel} from './providerLabels';
 import './producer-join.css';
 
-export function ProducerJoin({endpoint,rooms,invitation,onClose,onEnter}:{endpoint:EndpointInfo|null;rooms:LiveRoom[];invitation?:GuestSeatSpec;onClose:()=>void;onEnter:(seat:GuestSeatSpec,signal:AbortSignal)=>void|Promise<void>}){
+export function ProducerJoin({endpoint,rooms,invitation,onClose,onEnter,nativeProgramAvailable=false}:{endpoint:EndpointInfo|null;rooms:LiveRoom[];invitation?:GuestSeatSpec;onClose:()=>void;onEnter:(seat:GuestSeatSpec,signal:AbortSignal)=>void|Promise<void>;nativeProgramAvailable?:boolean}){
  const [url,setUrl]=useState(''),[api,setApi]=useState(''),[name,setName]=useState(endpoint?.name??''),[mode,setMode]=useState<'program'|'webcam'>(rooms.length?'program':'webcam'),[roomId,setRoomId]=useState(rooms[0]?.id??''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const operation=useRef<AbortController|null>(null),alive=useRef(true);
  const close=()=>{operation.current?.abort();onClose();};
@@ -29,7 +29,7 @@ export function ProducerJoin({endpoint,rooms,invitation,onClose,onEnter}:{endpoi
   <p>Bring your Set into their show. The host controls admission and when you appear on stage.</p>
   <form onSubmit={e=>{e.preventDefault();void enter();}}>
    {!invitation&&<><label>Room or invitation link<input aria-label="Producer invitation link" type="url" value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://their-server/connect/guest/…" required disabled={busy}/></label><label>Your name<input value={name} onChange={e=>setName(e.target.value)} maxLength={80} required disabled={busy}/></label><details><summary>Guest API address</summary><p>Boomin links resolve automatically. For a separate self-hosted API, enter its HTTPS address.</p><input aria-label="Guest API address" type="url" value={api} onChange={e=>setApi(e.target.value)} placeholder="Automatic from invitation" disabled={busy}/></details></>}
-   <fieldset disabled={busy}><legend>What do you want to send?</legend><label className="producer-send-option"><input type="radio" name="producer-video" checked={mode==='program'} disabled={!rooms.length} onChange={()=>setMode('program')}/><span><strong>My room and Set</strong><small>Composed output and processed audio. Requires Producer Virtual Camera.</small></span></label>
+   <fieldset disabled={busy}><legend>What do you want to send?</legend><label className="producer-send-option"><input type="radio" name="producer-video" checked={mode==='program'} disabled={!rooms.length} onChange={()=>setMode('program')}/><span><strong>My room and Set</strong><small>{nativeProgramAvailable?'720p30 composed output and processed audio.':'Composed output and processed audio. Requires Producer Virtual Camera.'}</small></span></label>
     <label className="producer-send-option"><input type="radio" name="producer-video" checked={mode==='webcam'} onChange={()=>setMode('webcam')}/><span><strong>Webcam and microphone</strong><small>Send just your camera and voice.</small></span></label>
    </fieldset>
    {mode==='program'&&<label>Local room<select aria-label="Room to send" value={roomId} onChange={e=>setRoomId(e.target.value)} disabled={busy}>{rooms.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select></label>}

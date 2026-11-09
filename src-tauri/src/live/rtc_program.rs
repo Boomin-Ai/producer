@@ -1,7 +1,12 @@
 //! Opt-in OBS program publication. Callbacks only copy into bounded queues.
 //! Stage bus 1 excludes remote voices; this is not a substitute for host AEC.
 use super::ffi;
-use producer_guest_runtime::program::{Sources, HEIGHT, WIDTH};
+use producer_guest_runtime::program::{Sources, VideoProfile, HEIGHT, WIDTH};
+#[path = "program_capture_clock.rs"]
+mod capture_clock;
+#[path = "program_capture_output.rs"]
+mod target_output;
+use capture_clock::video_frame_due;
 use std::{
     collections::VecDeque,
     ffi::c_void,
@@ -558,15 +563,56 @@ struct Shared {
     video: SyncSender<Picture>,
     failed: AtomicBool,
     ready: AtomicBool,
+    profile: VideoProfile,
+    video_period_ns: u64,
+    next_video_at: AtomicU64,
+    last_video_at: AtomicU64,
+}
+
+/// A video mix resolved by the engine, with an owner that prevents its canvas
+/// from being reset or retired until this publisher has disconnected.
+/// Each target creates its own bounded capture queues; it never drains another
+/// publisher's audio queue or owns its stream, recording, or virtual camera.
+#[derive(Clone)]
+pub struct CaptureTarget {
+    video: usize,
+    profile: VideoProfile,
+    _keeper: Arc<dyn Send + Sync>,
+}
+impl CaptureTarget {
+    /// # Safety
+    /// `video` must be an engine-owned, room-only selected canvas. `keeper`
+    /// must retain it through output disconnection. Its Drop must not block on
+    /// the engine thread. A main mix containing Studio is not a room target.
+    pub unsafe fn new(
+        video: usize,
+        profile: VideoProfile,
+        keeper: Arc<dyn Send + Sync>,
+    ) -> Result<Self, &'static str> {
+        let profile = profile.validate()?;
+        if video == 0 {
+            return Err("Native appearance video target is unavailable");
+        }
+        Ok(Self {
+            video,
+            profile,
+            _keeper: keeper,
+        })
+    }
+    pub fn profile(&self) -> VideoProfile {
+        self.profile
+    }
 }
 struct Tap {
-    shared: Box<Shared>,
+    shared: Arc<Shared>,
     audio_frames: Arc<AudioCaptureQueue>,
     video_frames: Option<Receiver<Picture>>,
     audio: usize,
     video: usize,
     audio_connected: bool,
     video_connected: bool,
+    target_output: Option<target_output::Output>,
+    _target: Option<CaptureTarget>,
 }
 extern "C" fn audio_callback(param: *mut c_void, bus: usize, data: *mut ffi::audio_data) {
     if param.is_null() {
@@ -697,11 +743,28 @@ extern "C" fn video_callback(param: *mut c_void, data: *mut ffi::video_data) {
             .store(true, Ordering::Release /* classified */);
         return;
     }
+    let previous = shared.last_video_at.swap(data.timestamp, Ordering::Relaxed);
+    if previous != 0 && data.timestamp <= previous {
+        CAPTURE_FAULT
+            .compare_exchange(0, 6, Ordering::AcqRel, Ordering::Acquire)
+            .ok();
+        shared.failed.store(true, Ordering::Release);
+        return;
+    }
+    // Pace before allocating/copying planes. Each subscriber has its own clock.
+    if !video_frame_due(
+        &shared.next_video_at,
+        shared.video_period_ns,
+        data.timestamp,
+    ) {
+        return;
+    }
+    let (width, height) = (shared.profile.width, shared.profile.height);
     let mut planes = Vec::with_capacity(3);
     for (index, width, height) in [
-        (0, WIDTH, HEIGHT),
-        (1, WIDTH / 2, HEIGHT / 2),
-        (2, WIDTH / 2, HEIGHT / 2),
+        (0, width, height),
+        (1, width / 2, height / 2),
+        (2, width / 2, height / 2),
     ] {
         let stride = data.linesize[index];
         if data.data[index].is_null() || stride < width || stride > 8192 {
@@ -739,6 +802,9 @@ extern "C" fn video_callback(param: *mut c_void, data: *mut ffi::video_data) {
 }
 impl Tap {
     fn start() -> Result<Self, &'static str> {
+        Self::start_with_target(None)
+    }
+    fn start_with_target(target: Option<CaptureTarget>) -> Result<Self, &'static str> {
         #[cfg(debug_assertions)]
         CAPTURE_GAP_PROOF.store(
             std::env::var("PRODUCER_RTC_CAPTURE_GAP_PROOF").as_deref() == Ok("1")
@@ -748,8 +814,21 @@ impl Tap {
         let audio_sender = Arc::new(AudioCaptureQueue::new());
         let audio_frames = audio_sender.clone();
         let (video_sender, video_frames) = sync_channel(2);
+        let profile = target
+            .as_ref()
+            .map(|t| t.profile)
+            .unwrap_or(VideoProfile::HOST_720P);
+        let video_period_ns = if target.is_some() {
+            1_000_000_000 / u64::from(profile.fps)
+        } else {
+            0
+        };
+        let video = target
+            .as_ref()
+            .map(|t| t.video)
+            .unwrap_or_else(|| unsafe { ffi::obs_get_video() } as usize);
         let mut tap = Self {
-            shared: Box::new(Shared {
+            shared: Arc::new(Shared {
                 audio: audio_sender,
                 video: video_sender,
                 failed: AtomicBool::new(false),
@@ -758,13 +837,19 @@ impl Tap {
                     && (cfg!(feature = "guest-rtc-production")
                         || std::env::var("PRODUCER_RTC_PROGRAM_PILOT").as_deref() == Ok("1")),
                 priority_attempted: AtomicBool::new(false),
+                profile,
+                video_period_ns,
+                next_video_at: AtomicU64::new(0),
+                last_video_at: AtomicU64::new(0),
             }),
             audio_frames,
             video_frames: Some(video_frames),
             audio: unsafe { ffi::obs_get_audio() } as usize,
-            video: unsafe { ffi::obs_get_video() } as usize,
+            video,
             audio_connected: false,
             video_connected: false,
+            target_output: None,
+            _target: target,
         };
         if tap.audio == 0 || tap.video == 0 {
             return Err("Native program requires the running OBS engine");
@@ -783,8 +868,8 @@ impl Tap {
         }
         let video = VideoScale {
             format: 1,
-            width: WIDTH,
-            height: HEIGHT,
+            width: profile.width,
+            height: profile.height,
             range: 1,
             // VP8's default decoded color matrix is BT.601. Match the raw
             // conversion instead of sending unlabelled BT.709 I420 pixels.
@@ -792,14 +877,25 @@ impl Tap {
         };
         // The OBS core wrapper activates the main compositor's raw output.
         // Connecting directly to video_output alone does not activate it.
-        unsafe {
-            ffi::obs_add_raw_video_callback(
-                (&video as *const VideoScale).cast(),
-                video_callback,
-                param,
-            );
+        if tap._target.is_some() {
+            tap.target_output = Some(unsafe {
+                target_output::Output::start(
+                    tap.video,
+                    &video,
+                    tap.shared.clone(),
+                    tap._target.as_ref().unwrap().clone(),
+                )?
+            });
+        } else {
+            unsafe {
+                ffi::obs_add_raw_video_callback(
+                    (&video as *const VideoScale).cast(),
+                    video_callback,
+                    param,
+                );
+            }
+            tap.video_connected = true;
         }
-        tap.video_connected = true;
         Ok(tap)
     }
     fn drain(&self) -> Result<Queues, &'static str> {
@@ -823,6 +919,9 @@ impl Tap {
         self.shared.ready.store(false, Ordering::Release);
         let param = (&*self.shared as *const Shared).cast_mut().cast();
         unsafe {
+            // Output release quiesces its raw callback before stable Shared
+            // userdata and the engine target keeper can be dropped.
+            drop(self.target_output.take());
             if self.video_connected {
                 let started = std::time::Instant::now();
                 ffi::obs_remove_raw_video_callback(video_callback, param);
@@ -866,7 +965,27 @@ pub struct Publisher {
 }
 impl Publisher {
     pub fn start(sources: Sources, deadline: u64) -> Result<Self, &'static str> {
-        let mut tap = Tap::start().map_err(|error| {
+        Self::start_with_target(sources, deadline, None)
+    }
+    pub fn start_target(
+        sources: Sources,
+        deadline: u64,
+        target: CaptureTarget,
+    ) -> Result<Self, &'static str> {
+        if sources.profile() != target.profile {
+            return Err("Native appearance source and capture profiles differ");
+        }
+        if wall_ms() >= deadline {
+            return Err("Native appearance lease expired before capture");
+        }
+        Self::start_with_target(sources, deadline, Some(target))
+    }
+    fn start_with_target(
+        sources: Sources,
+        deadline: u64,
+        target: Option<CaptureTarget>,
+    ) -> Result<Self, &'static str> {
+        let mut tap = Tap::start_with_target(target).map_err(|error| {
             trace_failure("native.rtc.publisher.failure.capture_setup");
             error
         })?;
@@ -983,6 +1102,126 @@ impl Drop for Publisher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn shared_capture(profile: VideoProfile) -> (Shared, Receiver<Picture>) {
+        let (video, receiver) = sync_channel(2);
+        (
+            Shared {
+                audio: Arc::new(AudioCaptureQueue::new()),
+                video,
+                failed: AtomicBool::new(false),
+                ready: AtomicBool::new(true),
+                raise_priority: false,
+                priority_attempted: AtomicBool::new(false),
+                profile,
+                video_period_ns: 1_000_000_000 / u64::from(profile.fps),
+                next_video_at: AtomicU64::new(0),
+                last_video_at: AtomicU64::new(0),
+            },
+            receiver,
+        )
+    }
+
+    #[test]
+    fn invalid_target_releases_its_keeper_before_any_obs_capture() {
+        struct Keeper(Arc<AtomicU64>);
+        impl Drop for Keeper {
+            fn drop(&mut self) {
+                self.0.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+        let released = Arc::new(AtomicU64::new(0));
+        let keeper: Arc<dyn Send + Sync> = Arc::new(Keeper(released.clone()));
+        assert!(unsafe { CaptureTarget::new(0, VideoProfile::HOST_720P, keeper) }.is_err());
+        assert_eq!(released.load(Ordering::Acquire), 1);
+    }
+
+    #[test]
+    fn timestamp_regression_fails_before_cadence_can_hide_it() {
+        let (shared, _frames) = shared_capture(VideoProfile::HOST_720P);
+        shared.last_video_at.store(100_000_000, Ordering::Relaxed);
+        shared.next_video_at.store(133_333_333, Ordering::Relaxed);
+        let mut data = ffi::video_data {
+            data: [std::ptr::null_mut(); 8],
+            linesize: [0; 8],
+            timestamp: 99_000_000,
+        };
+        video_callback((&shared as *const Shared).cast_mut().cast(), &mut data);
+        assert!(shared.failed.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn portrait_capture_copies_correct_planes_and_backpressure_is_local() {
+        let profile = VideoProfile::appearance(1080, true).unwrap();
+        let (appearance, frames) = shared_capture(profile);
+        let (host, host_frames) = shared_capture(VideoProfile::HOST_720P);
+        let mut y = vec![27u8; (profile.width * profile.height) as usize];
+        let mut u = vec![64u8; y.len() / 4];
+        let mut v = vec![192u8; y.len() / 4];
+        let mut data = ffi::video_data {
+            data: [std::ptr::null_mut(); 8],
+            linesize: [0; 8],
+            timestamp: 1_000_000_000,
+        };
+        for (i, plane) in [&mut y, &mut u, &mut v].into_iter().enumerate() {
+            data.data[i] = plane.as_mut_ptr();
+            data.linesize[i] = if i == 0 {
+                profile.width
+            } else {
+                profile.width / 2
+            };
+        }
+        for frame in 0..5 {
+            data.timestamp = 1_000_000_000 + frame * 33_333_333;
+            video_callback((&appearance as *const Shared).cast_mut().cast(), &mut data);
+        }
+        assert!(!appearance.failed.load(Ordering::Acquire));
+        assert!(!host.failed.load(Ordering::Acquire));
+        assert!(host_frames.try_recv().is_err());
+        let received: Vec<_> = frames.try_iter().collect();
+        assert_eq!(
+            received.len(),
+            2,
+            "a full video queue drops disposable frames"
+        );
+        assert_eq!(received[0].timestamp, 1_000_000_000);
+        assert_eq!(received[0].planes.0, y);
+        assert_eq!(received[0].planes.1, u);
+        assert_eq!(received[0].planes.2, v);
+        drop(frames);
+        data.timestamp += 33_333_333;
+        video_callback((&appearance as *const Shared).cast_mut().cast(), &mut data);
+        assert!(appearance.failed.load(Ordering::Acquire));
+        assert!(
+            !host.failed.load(Ordering::Acquire),
+            "retiring one receiver cannot fault another tap"
+        );
+    }
+
+    #[test]
+    fn each_program_tap_owns_its_processed_audio_queue() {
+        let (host, _host_video) = shared_capture(VideoProfile::HOST_720P);
+        let (appearance, _appearance_video) = shared_capture(VideoProfile::HOST_720P);
+        let mut plane = [0.25f32; 1024];
+        let mut data = ffi::audio_data {
+            data: [std::ptr::null_mut(); 8],
+            frames: 1024,
+            timestamp: unsafe { os_gettime_ns() },
+        };
+        data.data[0] = plane.as_mut_ptr().cast();
+        data.data[1] = plane.as_mut_ptr().cast();
+        for shared in [&host, &appearance] {
+            audio_callback((shared as *const Shared).cast_mut().cast(), 1, &mut data);
+        }
+        assert_eq!(host.audio.try_pop().unwrap().timestamp, data.timestamp);
+        assert!(host.audio.try_pop().is_none());
+        assert_eq!(
+            appearance.audio.try_pop().unwrap().timestamp,
+            data.timestamp
+        );
+        assert!(!host.failed.load(Ordering::Acquire));
+        assert!(!appearance.failed.load(Ordering::Acquire));
+    }
+
     #[test]
     fn blocked_video_sdk_call_cannot_block_audio_lane_and_pending_video_is_retired() {
         let (entered, entered_rx) = sync_channel(1);
@@ -1123,6 +1362,10 @@ mod tests {
             ready: AtomicBool::new(true),
             raise_priority: false,
             priority_attempted: AtomicBool::new(false),
+            profile: VideoProfile::HOST_720P,
+            video_period_ns: 0,
+            next_video_at: AtomicU64::new(0),
+            last_video_at: AtomicU64::new(0),
         };
         let mut left = [0.25f32; 1024];
         let mut right = [0.25f32; 1024];
@@ -1161,6 +1404,10 @@ mod tests {
             ready: AtomicBool::new(true),
             raise_priority: false,
             priority_attempted: AtomicBool::new(false),
+            profile: VideoProfile::HOST_720P,
+            video_period_ns: 0,
+            next_video_at: AtomicU64::new(0),
+            last_video_at: AtomicU64::new(0),
         };
         let mut plane = [0.0f32; 1024];
         let mut data = ffi::audio_data {
