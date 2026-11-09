@@ -6,7 +6,7 @@ export const AUTHORING_CATALOG = {
   acceptedEditSchemas: ['producer.set-edit/1','producer.set-edit/2'],
   profiles: {compact:'producer.design-plan/1',canonical:'producer.design-plan/2'},
   packageSchema: 'producer.presentation/2',
-  features: ['core@1', 'mask@1', 'backdrop@1', 'chart@1', 'scene3d@1','audience.vote@1','audience.text@1','data.weather@1','data.agent@1','data.social@1','room.chat@1',
+  features: ['core@1', 'mask@1', 'backdrop@1', 'chart@1', 'scene3d@1','dj.logo-orbit@1','audience.vote@1','audience.text@1','data.weather@1','data.agent@1','data.social@1','room.chat@1',
     ...['aurora','edgeGlow','lightSweep','plasma','silk','rings','grid','stars','petals','contours','prism','borderFlare','rain','snow','clouds','voiceBars','voiceRing','voiceSea','launchV1'].map(effect=>`shader.${effect}@1`)],
   planNodes: ['panel', 'text', 'camera', 'image', 'effect'],
   edits: ['move', 'text', 'replace-camera', 'duplicate-layout'],

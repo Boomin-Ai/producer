@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import {dropMotion,DROP_DURATION_MS} from './dropMotion.mjs';
 import {createSoundPopup} from './soundPopup.mjs';
+import {createDjLogoOrbit} from './djLogoOrbit.mjs';
 const ZERO={energy:0,bass:0,high:0,bands:Array(8).fill(0),wave:Array(32).fill(0)};
 const DEFAULT={sensitivity:1,intensity:1,motion:1,waveHeight:1,waveform:'bars',drop:0,money:false,color:'#dce3e8'};
 /** Fixed geometry and shared textures. Audio changes uniforms/transforms only. */
-export function createDjVisuals(renderer,width,height,role,header=[0,0,1,1]){
+export function createDjVisuals(renderer,width,height,role,header=[0,0,1,1],config){
+ if(role==='logoOrbit')return createDjLogoOrbit(renderer,width,height,config?.logoOrbit,header);
  const scene=new THREE.Scene(),camera=new THREE.OrthographicCamera(0,width,height,0,.1,200);camera.position.z=100;
  const resources=[],matrix=new THREE.Object3D(),tint=new THREE.Color();let transportLabel='',transportPosition=0,lastPosition=-1;let frame=ZERO,received=-Infinity,energy=0,bass=0,dropAt=-Infinity,dropId,previous=0,draws=0;
  const texture=draw=>{const canvas=document.createElement('canvas');canvas.width=256;canvas.height=128;draw(canvas.getContext('2d'));const t=new THREE.CanvasTexture(canvas);t.colorSpace=THREE.SRGBColorSpace;resources.push(t);return t;};

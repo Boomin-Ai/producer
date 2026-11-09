@@ -10,6 +10,8 @@
   },
   "type": "module",
   "scripts": {
+    "test:dj-logo-orbit": "node scripts/test-dj-logo-orbit.mjs",
+    "test:dj-logo-orbit-browser": "node scripts/test-dj-logo-orbit-browser.mjs",
     "test:performance-trace": "node scripts/test-performance-trace.mjs",
     "test:updater": "node scripts/test-updater.mjs",
     "test:window-source-label": "node scripts/test-window-source-label.mjs",

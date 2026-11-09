@@ -1,5 +1,28 @@
 # DJ in Rooms
 
+## Live logo orbits in Sets
+
+The `dj.logo-orbit@1` authoring capability adds a trusted `world.dj.role: "logoOrbit"`
+surface. Logos themselves respond to the native post-mix DJ analysis while
+circling a stationary title. This is a live layer, rather than an animated video.
+An updated native app is required; it is not supported by the original 0.4.90 renderer.
+
+`world.dj.logoOrbit` contains printable title/subtitle strings (32 characters),
+an `ink` color, orbit `seconds` (6–60), and 1–16 `logos` with unique `id`, an
+embedded PNG `data` URI and frequency `band` (0–7). PNGs are bounded to 512×512
+and 96 KiB each. External URLs, SVG, scripts and arbitrary renderer code are
+rejected in JavaScript and native validation. Existing stage/spectrum presets
+retain their contracts.
+
+Use `scene3d.music.sensitivity` to adjust the audio response and `intensity: 0`
+to leave the plain orbit. Logos remain upright, inside their frame and outside
+the protected title region. Silent/stale samples settle to the baseline orbit;
+there is no synthetic beat animation. `music.color` updates title ink in an
+existing context, so palette changes do not require another immutable world.
+The existing native DJ subscription supplies the same bounded analysis used
+by spectrum surfaces. No music files, private paths, soundboard triggers or
+extra audio capture are introduced by the Set.
+
 DJ is a host-controlled room panel. It uses the existing top/bottom mini docks,
 expanded row docks, side rails, placement menu, drag handles and saved layout.
 It is introduced in the bottom dock once. Hiding it preserves music playback.

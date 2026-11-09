@@ -65,7 +65,7 @@ export async function mountWorld(canvas, input, options) {
     }
    }
   }
-  if(world.dj)djVisuals=createDjVisuals(renderer,width,height,world.dj.role,header);
+  if(world.dj)djVisuals=await createDjVisuals(renderer,width,height,world.dj.role,header,world.dj);
   if(!initialized){cueFrom=lights.map(l=>l.light.intensity);cueStart=time();initialized=true;}
   await renderer.compileAsync(scene,camera);if(trimScene)await renderer.compileAsync(trimScene,trimCamera);renderer.autoClear=false;renderer.info.autoReset=false;
   if(disposed||version!==epoch)return;

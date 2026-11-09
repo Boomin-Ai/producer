@@ -6,6 +6,7 @@ export function packageFeatures(doc:PresentationPackage):string[]{
  const visit=(n:PresentationNode)=>{
   if(n.mask)features.add('mask@1');if(n.backdrop)features.add('backdrop@1');
   if(n.chart)features.add('chart@1');if(n.scene3d)features.add('scene3d@1');
+  if(n.scene3d?.world.dj?.role==='logoOrbit')features.add('dj.logo-orbit@1');
   if(n.shader)features.add(`shader.${n.shader.effect}@1`);n.children?.forEach(visit);
  };
  doc.set.layouts.forEach(l=>visit(l.root));Object.values(doc.set.components).forEach(c=>visit(c.root));
