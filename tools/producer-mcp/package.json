@@ -1,11 +1,12 @@
 {
   "name": "@producer/set-authoring-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node test.mjs"
+    "test": "node test.mjs",
+    "test:publication": "node test-publication.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",

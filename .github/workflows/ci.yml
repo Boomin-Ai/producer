@@ -49,6 +49,7 @@ jobs:
       - run: bun run test:control-arrangements
       - run: bun run test:module-arrangements
       - run: bun run test:package-validation
+      - run: bun run test:set-publication
       - run: bun run test:set-authoring
       - run: bun run test:voice-bars
       - run: bun run test:threads-social
@@ -130,6 +131,12 @@ jobs:
         run: |
           node scripts/test-beta-onboarding-browser.mjs
           node scripts/test-entry-presentation-browser.mjs
+      - name: Verify public profile pages and explicit Set publication UI
+        env:
+          PRODUCER_BROWSER_CHANNEL: chromium
+        run: |
+          node scripts/test-publication-browser.mjs
+          node scripts/test-site-public-browser.mjs
       - name: Verify library previews without changing room assignments or live playback
         run: |
           set -euo pipefail

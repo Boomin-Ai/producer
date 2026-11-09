@@ -9,19 +9,22 @@ import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {authoringRuntime,previewHtml} from './runtime.mjs';
 import {checkRenderedSet} from './visual-check.mjs';
+import {publishPackage,listPublications,publishingRequest} from './publication.mjs';
+import {renderPublicationPreview} from './publication-preview.mjs';
 
 const MAX_PACKAGE=40*1024*1024, MAX_DESIGN=1024*1024;
 const fileName=z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,180}\.set\.json$/);
 const document=z.record(z.unknown());
 const reply=value=>({content:[{type:'text',text:JSON.stringify(value)}]});
 
-/** File authoring only. No workspace credentials, room writes or native device access. */
+/** File authoring by default. Publishing is explicit opt-in; never touches devices or output. */
 export async function createAuthoringServer(directory) {
   await mkdir(directory,{recursive:true,mode:0o700});
   const root=await realpath(directory),api=await authoringRuntime();
   const target={catalogRevision:api.AUTHORING_CATALOG.revision,features:[...api.AUTHORING_CATALOG.features]};
   const scope={validation:'package-structure',nativeReadiness:'not-tested',outputChanged:false};
-  const server=new McpServer({name:'producer-sets',version:'0.2.0'});
+  const publishing=process.env.PRODUCER_ENABLE_PUBLISH==='1';
+  const server=new McpServer({name:'producer-sets',version:'0.3.0'});
 
   async function read(file) {
     fileName.parse(file);
@@ -52,8 +55,8 @@ export async function createAuthoringServer(directory) {
     const path=await writeNew(file,text);
     return {file,path,revision:await api.packageRevision(doc),features:api.packageFeatures(doc),integrations:api.integrationRequirements(doc),views:doc.set.views??{},layouts:doc.set.layouts.map(l=>({id:l.id,name:l.label,width:l.width,height:l.height})),...scope};
   }
-  function tool(name,description,inputSchema,readOnly,fn) {
-    server.registerTool(name,{description,inputSchema,annotations:{readOnlyHint:readOnly,destructiveHint:false,idempotentHint:readOnly,openWorldHint:false}},async input=>{
+  function tool(name,description,inputSchema,readOnly,fn,external=false) {
+    server.registerTool(name,{description,inputSchema,annotations:{readOnlyHint:readOnly,destructiveHint:false,idempotentHint:readOnly,openWorldHint:external}},async input=>{
       try{return reply(await fn(input));}
       catch(error){
         // Do not echo arbitrary file contents or user-supplied media in diagnostics.
@@ -62,7 +65,7 @@ export async function createAuthoringServer(directory) {
       }
     });
   }
-  tool('producer_capabilities','Discover the local compiler profile, plan/edit instructions and validation limits. This is not a connected native renderer capability probe.',{},true,async()=>({catalog:api.AUTHORING_CATALOG,target,instructions:api.DESIGN_INSTRUCTIONS,directory:root,...scope}));
+  tool('producer_capabilities','Discover the local compiler profile, plan/edit instructions and validation limits. This is not a connected native renderer capability probe.',{},true,async()=>({catalog:api.AUTHORING_CATALOG,target,instructions:api.DESIGN_INSTRUCTIONS,directory:root,publishing:{enabled:publishing,origin:'https://producer.dev',packageBytes:8388608,credentials:'existing Boomin CLI login; never included in packages'},...scope}));
   tool('producer_schema','Read the exact canonical package schema or a focused authoring section. No media, credentials or native actions.',{section:z.enum(['package','node','runtime','integrations','animation']).optional()},true,async({section='package'})=>{
     const full=api.presentationJsonSchema,fragment=section==='package'?full:section==='node'?full.$defs.node:section==='animation'?full.properties.set.properties.layouts.items.properties.animation:full.properties[section];
     const definitions={},seen=new Set();
@@ -88,11 +91,24 @@ export async function createAuthoringServer(directory) {
     if(await api.packageRevision(await read(file))!==input.baseRevision)throw Error('The source Set changed during repair. Inspect it again.');
     return save(next);
   });
-  tool('producer_preview_set','Create a standalone HTML browser preview using Producer’s actual SetPreview renderer. Cameras are placeholders and audio is simulated. Does not load preparation or put anything on air.',{file:fileName},false,async({file})=>{
+  tool('producer_preview_set','Create a standalone HTML browser preview using Producer’s actual SetPreview renderer. Optionally export a publication thumbnail using an installed Chromium browser. Cameras are placeholders and audio is simulated. Does not load preparation or put anything on air.',{file:fileName,exportThumbnail:z.boolean().optional(),layout:z.string().max(64).optional()},false,async({file,exportThumbnail,layout})=>{
     const doc=await read(file);
     const name=`preview-${randomUUID()}.html`,path=await writeNew(name,await previewHtml(doc));
-    return {path,packageFile:file,revision:await api.packageRevision(doc),preview:'browser-simulation',...scope};
+    const thumbnail=exportThumbnail?`poster-${randomUUID()}.jpg`:undefined;
+    const thumbnailPath=thumbnail?await writeNew(thumbnail,await renderPublicationPreview(doc,layout)):undefined;
+    return {path,packageFile:file,revision:await api.packageRevision(doc),preview:'browser-simulation',...(thumbnail?{thumbnail,thumbnailPath,thumbnailSource:'isolated Set renderer; placeholder cameras'}:{}),...scope};
   });
+  if(publishing){
+    const workspace=z.string().min(1).max(80).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+    tool('producer_list_publications','List published and private Set revisions for an explicitly selected Boomin workspace using the signed-in CLI account.',{workspace},true,async({workspace})=>listPublications(workspace),true);
+    tool('producer_publish_set','Push a portable Set to producer.dev under its Boomin workspace handle. Public/unlisted downloads require confirmPublic=true. Authored values and embedded media are shared; account credentials, devices and room output are never used. Private is the default.',{
+      file:fileName,workspace,slug:z.string().min(1).max(80).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),title:z.string().min(1).max(120).optional(),description:z.string().max(2000).optional(),
+      visibility:z.enum(['private','unlisted','public']).default('private'),confirmPublic:z.boolean().default(false),idempotencyKey:z.string().uuid(),publicationId:z.string().uuid().optional(),expectedRevision:z.number().int().positive().optional(),thumbnail:z.string().regex(/^poster-[a-f0-9-]{36}\.jpg$/).optional(),
+    },false,async({file,workspace,thumbnail,...options})=>publishPackage(JSON.stringify(await read(file)),{...options,brand:workspace,thumbnailPath:thumbnail?join(root,thumbnail):undefined}),true);
+    tool('producer_withdraw_set','Withdraw a published Set from producer.dev. Uses its exact current revision; public metadata, downloads and previews stop resolving. Existing downloaded copies are unaffected.',{
+      workspace,publicationId:z.string().uuid(),expectedRevision:z.number().int().positive(),idempotencyKey:z.string().uuid(),
+    },false,async({workspace,publicationId,expectedRevision,idempotencyKey})=>publishingRequest(workspace,`/v1/app/producer/v1/sets/publications/${publicationId}`,{method:'PATCH',body:{status:'withdrawn',expected_revision:expectedRevision,idempotency_key:idempotencyKey}}),true);
+  }
   server.registerResource('authoring-guide','producer://authoring/guide',{mimeType:'application/json',description:'Producer compiler capabilities and compact plan/edit contract'},async uri=>({contents:[{uri:uri.href,mimeType:'application/json',text:JSON.stringify({catalog:api.AUTHORING_CATALOG,instructions:api.DESIGN_INSTRUCTIONS,...scope})}]}));
   server.registerResource('canonical-schema','producer://authoring/schema',{mimeType:'application/schema+json',description:'Full canonical Set JSON schema from the installed checkout; used directly by canonical v2 plans and edits. Load for advanced authoring.'},async uri=>({contents:[{uri:uri.href,mimeType:'application/schema+json',text:JSON.stringify(api.presentationJsonSchema)}]}));
   return server;

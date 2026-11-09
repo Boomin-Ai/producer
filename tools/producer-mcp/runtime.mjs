@@ -42,7 +42,7 @@ async function previewScript() {
       select.value=doc.set.initialLayout;
       select.onchange=()=>{session.send({type:'control',action:{type:'layout.select',layoutId:select.value}});render();};
       render();
-      auditVisuals(doc).then(report=>{
+      if(!window.__producerSkipVisualAudit)auditVisuals(doc).then(report=>{
         window.__producerVisualReview={ok:true,report};
         const region=document.getElementById('review');region.textContent='Visual review: '+(report.issues.length?report.issues.length+' findings':'configured text fits; no supported geometry issues found');
         for(const issue of report.issues){const p=document.createElement('p');p.textContent=issue.layout+' / '+issue.node+': '+issue.message;region.append(p);}
@@ -56,7 +56,7 @@ async function previewScript() {
   }).then(result=>result.outputFiles[0].text);
 }
 
-export async function previewHtml(doc) {
+export async function previewHtml(doc,{review=true}={}) {
   const code=(await previewScript()).replaceAll('</script','<\\/script');
   const data=JSON.stringify(doc).replaceAll('<','\\u003c');
   return `<!doctype html><html lang="en"><meta charset="utf-8"><title>Producer Set preview</title>
@@ -64,5 +64,5 @@ export async function previewHtml(doc) {
   <style>body{margin:24px;background:#10141c;color:#eee;font:16px system-ui}header{display:flex;gap:20px;align-items:center;margin-bottom:16px}select{font:inherit;padding:8px}#preview{max-width:1100px;margin:auto}.set-preview{position:relative;width:100%;max-height:85vh}.set-preview iframe{position:absolute;border:0;width:100%;height:100%}.set-preview-status{position:absolute;bottom:8px;left:8px;background:#10141c;padding:8px}p{color:#b9c3d2}</style>
   <header><strong>Producer · Draft preview</strong><label>Layout <select id="layouts"></select></label></header>
   <p>Browser preview only. Cameras are placeholders; audio-reactive effects use simulated levels. Import the Set into Producer to bind sources and check native output.</p>
-  <div id="preview"></div><section id="review" aria-label="Visual review">Checking every layout…</section><script id="package" type="application/json">${data}</script><script>${code}</script></html>`;
+  <div id="preview"></div><section id="review" aria-label="Visual review">${review?'Checking every layout…':'Publication preview · placeholder cameras'}</section><script id="package" type="application/json">${data}</script><script>window.__producerSkipVisualAudit=${!review};${code}</script></html>`;
 }

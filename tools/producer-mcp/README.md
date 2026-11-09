@@ -331,3 +331,13 @@ semantic validation must both be established before claiming strict conformance.
 The MCP acceptance test also repairs six nested temperature text boxes in a new
 weather draft and rechecks all six layouts. The source fixture stays unchanged;
 its editorial-overlap findings remain advisory.
+
+## Optional public Set publishing
+
+Producer handles and Sets are served at `https://producer.dev/<handle>` and `/<handle>/set/<slug>`, using the same Boomin workspace identity. The MCP remains a local file authoring server by default. To add authenticated publishing, set `PRODUCER_ENABLE_PUBLISH=1` and use an existing Boomin CLI login (`~/.boomin/config.json`, or `PRODUCER_PUBLISH_CONFIG` for an explicit credential-file path). Tokens are never returned or put in packages.
+
+This adds `producer_list_publications`, `producer_publish_set`, and `producer_withdraw_set`. Each call selects its workspace; writes carry an idempotency key, updates/withdrawal use the exact revision, and public/unlisted publication requires `confirmPublic:true`. Private drafts are the default. Authored values and embedded assets become downloadable: inspect the package before publishing. Native output and device state stay untouched.
+
+`producer_preview_set` accepts `exportThumbnail:true` and an optional layout ID. It returns an isolated JPEG poster with placeholder cameras; pass the returned `thumbnail` filename into `producer_publish_set` to use it on the public page and OG image. Poster rendering needs an installed Chromium browser and blocks external network requests.
+
+Public packages currently support8MiB and preview images512KiB; local imports retain40MiB. Device-local media references must be embedded before sharing. See [the publication contract](../../docs/PRODUCER-PUBLIC-SETS.md) for CLI commands, routes, revision/visibility behavior and deployment checks.
