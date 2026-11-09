@@ -1,5 +1,6 @@
 //! Trusted, room-owned WebGL resource. Packages cannot choose URLs or scripts.
 use super::{contract::Clock, ffi, Source};
+use base64::Engine;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -48,6 +49,53 @@ fn color(v: &Value) -> bool {
     v.as_str().is_some_and(|s| {
         s.len() == 7 && s.starts_with('#') && s[1..].bytes().all(|c| c.is_ascii_hexdigit())
     })
+}
+fn logo_orbit(v: &Value) -> Result<(), String> {
+    obj(v, &["title", "subtitle", "ink", "seconds", "logos"])?;
+    for key in ["title", "subtitle"] {
+        let s = v[key].as_str().ok_or("Invalid orbit title")?;
+        if s.trim().is_empty() || s.len() > 32 || !s.bytes().all(|c| (32..=126).contains(&c)) {
+            return Err("Invalid orbit title".into());
+        }
+    }
+    if !color(&v["ink"]) || !number(&v["seconds"], 6., 60.) {
+        return Err("Invalid orbit controls".into());
+    }
+    let logos = v["logos"].as_array().ok_or("Invalid orbit logos")?;
+    if logos.is_empty() || logos.len() > 16 {
+        return Err("Orbit logo budget exceeded".into());
+    }
+    let mut ids = HashSet::new();
+    for logo in logos {
+        obj(logo, &["id", "data", "band"])?;
+        let id = logo["id"].as_str().ok_or("Invalid orbit identity")?;
+        if !ident(id) || !ids.insert(id) || logo["band"].as_u64().is_none_or(|b| b > 7) {
+            return Err("Invalid orbit logo".into());
+        }
+        let data = logo["data"].as_str().ok_or("Invalid orbit PNG")?;
+        if data.len() > 131094 {
+            return Err("Orbit PNG budget exceeded".into());
+        }
+        let encoded = data
+            .strip_prefix("data:image/png;base64,")
+            .ok_or("Orbit logos require embedded PNGs")?;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .map_err(|_| "Invalid orbit PNG")?;
+        if bytes.len() < 24
+            || bytes.len() > 98304
+            || bytes[..8] != [137, 80, 78, 71, 13, 10, 26, 10]
+            || &bytes[12..16] != b"IHDR"
+        {
+            return Err("Invalid orbit PNG".into());
+        }
+        let width = u32::from_be_bytes(bytes[16..20].try_into().unwrap());
+        let height = u32::from_be_bytes(bytes[20..24].try_into().unwrap());
+        if width == 0 || height == 0 || width > 512 || height > 512 {
+            return Err("Orbit logo dimensions exceeded".into());
+        }
+    }
+    Ok(())
 }
 fn camera(v: &Value) -> Result<(), String> {
     obj(v, &["position", "target", "fov"])?;
@@ -132,11 +180,18 @@ pub fn validate(s: &Spec) -> Result<(), String> {
         return Err("Invalid 3D world".into());
     }
     if let Some(dj) = w.get("dj") {
-        obj(dj, &["role", "headerRatio", "headerRect"])?;
-        if !matches!(dj["role"].as_str(), Some("stage" | "spectrum"))
-            || dj.get("headerRatio").is_some_and(|v| !number(v, 0.1, 1.))
+        obj(dj, &["role", "headerRatio", "headerRect", "logoOrbit"])?;
+        if !matches!(
+            dj["role"].as_str(),
+            Some("stage" | "spectrum" | "logoOrbit")
+        ) || dj.get("headerRatio").is_some_and(|v| !number(v, 0.1, 1.))
         {
             return Err("Invalid DJ visual surface".into());
+        }
+        if dj["role"] == "logoOrbit" {
+            logo_orbit(&dj["logoOrbit"])?;
+        } else if dj.get("logoOrbit").is_some() {
+            return Err("Logo orbit requires its own DJ role".into());
         }
         if let Some(r) = dj.get("headerRect") {
             let a = r.as_array().ok_or("Invalid DJ header rectangle")?;
@@ -962,6 +1017,46 @@ pub fn key(instance: &str, spec: &Spec, w: u32, h: u32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn logo_orbit_accepts_only_bounded_embedded_pngs() {
+        let mut bytes = vec![
+            137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, b'I', b'H', b'D', b'R',
+        ];
+        bytes.extend(1u32.to_be_bytes());
+        bytes.extend(1u32.to_be_bytes());
+        let data = format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(&bytes)
+        );
+        let good = json!({"title":"360 DEAL","subtitle":"THE NEW","ink":"#171720","seconds":18,"logos":[{"id":"twitch","band":0,"data":data}]});
+        assert!(logo_orbit(&good).is_ok());
+        let mut bad = good.clone();
+        bad["logos"][0]["data"] = json!("https://example.com/logo.png");
+        assert!(logo_orbit(&bad).is_err());
+        let mut bad = good.clone();
+        bad["logos"][0]["band"] = json!(8);
+        assert!(logo_orbit(&bad).is_err());
+        let mut bad = good.clone();
+        bad["logos"]
+            .as_array_mut()
+            .unwrap()
+            .push(good["logos"][0].clone());
+        assert!(logo_orbit(&bad).is_err());
+        let mut bad = good.clone();
+        bad["title"] = json!("x".repeat(33));
+        assert!(logo_orbit(&bad).is_err());
+        let mut bad = good.clone();
+        bad["seconds"] = json!(0);
+        assert!(logo_orbit(&bad).is_err());
+        bytes[16..20].copy_from_slice(&513u32.to_be_bytes());
+        let mut bad = good.clone();
+        bad["logos"][0]["data"] = json!(format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        ));
+        assert!(logo_orbit(&bad).is_err());
+    }
 
     #[test]
     fn renderer_response_survives_a_nonblocking_accepted_socket() {
