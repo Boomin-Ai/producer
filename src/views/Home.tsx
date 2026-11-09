@@ -532,6 +532,13 @@ export function Home({
     current();
     if(seat.endpointId!==activeEndpointId())throw Error('The workspace changed. Open the invitation again.');
     if(outgoingSeat)throw Error('Leave the current appearance before joining another room.');
+    // This candidate has a pinned Boomin guest issuer. Independent servers
+    // retain the existing transport instead of being silently opted into it.
+    const nativeProgram=nativeAppearances&&(()=>{try{
+      const issuer=new URL(seat.apiBase),path=issuer.pathname.replace(/\/+$/,'');
+      return issuer.origin==='https://api.boomin.ai'&&!issuer.username&&!issuer.password&&
+        ['', '/v1', '/v1/connect', '/v1/app/producer'].includes(path);
+    }catch{return false;}})();
     let own:LiveRoom|undefined;
     let access:RoomEntryAccess|undefined;
     if(seat.videoSource==='program'){
@@ -541,13 +548,14 @@ export function Home({
       current();
       if(!own)throw Error('The selected local room is no longer available. Choose another room.');
       const currentRoom=view.kind==='room'?view:retainedRoom;
-      if(nativeAppearances&&currentRoom&&currentRoom.room.id!==own.id)
+      if(nativeProgram&&currentRoom&&currentRoom.room.id!==own.id)
         throw Error('Choose the currently active local room to send its running program.');
+      if(!nativeProgram&&retainedRoom)throw Error('Finish the active local output before joining this server with your Set.');
       const [engine,captures]=await Promise.all([ipc.liveEngineStatus(),Promise.all(endpoints.map(e=>recording.list(e.id)))]);current();
       const outputsActive=engine.session_state!=='idle'||captures.some(rows=>rows.some(row=>row.status==='recording'));
       if(outputsActive){
         const runtime=roomRuntimeRef.current;
-        if(!nativeAppearances)throw Error('Start the program appearance before streaming or recording locally. Webcam-only appearances can join while output is active.');
+        if(!nativeProgram)throw Error('Start the program appearance before streaming or recording locally. Webcam-only appearances can join while output is active.');
         if(!currentRoom||currentRoom.room.id!==own.id||runtime?.roomId!==own.id||!runtime.programReady)
           throw Error('Choose the currently active local room to send its running program.');
       }
@@ -564,7 +572,7 @@ export function Home({
     roomExit.current!.cancel();
     markRoomClick();
     setNetworkSheet(null);setPendingSeat(undefined);
-    if(nativeAppearances&&seat.videoSource==='program'&&own){
+    if(nativeProgram&&seat.videoSource==='program'&&own){
       const currentRoom=view.kind==='room'?view:retainedRoom;
       const runtime=roomRuntimeRef.current;
       setOutgoingSeat({...seat,nativeProgram:true,portrait:runtime?.roomId===own.id?runtime.outputPortrait:false,quality:720});

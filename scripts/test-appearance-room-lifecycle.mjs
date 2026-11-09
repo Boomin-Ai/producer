@@ -43,7 +43,7 @@ const bundle=await build({stdin:{contents:`
   const loadLive=()=>{},setManagerRecordingId=()=>{},setSurface=()=>{},setSettingsSection=()=>{},openSettings=()=>setView({kind:'home'}),setNetworkSheet=()=>{},setPendingSeat=()=>{};
   ${navigate}
   ${attach}
-  useEffect(()=>{window.openLocal=()=>setView({kind:'room',room});window.reopen=()=>openRoom(room);window.openWrong=()=>openRoom({...room,id:'different'});window.join=async(id='selected')=>startSeat({endpointId:'local',localRoomId:id,videoSource:'program',joinUrl:'https://guest.example/gi_saved'},new AbortController().signal);window.inspect=()=>({view:view.kind,retained:retainedRoom?.room.id,appearance:outgoingSeat,nativeAppearances});});
+  useEffect(()=>{window.openLocal=()=>setView({kind:'room',room});window.reopen=()=>openRoom(room);window.openWrong=()=>openRoom({...room,id:'different'});window.join=async(id='selected')=>startSeat({endpointId:'local',localRoomId:id,videoSource:'program',apiBase:'https://api.boomin.ai/v1/connect',joinUrl:'https://guest.example/gi_saved'},new AbortController().signal);window.inspect=()=>({view:view.kind,retained:retainedRoom?.room.id,appearance:outgoingSeat,nativeAppearances});});
   return withExitCover(view.kind==='room'?null:<div id="home">Home</div>);
  }
  createRoot(document.getElementById('root')).render(<Harness/>);

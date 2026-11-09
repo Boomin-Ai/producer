@@ -13,13 +13,13 @@ assert(start>0&&end>start);const code=ts.transpileModule(home.slice(start,end)+'
 const deferred=()=>{let resolve;return {promise:new Promise(r=>resolve=r),resolve:v=>resolve(v)};};
 function harness({rooms,access,streaming=false,recording=false,native=false,retained=false,visible=false,ready=true,portrait=false,existingSeat}={}){
  const calls=[],appearances=[],exports={},room={id:'selected',endpoint_id:'local',config:'{}'};let active='local';
- const endpoint={id:'local',kind:'connected',base_url:'https://local.example/v1/app/producer'},context={exports,DOMException,Error,Promise,producerLocalAccess,useCallback:fn=>fn,endpoints:[endpoint],activeEndpointId:()=>active,
+ const endpoint={id:'local',kind:'connected',base_url:'https://local.example/v1/app/producer'},context={exports,DOMException,Error,Promise,URL,producerLocalAccess,useCallback:fn=>fn,endpoints:[endpoint],activeEndpointId:()=>active,
   nativeAppearances:native,view:visible?{kind:'room',room}:{kind:'home'},retainedRoom:retained?{room}:null,outgoingSeat:existingSeat,roomRuntimeRef:{current:retained||visible?{roomId:room.id,outputsActive:streaming||recording,programReady:ready,outputPortrait:portrait}:null},
   ipc:{liveListRooms:async()=>rooms??[room],liveEngineStatus:async()=>({session_state:streaming?'streaming':'idle'})},guests:{access:async()=>access??hostAccess},recording:{list:async()=>recording?[{status:'recording'}]:[]},roomMetadata:()=>({server_room_id:'server-room'}),isBoomin:()=>true,
   roomExit:{current:{cancel:()=>calls.push('cancelExit')}},markRoomClick:()=>{},setNetworkSheet:()=>{},setPendingSeat:()=>{},setOutgoingSeat:value=>appearances.push(value),setView:value=>calls.push(value)};
  vm.runInNewContext(code,context);return {start:exports.start,calls,appearances,room,switchWorkspace:()=>active='other'};
 }
-const seat={endpointId:'local',videoSource:'program',localRoomId:'selected'};
+const seat={endpointId:'local',videoSource:'program',localRoomId:'selected',apiBase:'https://api.boomin.ai/v1/app/producer'};
 let h=harness();await h.start(seat,new AbortController().signal);assert.equal(h.calls[1].room.id,'selected');assert.equal(h.calls[1].access.endpointId,'local');assert.equal(h.calls[1].access.serverRoomId,'server-room');assert.equal(h.calls[1].access.endpointBaseUrl,'https://local.example/v1/app/producer');assert.equal(await h.calls[1].access.result,hostAccess);
 const rooms=deferred(),abort=new AbortController();h=harness({rooms:rooms.promise});const pending=h.start(seat,abort.signal);abort.abort();rooms.resolve([h.room]);await assert.rejects(pending,{name:'AbortError'});assert.equal(h.calls.length,0);
 const access=deferred(),close=new AbortController();h=harness({access:access.promise});const authorizing=h.start(seat,close.signal);await new Promise(r=>setTimeout(r,0));close.abort();access.resolve(hostAccess);await assert.rejects(authorizing,{name:'AbortError'});assert.equal(h.calls.length,0);
@@ -38,6 +38,12 @@ for(const options of [{native:true,streaming:true},{native:true,recording:true},
 }
 h=harness({native:true});await h.start(seat,new AbortController().signal);assert.equal(h.calls[1].kind,'room');assert.equal(h.appearances[0].nativeProgram,true);assert.equal(h.appearances[0].portrait,false);
 console.log('PASS native appearance attachment: running stream/recording uses the retained controller and selected portrait; unknown, wrong or unready controllers fail before mutation.');
+for(const apiBase of ['https://owned.example/v1/app/producer','https://api.boomin.ai/other/v1','https://api.boomin.ai.evil.test/v1','https://name:secret@api.boomin.ai/v1']){
+ h=harness({native:true});await h.start({...seat,apiBase},new AbortController().signal);assert.equal(h.calls[1].kind,'seat');assert.equal(h.appearances.length,0);
+ h=harness({native:true,retained:true,streaming:true});await assert.rejects(h.start({...seat,apiBase},new AbortController().signal));assert.equal(h.calls.length,0);assert.equal(h.appearances.length,0);
+}
+console.log('PASS native issuer scope: independent and noncanonical servers keep compatibility transport and cannot bypass active-output protection.');
+h=harness({native:true});await h.start(seat,new AbortController().signal);
 
 // Execute the production seat bootstrap, not a facsimile: a cached access
 // receipt must settle the actual restore flags without starting the host poll.
