@@ -1,6 +1,8 @@
 import {parsePackageText} from './validation';
 import {SetPicker} from './SetPicker';
 import {MediaAssetsDialog} from './MediaAssetsDialog';
+import {PublishSetDialog} from './PublishSetDialog';
+import {activeEndpointId} from '../../lib/workspace';
 import {ipc} from '../../lib/ipc';
 import {PACKAGE_BYTES} from './assets';
 import { useEffect, useMemo, useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
@@ -28,6 +30,7 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
   const loadLibrary=async(file:string)=>{try{const next=new RehearsalSession(parsePackageText(await ipc.setLibraryRead(file)),undefined,'prepare');onChange(next.package);setSelectedFile(file);setError('');}catch(e){setError(String(e));}};
   const saveImported=async(doc:PresentationPackage)=>{await ipc.setLibrarySave(JSON.stringify(doc));await refreshLibrary();};
   const [media,setMedia]=useState(false);
+  const [publication,setPublication]=useState<{doc:PresentationPackage;endpointId:string}|null>(null);
   const [help, setHelp] = useState(false);
   const [authoring, setAuthoring] = useState<{ intent: AuthoringIntent; doc: PresentationPackage } | null>(null);
   const edit = (intent: AuthoringIntent) => { setAuthoring({ intent, doc: session.exportPreparedPackage() }); };
@@ -60,6 +63,7 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
         <button onClick={()=>{document.getElementById(filesId)?.hidePopover();edit('edit-set');}}>Generate Set draft</button>
         <button onClick={()=>{document.getElementById(filesId)?.hidePopover();setError('');file.current?.click();}}>Import set</button>
         <button onClick={()=>{document.getElementById(filesId)?.hidePopover();edit('export');}}>Export set</button>
+        <button type="button" onClick={()=>{document.getElementById(filesId)?.hidePopover();const endpointId=activeEndpointId();if(!endpointId){setError('Choose a Boomin workspace before publishing a Set.');return;}setPublication({doc:session.exportPreparedPackage(),endpointId});}}>Publish to producer.dev</button>
         <button onClick={()=>{document.getElementById(filesId)?.hidePopover();setMedia(true);}}>Media assets</button>
       </div>
       {output&&!hideOutputAction&&<button disabled={output.busy} onClick={()=>void(output.active||output.busy?output.returnToRoom():output.apply())}>{output.active||output.busy?'Show room scene':'Show set'}</button>}
@@ -93,6 +97,7 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
     </section>
     <input ref={file} className="set-file-input" type="file" accept=".json,application/json" aria-label="Import set package" onChange={e => void importFile(e.target.files?.[0])} />
     {media&&<MediaAssetsDialog doc={session.exportPreparedPackage()} layoutId={state.layoutId} onLoad={onChange} onClose={()=>setMedia(false)}/>}
+    {publication&&<PublishSetDialog {...publication} returnFocus={trigger.current} onClose={()=>setPublication(null)}/>}
     {authoring && <PackageAuthoringDialog {...authoring} returnFocus={trigger.current} onLoad={doc => {void saveImported(doc).then(()=>{setSelectedFile('');onChange(doc);}).catch(e=>{setError(String(e));});}} onClose={() => setAuthoring(null)} />}
   </>;
 }

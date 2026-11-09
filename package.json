@@ -2,7 +2,7 @@
   "name": "producer",
   "private": true,
   "version": "0.4.90",
-  "description": "Producer by Boomin — the open-source studio for creators: post everywhere, stream everywhere.",
+  "description": "Producer by Boomin \u2014 the open-source studio for creators: post everywhere, stream everywhere.",
   "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
@@ -87,7 +87,10 @@
     "test:visual-review-browser": "node scripts/test-visual-review-browser.mjs",
     "test:roster-poll": "node scripts/test-roster-poll.mjs",
     "test:threads-social": "node scripts/test-threads-social.mjs",
-    "test:threads-browser": "node scripts/test-threads-browser.mjs"
+    "test:threads-browser": "node scripts/test-threads-browser.mjs",
+    "export:set-publication": "node scripts/export-set-publication.mjs",
+    "publish:set": "node scripts/publish-set.mjs",
+    "test:set-publication": "node scripts/test-set-publication.mjs && node scripts/test-publication-client.mjs && node scripts/test-site-public-routes.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.0",
