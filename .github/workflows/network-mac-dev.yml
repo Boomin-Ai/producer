@@ -60,6 +60,7 @@ jobs:
           sparse-checkout: |
             scripts/ci-network-mac-dev.sh
             scripts/macos-ticket-retry.sh
+            scripts/codesign-with-retry.sh
             scripts/ci-network-mac-dev.py
             scripts/ci-network-mac-dev-origin-smoke.mjs
 
