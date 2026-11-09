@@ -97,7 +97,7 @@ if [[ -f $ENGINE/bin/obs-ffmpeg-mux ]]; then cp "$ENGINE/bin/obs-ffmpeg-mux" "$C
 # an already installed production provider; this app does not install it.
 [[ ! -e $CONTENTS/embedded.provisionprofile && ! -d $CONTENTS/Library/SystemExtensions ]] || { echo 'Unexpected system-extension installer in isolated app' >&2; exit 1; }
 ENTITLEMENTS="$RUNNER_TEMP/network-mac-dev-config/dev-entitlements.plist"
-sign() { codesign --force --timestamp --options runtime --keychain "$KEYCHAIN" --sign "$SIGN_IDENT" "$@"; }
+sign() { bash "$TOOLS/codesign-with-retry.sh" --force --timestamp --options runtime --keychain "$KEYCHAIN" --sign "$SIGN_IDENT" "$@"; }
 # Same leaf/framework/CEF-helper/plugin/outer ordering as the Release assembly.
 find "$CONTENTS/Frameworks" -name '*.dylib' -type f -print0 | while IFS= read -r -d '' leaf; do sign "$leaf"; done
 CEF="$CONTENTS/Frameworks/Chromium Embedded Framework.framework"

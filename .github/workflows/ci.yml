@@ -85,6 +85,7 @@ jobs:
       - run: python3 scripts/ci-network-mac-dev.py self-test
       - run: node scripts/ci-network-mac-dev-origin-smoke.mjs --self-test
       - run: bash scripts/test-notary-staple-retry.sh
+      - run: bash scripts/test-codesign-retry.sh
 
   server:
     if: ${{ !(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feat/producer-network-links' && inputs.network_mac_source_sha != '') }}
