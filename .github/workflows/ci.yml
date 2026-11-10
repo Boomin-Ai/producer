@@ -130,6 +130,10 @@ jobs:
         env:
           PRODUCER_BROWSER_CHANNEL: chromium
         run: bun run test:camera-background-browser
+      - name: Unassigned Set slots preserve the native graphics budget
+        env:
+          PRODUCER_BROWSER_CHANNEL: chromium
+        run: bun run test:room-compiler-unbound-slot-browser
       - name: Verify guest playback feedback and stable expanded program video
         env:
           PRODUCER_BROWSER_CHANNEL: chromium

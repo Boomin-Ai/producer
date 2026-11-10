@@ -19,6 +19,7 @@
     "test:room-publisher-browser": "node scripts/test-room-publisher-lifecycle.mjs",
     "test:manager-cache": "node scripts/test-manager-cache.mjs",
     "test:prepared-scenes": "node scripts/test-prepared-scenes.mjs",
+    "test:room-compiler-unbound-slot-browser": "node scripts/test-room-compiler-unbound-slot-browser.mjs",
     "test:set-capture-recovery-browser": "node scripts/test-set-capture-recovery-browser.mjs",
     "dev": "vite",
     "dev:room": "bash scripts/dev-room.sh",

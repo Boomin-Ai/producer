@@ -4,7 +4,7 @@ import {mediaPosition} from '../presentation/playback';
 import {layoutTransition} from '../presentation/layoutTransition';
 import {layoutFieldKeys} from '../presentation/layoutFields';
 import {evaluate,RehearsalSession} from '../presentation/rehearsal';
-import {compileRoomScene,nativeNodeId} from './roomCompiler';
+import {compileRoomScene,isUnboundSlotPlaceholder,nativeNodeId} from './roomCompiler';
 import type {RenderPlan,OutputTarget} from './scene';
 
 export type SceneReadiness={state:'queued'|'loading'|'ready'|'error';error?:string};
@@ -44,7 +44,8 @@ function digest(text:string){let a=2166136261,b=5381;for(let i=0;i<text.length;i
 function visual(node:RenderNode):unknown{const {playback:_playback,motionClass:_motion,...rest}=node;if(rest.scene3d){const {cue:_cue,view:_view,cueSequence:_sequence,...definition}=rest.scene3d;rest.scene3d={...definition,cue:"neutral"};}return {...rest,children:node.children.map(visual)};}
 export function sceneIdentity(spec:SceneSpec){return JSON.stringify({definition:spec.definition,root:visual(spec.projection.root),canvas:spec.layout,bindings:spec.bindings,target:spec.target,targets:spec.targets,assets:spec.assetVersion});}
 export function runtimePlan(plan:Plan,projection:OutputProjection):Plan{
- const next=structuredClone({...plan,assets:{}});next.clock=projection.timeline?.clock;next.motion=projection.timeline?.tracks.map(t=>({...t,target:nativeNodeId(t.target)}))??[];
+ const unbound=new Set<string>();const placeholders=(n:RenderPlan['root'])=>{if(isUnboundSlotPlaceholder(n))unbound.add(n.id);n.children.forEach(placeholders);};placeholders(plan.root);
+ const next=structuredClone({...plan,assets:{}});next.clock=projection.timeline?.clock;next.motion=projection.timeline?.tracks.filter(t=>!unbound.has(nativeNodeId(t.target))).map(t=>({...t,target:nativeNodeId(t.target)}))??[];
  const transports=new Map<string,RenderNode>();const collect=(n:RenderNode)=>{if(n.scene3d){next.scenes3d??={};next.scenes3d[n.scene3d.id+"-"+n.scene3d.pass]=structuredClone(n.scene3d);}transports.set(nativeNodeId(n.id),n);n.children.forEach(collect);};collect(projection.root);
  const patch=(n:RenderPlan['root'])=>{const authored=transports.get(n.id);if(authored?.playback){const now=Date.now();Object.assign(n,{playback:{...authored.playback,positionMs:mediaPosition(authored.playback,now),anchorMs:now}});}n.children.forEach(patch);};patch(next.root);
  return next;
