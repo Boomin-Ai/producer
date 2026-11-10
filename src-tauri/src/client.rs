@@ -48,6 +48,21 @@ fn error_message(body: &Value, status: u16) -> String {
         .unwrap_or_else(|| format!("endpoint returned HTTP {status}"))
 }
 
+fn hosted_control_session(ticket: &Value) -> Value {
+    let mut session = serde_json::json!({
+        "signaling_ticket": ticket.get("ticket").cloned().unwrap_or(Value::Null),
+        "signaling_url": ticket.get("signaling_url").cloned().unwrap_or(Value::Null),
+        "role": ticket.get("role").cloned().unwrap_or(Value::Null),
+        "can": ticket.get("can").cloned().unwrap_or(Value::Null),
+    });
+    // Opt in only to the known, numeric acknowledgement contract. Older
+    // deployments and unknown versions keep their existing wire behavior.
+    if ticket.get("publisher_protocol").and_then(Value::as_u64) == Some(1) {
+        session["publisher_protocol"] = 1.into();
+    }
+    session
+}
+
 impl ProducerClient {
     pub fn new(base_url: &str, token: &str) -> Self {
         Self {
@@ -404,12 +419,7 @@ impl ProducerClient {
             // Same shape the webview's RoomControlLink consumes; the ticket
             // route already returns `signaling_url` (api #392).
             let t = self.room_channel_ticket(room_id).await?;
-            return Ok(serde_json::json!({
-                "signaling_ticket": t.get("ticket").cloned().unwrap_or(Value::Null),
-                "signaling_url": t.get("signaling_url").cloned().unwrap_or(Value::Null),
-                "role": t.get("role").cloned().unwrap_or(Value::Null),
-                "can": t.get("can").cloned().unwrap_or(Value::Null),
-            }));
+            return Ok(hosted_control_session(&t));
         }
         let resp = self
             .http()
@@ -1368,4 +1378,48 @@ fn chrono_now_iso() -> String {
         (sod % 3600) / 60,
         sod % 60
     )
+}
+
+#[cfg(test)]
+mod publisher_protocol_tests {
+    use super::hosted_control_session;
+    use serde_json::{json, Value};
+
+    #[test]
+    fn hosted_session_passes_only_the_known_numeric_publisher_protocol() {
+        let ticket = json!({"ticket":"test-ticket","signaling_url":"/room","role":"host","can":{"control":true}});
+        let legacy = hosted_control_session(&ticket);
+        assert_eq!(
+            legacy,
+            json!({"signaling_ticket":"test-ticket","signaling_url":"/room","role":"host","can":{"control":true}})
+        );
+        for unsupported in [
+            Value::Null,
+            json!(false),
+            json!("1"),
+            json!(-1),
+            json!(0),
+            json!(2),
+            json!(1.5),
+            json!({}),
+        ] {
+            let mut next = ticket.clone();
+            next["publisher_protocol"] = unsupported;
+            assert_eq!(hosted_control_session(&next), legacy);
+        }
+        let mut acknowledged = ticket;
+        acknowledged["publisher_protocol"] = json!(1);
+        assert_eq!(
+            hosted_control_session(&acknowledged)["publisher_protocol"],
+            json!(1)
+        );
+    }
+
+    #[test]
+    fn absent_hosted_ticket_fields_keep_the_existing_null_shape() {
+        assert_eq!(
+            hosted_control_session(&Value::Null),
+            json!({"signaling_ticket":null,"signaling_url":null,"role":null,"can":null})
+        );
+    }
 }
