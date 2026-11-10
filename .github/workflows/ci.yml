@@ -134,6 +134,10 @@ jobs:
         env:
           PRODUCER_BROWSER_CHANNEL: chromium
         run: bun run test:room-compiler-unbound-slot-browser
+      - name: Set sliders preserve final values and room ownership
+        env:
+          PRODUCER_BROWSER_CHANNEL: chromium
+        run: bun run test:number-slider-browser
       - name: Verify guest playback feedback and stable expanded program video
         env:
           PRODUCER_BROWSER_CHANNEL: chromium

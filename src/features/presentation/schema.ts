@@ -199,7 +199,8 @@ export type RehearsalAction = Type<typeof action>;
 const control = union(
   object({ id, type: literal('button'), label: string(80), action, when: optional(binding), enabled: optional(binding) }),
   object({ id, type: literal('text'), label: string(80), key: id, when: optional(binding) }),
-  object({ id, type: literal('number'), label: string(80), key: id, when: optional(binding) }),
+  object({ id, type: literal('number'), label: string(80), key: id, when: optional(binding),
+    presentation: optional(literal('slider')), step: optional(number(.000001, 1e6)) }),
 );
 export type SetControl = Type<typeof control>;
 const controlReference=string(210,'^(builtin:layout|set:[a-zA-Z][a-zA-Z0-9_-]{0,63}|module:[a-zA-Z][a-zA-Z0-9_-]{0,63}:([a-zA-Z][a-zA-Z0-9_-]{0,63}|\\$(lifecycle|weather-location|behavior-tools)))$');
@@ -419,6 +420,7 @@ export function parsePackage(value: unknown): PresentationPackage {
     if (c.type !== 'button') {
       const def = doc.set.values[c.key];
       if (!def || def.type !== c.type) fail('$.set.controls', 'Control value/type does not match declared field.');
+      if(c.type==='number'&&c.presentation==='slider'&&def.type==='number'&&(def.min>=def.max||c.step!==undefined&&c.step>def.max-def.min))fail('$.set.controls','Slider needs increasing bounds and a step within its range.');
     } else if (c.action.type === 'layout.select' && !layouts.has(c.action.layoutId)) fail('$.set.controls', 'Unknown layout action.');
     else if (c.action.type === 'value.set') {
       if (!hasOwn(doc.set.values, c.action.key)) fail('$.set.controls', 'Unknown value action.');

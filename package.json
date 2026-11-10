@@ -20,6 +20,7 @@
     "test:manager-cache": "node scripts/test-manager-cache.mjs",
     "test:prepared-scenes": "node scripts/test-prepared-scenes.mjs",
     "test:room-compiler-unbound-slot-browser": "node scripts/test-room-compiler-unbound-slot-browser.mjs",
+    "test:number-slider-browser": "node scripts/test-number-slider-browser.mjs",
     "test:set-capture-recovery-browser": "node scripts/test-set-capture-recovery-browser.mjs",
     "dev": "vite",
     "dev:room": "bash scripts/dev-room.sh",

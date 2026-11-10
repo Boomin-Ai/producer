@@ -27,6 +27,7 @@ import {SetSourceCreator} from './SetSourceCreator';
 import {SetConfiguration} from './SetConfiguration';
 import {ControlArrangementEditor,useControlArrangement} from './ControlArrangementEditor';
 import {CommittedField} from './CommittedField';
+import {NumberSlider} from './NumberSlider';
 import {CameraBackgroundControls} from './CameraBackgroundControls';
 
 export type SetEditorTake = {
@@ -249,6 +250,8 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
         {c.label}</button>;
     }
     const def = doc.set.values[c.key];
+    if(c.type==='number'&&c.presentation==='slider'&&def.type==='number')return <NumberSlider key={c.id} owner={session} label={c.label} value={Number(state.values[c.key])} min={def.min} max={def.max} step={c.step} disabled={blocked} pending={!!state.controlPending} isPending={()=>!!session.snapshot().controlPending}
+      onCommit={value=>{onFieldEdit?.(c.key);return session.send({type:'field',key:c.key,value});}}/>;
     if(session.hasRoomControl())return <CommittedField key={c.id} label={c.label} field={def} value={state.values[c.key]} disabled={blocked} pending={!!state.controlPending} onApply={value=>{onFieldEdit?.(c.key);return session.send({type:'field',key:c.key,value});}}/>;
     return <label key={c.id}>{c.label}<input aria-label={c.label} type={c.type === 'number' ? 'number' : 'text'}
       disabled={blocked} value={String(state.values[c.key])} maxLength={def.type === 'text' ? def.maxLength : undefined}
