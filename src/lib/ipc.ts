@@ -993,7 +993,7 @@ export const guests = {
   /** A ticket to the room channel's CONTROL side for the host's Producer:
    * scene list out, mods' cuts in. */
   controlSession: (endpointId: string, roomId: string) =>
-    invoke<{ signaling_ticket: string; signaling_url: string; peer_id?: string }>("room_control_session", { endpointId, roomId }),
+    invoke<{ signaling_ticket: string; signaling_url: string; peer_id?: string; role?: string; publisher_protocol?: number }>("room_control_session", { endpointId, roomId }),
   /** Slot order — the FULL list of guest ids, first on top. */
   order: (endpointId: string, roomId: string, order: string[]) =>
     invoke("room_guest_order", { endpointId, roomId, order }),
