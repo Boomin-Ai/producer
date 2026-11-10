@@ -5865,11 +5865,12 @@ export function LiveView({
     // Open server: the host only (a mod runs views/ModSeat.tsx). Boomin: any
     // role — a mod's Producer lights the host's list off `scene.cut` frames
     // and takes the tally on `interactions:control` (the hub gates it).
-    if (roomRole !== "host" && !boominRoom) return;
     const sid = cfg.server_room_id;
     sceneOrderRef.current = { epoch: 0, sequence: 0 };
     controlHasSnapshot.current = false;
     let link: RoomControlLink | null = null;
+    const ownsCommand = (epoch: unknown) => !!link?.publisherReady &&
+      (link.publisherEpoch === null || link.publisherEpoch === epoch);
     let modulePublisher:ReturnType<typeof modulePushPublisher>|undefined;
     let alive = true;
     let votesRequest = 0;
@@ -5878,7 +5879,11 @@ export function LiveView({
     setSavedVotes([]);
     selectedVoteRef.current = null;
     let restoreAudienceOnSnapshot = false;
-    let publisherRejected = false;
+    let publisherNotice: number | null = null;
+    const clearPublisherNotice = () => {
+      if (publisherNotice !== null) dismiss(publisherNotice);
+      publisherNotice = null;
+    };
     let sourceLogEpoch = -1;
     const controlLogId = crypto.randomUUID().slice(0, 8);
     const logControl = (event: string, data: Record<string, unknown> = {}) => {
@@ -5889,6 +5894,7 @@ export function LiveView({
       const ep = await resolveActiveEndpoint().catch(() => null);
       if (!ep || !alive) return;
       const boomin = isBoomin(ep);
+      if (roomRoleRef.current !== "host" && !boomin) return;
       if(boomin)modulePublisher=modulePushPublisher(ep.id,sid);
       link = new RoomControlLink({
         origin: new URL(ep.base_url).origin,
@@ -5904,20 +5910,35 @@ export function LiveView({
         subscribe: boomin ? [...BOOMIN_ROOM_CHANNELS] : ["interaction:host", "stage"],
         parse: boomin ? parseBoominFrame : undefined,
         renewAfterMs: 105_000,
+        onPublisherState: (state) => {
+          if (!alive) return;
+          logControl("publisher", { phase: state.phase, code: state.code, confirmed: state.confirmed, retrying: state.retrying });
+          if (state.phase === "ready" && state.confirmed) {
+            clearPublisherNotice();
+            setAudienceError(null);
+          } else if (state.phase === "rejected") {
+            const message = state.retrying ? "Reconnecting room controls…"
+              : state.code === "publisher_busy"
+              ? "Another Producer session controls this room. Close that room session, then reopen this one."
+              : state.code === "stale_publisher"
+                ? "This connection no longer controls the room. Reopen the room on the host device."
+                : state.code === "publisher_ack_timeout"
+                  ? "The server did not confirm room control. Reopen the room to retry."
+                  : "Room control is unavailable. Reopen the room to retry.";
+            publisherNotice = state.retrying
+              ? notify(message, { key: "room-publisher", tone: "info", sticky: true })
+              : notifyError(message, { key: "room-publisher" });
+          }
+        },
         onFrame: (frame: ControlFrame) => {
+          if (!alive) return;
           modulePublisher?.frame(frame as unknown as Record<string,unknown>);
-          if(frame.type==="scene.published"&&roomRoleRef.current==="host")presentationRelay.flush(value=>link?.send(value)??false,presentedSession.current.moduleSnapshot(),true);
           if (["error", "audience.error", "scene.state", "scene.published", "room.sources"].includes(frame.type)) {
             const info = frame as Record<string, unknown>;
             if (frame.type !== "room.sources" || info.epoch !== sourceLogEpoch) {
               logControl(frame.type, { code: info.code, epoch: info.epoch, sequence: info.sequence });
             }
             if (frame.type === "room.sources" && typeof info.epoch === "number") sourceLogEpoch = info.epoch;
-          }
-          if (frame.type === "scene.published" && roomRoleRef.current === "host" && publisherRejected) {
-            publisherRejected = false;
-            dismissKey("room-publisher");
-            setAudienceError(null);
           }
           if (frame.type.startsWith("audience.")) {
             const f = frame as Record<string, unknown>;
@@ -5936,7 +5957,6 @@ export function LiveView({
             if (frame.type === "audience.hands" && Array.isArray(f.hands)) setAudienceHands(f.hands as AudienceHand[]);
             if (frame.type === "audience.chat") setAudienceState((previous) => ({ ...previous, chat: [...(previous.chat ?? []).slice(-99), f.message as NonNullable<AudienceSnapshot['chat']>[number]] }));
             if (frame.type === "audience.invite.request" && roomRoleRef.current === "host" && typeof f.id === "string") void inviteAudience(f.id);
-            if (frame.type === "audience.error" && f.code === "publisher_busy") publisherRejected = true;
             if (frame.type === "audience.error") setAudienceError(f.code === "publisher_busy"
               ? "Another Producer session controls this room. Close that room session, then reopen this one."
               : String(f.code));
@@ -5976,15 +5996,16 @@ export function LiveView({
             }
             return;
           }
-          if (frame.type === "room.action" && roomRoleRef.current === "host") {
+          if (frame.type === "room.action" && roomRoleRef.current === "host" && link?.publisherReady) {
             const command = frame as unknown as RoomAction & { server_now: number };
+            if (!ownsCommand(command.epoch)) return;
             const key = `${command.kind}:${command.target}`;
             if (command.epoch < actionEpoch.current || command.sequence <= (sourceOrder.current.get(key) ?? 0)) return;
             if (command.epoch > actionEpoch.current) sourceOrder.current.clear();
             actionEpoch.current = command.epoch; sourceOrder.current.set(key, command.sequence);
             const deadline = performance.now() + Math.max(0, command.expires_at - command.server_now);
             sceneExecutionRef.current = sceneExecutionRef.current.catch(() => {}).then(async () => {
-              if (!alive || performance.now() >= deadline || actionEpoch.current !== command.epoch || sourceOrder.current.get(key) !== command.sequence) return;
+              if (!alive || !ownsCommand(command.epoch) || performance.now() >= deadline || actionEpoch.current !== command.epoch || sourceOrder.current.get(key) !== command.sequence) return;
               let error: string | undefined;
               try {
                 if (command.kind === "participant.stage") {
@@ -6052,16 +6073,12 @@ export function LiveView({
           if (frame.type === "error" && !(frame as { channel?: string }).channel) {
             const code = (frame as { code?: string }).code;
             const ownershipError = code === "publisher_busy" || code === "stale_publisher" || code === "host_unavailable";
-            if (ownershipError) publisherRejected = true;
-            notifyError(code === "publisher_busy"
-              ? "Another Producer session controls this room. Close that room session, then reopen this one."
-              : code === "stale_publisher"
-                ? "This connection no longer controls the room. Reopen the room on the host device."
-              : code ?? "Room control unavailable", { key: ownershipError ? "room-publisher" : "guests" });
+            if (!ownershipError) notifyError(code ?? "Room control unavailable", { key: "guests" });
             return;
           }
-          if (frame.type !== "scene.cut" || roomRoleRef.current !== "host") return;
+          if (frame.type !== "scene.cut" || roomRoleRef.current !== "host" || !link?.publisherReady) return;
           const cut = frame as SceneCutFrame;
+          if (!ownsCommand(cut.epoch)) return;
           if (cut.command_id && typeof cut.sequence === "number" && typeof cut.epoch === "number") {
             const previous = sceneOrderRef.current;
             if (cut.epoch < previous.epoch || (cut.epoch === previous.epoch && cut.sequence <= previous.sequence)) return;
@@ -6071,7 +6088,7 @@ export function LiveView({
           // in our queue. Deadline uses the server's relative clock budget.
           const deadline = performance.now() + Math.max(0, (cut.expires_at ?? cut.server_now + 4000) - cut.server_now);
           sceneExecutionRef.current = sceneExecutionRef.current.catch(() => {}).then(async () => {
-            if (!alive || performance.now() >= deadline) return;
+            if (!alive || !ownsCommand(cut.epoch) || performance.now() >= deadline) return;
             const newest = sceneOrderRef.current;
             if (cut.command_id && (newest.epoch !== cut.epoch || newest.sequence !== cut.sequence)) return;
             const sc = scenesRef.current.find((x) => x.id === cut.scene_id);
@@ -6096,6 +6113,7 @@ export function LiveView({
           if (roomRoleRef.current === "host") {
             restoreAudienceOnSnapshot = true;
             link?.publishScenes(scenesRef.current, activeSceneRef.current);
+            presentationRelay.flush(value=>link?.send(value)??false,presentedSession.current.moduleSnapshot(),true);
             publishSourceTruth();
           }
         },
@@ -6106,12 +6124,13 @@ export function LiveView({
     return () => {
       alive = false;
       link?.stop();
+      clearPublisherNotice();
       modulePublisher?.close();
       for (const sender of audienceSenders.current.values()) sender.stop();
       audienceSenders.current.clear();
       if (controlRef.current === link) controlRef.current = null;
     };
-  }, [room?.id, cfg.server_room_id, roomRole, boominRoom,seat]);
+  }, [room?.id, cfg.server_room_id, roomRole,seat]);
   useEffect(() => { publishSourceTruth(); }, [sources, roomRole]);
 
   // Every change to the list or the active scene reaches the mods. Open
