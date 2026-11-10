@@ -277,6 +277,13 @@
 .set-source-card { border:1px solid #29323e; border-radius:8px; padding:10px; display:flex; flex-direction:column; gap:8px; }
 .set-source-card h4 { margin:0; display:flex; gap:8px; align-items:center; }
 .set-source-card h4>span { color:#929daa; }
+.set-camera-backgrounds { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
+.set-camera-background { margin:0; padding:8px 10px; min-width:200px; border:1px solid var(--line-1,#29323e); border-radius:8px; }
+.set-camera-background legend { padding:0 4px; font-size:12px; }
+.set-camera-background > div { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+.set-camera-background button[aria-pressed="true"] { background:var(--surface-3,#303b49); border-color:var(--muted,#8f9ba9); }
+.set-camera-background [role="status"] { font-size:11px; color:var(--muted,#8f9ba9); }
+.set-camera-background .set-error { margin:6px 0 0; }
 .set-framing-adjust { border:1px solid #29323e; border-radius:6px; padding:0 8px; }
 .set-framing-adjust .set-slot-position { display:flex; gap:8px; margin:8px 0; }
 .set-framing-adjust .set-slot-position>span { min-width:0; flex:1; }

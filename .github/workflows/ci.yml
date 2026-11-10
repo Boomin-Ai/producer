@@ -42,6 +42,7 @@ jobs:
       - run: bun run test:performance-trace
       - run: python3 scripts/profile-production.py --self-test
       - run: bun run test:presentation
+      - run: bun run test:camera-background
       - run: node scripts/test-dj-set-feed.mjs
       - run: bun run test:module-push
       - run: bun run test:set-control
@@ -125,6 +126,10 @@ jobs:
         env:
           PRODUCER_BROWSER_CHANNEL: chromium
         run: bun run test:room-publisher-browser
+      - name: Camera background controls
+        env:
+          PRODUCER_BROWSER_CHANNEL: chromium
+        run: bun run test:camera-background-browser
       - name: Verify guest playback feedback and stable expanded program video
         env:
           PRODUCER_BROWSER_CHANNEL: chromium

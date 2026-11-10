@@ -77,6 +77,7 @@ import {
   type FilterState,
 } from "../lib/filters";
 import { filterEditQueue, withSourceFilters } from "../lib/sourceFilters";
+import { cameraBackgroundControls, type CameraBackgroundContext } from "../lib/cameraBackground";
 import { DEMO_CHAT, DEMO_VIDEO_URL, demoOn } from "../lib/demo";
 import { activeEndpointId, isBoomin, resolveActiveEndpoint } from "../lib/workspace";
 import { nativeGuestSources } from "../lib/nativeGuestSources";
@@ -2717,6 +2718,7 @@ export function LiveView({
   const entryAccessRef = useRef(entryAccess);
   const [producerLocalAuthorized,setProducerLocalAuthorized]=useState(()=>!seat);
   const roomEngineRef = useRef<ReturnType<typeof roomSession> | null>(null);
+  const cameraBackgroundChanged = useRef<(source:string)=>void>(()=>{});
   useLayoutEffect(() => {
     const session = roomSession();
     roomEngineRef.current = session;
@@ -3119,6 +3121,7 @@ export function LiveView({
       if (room) await ipc.liveUpdateRoom(room.id, { config: serializeConfig(next) });
     });
     if (!chain) throw new Error("The room is closed. Reopen it to edit filters.");
+    if(op.op!=="list")cameraBackgroundChanged.current(source);
     return chain;
   }, [room?.id]);
   const setLayout = (l: Layout, deferSave = false) => writeCfg({ ...cfgRef.current, layout: l }, deferSave);
@@ -4707,6 +4710,23 @@ export function LiveView({
   const setOutputEnabled=docApplied && !mountVeil && isHost && !(import.meta.env.DEV && import.meta.env.VITE_SCENE3D_PROOF);
   useDjSetFeeds(setRehearsal,roomId,setOutputEnabled);
   const setOutput=useSetOutput(setRehearsal,roomId,sources,setOutputEnabled,cfg.presentation?.bindings ?? {},bindings=>writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.preparedPackage(),bindings,framing:cfgRef.current.presentation?.framing}},true),cfg.presentation?.framing ?? {},framing=>writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.preparedPackage(),bindings:cfgRef.current.presentation?.bindings ?? {},framing}},true));
+  const cameraBackgroundContext = useRef<CameraBackgroundContext & {set:RehearsalSession}>({room:roomId,owner:null,set:setRehearsal,enabled:false,bindings:{},sources:{}});
+  cameraBackgroundContext.current={room:roomId,owner:roomEngineRef.current,set:setRehearsal,enabled:setOutputEnabled&&setOutput.active,bindings:setOutput.bindings,sources};
+  const setCameraBackground = useMemo(()=>cameraBackgroundControls({
+    current:()=>{
+      const current=cameraBackgroundContext.current;
+      return {...current,owner:roomEngineRef.current,enabled:current.enabled&&current.set.snapshot().workspaceMode==='live'};
+    },
+    filters:filtersIpc,
+    persist:async(source,chain)=>{
+      const next=withSourceFilters(cfgRef.current,source,chain);
+      if(next===cfgRef.current)return;
+      cfgRef.current=next;setCfgState(next);
+      if(roomId)await ipc.liveUpdateRoom(roomId,{config:serializeConfig(next)});
+    },
+  }),[roomId]);
+  cameraBackgroundChanged.current=setCameraBackground.changed;
+  if(setOutput.renderer==='native')setOutput.cameraBackground=setCameraBackground;
   if(setOutput.renderer==='native')setOutput.createSource=async(slot,spec,label,assign=true)=>{
     const id='set-source-'+crypto.randomUUID();
     const next=await invoke<LiveSources>('live_set_source_create',{id,label,spec});

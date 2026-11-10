@@ -27,6 +27,7 @@ import {SetSourceCreator} from './SetSourceCreator';
 import {SetConfiguration} from './SetConfiguration';
 import {ControlArrangementEditor,useControlArrangement} from './ControlArrangementEditor';
 import {CommittedField} from './CommittedField';
+import {CameraBackgroundControls} from './CameraBackgroundControls';
 
 export type SetEditorTake = {
   phase: string;
@@ -438,6 +439,11 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
     {output?.layoutReadiness&&views.some(view=>viewReadiness(view)?.state==='error')&&<p className="set-error">Some layouts could not load. <button onClick={output.retryPreparation}>Retry loading</button></p>}
     {output?.error && <div role="alert" className="set-error">{output.error} <button disabled={output.busy&&!output.active} onClick={()=>void output.apply()}>Retry update</button></div>}
     {state.trace[state.trace.length - 1]?.message.startsWith('Rejected:') && <p role="status" className="set-error">{state.trace[state.trace.length - 1]!.message}</p>}
+    {!editorOnly && output?.cameraBackground && <section className="set-camera-backgrounds" aria-label="Camera backgrounds">
+      {doc.set.slots.filter((slot,index,slots) => visibleSlots.has(slot.id) && output.sources.items?.some(item => item.id === output.bindings[slot.id] && item.kind === 'camera') && !slots.slice(0,index).some(previous => visibleSlots.has(previous.id) && output.bindings[previous.id] === output.bindings[slot.id])).map(slot =>
+        <CameraBackgroundControls key={`${slot.id}:${output.bindings[slot.id]}`} slot={slot.id} source={output.bindings[slot.id]} label={slot.label}
+          controls={output.cameraBackground!} disabled={blocked || !output.active || state.workspaceMode !== 'live'} />)}
+    </section>}
     <div className={`set-sections ${rehearsing ? 'is-rehearsing' : 'is-prepared'}${doc.show ? ' has-show' : ' set-only'}${hasHostMedia ? ' has-media' : ''}`}>
       {!doc.show && <>
         <section className="set-manual-controls" aria-label="Set controls">
