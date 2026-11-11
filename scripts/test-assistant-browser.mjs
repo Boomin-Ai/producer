@@ -18,7 +18,7 @@ try {
   const {AUTHORING_CATALOG}=await import('/src/features/presentation/authoring/catalog.ts');
   window.__TAURI_INTERNALS__={invoke:async(command)=>{window.nativeCalls.push(command);if(command==='assistant_authoring_capabilities')return {schema:'producer.native-authoring/1',catalogRevision:2,packageSchema:'producer.presentation/2',features:[...AUTHORING_CATALOG.features],nativeAdmission:'separate-native-preparation-required'};if(command==='plugin:app|version')return '0.4.90';if(command==='plugin:event|listen')return 1;return null;},transformCallback:()=>1,convertFileSrc:p=>p};
   window.mockAssistant={status:async()=>({accounts:[{id:'account-test',email:'test@example.invalid',planEnabled:true,verified:true}],active:'account-test',signIn:null}),turn:async(turn,event)=>{
-    window.turns.push(turn);
+    window.turns.push(structuredClone(turn));
     if(window.blockNextTurn){await new Promise(resolve=>{window.releaseLate=()=>{event({type:'text',text:'Late result'});event({type:'completed',output:[]});resolve();}});return;}
     if(!turn.tools.length){event({type:'text',text:'Design sharing is off.'});event({type:'completed',output:[{type:'message',role:'assistant',content:[{type:'output_text',text:'Design sharing is off.'}]}]});return;}
     const results=turn.input.filter(i=>i.type==='function_call_output');

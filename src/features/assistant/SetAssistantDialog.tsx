@@ -30,6 +30,7 @@ export default function SetAssistantDialog({document, onLoad, onClose}: {documen
   const dialog = useRef<HTMLDialogElement>(null);
   const worker = useRef<SetAuthoringWorker | undefined>(undefined);
   const generation = useRef(0), turnId = useRef<string | undefined>(undefined), authAttempt = useRef<string | undefined>(undefined);
+  const accountEpoch=useRef('');
   const history = useRef<unknown[]>([]);
   const [draft, setDraft] = useState<DraftSnapshot>();
   const [status, setStatus] = useState<AssistantStatus>();
@@ -66,10 +67,16 @@ export default function SetAssistantDialog({document, onLoad, onClose}: {documen
   }, [status?.signIn?.status]);
   useEffect(() => {
     let disposed = false; setModels([]); setModel('');
+    const epoch=`${active?.id??''}:${active?.planEnabled??false}:${status?.signIn?.status==='complete'?status.signIn.id:''}`;
+    if(accountEpoch.current&&accountEpoch.current!==epoch) {
+      ++generation.current;setBusy(false);history.current=[];setMessages([]);
+      if(turnId.current)void chatgpt.cancel(turnId.current).catch(()=>{});
+    }
+    accountEpoch.current=epoch;
     if (!active?.planEnabled) return;
     void chatgpt.models(active.id).then(value => {if (!disposed) {setModels(value); setModel(value[0]?.slug ?? '');}}).catch(e => {if (!disposed) setError(errorText(e));});
     return () => {disposed = true;};
-  }, [active?.id, active?.planEnabled]);
+  }, [active?.id, active?.planEnabled,status?.signIn?.status==='complete'?status.signIn.id:'']);
 
   async function stop() {
     ++generation.current; setBusy(false); setNotice('Assistant stopped. Completed draft changes are saved.');
