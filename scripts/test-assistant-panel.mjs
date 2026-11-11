@@ -88,7 +88,7 @@ try {
   await page.evaluate(({dock,width})=>{window.miniFixture.style.width=width+'px';window.miniFixture.firstElementChild.className=dock==='top'?'rm-dock rm-dock-top':'rm-dock rm-dock-bottom sized slim';},{dock,width});
   const metrics=await page.locator('.assistant-mini').evaluate(el=>{const box=el.getBoundingClientRect();return {height:box.height,controls:[...el.querySelectorAll('textarea,button')].map(control=>{const r=control.getBoundingClientRect();return {inside:r.left>=box.left-1&&r.right<=box.right+1&&r.top>=box.top-1&&r.bottom<=box.bottom+1,width:r.width,height:r.height};})};});
   assert(metrics.height>=38,`${dock} mini dock supplies a real content height`);
-  assert(metrics.controls.every(control=>control.inside&&control.height>=26&&control.width>=20),`${dock} ${width}px mini prompt and controls remain visible`);
+  assert(metrics.controls.every(control=>control.inside&&control.height>=26&&control.width>=20),`${dock} ${width}px mini prompt and controls remain visible: ${JSON.stringify(metrics)}`);
  }
  assert.equal(await page.getByRole('button',{name:'Send ↗',exact:true}).isDisabled(),true);
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('   ');assert.equal(await page.getByRole('button',{name:'Send ↗',exact:true}).isDisabled(),true);
@@ -97,7 +97,9 @@ try {
  assert.equal(await page.getByRole('button',{name:'Send ↗',exact:true}).isEnabled(),true);
  if(process.env.PRODUCER_PANEL_SCREENSHOTS)await page.locator('.assistant-docked').screenshot({path:process.env.PRODUCER_PANEL_SCREENSHOTS+'/mini.png'});
  await page.getByRole('button',{name:'Expand Assistant',exact:true}).click();
+ await page.getByRole('dialog',{name:'Assistant conversation panel',exact:true}).waitFor();
  assert.equal(await page.getByRole('textbox',{name:'Assistant prompt'}).inputValue(),multiline,'expanding retains the complete shared prompt');
+ await page.getByRole('button',{name:'Expand dock',exact:true}).click();
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('');
  await page.evaluate(()=>window.render({target:document.getElementById('right'),onExpand:()=>{window.expands++;window.render({compact:false});}}));
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Unsent before any private edit.');
@@ -110,8 +112,12 @@ try {
  const modelCalls=await page.evaluate(()=>window.modelCalls);
  await page.evaluate(()=>window.render({target:document.getElementById('bottom'),compact:true}));
  await page.getByRole('button',{name:/Assistant.*Working/}).waitFor();
- await page.evaluate(()=>window.release());await page.getByRole('button',{name:/Assistant.*Draft ready/}).waitFor();
- await page.getByRole('button',{name:/Assistant.*Draft ready/}).click();
+ await page.evaluate(()=>window.release());await page.getByRole('button',{name:/Assistant.*Reply ready/}).waitFor();
+ const completed=page.locator('.assistant-task-toast');await completed.waitFor();assert.match(await completed.innerText(),/Assistant finished.*Panel draft is ready/s);
+ if(process.env.PRODUCER_PANEL_SCREENSHOTS)await completed.screenshot({path:process.env.PRODUCER_PANEL_SCREENSHOTS+'/completion.png'});
+ await completed.getByRole('button',{name:'View reply ↗',exact:true}).click();
+ assert.equal(await completed.count(),0,'reading the reply dismisses its completion toast');
+ await page.getByRole('button',{name:'Expand dock',exact:true}).click();
  await page.getByText('Panel draft is ready.',{exact:true}).waitFor();
  assert.deepEqual(await page.locator('.assistant-suggestions button').allTextContents(),['Review changes','Continue editing','Explain changes']);
  if(process.env.PRODUCER_PANEL_SCREENSHOTS)await page.locator('.assistant-docked').screenshot({path:process.env.PRODUCER_PANEL_SCREENSHOTS+'/ready.png'});
@@ -123,7 +129,8 @@ try {
  await page.getByRole('button',{name:'Review in Set Edit',exact:true}).click();await page.waitForFunction(()=>window.reviews.length===1);
  assert.equal(await page.evaluate(()=>window.reviews[0].set.layouts[0].root.children[0].text),'PANEL VERIFIED');
  assert.deepEqual(await page.evaluate(()=>window.reviews[0].set.controls),await page.evaluate(()=>window.session.package.set.controls));
- await page.waitForFunction(()=>!document.querySelector('.assistant-draft-card button').disabled);
+ await page.waitForFunction(()=>!document.querySelector('.assistant-draft-card'));
+ assert.equal(await page.getByRole('button',{name:'Review in Set Edit',exact:true}).count(),0,'a handed-off revision is not offered for review again');
  // Set Edit receives the edited candidate, not the original source. Reopening
  // Assistant from that draft must keep the same conversation and undo journal.
  await page.evaluate(()=>window.render({request:{id:'editor-request',document:window.reviews[0]}}));
@@ -139,7 +146,8 @@ try {
  await page.evaluate(()=>{const next=structuredClone(window.source);next.id='third-room-set';next.name='Third room Set';window.session=new RehearsalSession(next,undefined,'prepare');window.render({session:window.session});});
  await page.getByRole('button',{name:'Assistant context: Second room Set',exact:true}).waitFor();
  assert.equal(await page.getByRole('textbox',{name:'Assistant prompt'}).inputValue(),'Keep this unsent prompt.');
- await page.getByRole('button',{name:'Review in Set Edit',exact:true}).click();await page.waitForFunction(()=>window.reviews.length===3);
+ await page.getByRole('button',{name:'Assistant context: Second room Set',exact:true}).click();
+ await page.getByRole('button',{name:'Open in Set Edit',exact:true}).click();await page.waitForFunction(()=>window.reviews.length===3);
  assert.equal(await page.evaluate(()=>window.reviews[2].set.layouts[0].root.children[0].text),'PANEL VERIFIED');
  assert.equal(await page.evaluate(()=>window.session.package.name),'Third room Set');
  assert(!(await page.evaluate(()=>window.nativeCalls)).some(c=>/^live_/.test(c)),'panel has no native room or capture authority');
@@ -161,7 +169,7 @@ try {
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Keep the retry action reachable in every dock.');await page.getByRole('button',{name:'Send ↗',exact:true}).click();await page.getByRole('button',{name:'Retry request',exact:true}).waitFor();
  for(const [name,width,height] of [['side',360,780],['narrow',240,780],['bottom',1100,360],['top',1100,240]]){
   await page.evaluate(({width,height})=>{const target=document.getElementById('right');target.style.width=width+'px';target.style.height=height+'px';document.getElementById('bottom').style.display='none';window.render({target,compact:false});},{width,height});
-  await page.waitForFunction(()=>{const element=document.querySelector('.assistant-docked textarea');return element&&element.getBoundingClientRect().height>30});
+  await page.waitForFunction(()=>{const element=document.querySelector('.assistant-docked textarea');return element&&element.getBoundingClientRect().height>=30});
   const geometry=await page.evaluate(()=>{
    const box=document.querySelector('.assistant-docked').getBoundingClientRect();
    return [...document.querySelectorAll('.assistant-docked .assistant-compose textarea,.assistant-docked .assistant-compose button,.assistant-docked .assistant-error button')].map(element=>{const r=element.getBoundingClientRect();return {inside:r.left>=box.left-1&&r.right<=box.right+1&&r.top>=box.top-1&&r.bottom<=box.bottom+1,width:r.width,height:r.height};});
@@ -169,6 +177,22 @@ try {
   assert(geometry.every(r=>r.inside&&r.width>25&&r.height>25),name+' keeps the composer and send control visible');
   if(process.env.PRODUCER_PANEL_SCREENSHOTS)await page.locator('.assistant-docked').screenshot({path:process.env.PRODUCER_PANEL_SCREENSHOTS+'/'+name+'.png'});
  }
+ await page.locator('.assistant-tight').waitFor();
+ await page.getByRole('button',{name:'Expand Assistant',exact:true}).click();
+ const fullConversation=page.getByRole('dialog',{name:'Assistant conversation panel',exact:true});await fullConversation.waitFor();
+ await fullConversation.getByRole('button',{name:'Retry request',exact:true}).waitFor();
+ const fullBounds=await fullConversation.boundingBox();assert(fullBounds.width>=320&&fullBounds.height>=400&&fullBounds.x>=0&&fullBounds.y>=0&&fullBounds.x+fullBounds.width<=1440&&fullBounds.y+fullBounds.height<=1050,'a squeezed tile opens a usable viewport-bounded conversation');
+ if(process.env.PRODUCER_PANEL_SCREENSHOTS)await fullConversation.screenshot({path:process.env.PRODUCER_PANEL_SCREENSHOTS+'/full-conversation.png'});
+ await fullConversation.getByRole('button',{name:'Close Assistant conversation',exact:true}).click();
+ assert.equal(await fullConversation.count(),0,'closing the conversation preserves the compact tile');
+ await page.evaluate(()=>{const target=document.getElementById('right');target.style.width='150px';target.style.height='780px';window.failNext=true;});
+ await page.getByRole('button',{name:'Assistant suggestions',exact:true}).waitFor();
+ await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Send with Enter from the narrow sidebar.');
+ assert.equal(await page.getByRole('button',{name:'Send ↗',exact:true}).isVisible(),false,'super-narrow composers use a keyboard cue');
+ const keyFits=await page.locator('.assistant-composer').evaluate(element=>{const input=element.querySelector('textarea').getBoundingClientRect(),key=element.querySelector('.assistant-send-key').getBoundingClientRect();return {fits:input.right<=key.left+1,input:input.toJSON(),key:key.toJSON(),form:getComputedStyle(element.querySelector('form')).display,keyPosition:getComputedStyle(element.querySelector('.assistant-send-key')).position};});assert(keyFits.fits,'the Enter cue never paints over input text: '+JSON.stringify(keyFits));
+ await page.getByRole('textbox',{name:'Assistant prompt'}).press('Enter');
+ await page.getByText('Send with Enter from the narrow sidebar.',{exact:true}).waitFor();
+ assert.equal(await page.getByRole('textbox',{name:'Assistant prompt'}).inputValue(),'');
  assert.deepEqual(errors,[]);
  // Rendered Markdown remains text-owned: no raw HTML, image requests or
  // executable links. Tables must stay inside the dock's scrollable surface.
