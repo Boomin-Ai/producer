@@ -73,3 +73,61 @@
 .assistant-message details{font-size:11px;margin-top:6px}.assistant-message details summary{cursor:pointer;color:#d1b9ad}.assistant-message pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:180px;overflow:auto;font:11px/1.6 ui-monospace,monospace;color:#e0b6a9}
 
 .assistant-preview-failure{padding:20px;border:1px solid #71534a;border-radius:10px;background:#231c1b;color:#efc6bb;overflow-wrap:anywhere}.assistant-preview-failure h3{margin-top:0}.assistant-preview-failure p{font-size:12px;line-height:1.7}
+
+/* The dock contains a view, while its room owns the long-lived session. */
+.assistant-dock-mount{display:flex;width:100%;height:100%;min-width:0;min-height:0;container:assistant-dock / size}
+.assistant-workspace.assistant-docked{position:relative;inset:auto;display:flex;width:100%;height:100%;max-width:none;max-height:none;margin:0;padding:0;border:0;border-radius:0;box-shadow:none;overflow:hidden;font:12px/1.5 system-ui,sans-serif;background:#0d141b}
+.assistant-docked>.assistant-panel{flex:1;width:100%;min-height:0;border:0;overflow:hidden}
+.assistant-dock-header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-bottom:1px solid #28343e}
+.assistant-dock-header>strong{font-size:13px;letter-spacing:-.02em}
+.assistant-docked .assistant-dock-header>button{border:0;background:transparent;min-height:26px;padding:2px 6px;font-size:17px;color:#adbbc5}
+.assistant-context{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;background:#111c25;border-bottom:1px solid #29343d;min-width:0}
+.assistant-context>span{display:flex;flex-direction:column;min-width:0}
+.assistant-context small{font-size:8px;color:#7f969f;letter-spacing:.12em}
+.assistant-context strong{font-size:11px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.assistant-docked .assistant-context>button{flex:none;min-height:26px;padding:3px 7px;font-size:10px;background:transparent;border-color:#33434e;color:#b7c8d0}
+.assistant-provider-compact{display:flex;align-items:center;gap:6px;padding:7px 12px;color:#b6c7c0;font-size:10px;min-width:0}
+.assistant-provider-compact>span:last-child{margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#879aa6}
+.assistant-connected-dot{display:inline-block;flex:none;width:6px;height:6px;border-radius:50%;background:#79dfbd}
+.assistant-connected-dot.working{background:#e5c58b;animation:assistant-working 1.5s ease-in-out infinite}
+@keyframes assistant-working{50%{opacity:.4}}
+.assistant-docked .assistant-connection{padding:10px 12px;max-height:260px;overflow:auto;flex:none}
+.assistant-docked .assistant-account-row{grid-template-columns:1fr}
+.assistant-docked .assistant-sharing{padding:7px 12px;font-size:10px;flex:none;max-height:160px;overflow:auto}
+.assistant-docked .assistant-messages{padding:12px;min-height:40px;flex:1;overflow:auto;overscroll-behavior:contain}
+.assistant-docked .assistant-empty{padding:10px 0}
+.assistant-docked .assistant-empty>strong{font-size:17px}
+.assistant-docked .assistant-empty>p{font-size:11px;line-height:1.65;margin:8px 0 12px}
+.assistant-docked .assistant-empty>button{display:inline-flex;margin:0 6px 6px 0;font-size:10px;padding:5px 8px;min-height:28px}
+.assistant-docked .assistant-message{margin:0 0 14px;padding:0 0 0 9px}
+.assistant-docked .assistant-message.user{padding:9px;border-radius:7px;background:#182630}
+.assistant-docked .assistant-message>p{font-size:11px;line-height:1.7;overflow-wrap:anywhere}
+.assistant-docked .assistant-message.tool>p{font-size:10px;color:#8fa69b}
+.assistant-draft-card{display:flex;align-items:center;gap:10px;justify-content:space-between;margin:0 10px 8px;padding:9px;border:1px solid #355148;border-radius:8px;background:#14251f;flex:none;min-width:0}
+.assistant-draft-card>div{min-width:0;display:flex;flex-direction:column;gap:2px}
+.assistant-draft-card strong{font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.assistant-draft-card span{font-size:9px;color:#97b5a8}
+.assistant-docked .assistant-draft-card>button{font-size:10px;padding:4px 7px;min-height:28px;flex:none}
+.assistant-docked .assistant-compose{padding:10px 12px;flex:none}
+.assistant-docked .assistant-compose>label{font-size:10px}
+.assistant-docked .assistant-compose textarea{min-height:64px;max-height:120px;padding:9px;font-size:11px;resize:none}
+.assistant-docked .assistant-compose>div{margin-top:7px}
+.assistant-docked .assistant-compose button{min-height:28px;padding:4px 10px;font-size:10px}
+.assistant-docked .assistant-error,.assistant-docked .assistant-notice{padding:7px 12px;flex:none;font-size:10px;max-height:64px}
+.assistant-mini{display:flex;align-items:center;width:100%;height:100%;min-width:0}
+.assistant-mini>button{width:100%;height:100%;display:flex;align-items:center;gap:8px;border:0;background:transparent;padding:0 12px;min-width:0;text-align:left}
+.assistant-mini strong{font-size:12px}.assistant-mini>button>span:nth-last-child(2){font-size:10px;color:#8fa69f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.assistant-mini>button>span:last-child{margin-left:auto;color:#b7c9c1}
+@container assistant-dock (min-width:650px){
+ .assistant-docked:not(.assistant-docked-mini)>.assistant-panel:not(:has(.assistant-connection)){display:grid;grid-template-columns:minmax(0,1.2fr) minmax(240px,.8fr);grid-template-rows:32px auto minmax(0,1fr) auto 28px}
+ .assistant-docked .assistant-dock-header{grid-column:1/-1;grid-row:1;padding:3px 12px}
+ .assistant-docked .assistant-context{grid-column:1;grid-row:2;padding:5px 12px}
+ .assistant-docked .assistant-provider-compact{grid-column:2;grid-row:2;border-bottom:1px solid #29343d}
+ .assistant-docked .assistant-messages{grid-column:1;grid-row:3;min-height:0}
+ .assistant-docked .assistant-draft-card{grid-column:1;grid-row:4;margin:0 10px 6px;padding:6px 9px}
+ .assistant-docked .assistant-compose{grid-column:2;grid-row:3/5;border-left:1px solid #29343d;display:flex;flex-direction:column;min-height:0}
+ .assistant-docked .assistant-compose textarea{flex:1;min-height:38px;max-height:none}
+ .assistant-docked .assistant-sharing{grid-column:1/-1;grid-row:5;padding:4px 12px}
+ .assistant-docked .assistant-sharing[open]{position:absolute;z-index:5;bottom:0;background:#111c25;max-height:180px;width:100%;box-sizing:border-box}
+ .assistant-docked>.assistant-panel:has(.assistant-connection){overflow:auto}
+}
+@container assistant-dock (max-width:260px){.assistant-context{flex-wrap:wrap}.assistant-draft-card{flex-direction:column;align-items:stretch}.assistant-docked .assistant-compose>div>span{display:none}.assistant-docked .assistant-compose>div{justify-content:flex-end}}

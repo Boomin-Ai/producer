@@ -1,3 +1,4 @@
+import type {AssistantEditorRequest} from '../assistant/roomBridge';
 import {useSocialRehearsal} from './useSocialRehearsal';
 import {SetIntegrationConnections} from './SetIntegrationConnections';
 import {integrationRequirements} from './integrationRequirements';
@@ -38,6 +39,7 @@ export type SetEditorTake = {
 };
 
 type PanelProps={
+  assistantEditorRequest?:AssistantEditorRequest; onAssistantEditorOpened?:(id:string)=>void;
   endpoint?:string;serverRoomId?:string;preferenceRoomId?:string;moduleBindings?:ModuleBindings;
   voting?:ReactNode; sourceNames?: Record<string,string>; onFieldEdit?: (key:string)=>void; output?: SetOutputControls; session: RehearsalSession; blocked?: boolean; blockedReason?: string;
   onChange: (doc: PresentationPackage, moduleBindings?: ModuleBindings, take?: SetEditorTake) => void | RehearsalSession | Promise<void | RehearsalSession>;
@@ -62,6 +64,7 @@ export function SetAuthoringControlSurface({session}:{session:RehearsalSession})
   return <SetControlsPanelView session={session} preferenceRoomId={`assistant:${session.package.id}`} onChange={()=>{}}/>;
 }
 export function SetControlsPanel(props:PanelProps) {
+  const [assistantRequestReady,setAssistantRequestReady]=useState<string>();
   const [draft,setDraft]=useState(()=>new RehearsalSession(props.session.preparedPackage(),undefined,'prepare'));
   const [moduleBindings,setModuleBindings]=useState<ModuleBindings>(props.moduleBindings??{});
   const {connections,adapters,connectionError,retryConnections}=useDataConnections(props.endpoint);
@@ -86,6 +89,13 @@ export function SetControlsPanel(props:PanelProps) {
     setDraft(next);
     setModuleBindings(props.moduleBindings??{});setBindings({...props.output?.bindings});setFraming({...props.output?.framing});
   },[props.session]);
+  useEffect(()=>{
+    const request=props.assistantEditorRequest;
+    if(!request)return;
+    setDraft(new RehearsalSession(request.document,undefined,'prepare'));
+    setModuleBindings(props.moduleBindings??{});setBindings({...props.output?.bindings});setFraming({...props.output?.framing});
+    setPublishError('');setAssistantRequestReady(request.id);
+  },[props.assistantEditorRequest?.id]);
   const finishPublish = (error?: unknown) => {
     publishingRef.current = false;
     setPublishing(false);
@@ -160,10 +170,10 @@ export function SetControlsPanel(props:PanelProps) {
       editorStatus={editorStatus} workspaceBusy={publishing} onWorkspaceClose={onClose} />
   </>;
   return <SetControlsPanelView {...props} connections={connections} adapters={adapters} connectionError={connectionError}
-    onRetryConnections={retryConnections} workspace={workspace} workspaceBusy={publishing}
+    onRetryConnections={retryConnections} editorOpenRequest={assistantRequestReady===props.assistantEditorRequest?.id?assistantRequestReady:undefined} onEditorRequestOpened={props.onAssistantEditorOpened} workspace={workspace} workspaceBusy={publishing}
     onWorkspaceClose={()=>draft.exitRehearsal()} />;
 }
-function SetControlsPanelView({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, voting, onFieldEdit, workspace, workspaceBusy=false, editorOnly=false,onPublish,publishError,onWorkspaceClose,editorStatus='changed',endpoint,serverRoomId,preferenceRoomId,moduleBindings={},connections=[],adapters=[],connectionError='',onRetryConnections,onModuleBinding }: PanelProps & {connections?:SavedConnection[];adapters?:import('../../../shared/set-runtime/dataAdapters').DataAdapterManifest[];connectionError?:string;onRetryConnections?:()=>void;onModuleBinding?:(role:string,binding:ModuleBindings[string])=>void;} & {editorStatus?:'changed'|'applying'|'applied'|'error';onWorkspaceClose?:()=>void;workspace?:(onClose:()=>void)=>ReactNode;workspaceBusy?:boolean;editorOnly?:boolean;onPublish?:()=>void;publishError?:string}) {
+function SetControlsPanelView({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, voting, onFieldEdit, workspace, workspaceBusy=false, editorOnly=false,onPublish,publishError,onWorkspaceClose,editorStatus='changed',editorOpenRequest,onEditorRequestOpened,endpoint,serverRoomId,preferenceRoomId,moduleBindings={},connections=[],adapters=[],connectionError='',onRetryConnections,onModuleBinding }: PanelProps & {connections?:SavedConnection[];adapters?:import('../../../shared/set-runtime/dataAdapters').DataAdapterManifest[];connectionError?:string;onRetryConnections?:()=>void;onModuleBinding?:(role:string,binding:ModuleBindings[string])=>void;} & {editorOpenRequest?:string;onEditorRequestOpened?:(id:string)=>void;editorStatus?:'changed'|'applying'|'applied'|'error';onWorkspaceClose?:()=>void;workspace?:(onClose:()=>void)=>ReactNode;workspaceBusy?:boolean;editorOnly?:boolean;onPublish?:()=>void;publishError?:string}) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const arrangements=useControlArrangement(session.package,JSON.stringify([endpoint??'local',serverRoomId??preferenceRoomId??'preview']));
   const [player, setPlayer] = useState('player-1');
@@ -432,7 +442,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
       </div>
       <div className="set-toolbar-tools">
         <ControlArrangementEditor value={arrangements} fixedLayout={!doc.show} redundantLayoutControls={redundantLayoutControls}/>
-        <RehearsalPreview doc={doc} state={state} output={output} outputActive={output?.active} workspace={workspace} workspaceBusy={workspaceBusy} onEditorClose={onWorkspaceClose} configuration={<SetConfiguration session={session} onChange={onChange} output={output}/>} editor={editor} sources={visibleSlots.size ? sourceEditor : undefined} />
+        <RehearsalPreview openRequest={editorOpenRequest} onOpenRequest={onEditorRequestOpened} doc={doc} state={state} output={output} outputActive={output?.active} workspace={workspace} workspaceBusy={workspaceBusy} onEditorClose={onWorkspaceClose} configuration={<SetConfiguration session={session} onChange={onChange} output={output}/>} editor={editor} sources={visibleSlots.size ? sourceEditor : undefined} />
       </div>
     </header>
     {session.hasRoomControl()&&<p role="status">{state.controlPending?"Sending room command…":"Shared room controls · changes require output confirmation"}</p>}

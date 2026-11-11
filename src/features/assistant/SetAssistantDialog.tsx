@@ -13,6 +13,8 @@ import type {PresentationPackage} from '../presentation/schema';
 import './assistant.css';
 import {DraftPreviewBoundary} from './DraftPreviewBoundary';
 
+export interface AssistantDock {target: HTMLElement | null; compact: boolean; onExpand(): void; onUseCurrent(): void; reviewRequest?: string; contextLabel: string}
+
 type Message = {id: string; role: 'user' | 'assistant' | 'tool'; text: string; details?: string};
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
 const DraftPreview = memo(function DraftPreview({document}: {document: PresentationPackage}) {
@@ -27,8 +29,13 @@ const DraftPreview = memo(function DraftPreview({document}: {document: Presentat
   </div>;
 });
 
-export default function SetAssistantDialog({document, onLoad, onClose}: {document: PresentationPackage; onLoad: (document: PresentationPackage) => Promise<void>; onClose: () => void}) {
+export default function SetAssistantDialog({document, onLoad, onClose, dock, scope, contextError, onDraftChange}: {document: PresentationPackage; onLoad: (document: PresentationPackage) => Promise<void>; onClose: () => void; dock?: AssistantDock; scope?: string; contextError?:string; onDraftChange?:(document:PresentationPackage)=>void}) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const parking = useMemo(() => globalThis.document.createElement('div'), []);
+  const [reviewOpen, setReviewOpen] = useState(false), [settingsOpen, setSettingsOpen] = useState(false);
+  const modalOpen = !dock || reviewOpen;
+  useEffect(() => {if (dock?.reviewRequest) setReviewOpen(true);}, [dock?.reviewRequest]);
+  useEffect(() => {if (!modalOpen) return; const element = dialog.current; element?.showModal(); return () => {element?.close();};}, [modalOpen]);
   const worker = useRef<SetAuthoringWorker | undefined>(undefined);
   const generation = useRef(0), turnId = useRef<string | undefined>(undefined), authAttempt = useRef<string | undefined>(undefined);
   const accountEpoch=useRef('');
@@ -41,6 +48,7 @@ export default function SetAssistantDialog({document, onLoad, onClose}: {documen
     latestRevision.current=snapshot.revision;
     if(previewFault.current?.revision!==snapshot.revision){previewFault.current=undefined;setPreviewFailed(false);}
     setDraft(snapshot);
+    onDraftChange?.(snapshot.document);
   }
   const [status, setStatus] = useState<AssistantStatus>();
   const [models, setModels] = useState<AssistantModel[]>([]), [model, setModel] = useState('');
@@ -54,11 +62,10 @@ export default function SetAssistantDialog({document, onLoad, onClose}: {documen
   useEffect(() => {
     let disposed = false;
     const local = new SetAuthoringWorker(); worker.current = local;
-    dialog.current?.showModal();
-    void discoverDesktopAuthoringTarget().then(target => local.open(document, target, activeEndpointId() ?? 'local')).then(snapshot => {if (!disposed) {updateDraft(snapshot); if (snapshot.restored && snapshot.canUndo) setNotice('Restored your saved draft.');}}).catch(e => {if (!disposed) setError(errorText(e));});
+    void discoverDesktopAuthoringTarget().then(target => local.open(document, target, scope ?? activeEndpointId() ?? 'local')).then(snapshot => {if (!disposed) {updateDraft(snapshot); if (snapshot.restored && snapshot.canUndo) setNotice('Restored your saved draft.');}}).catch(e => {if (!disposed) setError(errorText(e));});
     void refresh().catch(e => {if (!disposed) setError(errorText(e));});
     return () => {disposed = true; ++generation.current; if (turnId.current) void chatgpt.cancel(turnId.current).catch(() => {}); if (authAttempt.current) void chatgpt.cancelSignIn().catch(() => {}); local.close(); worker.current = undefined;};
-  }, [document]);
+  }, [document, scope]);
   useEffect(() => {
     if (status?.signIn?.status !== 'waiting') return;
     let disposed = false;
@@ -157,15 +164,15 @@ export default function SetAssistantDialog({document, onLoad, onClose}: {documen
     try {
       await local.call('validate', {revision});
       if (worker.current !== local || generation.current !== ticket || latestRevision.current !== revision) throw Error('The draft changed before loading. Review it again.');
-      await onLoad(draft.document); onClose();
+      await onLoad(draft.document); setLoading(false); if (dock) setReviewOpen(false); else onClose();
     } catch (e) {setError(errorText(e)); setLoading(false);}
   }
-  const close = () => {void stop(); onClose();};
-  return createPortal(<dialog ref={dialog} className="assistant-workspace" aria-label="Set assistant" onCancel={event => {event.preventDefault(); close();}}>
-    <header className="assistant-header"><div><span className="assistant-eyebrow">PRODUCER ASSISTANT</span><h2>Make something worth watching.</h2></div><button onClick={close} aria-label="Close Set assistant">Close</button></header>
-    <div className="assistant-workspace-grid">
-      <section className="assistant-preview" aria-label="Draft design preview">{draft ? <DraftPreviewBoundary key={draft.revision} onError={message=>{if(latestRevision.current===draft.revision){previewFault.current={revision:draft.revision,message};setPreviewFailed(true);}}}><DraftPreview document={draft.document}/></DraftPreviewBoundary> : <p role="status">Opening your design…</p>}<div className="assistant-history"><button disabled={!draft?.canUndo || busy || loading} onClick={() => void moveHistory('undo')}>Undo</button><button disabled={!draft?.canRedo || busy || loading} onClick={() => void moveHistory('redo')}>Redo</button><span>{draft?.checkpoints.length ?? 0} saved edits</span></div></section>
-      <section className="assistant-panel" aria-label="Assistant conversation">
+  const close = () => {if (dock) setReviewOpen(false); else {void stop(); onClose();}};
+  const conversation = (      <section className="assistant-panel" aria-label="Assistant conversation">
+        {dock && !reviewOpen && <header className="assistant-dock-header"><strong>Assistant</strong><button type="button" aria-label="Assistant settings" aria-expanded={settingsOpen} onClick={() => setSettingsOpen(v => !v)}>⚙</button></header>}
+        {dock && !reviewOpen && <div className="assistant-context"><span><small>{dock.contextLabel}</small><strong title={document.name}>{document.name}</strong></span><button type="button" onClick={dock.onUseCurrent} disabled={busy || loading}>Use room Set</button></div>}
+        {dock && !reviewOpen && active?.planEnabled && !settingsOpen && <div className="assistant-provider-compact"><span className="assistant-connected-dot"/>ChatGPT<span>{models.find(m=>m.slug===model)?.display_name ?? 'Loading model…'}</span></div>}
+        {(!dock || reviewOpen || settingsOpen || !active?.planEnabled) && <>
         <div className="assistant-connection"><div className="assistant-provider-title"><strong>ChatGPT</strong><span>{active?.planEnabled ? 'Connected' : 'Connect your plan'}</span></div>
           {!active?.planEnabled ? <><p>Create and refine Sets with your ChatGPT plan.</p><button data-oai-siwc-button="" className="assistant-connect" disabled={connecting} onClick={() => void signIn(active?.id)}>{connecting ? 'Continue in your browser…' : 'Continue with ChatGPT'}</button></> : <div className="assistant-account-row"><label>Account<select aria-label="Assistant account" value={active.id} disabled={busy} onChange={event => void chooseAccount(event.target.value)}>{status?.accounts.map(a => <option key={a.id} value={a.id}>{a.email} · {a.id.slice(0, 6)}</option>)}</select></label><label>Model<select aria-label="Assistant model" value={model} disabled={busy || !models.length} onChange={event => {history.current = []; setMessages([]); setModel(event.target.value);}}>{models.map(m => <option key={m.slug} value={m.slug}>{m.display_name}</option>)}</select></label></div>}
           {status?.signIn?.status === 'waiting' && status.signIn.expiresAt && <p role="status">Complete the newest browser sign-in by {new Date(status.signIn.expiresAt * 1000).toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'})}. Keep Producer open.</p>}
@@ -174,12 +181,25 @@ export default function SetAssistantDialog({document, onLoad, onClose}: {documen
           {active && <div className="assistant-account-actions"><button disabled={busy} onClick={() => void signIn()}>Add account</button><button disabled={busy} onClick={() => void signIn(active.id)}>Reconnect</button><button disabled={busy} onClick={() => void disconnect()}>Disconnect</button><button onClick={() => void openUrl('https://chatgpt.com/settings/usage')}>Usage ↗</button></div>}
           {welcome && <div className="assistant-welcome" role="dialog" aria-label="ChatGPT plan connected"><strong>You’re using your ChatGPT plan</strong><p>Eligible requests use your plan. Manage Producer’s usage and access in ChatGPT settings.</p><button onClick={() => {if (active) localStorage.setItem(`producer:assistant:welcome:${active.id}`, '1'); setWelcome(false);}}>Got it</button></div>}
         </div>
+        </>}
         <details className="assistant-sharing"><summary>On request · Data shared</summary><label><input type="checkbox" checked={shareDesign} onChange={event => {void stop(); setShareDesign(event.target.checked); history.current = []; setMessages([]);}}/>Share this Set’s design with ChatGPT</label><p>Includes authored text, controls, source roles and animation. Camera, screen capture, audio, room chat and credentials stay outside this conversation. Changing sharing starts a new conversation.</p><span>Authority: private draft edits</span><button type="button" disabled={busy} onClick={()=>{history.current=[];setMessages([]);setError('');setNotice('New conversation. Your draft is retained.');}}>New conversation</button></details>
-        <div className="assistant-messages" role="log" aria-label="Assistant messages" aria-live="polite">{!messages.length && <div className="assistant-empty"><strong>Your design, down to the details.</strong><p>Create a complete Set, refine one element, or design controls for each layout.</p><button onClick={() => setPrompt('Refine this Set with stronger typography and subtle cinematic motion. Preserve my sources, controls and configured content.')}>Polish this Set</button><button onClick={() => setPrompt('Create a cinematic charcoal-and-chrome teaching Set, with landscape and vertical layouts, host camera and screen-share roles, animated teaching cards and beautifully arranged configurable controls.')}>Create a new Set</button></div>}{messages.filter(m => m.text).map(message => <div key={message.id} className={`assistant-message ${message.role}`}><span>{message.role === 'user' ? 'You' : message.role === 'tool' ? 'Producer' : 'Assistant'}</span><p>{message.text}</p>{message.details&&<details><summary>Validation details</summary><pre>{message.details}</pre></details>}</div>)}</div>
-        {error && <p className="assistant-error" role="alert">{error}</p>}{notice && <p className="assistant-notice" role="status">{notice}</p>}
+        <div className="assistant-messages" role="log" aria-label="Assistant messages" aria-live="polite">{!messages.length && <div className="assistant-empty"><strong>{dock && !reviewOpen ? 'What are we producing?' : 'Your design, down to the details.'}</strong><p>Create a complete Set, refine one element, or design controls for each layout.</p><button onClick={() => setPrompt('Refine this Set with stronger typography and subtle cinematic motion. Preserve my sources, controls and configured content.')}>Polish this Set</button><button onClick={() => setPrompt('Create a cinematic charcoal-and-chrome teaching Set, with landscape and vertical layouts, host camera and screen-share roles, animated teaching cards and beautifully arranged configurable controls.')}>Create a new Set</button></div>}{messages.filter(m => m.text).map(message => <div key={message.id} className={`assistant-message ${message.role}`}><span>{message.role === 'user' ? 'You' : message.role === 'tool' ? 'Producer' : 'Assistant'}</span><p>{message.text}</p>{message.details&&<details><summary>Validation details</summary><pre>{message.details}</pre></details>}</div>)}</div>
+        {(error||contextError) && <p className="assistant-error" role="alert">{error||contextError}</p>}{notice && <p className="assistant-notice" role="status">{notice}</p>}
+        {dock && !reviewOpen && draft && <div className="assistant-draft-card"><div><strong>{draft.document.name}</strong><span>{draft.checkpoints.length ? `${draft.checkpoints.length} saved edits · private draft` : 'Private preparation'}</span></div><button type="button" className="assistant-primary" disabled={busy || loading || previewFailed} onClick={() => void load()}>{loading ? 'Opening…' : 'Review in Set Edit'}</button></div>}
         <form className="assistant-compose" onSubmit={event => {event.preventDefault(); void send();}}><label htmlFor="assistant-prompt">Describe your Set or an edit</label><textarea id="assistant-prompt" aria-label="Assistant prompt" value={prompt} maxLength={8000} onChange={event => setPrompt(event.target.value)} placeholder="Make KLEVELAND bold chrome, with a slow light sweep…" onKeyDown={event => {if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {event.preventDefault(); void send();}}}/><div><span>{busy ? 'Working on your draft…' : 'Changes stay in your draft.'}</span>{busy ? <button type="button" onClick={() => void stop()}>Stop</button> : <button className="assistant-primary" disabled={!active?.planEnabled || !model || !draft || !prompt.trim() || loading} type="submit">Send ↗</button>}</div></form>
-      </section>
+      </section>);
+  const compact = dock && (dock.compact || reviewOpen);
+  return <>
+    {dock && createPortal(<section className={`assistant-workspace assistant-docked${compact ? ' assistant-docked-mini' : ''}`} aria-label="Room Assistant">
+      {compact ? <div className="assistant-mini"><button type="button" onClick={() => {if(reviewOpen)setReviewOpen(false);else dock.onExpand();}}><span className={`assistant-connected-dot${busy ? ' working' : ''}`}/><strong>Assistant</strong><span>{reviewOpen ? 'Open in Set Edit' : busy ? 'Working on draft…' : draft?.canUndo ? 'Draft ready' : 'Create with ChatGPT'}</span><span aria-hidden="true">↗</span></button></div> : conversation}
+    </section>, dock.target ?? parking)}
+    {modalOpen && createPortal(<dialog ref={dialog} className="assistant-workspace" aria-label="Set assistant" onCancel={event => {event.preventDefault(); close();}}>
+    <header className="assistant-header"><div><span className="assistant-eyebrow">PRODUCER ASSISTANT</span><h2>Make something worth watching.</h2></div><button onClick={close} aria-label="Close Set assistant">{dock ? 'Back to room' : 'Close'}</button></header>
+    <div className="assistant-workspace-grid">
+      <section className="assistant-preview" aria-label="Draft design preview">{draft ? <DraftPreviewBoundary key={draft.revision} onError={message=>{if(latestRevision.current===draft.revision){previewFault.current={revision:draft.revision,message};setPreviewFailed(true);}}}><DraftPreview document={draft.document}/></DraftPreviewBoundary> : <p role="status">Opening your design…</p>}<div className="assistant-history"><button disabled={!draft?.canUndo || busy || loading} onClick={() => void moveHistory('undo')}>Undo</button><button disabled={!draft?.canRedo || busy || loading} onClick={() => void moveHistory('redo')}>Redo</button><span>{draft?.checkpoints.length ?? 0} saved edits</span></div></section>
+      {conversation}
     </div>
     <footer className="assistant-footer"><span>Review the design and its controls, then check it in preparation.</span><button className="assistant-primary" disabled={!draft?.canUndo || busy || loading || previewFailed} onClick={() => void load()}>{loading ? 'Loading…' : 'Load preparation'}</button></footer>
-  </dialog>, globalThis.document.body);
+  </dialog>, globalThis.document.body)}
+  </>;
 }

@@ -1,3 +1,4 @@
+import {RoomAssistantContext, type AssistantSetRequest, type AssistantEditorRequest} from '../features/assistant/roomBridge';
 import { windowSourceLabel } from "../lib/sourceSpec";
 import { listen as listenSoundboard } from "@tauri-apps/api/event";
 import {LiveCaptions} from '../features/transcription/LiveCaptions';
@@ -29,7 +30,7 @@ import { DJSlider } from "../components/DJSlider";
 import { AudienceDestination, AudienceDestinationMark } from "../components/AudienceDestination";
 import type { LocalRecording } from "../lib/ipc";
 import { RoomOpening } from "./RoomOpening";
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Fragment, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { installStageCutouts } from "../lib/stageCutouts";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -92,6 +93,8 @@ import { Select } from "../components/Select";
 import { fromCanvas, modFeedRect, modFeedZ, modSourceOwner, rememberModFeed, toCanvas, type ModFeedTrack } from "../lib/modFeed";
 import {
   PANEL_META,
+  normalize,
+  DEFAULT_LAYOUT,
   PANEL_ORDER,
   PRESETS as LAYOUT_PRESETS,
   dockOf,
@@ -2668,6 +2671,8 @@ export type RoomRuntimeState = {
   outputPortrait: boolean;
   programReady: boolean;
 };
+
+const RoomAssistant = lazy(() => import('../features/assistant/RoomAssistant'));
 
 export function LiveView({
   room,
@@ -7323,10 +7328,53 @@ export function LiveView({
     />
   );
 
+  const [assistantTarget,setAssistantTarget]=useState<HTMLDivElement|null>(null);
+  const assistantTargetRef=useCallback((element:HTMLDivElement|null)=>setAssistantTarget(element),[]);
+  const [assistantStarted,setAssistantStarted]=useState(false);
+  const [assistantRequest,setAssistantRequest]=useState<(AssistantSetRequest&{id:string})>();
+  const [assistantEditorRequest,setAssistantEditorRequest]=useState<AssistantEditorRequest>();
+  const assistantEditorOpened=useCallback((id:string)=>setAssistantEditorRequest(current=>current?.id===id?undefined:current),[]);
+  const assistantDock=dockOf(layout,'assistant');
+  const assistantDockOpen=assistantDock==='top'?topOpen:assistantDock==='bottom'?sheetOpen:assistantDock==='left'?leftOpen:assistantDock==='right'?rightOpen:false;
+  const assistantEnabled=visible&&isHost&&docApplied;
+  const assistantOwner=useRef({enabled:assistantEnabled,source:setRehearsal});assistantOwner.current={enabled:assistantEnabled,source:setRehearsal};
+  useEffect(()=>{if(assistantEnabled&&assistantDockOpen&&!layoutEdit)setAssistantStarted(true);},[assistantEnabled,assistantDockOpen,layoutEdit]);
+  const assistantBridge=useMemo(()=>({open:(request:AssistantSetRequest)=>{
+    if(!assistantOwner.current.enabled)return;
+    setAssistantRequest({...request,id:crypto.randomUUID()});setAssistantStarted(true);
+  }}),[]);
+  const reviewAssistantDraft=useCallback(async(document:import('../features/presentation/schema').PresentationPackage,source:RehearsalSession)=>{
+    const current=()=>assistantOwner.current.enabled&&assistantOwner.current.source===source;
+    if(!current())throw Error('The room Set changed. Use the current room Set or reopen its editor. Your Assistant draft is saved.');
+    await ipc.setLibrarySave(JSON.stringify(document));
+    if(!current())throw Error('The room changed. The candidate is saved in your Set library.');
+    // This installs only a PRIVATE editor draft. Existing Show on output owns
+    // native preparation, source assignments and the explicit live transition.
+    setAssistantEditorRequest({id:crypto.randomUUID(),document});
+    const existing=normalize(cfgRef.current.layout??DEFAULT_LAYOUT);
+    const where=dockOf(existing,'setControls');
+    if(where==='hidden')writeCfg({...cfgRef.current,layout:movePanel(existing,'setControls','right')});
+    if(where==='hidden'||where==='right')setRightOpen(true);
+    if(where==='left')setLeftOpen(true);
+    if(where==='top')setTopOpen(true);
+    if(where==='bottom')setSheetOpen(true);
+  },[roomId]);
+  const expandAssistant=useCallback(()=>{
+    const current=cfgRef.current,where=dockOf(normalize(current.layout??DEFAULT_LAYOUT),'assistant');
+    const next={...current.sizes};
+    if(where==='top'){next.top=TOP_MAX;setTopOpen(true);}
+    if(where==='bottom'){next.bottom=360;setSheetOpen(true);}
+    if(where==='left'){next.left=Math.max(320,next.left??0);setLeftOpen(true);}
+    if(where==='right'){next.right=Math.max(320,next.right??0);setRightOpen(true);}
+    writeCfg({...current,sizes:next});
+  },[roomId]);
+
   const panelBody = (id: PanelId) => {
     switch (id) {
+      case "assistant":
+        return isHost ? <div className="assistant-dock-mount" ref={assistantTargetRef}/> : <div className="rm-rows-empty">The host controls the Assistant.</div>;
       case "setControls":
-        return visible?<SetControlsPanel preferenceRoomId={roomId??undefined} endpoint={endpointRef.current??activeEndpointId()??undefined} serverRoomId={cfg.server_room_id??undefined} moduleBindings={cfg.presentation?.moduleBindings} voting={roomAccess.can.interactions?<SetRoomVoting vote={vote} savedVotes={savedVotes} onSelectVote={selectSavedVote} onOpen={openVote} onTransition={(action,hold)=>void transitionVote(action,hold)}/>:undefined} sourceNames={setSourceNames} onFieldEdit={editSetField} session={setRehearsal} output={setOutput} blocked={!docApplied}
+        return visible?<SetControlsPanel assistantEditorRequest={assistantEditorRequest} onAssistantEditorOpened={assistantEditorOpened} preferenceRoomId={roomId??undefined} endpoint={endpointRef.current??activeEndpointId()??undefined} serverRoomId={cfg.server_room_id??undefined} moduleBindings={cfg.presentation?.moduleBindings} voting={roomAccess.can.interactions?<SetRoomVoting vote={vote} savedVotes={savedVotes} onSelectVote={selectSavedVote} onOpen={openVote} onTransition={(action,hold)=>void transitionVote(action,hold)}/>:undefined} sourceNames={setSourceNames} onFieldEdit={editSetField} session={setRehearsal} output={setOutput} blocked={!docApplied}
           blockedReason={!docApplied ? "Waiting for the room to finish loading." : undefined}
           onChange={changeSet} />:null;
       case "sounds":
@@ -8752,7 +8800,8 @@ export function LiveView({
   }
 
   return (
-    <div hidden={!visible} style={visible?undefined:{display:'none'}} className={`room${layoutEdit ? " layout-edit" : ""}`}>
+    <RoomAssistantContext.Provider value={assistantBridge}><div hidden={!visible} style={visible?undefined:{display:'none'}} className={`room${layoutEdit ? " layout-edit" : ""}`}>
+      {assistantStarted&&assistantEnabled&&<Suspense fallback={null}><RoomAssistant key={JSON.stringify([endpointRef.current??'local',roomId??'local'])} session={setRehearsal} scope={JSON.stringify(['room',endpointRef.current??'local',roomId??'local'])} target={assistantTarget} compact={formDockOf('assistant')==='top'} onExpand={expandAssistant} request={assistantRequest} onReview={reviewAssistantDraft}/></Suspense>}
       {/* The first-room walkthrough. Renders over everything but the mount
         * veil — teaching a room that has not finished opening would point at
         * controls that are not there yet. */}
@@ -9752,7 +9801,7 @@ export function LiveView({
         scenes={scenes.length}
         sources={sources.items?.length ?? 0}
       />
-    </div>
+    </div></RoomAssistantContext.Provider>
   );
 }
 

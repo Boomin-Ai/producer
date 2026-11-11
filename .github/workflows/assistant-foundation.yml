@@ -1,7 +1,7 @@
 name: Assistant authoring foundation
 on:
   pull_request:
-    paths: ['crates/assistant-runtime/**', 'shared/authoring/**', 'src/features/assistant/**', 'src/features/presentation/authoring/**', 'src/features/presentation/schema.ts', 'tools/producer-mcp/**', 'scripts/test-authoring-foundation.mjs', 'scripts/test-assistant-*.mjs', '.github/workflows/assistant-foundation.yml']
+    paths: ['crates/assistant-runtime/**', 'shared/authoring/**', 'src/features/assistant/**', 'src/features/presentation/authoring/**', 'src/features/presentation/schema.ts', 'src/features/presentation/SetConfiguration.tsx', 'src/features/presentation/SetControlsPanel.tsx', 'src/features/presentation/RehearsalPreview.tsx', 'src/views/Live.tsx', 'src/lib/layout.ts', 'tools/producer-mcp/**', 'scripts/test-authoring-foundation.mjs', 'scripts/test-assistant-*.mjs', '.github/workflows/assistant-foundation.yml']
   push:
     branches: ['feat/assistant-authoring-foundation']
 permissions:
@@ -52,6 +52,7 @@ jobs:
           curl -fsS "$PRODUCER_TEST_URL" >/dev/null
           node scripts/test-assistant-browser.mjs
           node scripts/test-assistant-preview.mjs
+          node scripts/test-assistant-panel.mjs
           node scripts/test-assistant-workbench.mjs
   provider-runtime:
     runs-on: ubuntu-latest
