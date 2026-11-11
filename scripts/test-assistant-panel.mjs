@@ -42,6 +42,18 @@ try {
  await page.getByText('Test model',{exact:true}).waitFor();
  assert.deepEqual(await page.locator('.assistant-suggestions button').allTextContents(),['Create a Set','Plan a show','Help me get started']);
  assert.equal(await page.locator('.assistant-context-trigger').count(),0,'an empty room does not present a Set-specific header');
+ await page.evaluate(()=>document.getElementById('right').style.width='150px');
+ const ideas=page.getByRole('button',{name:'Assistant suggestions',exact:true});await ideas.waitFor();
+ assert.equal(await page.locator('.assistant-suggestions').isVisible(),false,'a narrow sidebar uses one ideas menu instead of crushed chips');
+ await ideas.click();const suggestionMenu=page.locator('.assistant-suggestion-popover:popover-open');await suggestionMenu.waitFor();
+ const menuBounds=await suggestionMenu.boundingBox();assert(menuBounds.x>=0&&menuBounds.y>=0&&menuBounds.x+menuBounds.width<=1440&&menuBounds.y+menuBounds.height<=1050,'ideas menu stays inside the viewport');
+ assert.equal(await suggestionMenu.getByRole('button').count(),3);
+ if(process.env.PRODUCER_PANEL_SCREENSHOTS)await suggestionMenu.screenshot({path:process.env.PRODUCER_PANEL_SCREENSHOTS+'/narrow-ideas.png'});
+ await suggestionMenu.getByRole('button',{name:'Plan a show'}).click();
+ assert.equal(await page.locator('.assistant-suggestion-popover:popover-open').count(),0);
+ assert.match(await page.getByRole('textbox',{name:'Assistant prompt'}).inputValue(),/Help me plan a show/);
+ assert.equal(await page.evaluate(()=>window.turns.length),0,'ideas menu only prepares the prompt');
+ await page.evaluate(()=>document.getElementById('right').style.width='360px');
  await page.getByRole('button',{name:'Plan a show',exact:true}).click();
  assert.match(await page.getByRole('textbox',{name:'Assistant prompt'}).inputValue(),/Help me plan a show/);
  assert.equal(await page.evaluate(()=>window.turns.length),0,'a suggestion prepares a prompt; it never submits or changes output');

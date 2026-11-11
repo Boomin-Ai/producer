@@ -193,6 +193,23 @@
 .assistant-workspace .assistant-composer .assistant-compose>div{right:9px;bottom:10px;}
 .assistant-workspace .assistant-composer .assistant-send{width:28px;height:28px;min-height:28px;border-radius:8px;}
 .assistant-workspace .assistant-composer .assistant-send:disabled{background:#22303a;color:#637884;}
+.assistant-suggestions-compact{display:none;padding:5px 6px 0;}
+.assistant-workspace .assistant-suggestions-compact>button{display:flex;align-items:center;gap:5px;min-height:26px;padding:3px 5px;border:0;background:transparent;color:#9aadb9;font-size:10px;}
+.assistant-suggestions-compact>button>span{color:#6f8593;}
+.assistant-suggestion-popover{position:fixed;inset:auto;margin:0;box-sizing:border-box;width:min(250px,calc(100vw - 20px));max-height:calc(100dvh - 20px);overflow:auto;padding:6px;border:1px solid #344650;border-radius:11px;background:#152029;color:#dde7ed;box-shadow:0 10px 32px #0008;font:12px/1.5 system-ui,sans-serif;}
+.assistant-suggestion-popover>span{display:block;padding:5px 8px;color:#8da4af;font-size:10px;}
+.assistant-suggestion-popover>button{display:flex;align-items:center;justify-content:space-between;gap:10px;box-sizing:border-box;width:100%;min-height:36px;padding:8px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;text-align:left;white-space:normal;cursor:pointer;}
+.assistant-suggestion-popover>button>span{color:#839da8;}
+.assistant-suggestion-popover>button:hover:not(:disabled){background:#23343d;}
+.assistant-suggestion-popover>button:disabled{opacity:.45;cursor:default;}
+.assistant-suggestion-popover>button:focus-visible{outline:2px solid #80dbbe;outline-offset:-2px;}
+@container assistant-dock (max-width:220px){
+ .assistant-composer{margin:6px 8px 8px;}
+ .assistant-composer .assistant-suggestions{display:none;}
+ .assistant-suggestions-compact{display:flex;}
+ .assistant-workspace .assistant-composer textarea{height:40px;min-height:40px;white-space:pre;overflow-wrap:normal;}
+ .assistant-header-title>strong{font-size:11px;}
+}
 
 /* Mini and expanded forms share one prompt and request owner. */
 .assistant-workspace .assistant-mini-compose{flex:1;min-width:0;height:32px;padding:0;border:0;}

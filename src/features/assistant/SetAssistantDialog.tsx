@@ -13,6 +13,7 @@ import type {PresentationPackage} from '../presentation/schema';
 import './assistant.css';
 import {DraftPreviewBoundary} from './DraftPreviewBoundary';
 import {AssistantMessage} from './AssistantMessage';
+import {AssistantSuggestions} from './AssistantSuggestions';
 import {roomSuggestions,type AssistantRoomState,type AssistantSuggestion} from './suggestions';
 
 export interface AssistantDock {target: HTMLElement | null; compact: boolean; onExpand(): void; onUseCurrent(): void; reviewRequest?: string; contextLabel: string; roomName?:string; roomChanged?:boolean}
@@ -199,7 +200,7 @@ export default function SetAssistantDialog({document, onLoad, onClose, dock, sco
     if(suggestion.prompt)setPrompt(suggestion.prompt);
     promptRef.current?.focus();
   };
-  const suggestionRow=<div hidden={showSettings} className="assistant-suggestions" aria-label="Suggested actions">{suggestions.map(suggestion=><button type="button" key={suggestion.id} disabled={busy||loading||suggestion.action==='review'&&previewFailed} onClick={()=>chooseSuggestion(suggestion)}>{suggestion.label}</button>)}</div>;
+  const suggestionRow=!showSettings&&<AssistantSuggestions items={suggestions} disabled={suggestion=>busy||loading||suggestion.action==='review'&&previewFailed} onChoose={chooseSuggestion}/>;
   const compose=(mini=false)=>(<form hidden={!mini&&showSettings} className={`assistant-compose${mini?' assistant-mini-compose':''}`} onSubmit={event => {event.preventDefault(); void send();}}><label className="assistant-compose-label" htmlFor={mini?'assistant-mini-prompt':'assistant-prompt'}>Message Producer</label><textarea ref={promptRef} id={mini?'assistant-mini-prompt':'assistant-prompt'} aria-label="Assistant prompt" value={prompt} maxLength={8000} onChange={event => setPrompt(event.target.value)} rows={mini?1:3} placeholder="Ask Producer…" onKeyDown={event => {if (!event.nativeEvent.isComposing && event.key==='Enter' && ((event.metaKey || event.ctrlKey) || (mini&&!event.shiftKey))) {event.preventDefault(); void send();}}}/><div><span>{busy ? 'Working…' : `Private draft · ${/Mac/i.test(navigator.platform)?'⌘':'Ctrl'} Enter to send`}</span>{busy ? <button className="assistant-send is-stop" type="button" aria-label="Stop" title="Stop response" onClick={() => void stop()}><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg></button> : <button className="assistant-primary assistant-send" aria-label="Send ↗" title="Send message" disabled={!active?.planEnabled || !model || !draft || !prompt.trim() || loading} type="submit"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button>}</div></form>);
   const conversation = (      <section className="assistant-panel" aria-label="Assistant conversation">
         <header ref={header} className="assistant-dock-header">
