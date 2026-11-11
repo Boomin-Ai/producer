@@ -9,7 +9,7 @@ for(const dock of ['top','left','right','bottom','hidden'])assert.equal(layout.d
 const suggestionBundle=await build({entryPoints:['src/features/assistant/suggestions.ts'],bundle:true,write:false,platform:'node',format:'esm'});
 const {roomSuggestions}=await import('data:text/javascript;base64,'+Buffer.from(suggestionBundle.outputFiles[0].text).toString('base64'));
 const room={setOnOutput:true,screenSharing:true,guestsConnected:true};
-assert.deepEqual(roomSuggestions(room,{edited:false,started:true,design:false,canEdit:true}).map(chip=>chip.label),['Continue','Next step','Make an outline'],'an active content conversation gets follow-ups rather than onboarding');
+assert.deepEqual(roomSuggestions(room,{edited:false,started:true,design:false,canEdit:true,messages:[{role:'user',text:'Plan a teaching show; no edits.'},{role:'assistant',text:'Choose a direction:\n- **Code lab** — hands-on demos\n- **Field notes** — lessons from projects\n- **Office hours** — questions'}]}).map(chip=>chip.label),['Code lab','Field notes','Office hours'],'an active content conversation gets its actual choices rather than onboarding');
 assert(roomSuggestions(room,{edited:true,started:true,design:true,canEdit:false}).every(chip=>!chip.action&&chip.label!=='Refine controls'),'sharing off never exposes a private edit or review shortcut');
 const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'playwright-core');
 const browser=await chromium.launch({executablePath:process.env.PRODUCER_CHROME??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
@@ -99,6 +99,21 @@ try {
  await page.getByRole('button',{name:'Expand Assistant',exact:true}).click();
  await page.getByRole('dialog',{name:'Assistant conversation panel',exact:true}).waitFor();
  assert.equal(await page.getByRole('textbox',{name:'Assistant prompt'}).inputValue(),multiline,'expanding retains the complete shared prompt');
+ // Re-clicking Expand used to erase placement while leaving open=true, which
+ // hid both the floating panel and the compact input until a reset.
+ await page.getByRole('button',{name:'Expand Assistant',exact:true}).click();
+ assert.equal(await page.getByRole('dialog',{name:'Assistant conversation panel',exact:true}).count(),0);
+ assert.equal(await page.getByRole('textbox',{name:'Assistant prompt'}).inputValue(),multiline);
+ for(const method of ['close','escape','outside']){
+  await page.getByRole('button',{name:'Expand Assistant',exact:true}).click();
+  await page.getByRole('dialog',{name:'Assistant conversation panel',exact:true}).waitFor();
+  if(method==='close')await page.getByRole('button',{name:'Close Assistant conversation',exact:true}).click();
+  if(method==='escape')await page.keyboard.press('Escape');
+  if(method==='outside')await page.mouse.click(1400,1000);
+  assert.equal(await page.getByRole('dialog',{name:'Assistant conversation panel',exact:true}).count(),0,method+' closes the floating conversation');
+  assert.equal(await page.getByRole('textbox',{name:'Assistant prompt'}).inputValue(),multiline,method+' restores the usable shared mini prompt');
+ }
+ await page.getByRole('button',{name:'Expand Assistant',exact:true}).click();
  await page.getByRole('button',{name:'Expand dock',exact:true}).click();
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('');
  await page.evaluate(()=>window.render({target:document.getElementById('right'),onExpand:()=>{window.expands++;window.render({compact:false});}}));
@@ -113,13 +128,15 @@ try {
  await page.evaluate(()=>window.render({target:document.getElementById('bottom'),compact:true}));
  await page.getByRole('button',{name:/Assistant.*Working/}).waitFor();
  await page.evaluate(()=>window.release());await page.getByRole('button',{name:/Assistant.*Reply ready/}).waitFor();
- const completed=page.locator('.assistant-task-toast');await completed.waitFor();assert.match(await completed.innerText(),/Assistant finished.*Panel draft is ready/s);
+ const completed=page.locator('.assistant-task-toast');await completed.waitFor();assert.match(await completed.innerText(),/Reply ready.*Panel draft is ready/s);
+ const dockBounds=await page.locator('.assistant-docked').boundingBox(),toastBounds=await completed.boundingBox();
+ assert(toastBounds.x<dockBounds.x+dockBounds.width&&toastBounds.x+toastBounds.width>dockBounds.x&&toastBounds.y<dockBounds.y+dockBounds.height&&toastBounds.y+toastBounds.height>dockBounds.y,'completion previews overlay their dock rather than sit beside it');
  if(process.env.PRODUCER_PANEL_SCREENSHOTS)await completed.screenshot({path:process.env.PRODUCER_PANEL_SCREENSHOTS+'/completion.png'});
  await completed.getByRole('button',{name:'View reply ↗',exact:true}).click();
  assert.equal(await completed.count(),0,'reading the reply dismisses its completion toast');
  await page.getByRole('button',{name:'Expand dock',exact:true}).click();
  await page.getByText('Panel draft is ready.',{exact:true}).waitFor();
- assert.deepEqual(await page.locator('.assistant-suggestions button').allTextContents(),['Review changes','Continue editing','Explain changes']);
+ assert.equal((await page.locator('.assistant-suggestions button').allTextContents())[0],'Review changes');
  if(process.env.PRODUCER_PANEL_SCREENSHOTS)await page.locator('.assistant-docked').screenshot({path:process.env.PRODUCER_PANEL_SCREENSHOTS+'/ready.png'});
  assert.equal(await page.evaluate(()=>window.modelCalls),modelCalls,'docking and compact view retain the provider session');
  assert.equal(await page.evaluate(()=>window.cancelled),0,'moving the panel does not cancel its active turn');

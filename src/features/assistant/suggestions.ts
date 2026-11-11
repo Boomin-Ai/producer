@@ -1,3 +1,4 @@
+import {conversationSuggestions,type ConversationMessage} from './conversationSuggestions';
 /** Local UI context only. No media, transcripts, guest identities or room chat. */
 export interface AssistantRoomState {
   setOnOutput: boolean;
@@ -5,16 +6,12 @@ export interface AssistantRoomState {
   guestsConnected: boolean;
 }
 export type AssistantSuggestion = {id:string;label:string;prompt?:string;action?:'review'|'focus'};
-export function roomSuggestions(room:AssistantRoomState|undefined, state:{edited:boolean;started:boolean;design:boolean;canEdit:boolean}):AssistantSuggestion[] {
+export function roomSuggestions(room:AssistantRoomState|undefined, state:{edited:boolean;started:boolean;design:boolean;canEdit:boolean;messages?:readonly ConversationMessage[];replies?:readonly AssistantSuggestion[]}):AssistantSuggestion[] {
+  if(state.started)return conversationSuggestions(state.messages??[],state.replies,state.edited&&state.canEdit);
   if(state.edited&&state.canEdit)return [
     {id:'review',label:'Review changes',action:'review'},
     {id:'continue-editing',label:'Continue editing',action:'focus'},
     {id:'explain-changes',label:'Explain changes',prompt:'Explain the changes in my current private draft and what I should check before showing it on output. Make no edits.'},
-  ];
-  if(state.started)return [
-    {id:'continue',label:'Continue',prompt:'Continue from our last exchange. Keep any edits private and preserve the room output.'},
-    {id:'next-step',label:'Next step',prompt:'What is the best next step based on our conversation? Explain it before taking any action.'},
-    state.design&&state.canEdit?{id:'refine-controls',label:'Refine controls',prompt:'Suggest a clearer control arrangement for the private Set we are discussing. Explain the changes before editing.'}:{id:'make-outline',label:'Make an outline',prompt:'Turn what we have discussed into a clear content outline that I can produce in this room.'},
   ];
   if(!state.canEdit)return [
     {id:'plan-show',label:'Plan a show',prompt:'Help me plan a show. Ask me about the topic, audience and length first. Do not inspect or edit a Set.'},

@@ -227,18 +227,23 @@
 .assistant-floating-tools{display:flex;justify-content:flex-end;align-items:center;gap:5px;flex:none;padding:4px 7px;border-bottom:1px solid #273640;}
 .assistant-workspace .assistant-floating-tools button{min-height:26px;padding:3px 7px;font-size:10px;border:0;background:transparent;color:#9bafba;}
 .assistant-workspace .assistant-floating-tools button:last-child{font-size:18px;line-height:1;width:26px;}
-.assistant-task-toast{position:fixed;z-index:149;box-sizing:border-box;width:min(320px,calc(100vw - 20px));max-height:min(260px,calc(100dvh - 20px));overflow:auto;padding:12px;border:1px solid #3f6054;border-radius:12px;background:#15231f;color:#dcebe5;box-shadow:0 12px 40px #0008;font:12px/1.5 system-ui,sans-serif;}
+.assistant-task-toast{position:fixed;z-index:149;box-sizing:border-box;width:min(320px,calc(100vw - 20px));max-height:min(190px,calc(100dvh - 20px));overflow:auto;padding:11px 13px;border:1px solid #3b4c53;border-radius:12px;background:#142027;color:#e1ebee;box-shadow:0 8px 28px #0009;font:12px/1.5 system-ui,sans-serif;}
 .assistant-task-toast>div{display:flex;justify-content:space-between;align-items:center;gap:10px;}
-.assistant-task-toast strong{font-size:12px;}
-.assistant-task-toast p{margin:8px 0;color:#b5c7be;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;white-space:pre-wrap;}
+.assistant-task-toast strong{font-size:12px;font-weight:600;}
+.assistant-task-toast p{margin:5px 0 6px;color:#b5c5cc;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;}
 .assistant-task-toast button{border:0;border-radius:6px;background:transparent;color:#9ae6c8;padding:4px 0;font:inherit;cursor:pointer;}
 .assistant-task-toast>div>button{width:24px;font-size:18px;padding:0;color:#96ada2;}
 .assistant-task-toast button:focus-visible{outline:2px solid #7edcba;outline-offset:2px;}
+.assistant-unread-dot{flex:none;width:6px;height:6px;border-radius:50%;background:#94e2c6;box-shadow:0 0 0 2px #94e2c61c;}
 .assistant-workspace .assistant-tight{display:grid;height:100%;min-height:0;grid-template-columns:minmax(0,1fr) 28px;grid-template-rows:30px minmax(0,1fr) 32px;gap:7px;padding:8px;align-items:stretch;}
 .assistant-tight>.assistant-mini-open{grid-column:1;grid-row:1;justify-content:flex-start;max-width:100%;}
 .assistant-tight>.assistant-mini-expand{grid-column:2;grid-row:1;}
 .assistant-workspace .assistant-tight-summary{grid-column:1/3;grid-row:2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:0;padding:0 5px;border:0;border-radius:0;background:transparent;color:#9cb1bc;font-size:11px;line-height:1.6;text-align:left;white-space:normal;overflow-wrap:anywhere;}
 .assistant-tight>.assistant-mini-compose{grid-column:1/3;grid-row:3;width:100%;}
+.assistant-workspace .assistant-mini-connect{flex:1;min-width:0;min-height:30px;height:32px;padding:3px 7px;border:1px solid #eef3f6;border-radius:7px;background:#eef3f6;color:#111b22;font-size:10px;line-height:1.2;white-space:normal;}
+.assistant-workspace .assistant-mini-connect:hover:not(:disabled){background:#dce8ed;color:#111b22;border-color:#dce8ed;}
+.assistant-tight>.assistant-mini-connect{grid-column:1/3;grid-row:3;width:100%;}
 @container assistant-dock (max-width:300px){.assistant-mini-open>strong{display:block;overflow:hidden;text-overflow:ellipsis;}.assistant-mini-open{flex-shrink:1;}.assistant-mini-open strong{font-size:10px;}}
 @container assistant-dock (max-width:160px){.assistant-mini:not(.assistant-tight)>.assistant-mini-compose{display:none;}.assistant-mini:not(.assistant-tight)>.assistant-mini-open{flex:1;}}
+@container assistant-dock (max-width:220px){.assistant-mini-disconnected:not(.assistant-tight)>.assistant-mini-open{flex:none;}.assistant-mini-disconnected:not(.assistant-tight)>.assistant-mini-open strong,.assistant-mini-disconnected:not(.assistant-tight)>.assistant-mini-expand,.assistant-mini-disconnected .assistant-mini-status{display:none;}}
 @media(prefers-reduced-motion:reduce){.assistant-connected-dot.working{animation:none;}}

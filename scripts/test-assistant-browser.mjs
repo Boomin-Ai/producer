@@ -21,7 +21,7 @@ try {
   window.mockAssistant={status:async()=>({accounts:[{id:'account-test',email:'test@example.invalid',planEnabled:true,verified:true}],active:'account-test',signIn:null}),turn:async(turn,event)=>{
     window.turns.push(structuredClone(turn));
     if(window.blockNextTurn)return await new Promise(resolve=>{window.releaseLate=()=>{event({type:'text',text:'Late result'});resolve([]);}});
-    if(!turn.tools.length){event({type:'text',text:'Design sharing is off.'});return [{type:'message',role:'assistant',content:[{type:'output_text',text:'Design sharing is off.'}]}];}
+    if(!turn.tools.some(tool=>tool.name==='producer')){event({type:'text',text:'Design sharing is off.'});return [{type:'message',role:'assistant',content:[{type:'output_text',text:'Design sharing is off.'}]}];}
     const results=turn.input.filter(i=>i.type==='function_call_output');
     if(!results.length)return [{type:'function_call',namespace:'producer',name:'inspect_set',arguments:'{}',call_id:'call-inspect'}];
     if(results.length===1||results.length===2){
@@ -75,7 +75,7 @@ try {
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Another edit.');await page.getByRole('button',{name:'Send ↗',exact:true}).click();await page.waitForFunction(()=>typeof window.releaseLate==='function');await page.getByRole('button',{name:'Stop',exact:true}).click();await page.evaluate(()=>{window.releaseLate();window.blockNextTurn=false;});
  assert.equal(await page.getByText('Late result',{exact:true}).count(),0,'stopped provider results are fenced');
  await page.getByRole('button',{name:'Assistant settings',exact:true}).click();await page.getByText('On request · Data shared',{exact:true}).click();await page.getByRole('checkbox',{name:'Share this Set’s design with ChatGPT'}).uncheck();await page.getByRole('button',{name:'Close Assistant settings',exact:true}).click();
- await page.getByRole('textbox',{name:'Assistant prompt'}).fill('What can you help with?');await page.getByRole('button',{name:'Send ↗',exact:true}).click();await page.getByText('Design sharing is off.',{exact:true}).waitFor();assert.deepEqual(await page.evaluate(()=>window.turns.at(-1).tools),[]);assert.equal(await page.evaluate(()=>window.turns.at(-1).input.length),1,'changed sharing excludes old context/history');
+ await page.getByRole('textbox',{name:'Assistant prompt'}).fill('What can you help with?');await page.getByRole('button',{name:'Send ↗',exact:true}).click();await page.getByText('Design sharing is off.',{exact:true}).waitFor();assert.deepEqual(await page.evaluate(()=>window.turns.at(-1).tools.map(tool=>tool.name)),['producer_assistant'],'sharing off permits only UI reply metadata, with no authoring authority');assert.equal(await page.evaluate(()=>window.turns.at(-1).input.length),1,'changed sharing excludes old context/history');
  assert(!(await page.evaluate(()=>window.nativeCalls)).some(c=>/live_.*(apply|create|start|stop|record|stream)/.test(c)),'assistant never owns native output');
  assert.deepEqual(errors,[]);
  if(process.env.PRODUCER_ASSISTANT_SCREENSHOT){await fs.mkdir(new URL('.',`file://${process.env.PRODUCER_ASSISTANT_SCREENSHOT}`).pathname,{recursive:true});await page.screenshot({path:process.env.PRODUCER_ASSISTANT_SCREENSHOT});}
