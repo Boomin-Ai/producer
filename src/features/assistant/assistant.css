@@ -139,19 +139,19 @@
 .assistant-mini-open strong{font-size:11px;font-weight:600;}
 .assistant-mini-status{font-size:10px;color:#9db5ad;max-width:135px;overflow:hidden;text-overflow:ellipsis;}
 .assistant-workspace .assistant-mini-expand{display:grid;place-items:center;flex:none;width:28px;height:28px;min-height:28px;padding:0;border:0;background:transparent;color:#adc1ca;}
-.assistant-suggestions{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:5px 12px 0;flex:none;min-width:0;}
-.assistant-workspace .assistant-suggestions>button{min-height:26px;padding:4px 8px;border-radius:7px;border:1px solid #2c3c47;background:#15212a;color:#b7cbd4;font-size:10px;line-height:1.4;}
-.assistant-workspace .assistant-suggestions>button:hover:not(:disabled){border-color:#547469;background:#1c302a;color:#c5eddf;}
+.assistant-suggestions{display:flex;align-items:stretch;gap:2px;padding:6px 6px 0;flex:none;min-width:0;}
+.assistant-workspace .assistant-suggestions>button{flex:0 1 auto;min-width:0;min-height:26px;padding:4px 6px;border-radius:6px;border:1px solid transparent;background:transparent;color:#9aadb9;font-size:10px;line-height:1.4;text-align:left;white-space:normal;overflow-wrap:anywhere;}
+.assistant-workspace .assistant-suggestions>button:hover:not(:disabled){border-color:transparent;background:#23313a;color:#e0eae9;}
 @container assistant-dock (min-width:650px){
- .assistant-docked:not(.assistant-docked-mini)>.assistant-panel{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:52px minmax(0,1fr) auto auto auto auto auto}
+ .assistant-docked:not(.assistant-docked-mini)>.assistant-panel{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:52px minmax(0,1fr) auto auto auto auto}
  .assistant-docked .assistant-dock-header{grid-column:1;grid-row:1;height:52px;padding:5px 12px}
- .assistant-docked .assistant-settings{grid-column:1;grid-row:2/8}
+ .assistant-docked .assistant-settings{grid-column:1;grid-row:2/7}
  .assistant-docked .assistant-messages{grid-column:1;grid-row:2;min-height:0}
  .assistant-docked .assistant-error{grid-column:1;grid-row:3;max-height:70px}
  .assistant-docked .assistant-notice{grid-column:1;grid-row:4;max-height:50px}
  .assistant-docked .assistant-draft-card{grid-column:1;grid-row:5;margin:0 10px 6px;padding:5px 9px}
- .assistant-docked .assistant-suggestions{grid-column:1;grid-row:6;}
- .assistant-docked .assistant-compose{grid-column:1;grid-row:7;padding:8px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;min-height:0}
+ .assistant-docked .assistant-composer{grid-column:1;grid-row:6;}
+ .assistant-docked .assistant-compose{padding:8px 12px;min-height:0}
  .assistant-docked .assistant-compose textarea{height:44px;min-height:44px;max-height:80px}
  .assistant-docked .assistant-compose>div{margin:0}
 }
@@ -173,6 +173,8 @@
 .assistant-docked .assistant-rich-text{font-size:12px;line-height:1.65}
 
 /* A single composer surface with an inset transport control. */
+.assistant-composer{flex:none;min-width:0;margin:8px 12px 12px;border:1px solid #2c3c47;border-radius:12px;background:#121c24;transition:border-color .15s;}
+.assistant-composer:focus-within{border-color:#668d80;}
 .assistant-workspace .assistant-compose{position:relative;display:block;padding:10px 12px;border-top:1px solid #28333d;}
 .assistant-workspace .assistant-compose textarea{min-height:68px;max-height:160px;padding:12px 48px 12px 13px;border:1px solid #30414d;border-radius:13px;background:#111b24;line-height:1.5;resize:none;}
 .assistant-workspace .assistant-compose>div{position:absolute;right:21px;bottom:19px;margin:0;display:flex;}
@@ -183,6 +185,14 @@
 .assistant-workspace .assistant-compose .assistant-send.is-stop{background:#30434b;color:#d8e5e9;}
 .assistant-workspace .assistant-compose .assistant-send:focus-visible{outline:2px solid #9ce5d0;outline-offset:3px;}
 @container assistant-dock (min-width:650px){.assistant-docked .assistant-compose textarea{height:48px;min-height:48px;max-height:100px;}}
+.assistant-workspace .assistant-composer .assistant-compose{padding:3px 9px 9px;border:0;}
+.assistant-workspace .assistant-composer .assistant-compose-label{position:absolute;width:1px;height:1px;padding:0;margin:-1px;clip-path:inset(50%);overflow:hidden;white-space:nowrap;}
+.assistant-workspace .assistant-composer textarea{height:48px;min-height:48px;max-height:160px;padding:9px 39px 9px 4px;border:0;border-radius:0;background:transparent;font-size:12px;line-height:1.5;}
+.assistant-workspace .assistant-composer textarea:focus-visible{outline:0;box-shadow:none;}
+.assistant-composer textarea::placeholder{color:#8799a6;opacity:1;}
+.assistant-workspace .assistant-composer .assistant-compose>div{right:9px;bottom:10px;}
+.assistant-workspace .assistant-composer .assistant-send{width:28px;height:28px;min-height:28px;border-radius:8px;}
+.assistant-workspace .assistant-composer .assistant-send:disabled{background:#22303a;color:#637884;}
 
 /* Mini and expanded forms share one prompt and request owner. */
 .assistant-workspace .assistant-mini-compose{flex:1;min-width:0;height:32px;padding:0;border:0;}
