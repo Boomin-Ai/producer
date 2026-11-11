@@ -3,7 +3,25 @@ import {applyDesignEdits, compileDesignPlan, designContext, packageRevision} fro
 import type {AuthoringTarget} from './catalog';
 import type {PresentationNode, PresentationPackage} from '../schema';
 import {validateAuthoredDefaults} from './validateDefaults';
+import {layoutOrientation,layoutViews} from '../layoutViews';
 export {validateAuthoredDefaults} from './validateDefaults';
+
+/** New multi-format designs must describe how their canvases belong to views.
+ * Existing imports/edits stay compatible, including legacy suffix-paired Sets.
+ * Explicit partial-format views remain available for intentional compositions. */
+export function validateNewSetViews(document:PresentationPackage) {
+  const orientations=[...new Set(document.set.layouts.map(layoutOrientation))];
+  if(orientations.length<2)return;
+  const views=layoutViews(document.set);
+  if(Object.keys(document.set.views??{}).length){
+    const mapped=new Set(Object.values(document.set.views!).flatMap(variants=>Object.values(variants)));
+    const missing=document.set.layouts.filter(layout=>!mapped.has(layout.id));
+    if(missing.length)throw Error(`New multi-format Set has unmapped layouts: ${missing.map(layout=>layout.id).join(', ')}. Include them in set.views with the matching landscape/portrait/square keys.`);
+  }else{
+    const unpaired=views.filter(view=>orientations.some(orientation=>!view.variants[orientation]));
+    if(unpaired.length)throw Error('New multi-format Set is not paired for output. Add set.views, for example {main:{landscape:"landscape-layout-id",portrait:"portrait-layout-id"}}, and a matching initialView. A layout named Vertical is not an output pairing.');
+  }
+}
 
 export type SetAuthoringCommand =
   | {type: 'canonical'; edit: unknown}
@@ -31,7 +49,11 @@ export function setDocumentAdapter(target: AuthoringTarget): DocumentAdapter<Pre
     const fields:Record<string,string[]>={canonical:['type','edit'],design:['type','plan'],'node.properties':['type','layoutId','nodeId','properties'],'animation.track':['type','layoutId','track']};
     if(!fields[command.type]||Object.keys(command).some(key=>!fields[command.type].includes(key)))throw Error('Unknown authoring command fields.');
     if (command.type === 'canonical') return applyDesignEdits(base, command.edit, target);
-    if (command.type === 'design') return compileDesignPlan(command.plan, target, base.set.assets);
+    if (command.type === 'design') {
+      const document=compileDesignPlan(command.plan, target, base.set.assets);
+      if((command.plan as {schema?:string})?.schema==='producer.design-plan/2')validateNewSetViews(document);
+      return document;
+    }
     const layoutIndex = base.set.layouts.findIndex(l => l.id === command.layoutId);
     if (layoutIndex < 0) throw Error('Unknown layout ID.');
     const layout = base.set.layouts[layoutIndex], root = `/set/layouts/${layoutIndex}`;
@@ -62,7 +84,7 @@ export function setDocumentAdapter(target: AuthoringTarget): DocumentAdapter<Pre
 }
 export const createSetAuthoringSession = (base: PresentationPackage, target: AuthoringTarget) => AuthoringSession.create(setDocumentAdapter(target), base);
 export function inspectAuthoredSet(doc: PresentationPackage) {
-  return {context: designContext(doc), layouts: doc.set.layouts.map(layout => {
+  return {context: designContext(doc), canvasViews:layoutViews(doc.set), explicitViewMapping:!!Object.keys(doc.set.views??{}).length, layouts: doc.set.layouts.map(layout => {
     const nodes: Array<{id: string; type: string; parent?: string}> = [];
     const visit = (node: PresentationNode, parent?: string) => {nodes.push({id: node.id, type: node.type, ...(parent ? {parent} : {})}); node.children?.forEach(n => visit(n, node.id));};
     visit(layout.root);

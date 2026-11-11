@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {build} from 'esbuild';
-const bundle=await build({stdin:{contents:`export * from './shared/authoring/session';export * from './src/features/presentation/authoring/service';export * from './src/features/presentation/authoring/catalog';export * from './src/features/presentation/authoring/compiler';export * from './src/features/presentation/schema';`,resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',write:false});
+const bundle=await build({stdin:{contents:`export * from './shared/authoring/session';export * from './src/features/presentation/authoring/service';export * from './src/features/presentation/authoring/catalog';export * from './src/features/presentation/authoring/compiler';export * from './src/features/presentation/layoutViews';export * from './src/features/presentation/schema';`,resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',write:false});
 const api=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
 const styleContract=api.presentationJsonSchema.$defs.node.anyOf[0].properties.styles;
 assert(styleContract.propertyNames.enum.includes('padding'));assert(!styleContract.propertyNames.enum.includes('marginBottom'),'exported authoring schema must reject styles the canonical importer rejects');
@@ -46,6 +46,19 @@ const motion={type:'animation.track',layoutId:layout.id,track:{target:node.id,pr
 const moved=await session.edit({operationId:'motion',baseRevision:session.snapshot().revision,label:'Animate headline',command:motion});
 assert.equal(moved.document.set.layouts[0].animation.tracks.filter(t=>t.target===node.id&&t.property==='opacity').length,1);
 const roleMap=api.inspectAuthoredSet(moved.document);assert(roleMap.layouts[0].nodes.some(n=>n.id===node.id));assert(!JSON.stringify(roleMap).includes('base64,'));
+// A portrait canvas is not useful on dual output unless it is a variant of
+// the same logical view. Reject new unpaired designs without breaking imports.
+const multi=api.parsePackage({schema:'producer.presentation/2',id:'paired-test',version:'1.0.0',name:'Paired test',set:{initialLayout:'landscape',values:{},feeds:{},slots:[],components:{},controls:[],layouts:[['landscape',1920,1080],['portrait',1080,1920]].map(([id,width,height])=>({id,label:id,width,height,root:{id:'root',type:'box',styles:{position:'absolute',inset:0},children:[{id:'title',type:'text',text:'KLEVELAND',styles:{position:'absolute',left:40,top:40,width:600,height:100}}]}}))}});
+const tree=structuredClone(multi);delete tree.set.assets;
+const unpairedPlan={schema:'producer.design-plan/2',package:tree,assetRefs:Object.keys(multi.set.assets??{})};
+await assert.rejects(session.edit({operationId:'unpaired',baseRevision:session.snapshot().revision,label:'New unpaired design',command:{type:'design',plan:unpairedPlan}}),/not paired for output/);
+assert.equal(session.snapshot().revision,moved.revision,'a rejected multi-format design retains the previous draft');
+const paired=structuredClone(tree);paired.set.views={main:{landscape:'landscape',portrait:'portrait'}};paired.set.initialView='main';api.validateNewSetViews(paired);
+const pairedSession=await api.createSetAuthoringSession(original,target);const pairedResult=await pairedSession.edit({operationId:'paired',baseRevision:pairedSession.snapshot().revision,label:'Paired design',command:{type:'design',plan:{...unpairedPlan,package:paired}}});
+assert.deepEqual(api.inspectAuthoredSet(pairedResult.document).canvasViews[0].variants,{landscape:'landscape',portrait:'portrait'});
+assert.equal(api.outputLayout(pairedResult.document.set,'landscape','portrait'),'portrait','the portrait output selects the separately authored portrait composition');
+assert.equal(api.outputLayout(pairedResult.document.set,'portrait','landscape'),'landscape');
+const missing=structuredClone(paired);missing.set.views={main:{landscape:'landscape'}};assert.throws(()=>api.validateNewSetViews(missing),/unmapped layouts: portrait/);
 // A second document adapter exercises the SAME transaction/history service.
 // This is a contract test, not a claim that a timeline renderer exists.
 const generic={kind:'test.sequence',revision:async d=>JSON.stringify(d),apply:async(d,c)=>({...d,position:c.position})};
