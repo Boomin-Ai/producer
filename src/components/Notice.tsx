@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { type Notice, fade, subscribeNotices } from "../lib/notices";
+import {ToolbarButton} from './RoomToolbar';
 
 export function useNotices(): Notice[] {
   const [list, setList] = useState<Notice[]>([]);
@@ -9,8 +10,9 @@ export function useNotices(): Notice[] {
 
 type NoticeAction = { label: string; onClick: () => void; noticeKey: string };
 
-export function NoticeHost({ action, hidden = false }: {
+export function NoticeHost({ action, hidden = false, compact = false }: {
   hidden?: boolean;
+  compact?: boolean;
   action?: NoticeAction;
 }) {
   const list = useNotices();
@@ -52,8 +54,9 @@ export function NoticeHost({ action, hidden = false }: {
   const actionId = history.filter(notice => notice.key === action?.noticeKey).pop()?.id;
   if (hidden) return null;
 
-  return <div className="rm-top-activity" onKeyDown={closeOnEscape}>
-    <button ref={trigger} type="button" className="rm-activity-trigger" aria-label="Room activity" data-tone={latest?.tone}
+  const symbol=<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M3 12h4l3-6 4 12 3-6h4" /></svg>;
+  return <div className={`rm-top-activity${compact?' is-compact':''}`} onKeyDown={closeOnEscape}>
+    {compact?<ToolbarButton ref={trigger} label="Room activity" tooltip={activityText?`Activity · ${activityText}`:'Room activity'} tooltipAlign="start" data-tone={latest?.tone} aria-expanded={open} aria-controls={open?panelId:undefined} onClick={()=>setOpen(current=>!current)}>{symbol}{latest&&<span className="rm-toolbar-notice" data-tone={latest.tone} aria-hidden="true"/>}</ToolbarButton>:<button ref={trigger} type="button" className="rm-activity-trigger" aria-label="Room activity" data-tone={latest?.tone}
       title={activityText ?? "Room activity"} aria-expanded={open} aria-controls={open ? panelId : undefined}
       onClick={() => setOpen(current => !current)}>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
@@ -65,7 +68,7 @@ export function NoticeHost({ action, hidden = false }: {
       <svg className="rm-activity-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
         <path d="m3 4.5 3 3 3-3" />
       </svg>
-    </button>
+    </button>}
     <span className="rm-activity-announcement" role="status">{latest?.text}</span>
     {open && <section id={panelId} className="rm-activity-panel" aria-label="Room activity feed">
       {history.length ? <ul className="rm-activity-list" tabIndex={0} aria-label="Recent updates">

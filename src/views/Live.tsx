@@ -1,4 +1,6 @@
 import {RoomAssistantContext, type AssistantSetRequest, type AssistantEditorRequest} from '../features/assistant/roomBridge';
+import {RoomTransportControls,ToolbarButton} from '../components/RoomToolbar';
+import {IS_MAC,IS_WINDOWS} from '../lib/platform';
 import { windowSourceLabel } from "../lib/sourceSpec";
 import { listen as listenSoundboard } from "@tauri-apps/api/event";
 import {LiveCaptions} from '../features/transcription/LiveCaptions';
@@ -3547,6 +3549,11 @@ export function LiveView({
   const [recSince, setRecSince] = useState<number>(0);
   const [recTick, setRecTick] = useState(0);
   const [savedRecording, setSavedRecording] = useState<LocalRecording | null>(null);
+  const recordingFlight=useRef(false);
+  const [recordingBusy,setRecordingBusy]=useState(false);
+  const [recordReview,setRecordReview]=useState(0);
+  const streamingFlight=useRef(false);
+  const [streamingBusy,setStreamingBusy]=useState(false);
 
   useEffect(() => {
     if (!recPath || !visible) return;
@@ -3555,11 +3562,15 @@ export function LiveView({
   }, [recPath, visible]);
 
   const toggleRecord = async () => {
+    if(recordingFlight.current)return false;
+    recordingFlight.current=true;setRecordingBusy(true);
+    try {
     if (recPath) {
       const done = await recIpc.stop().catch((e) => {
         notifyError(e, { key: "banner" });
         return null;
       });
+      if(!done)return false;
       setRecPath(null);
       if (done) {
         const capture = await recIpc.byPath(done).catch(() => null);
@@ -3569,9 +3580,9 @@ export function LiveView({
         }
         notify(`Saved ${done.split("/").pop()}`, { key: "recording-saved", tone: "success", check: true });
       }
-      return;
+      return true;
     }
-    if (room && !roomApplied.current) return;
+    if (room && !roomApplied.current) return false;
     // The engine owns no clock, so the file name is stamped here.
     const d = new Date();
     const pad = (n: number) => String(n).padStart(2, "0");
@@ -3583,11 +3594,14 @@ export function LiveView({
       if(outputView==='both')notify("Recording landscape and portrait to separate files",{key:"banner",tone:"info"});
       setRecSince(Date.now());
       setRecTick(0);
+      return true;
     } catch (e) {
       notifyError(e, { key: "banner" });
+      return false;
     } finally {
       setOutputsStarting(count=>Math.max(0,count-1));
     }
+    } finally {recordingFlight.current=false;setRecordingBusy(false);}
   };
 
   // recTick only exists to re-render once a second while recording.
@@ -5317,11 +5331,13 @@ export function LiveView({
   }
 
   async function goLive() {
-    if (room && !roomApplied.current) return;
+    const owner=roomEngineRef.current;
+    if (!owner||streamingFlight.current||room && !roomApplied.current) return false;
+    streamingFlight.current=true;setStreamingBusy(true);
     dismissKey("banner");
     try {
       setOutputsStarting(count=>count+1);
-      await roomEngineRef.current?.run(async () => {
+      await owner.run(async () => {
         const ep = await resolveActiveEndpoint().catch(() => null);
         await ipc.liveGoLive(ep && isBoomin(ep) ? ep.id : undefined, cfgRef.current.server_room_id ?? undefined);
         if (roomId) {
@@ -5329,11 +5345,21 @@ export function LiveView({
           markLiveRoom(roomId);
         }
       });
+      return true;
     } catch (e) {
       notifyError(e, { key: "banner" });
+      return false;
     } finally {
+      streamingFlight.current=false;setStreamingBusy(false);
       setOutputsStarting(count=>Math.max(0,count-1));
     }
+  }
+  async function stopStream() {
+    if(streamingFlight.current)return false;
+    streamingFlight.current=true;setStreamingBusy(true);
+    try {await ipc.liveStop();return true;}
+    catch(error){notifyError(error,{key:'banner'});return false;}
+    finally{streamingFlight.current=false;setStreamingBusy(false);}
   }
 
   // ── WRITE-THROUGH (room state, mirror 1) ─────────────────────────────────
@@ -8648,16 +8674,17 @@ export function LiveView({
   };
   const panelsMenu = () => (
     <div className="rm-pop-anchor">
-      <button
-        className="rm-editbar-btn"
+      <ToolbarButton
+        label="Panels"
+        tooltip="Show or move room panels"
+        aria-expanded={addMenu==='hidden'}
         onClick={(e) => {
           setPopAnchor(e.currentTarget);
           setAddMenu((m) => (m === "hidden" ? null : "hidden"));
         }}
       >
-        Panels
-        {ic.chev}
-      </button>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16m0-10h12"/></svg>
+      </ToolbarButton>
       {addMenu === "hidden" && (
         <Pop anchor={popAnchor} align="right" className="rm-pop-add">
           <div className="rm-pop-title">PANELS</div>
@@ -8846,35 +8873,38 @@ export function LiveView({
         <div className="rm-window-drag-handle" data-tauri-drag-region title="Drag to move Producer" aria-label="Drag to move Producer" />
         {/* The way DOWN and the way AROUND both live at the FAR LEFT, apart
           * from the transport cluster: collapse first, then edit. */}
-        <button
+        <ToolbarButton
           className="rm-leave"
+          label="Collapse room"
+          tooltip={streaming ? "Collapse room · The stream keeps running" : "Return to room cards"}
+          tooltipAlign="start"
           data-perf-action="room.collapse"
           onClick={() => onLeave?.()}
-          title={streaming ? "Collapse — the stream keeps running" : "Collapse room"}
         >
           {ic.collapseDown}
-        </button>
+        </ToolbarButton>
         {/* Layout editing is stage furniture for the person running the set;
           * a control seat gets the panels as they are. */}
         {isHost && (
-          <button
+          <ToolbarButton
             data-walk="edit"
             data-perf-action="layout.toggle"
-            className={`rm-icon-chip rm-edit-trigger${layoutEdit ? " on" : ""}`}
+            className="rm-edit-trigger"
+            label={layoutEdit?'Done editing layout':'Edit layout'}
+            tooltip={`${layoutEdit?'Done editing layout':'Edit layout'} · ${IS_MAC?'⌘E':'Ctrl+E'}`}
+            tooltipAlign="start"
             aria-pressed={layoutEdit}
             onClick={() => {
               traceLayoutToggle();
               setLayoutEdit((e) => !e);
               setLayoutMenu(false);
             }}
-            title={layoutEdit ? "Done editing layout (⌘E)" : "Edit layout (⌘E)"}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m15 4 5 5-10 10-6 1 1-6zM13 6l5 5"/></svg>
-            <span>{layoutEdit ? "Done" : "Edit layout"}</span>
-          </button>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">{layoutEdit?<path d="m5 12 4 4L19 6"/>:<path d="m15 4 5 5-10 10-6 1 1-6zM13 6l5 5"/>}</svg>
+          </ToolbarButton>
         )}
 
-        <NoticeHost hidden={layoutEdit} action={savedRecording && onOpenRecording ? {
+        <NoticeHost compact hidden={layoutEdit} action={savedRecording && onOpenRecording ? {
           label: "View in Manager",
           noticeKey: "recording-saved",
           onClick: () => onOpenRecording(savedRecording.id),
@@ -8884,16 +8914,17 @@ export function LiveView({
         <div className="rm-editbar">
           <span className="rm-editbar-dot" />
           <div className="rm-pop-anchor">
-            <button
-              className="rm-editbar-btn"
+            <ToolbarButton
+              label="Layout presets"
+              tooltip="Choose a room layout preset"
+              aria-expanded={layoutMenu}
               onClick={(e) => {
                 setPopAnchor(e.currentTarget);
                 setLayoutMenu((o) => !o);
               }}
             >
-              Presets
-              {ic.chev}
-            </button>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            </ToolbarButton>
             {layoutMenu && (
               <Pop anchor={popAnchor} align="right" className="rm-pop-layout">
                 {LAYOUT_PRESETS.map((p) => (
@@ -8922,7 +8953,6 @@ export function LiveView({
           {/* Where the stage's quick controls float — an edge of the canvas.
             * One placement button: shows the edge, click opens the menu. */}
           <span className="rm-editbar-ctl" title="Quick controls position">
-            <span className="rm-editbar-ctl-label">Controls</span>
             <PlacementButton
               value={cfg.stage_bar ?? "bottom"}
               order={PLACEMENTS}
@@ -8946,25 +8976,25 @@ export function LiveView({
           <LiveCaptions key={roomId??'local'} maxLength={setRehearsal.package.set.values.liveCaption?.type==='text'?setRehearsal.package.set.values.liveCaption.maxLength:160} enabled={docApplied&&!!setRehearsal.package.set.values.liveCaption} onText={text=>{if(setRehearsal.package.set.values.liveCaption)setRehearsal.send({type:'field',key:'liveCaption',value:text});}} />
           {/* The guest link IS the guest feature: no flag, no door. */}
           <span className="hd-link-group" hidden={!canGuests}>
-            <button
-              className="hd-chip hd-link"
+            <ToolbarButton
+              label="Copy guest link"
+              tooltip="Copy this room’s guest link"
               data-perf-action="guest_link.copy"
-              title="Copy this room's guest link"
               onClick={copyRoomLink}
             >
-              {ic.link ?? "🔗"} Link
-            </button>
-            <button
-              className={`hd-chip hd-link-more${linkMenuOpen ? " on" : ""}`}
-              title="More"
-              aria-label="Link options"
+              {ic.link ?? "🔗"}
+            </ToolbarButton>
+            <ToolbarButton
+              className="rm-toolbar-link-more"
+              label="Link options"
+              aria-expanded={linkMenuOpen}
               onClick={(e) => {
                 setPopAnchor(e.currentTarget);
                 setLinkMenuOpen((o) => !o);
               }}
             >
-              ▾
-            </button>
+              {ic.chev}
+            </ToolbarButton>
           </span>
           {linkMenuOpen && (
             <Pop anchor={popAnchor} align="left" className="rm-pop-link">
@@ -8982,26 +9012,21 @@ export function LiveView({
               </button>
             </Pop>
           )}
-          <button
-            className="hd-chip hd-chans"
-            title="Channels this room goes out to"
+          <ToolbarButton
+            label="Channels"
+            className="rm-toolbar-channels"
+            tooltip={`Channels${enabledDests.length?` · ${enabledDests.map(d=>d.label).join(', ')}`:''}${audienceEnabled?` · ${boominRoom?'Boomin':'Audience'} access open`:''}`}
+            aria-expanded={destsOpen}
             onClick={(e) => {
               setPopAnchor(e.currentTarget);
               setDestsOpen((o) => !o);
             }}
           >
-            {audienceEnabled && <><span className="hd-chan-logo"><AudienceDestinationMark /></span><span>{boominRoom ? "Boomin" : "Audience"}</span></>}
-            {enabledDests.length > 0 ? (
-              enabledDests.map((d) => (
-                <span key={d.id} className="hd-chan-logo">
-                  {PLATFORM_LOGO[d.preset] ?? <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />}
-                </span>
-              ))
-            ) : !audienceEnabled ? (
-              <span>Channels</span>
-            ) : null}
+            {audienceEnabled&&<span className="hd-chan-logo" aria-hidden="true"><AudienceDestinationMark/></span>}
+            {enabledDests.map(d=><span key={d.id} className="hd-chan-logo" aria-hidden="true">{PLATFORM_LOGO[d.preset]??<span className="rm-row-dot" style={{background:PLATFORM_TINT[d.preset]??'currentColor'}}/>}</span>)}
+            {!audienceEnabled&&!enabledDests.length&&<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="8" y="3" width="13" height="13" rx="2"/><path d="M16 20H5a2 2 0 0 1-2-2V8"/></svg>}
             {ic.chev}
-          </button>
+          </ToolbarButton>
           {destsOpen && (
             <Pop anchor={popAnchor} align="right" className="rm-pop-dests">
               <div className="rm-pop-title">CHANNELS</div>
@@ -9048,90 +9073,53 @@ export function LiveView({
             </Pop>
           )}
 
-          <button
-            className="hd-chip"
-            title="Output video settings"
+          <ToolbarButton
+            label="Output video settings"
+            tooltip={`Video quality · ${vh}p · ${vf} fps`}
+            aria-expanded={qualityOpen}
             onClick={(e) => {
               setPopAnchor(e.currentTarget);
               setQualityOpen((o) => !o);
             }}
           >
-            {vh}p · {vf}
-            {ic.chev}
-          </button>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 7h7m4 0h5M4 17h2m4 0h10"/><circle cx="13" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
+          </ToolbarButton>
 
-          <button
-            className={`hd-chip hd-studio${studioOn ? " on" : ""}`}
+          <ToolbarButton
+            label={studioOn?'Turn Studio output off':'Studio output'}
             onClick={toggleStudio}
             disabled={!engineOk || studioBusy}
             aria-pressed={studioOn}
-            title="Broadcast the studio — the whole Producer window goes out"
+            tooltip={studioOn?'Studio output is on · The whole Producer window goes out':'Studio output · Broadcast the whole Producer window'}
           >
             {ic.layout}
-            {studioOn ? "Studio on" : "Studio"}
-          </button>
+          </ToolbarButton>
 
 
 
-          <button
-            className={`hd-chip${vcamOn ? " on" : ""}`}
+          <ToolbarButton
+            label={vcamPending?`${vcamPending} virtual camera`:vcamOn?'Stop virtual camera':vcamState?.installed?'Virtual camera':'Install virtual camera'}
             onClick={toggleVcam}
             disabled={!engineOk || vcamPending !== null}
             aria-busy={vcamPending !== null}
-            title={
+            aria-pressed={vcamOn}
+            tooltip={
               vcamState?.installed
-                ? "Appear as a webcam in Zoom, Meet and Discord"
-                : vcamState?.error ?? "Install Producer's virtual camera"
+                ? "Take your camera and Set anywhere. Choose Producer Virtual Camera in your video app."
+                : vcamState?.error ?? "Take your camera and Set anywhere. Set up Producer Virtual Camera."
             }
           >
             {ic.cam}
-            {vcamPending
-              ? (vcamPending === "starting" ? "Starting…" : vcamPending === "stopping" ? "Stopping…" : "Installing…")
-              : vcamOn
-                ? "Cam on"
-                : vcamState?.installed
-                  ? "Virtual cam"
-                  : vcamState?.state === "needs_approval"
-                    ? "Approve"
-                    : vcamState?.state === "move_to_applications"
-                      ? "Locate app"
-                      : vcamState?.state === "requested"
-                        ? "Installing…"
-                        : vcamState?.error && vcamState.state !== "failed"
-                          ? "Virtual cam"
-                          : "Install cam"}
-          </button>
-
-          <button
-            className={`hd-chip${recPath ? " rec" : ""}`}
-            onClick={toggleRecord}
-            disabled={!engineOk || (!recPath && (micUnready || (!!room && !docApplied)))}
-            title={recPath ? `Recording to ${recPath.split("/").pop()}` : "Record locally"}
-          >
-            <span className="rm-rec-dot" />
-            {recPath
-              ? `${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`
-              : "Record"}
-          </button>
-
-          {streaming ? (
-            <button className="hd-golive stop" onClick={() => ipc.liveStop()} disabled={state === "stopping"}>
-              <span className="rm-big-icon">■</span>
-              {state === "stopping" ? "Stopping…" : "End"}
-            </button>
-          ) : (
-            <button
-              className="hd-golive"
-              onClick={goLive}
-              disabled={!engineOk || micUnready || (!!room && !docApplied) || enabledDests.length === 0}
-              title={audienceEnabled
-                ? "Boomin audience access is open. Select an external channel to stream there too."
-                : enabledDests.length === 0 ? "Select an external channel, or open audience access in Channels." : undefined}
-            >
-              {ic.onair}
-              GO LIVE
-            </button>
-          )}
+          </ToolbarButton>
+          <span className="rm-toolbar-separator" aria-hidden="true"/>
+          <RoomTransportControls visible={visible} onOpen={closePops} recordRequest={recordReview} recording={!!recPath} recordingPath={recPath} recordingElapsed={`${Math.floor(recElapsed/60)}:${String(recElapsed%60).padStart(2,'0')}`} recordingBusy={recordingBusy}
+            recordDisabled={!engineOk||(!recPath&&(micUnready||!!room&&!docApplied))} recordReason={!engineOk?'The room engine is starting':!recPath&&micUnready?'Waiting for the microphone':!recPath&&!!room&&!docApplied?'The room is still loading':undefined}
+            streaming={streaming} streamBusy={streamingBusy||state==='starting'||state==='stopping'} streamDisabled={!streaming&&(!engineOk||micUnready||!!room&&!docApplied||enabledDests.length===0)}
+            streamReason={!streaming?(!engineOk?'The room engine is starting':micUnready?'Waiting for the microphone':!!room&&!docApplied?'The room is still loading':!enabledDests.length?'Select a streaming destination in Channels':undefined):undefined}
+            destinations={enabledDests.map(d=>({id:d.id,label:d.label,icon:PLATFORM_LOGO[d.preset]??ic.onair}))} audienceLabel={audienceEnabled?(boominRoom?'Boomin':'Room'):undefined}
+            program={studioOn?'Studio · Entire Producer window':setOutput.currentPresented?setRehearsal.package.name:'Room scene'} streamFormat={`${vh}p · ${vf} fps · ${outputView==='portrait'?'Portrait':'Landscape'}`}
+            recordFormat={`${vh}p · ${vf} fps · ${outputView==='both'?'Landscape + portrait · Two MP4 files':outputView==='portrait'?'Portrait · MP4':'Landscape · MP4'}`} recordingFolder={IS_WINDOWS?'Videos / Producer':'Movies / Producer'}
+            onRecord={toggleRecord} onStream={goLive} onStopStream={stopStream}/>
 
           {qualityOpen && (
             <Pop anchor={popAnchor} align="right" className="rm-pop-quality">
@@ -9429,7 +9417,8 @@ export function LiveView({
               <button
                 className={`stg-btn${recPath ? " rec" : ""}`}
                 title={recPath ? "Stop recording" : "Record"}
-                onClick={toggleRecord}
+                disabled={recordingBusy||!engineOk||(!recPath&&(micUnready||!!room&&!docApplied))}
+                onClick={()=>setRecordReview(n=>n+1)}
               >
                 <span className="rm-rec-dot" />
               </button>

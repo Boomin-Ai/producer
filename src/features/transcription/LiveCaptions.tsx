@@ -2,6 +2,7 @@ import {useEffect,useRef,useState} from 'react';
 import {invoke} from '../../lib/nativeInvoke';
 import {listen} from '@tauri-apps/api/event';
 import {notifyError} from '../../lib/notices';
+import {ToolbarButton} from '../../components/RoomToolbar';
 type Update={session:number;state:string;text:string;is_final:boolean;message?:string};
 export function LiveCaptions({enabled,onText,maxLength=160}:{enabled:boolean;onText:(text:string)=>void;maxLength?:number}){
  const [state,setState]=useState('off'),session=useRef<number|null>(null),lastText=useRef(''),active=useRef(true),text=useRef(onText),limit=useRef(maxLength);text.current=onText;limit.current=Math.max(16,Math.min(4096,maxLength));
@@ -19,5 +20,5 @@ export function LiveCaptions({enabled,onText,maxLength=160}:{enabled:boolean;onT
   catch(e){if(active.current){setState('off');notifyError(e,{key:'transcription'});}}
  };
  if(!enabled)return null;
- return <button className={`hd-chip${state==='listening'?' on':''}`} disabled={state==='connecting'} aria-pressed={state==='listening'} title="Live microphone captions through your saved Deepgram connection" onClick={()=>void(state==='listening'?stop():start())}>{state==='connecting'?'Connecting captions…':state==='listening'?'Stop captions':'Captions'}</button>;
+ return <ToolbarButton label={state==='connecting'?'Connecting captions':state==='listening'?'Stop captions':'Captions'} disabled={state==='connecting'} aria-pressed={state==='listening'} tooltip="Live microphone captions through your saved Deepgram connection" onClick={()=>void(state==='listening'?stop():start())}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9H8v6h2m7-6h-2v6h2"/></svg></ToolbarButton>;
 }
