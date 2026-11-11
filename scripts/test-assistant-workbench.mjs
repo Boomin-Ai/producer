@@ -18,7 +18,9 @@ try {
    if(command==='plugin:event|listen')return 1;
    if(command==='plugin:event|unlisten')return;
    if(command==='set_library_list')return [];
-   if(command==='assistant_status')return {accounts:[],active:null,signIn:null};
+   if(command==='assistant_status')return {accounts:[],active:null,signIn:window.signInStatus??null};
+   if(command==='assistant_sign_in'){window.signInStatus={id:'test-attempt',status:'waiting',error:null,expiresAt:Math.floor(Date.now()/1000)+900};return 'test-attempt';}
+   if(command==='assistant_cancel_sign_in'){window.signInStatus=null;return;}
    if(command==='assistant_authoring_capabilities')return {schema:'producer.native-authoring/1',catalogRevision:2,packageSchema:'producer.presentation/2',features:[...AUTHORING_CATALOG.features],nativeAdmission:'separate-native-preparation-required'};
    throw Error('Unexpected native command in authoring-only view: '+command);
   },transformCallback:()=>1,convertFileSrc:path=>path};
@@ -28,8 +30,12 @@ try {
  await page.getByRole('button',{name:'Assistant',exact:true}).click();
  await page.getByRole('button',{name:'Continue with ChatGPT',exact:true}).waitFor();
  await page.getByText('After Hours',{exact:true}).first().waitFor();
+ await page.getByRole('button',{name:'Continue with ChatGPT',exact:true}).click();
+ await page.getByText(/^Complete the newest browser sign-in by/).waitFor();
+ await page.getByRole('button',{name:'Cancel sign-in',exact:true}).click();
+ await page.getByRole('button',{name:'Continue with ChatGPT',exact:true}).waitFor();
  await page.getByRole('button',{name:'Close Set assistant',exact:true}).click();
  assert.deepEqual(errors,[]);
  assert((await page.evaluate(()=>window.nativeCalls)).every(command=>!command.startsWith('live_')),'authoring verification must not start or query the live engine');
- console.log('PASS authoring-only dev view: real Set editor and Assistant, no room or capture commands, native login entry shown. Authentication is separately qualified in the signed app.');
+ console.log('PASS authoring-only dev view: real Set editor and Assistant, no room or capture commands, login entry, explicit browser deadline and cancellation. Authentication is separately qualified in the signed app.');
 } finally {await browser.close();}

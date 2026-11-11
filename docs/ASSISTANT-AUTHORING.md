@@ -31,6 +31,11 @@ and sign-out. It has no room or engine dependency. The Tauri adapter supplies a
 separate OS credential-vault namespace and a per-profile process lock. Tokens,
 authorization URLs and endpoint credentials never enter the webview.
 
+First-time browser authorization has a bounded 15-minute window for account
+selection, MFA and consent. Producer shows its deadline; cancellation still
+stops the attempt immediately. An expired attempt requires a fresh browser
+flow and a new PKCE/state/nonce; pasted callback URLs are never replayed.
+
 The native runtime initializes lazily on opening the Assistant. Model calls and
 credential operations do not run in the audio/graphics path. Existing room
 transitions and preparation/output ownership remain unchanged.

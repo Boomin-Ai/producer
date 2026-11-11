@@ -1,7 +1,7 @@
 /** Inference adapters own transport/auth only. Producer owns all tools/effects. */
 import {Channel, invoke} from '../../lib/nativeInvoke';
 export interface AssistantAccount {id: string; email: string; planEnabled: boolean; verified: boolean}
-export interface AssistantStatus {accounts: AssistantAccount[]; active: string | null; signIn: {id: string; status: 'waiting' | 'complete' | 'error'; error: string | null} | null}
+export interface AssistantStatus {accounts: AssistantAccount[]; active: string | null; signIn: {id: string; status: 'waiting' | 'complete' | 'error'; error: string | null; expiresAt?: number} | null}
 export interface AssistantModel {slug: string; display_name: string}
 export interface AssistantTurn {accountId: string; turnId: string; model: string; instructions: string; input: unknown[]; tools: unknown[]}
 export type AssistantEvent = {type: 'text'; text: string} | {type: 'completed'; output: ResponseItem[]};

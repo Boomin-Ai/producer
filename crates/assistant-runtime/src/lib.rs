@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
+    future::Future,
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -21,7 +22,20 @@ const ISSUER: &str = "https://auth.openai.com";
 const RESOURCE: &str = "https://api.openai.com/v1";
 const SCOPE: &str = "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct";
 const PLAN_SCOPE: &str = "chatgpt.tokens.use.direct";
+// First-time browser sign-in may include account selection, MFA and consent.
+// Keep this bounded, but do not close the callback during a normal setup flow.
+const AUTHORIZATION_WINDOW: Duration = Duration::from_secs(15 * 60);
 pub type Result<T> = std::result::Result<T, String>;
+
+async fn authorize_until_deadline<T>(
+    cancel: Arc<Notify>,
+    work: impl Future<Output = Result<T>>,
+) -> Result<T> {
+    tokio::select! {
+        _ = cancel.notified() => Err("ChatGPT sign-in canceled.".into()),
+        result = tokio::time::timeout(AUTHORIZATION_WINDOW, work) => result.unwrap_or_else(|_| Err("ChatGPT sign-in expired. Click Continue with ChatGPT and use the newest browser tab.".into())),
+    }
+}
 
 /// Deliberately no Debug implementation on credential-bearing types.
 #[derive(Clone, Serialize, Deserialize)]
@@ -78,10 +92,12 @@ impl From<&Account> for AccountInfo {
     }
 }
 #[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct SignInStatus {
     pub id: String,
     pub status: String,
     pub error: Option<String>,
+    pub expires_at: u64,
 }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -285,16 +301,18 @@ impl Client {
                 id: id.clone(),
                 status: "waiting".into(),
                 error: None,
+                expires_at: now() + AUTHORIZATION_WINDOW.as_secs(),
             },
             cancel.clone(),
         ));
         let client = self.clone();
         let attempt = id.clone();
         tokio::spawn(async move {
-            let result = tokio::select! {
-                _ = cancel.notified() => Err("ChatGPT sign-in canceled.".into()),
-                result = tokio::time::timeout(Duration::from_secs(300), client.finish(listener, &redirect, &state, &nonce, &verifier, prior)) => result.unwrap_or_else(|_| Err("ChatGPT sign-in timed out. Start a new sign-in.".into())),
-            };
+            let result = authorize_until_deadline(
+                cancel,
+                client.finish(listener, &redirect, &state, &nonce, &verifier, prior),
+            )
+            .await;
             let mut pending = client.sign_in.lock().await;
             if let Some((status, _)) = pending.as_mut().filter(|(s, _)| s.id == attempt) {
                 status.status = if result.is_ok() { "complete" } else { "error" }.into();
@@ -997,9 +1015,12 @@ mod tests {
             .await
             .unwrap();
         tokio::task::yield_now().await;
-        valid.write_all(format!("state&code=test_code&client_id=oaiapp_test HTTP/1.1\r\nHost: {address}\r\n\r\n").as_bytes()).await.unwrap();
+        // Opaque authorization codes can occupy several kilobytes. Exercise
+        // the chunked reader without ever putting a real credential in tests.
+        let opaque_code = "test_code".repeat(500);
+        valid.write_all(format!("state&code={opaque_code}&client_id=oaiapp_test HTTP/1.1\r\nHost: {address}\r\n\r\n").as_bytes()).await.unwrap();
         let fields = callback.await.unwrap().unwrap();
-        assert_eq!(fields["code"], "test_code");
+        assert_eq!(fields["code"], opaque_code);
         assert_eq!(fields["client_id"], "oaiapp_test");
     }
     #[tokio::test]
@@ -1028,5 +1049,45 @@ mod tests {
         assert!(!public.contains("access_token"));
         assert!(!public.contains("refresh_token"));
         assert!(!public.contains("host_id"));
+    }
+    #[tokio::test(start_paused = true)]
+    async fn first_sign_in_survives_five_minutes_but_has_a_deadline_and_cancel() {
+        let cancel = Arc::new(Notify::new());
+        let (complete, receive) = tokio::sync::oneshot::channel();
+        let flow = tokio::spawn(authorize_until_deadline(cancel, async {
+            receive
+                .await
+                .map_err(|_| "test response closed".to_string())
+        }));
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_secs(301)).await;
+        tokio::task::yield_now().await;
+        assert!(
+            !flow.is_finished(),
+            "first-time setup must outlive five minutes"
+        );
+        complete.send("completed").unwrap();
+        assert_eq!(flow.await.unwrap().unwrap(), "completed");
+
+        let cancel = Arc::new(Notify::new());
+        let flow = tokio::spawn(authorize_until_deadline::<()>(
+            cancel,
+            std::future::pending(),
+        ));
+        tokio::task::yield_now().await;
+        tokio::time::advance(AUTHORIZATION_WINDOW).await;
+        assert!(flow
+            .await
+            .unwrap()
+            .unwrap_err()
+            .contains("newest browser tab"));
+
+        let cancel = Arc::new(Notify::new());
+        let flow = tokio::spawn(authorize_until_deadline::<()>(
+            cancel.clone(),
+            std::future::pending(),
+        ));
+        cancel.notify_one();
+        assert!(flow.await.unwrap().unwrap_err().contains("canceled"));
     }
 }
