@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'playwright-core');
 const origin=process.env.PRODUCER_TEST_URL??'http://127.0.0.1:1436/';
-const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
+const browser=await chromium.launch({executablePath:process.env.PRODUCER_CHROME??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
 try {
   const page=await browser.newPage({viewport:{width:1000,height:1000}}),errors=[];
   page.on('pageerror',error=>errors.push(error.message));

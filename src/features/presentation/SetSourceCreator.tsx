@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { devices, extraSources, type DeviceOption } from "../../lib/ipc";
+import { devices, extraSources, overlayBridge, type DeviceOption } from "../../lib/ipc";
 import type { ExtraSpec } from "../../lib/sourceSpec";
 export function SetSourceCreator({
   slot,
@@ -11,7 +11,7 @@ export function SetSourceCreator({
   create: (slot: string, spec: ExtraSpec, label: string) => Promise<string|void>;
 }) {
   const [open, setOpen] = useState(false),
-    [kind, setKind] = useState("camera"),
+    [kind, setKind] = useState(/chat/i.test(slot + " " + label) ? "chat" : "camera"),
     [device, setDevice] = useState(""),
     [choices, setChoices] = useState<DeviceOption[]>([]),
     [busy, setBusy] = useState(false),
@@ -41,6 +41,8 @@ export function SetSourceCreator({
         spec = { kind: "camera", ...(device ? { device } : {}) };
       else if (kind === "screen")
         spec = { kind: "screen", ...(device ? { display: device } : {}) };
+      else if (kind === "chat")
+        spec = { kind: "overlay", url: await overlayBridge.chatStart() };
       else if (kind === "color") spec = { kind: "color", color: "#20364d" };
       else {
         const file = await extraSources.pickFile(kind as "image" | "media");
@@ -50,7 +52,7 @@ export function SetSourceCreator({
             ? { kind: "image", path: file }
             : { kind: "media", path: file, looping: true };
       }
-      await create(slot, spec, `${label} ${kind === "media" ? "video" : kind}`);
+      await create(slot, spec, kind === "chat" ? "Chat" : `${label} ${kind === "media" ? "video" : kind}`);
       setOpen(false);
     } catch (e) {
       setError(String(e));
@@ -84,11 +86,13 @@ export function SetSourceCreator({
         >
           <option value="camera">Camera</option>
           <option value="screen">Screen</option>
+          <option value="chat">Chat · connected platforms</option>
           <option value="image">Image</option>
           <option value="media">Video</option>
           <option value="color">Color</option>
         </select>
       </label>
+      {kind === "chat" && <p className="set-section-note">Uses your connected Twitch, Kick, YouTube and Boomin chats. Connect channels in the room’s Chat settings.</p>}
       {["camera", "screen"].includes(kind) && (
         <label>
           Device
