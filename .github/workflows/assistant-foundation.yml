@@ -1,7 +1,7 @@
 name: Assistant authoring foundation
 on:
   pull_request:
-    paths: ['crates/assistant-runtime/**', 'shared/authoring/**', 'src/features/assistant/**', 'src/features/presentation/authoring/**', 'scripts/test-authoring-foundation.mjs', 'scripts/test-assistant-browser.mjs', '.github/workflows/assistant-foundation.yml']
+    paths: ['crates/assistant-runtime/**', 'shared/authoring/**', 'src/features/assistant/**', 'src/features/presentation/authoring/**', 'src/features/presentation/schema.ts', 'tools/producer-mcp/**', 'scripts/test-authoring-foundation.mjs', 'scripts/test-assistant-*.mjs', '.github/workflows/assistant-foundation.yml']
   push:
     branches: ['feat/assistant-authoring-foundation']
 permissions:
@@ -18,6 +18,33 @@ jobs:
       - run: bun run test:authoring-foundation && bun run test:authoring-full && bun run test:control-arrangements && bun run test:module-arrangements
       - run: bun scripts/test-assistant-transport.mjs
       - run: bun run build
+  authoring-browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: npm ci --prefix tools/producer-mcp
+      - run: node tools/producer-mcp/node_modules/playwright-core/cli.js install --with-deps chromium
+      - name: Verify isolated Assistant authoring and preview recovery
+        env:
+          PRODUCER_TEST_URL: http://127.0.0.1:1445/
+          PRODUCER_PLAYWRIGHT_MODULE: ${{ github.workspace }}/tools/producer-mcp/node_modules/playwright-core/index.mjs
+        run: |
+          export PRODUCER_CHROME="$(node --input-type=module -e 'import {chromium} from "./tools/producer-mcp/node_modules/playwright-core/index.mjs";console.log(chromium.executablePath())')"
+          bunx vite --host 127.0.0.1 --port 1445 --strictPort > "$RUNNER_TEMP/assistant-vite.log" 2>&1 &
+          vite_pid=$!
+          trap 'kill "$vite_pid"' EXIT
+          for attempt in $(seq 1 30); do
+            if curl -fsS "$PRODUCER_TEST_URL" >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS "$PRODUCER_TEST_URL" >/dev/null
+          node scripts/test-assistant-browser.mjs
+          node scripts/test-assistant-preview.mjs
+          node scripts/test-assistant-workbench.mjs
   provider-runtime:
     runs-on: ubuntu-latest
     steps:

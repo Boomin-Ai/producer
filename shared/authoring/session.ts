@@ -4,6 +4,9 @@ export interface DocumentAdapter<Document, Command> {
   kind: string;
   revision(document: Document): Promise<string>;
   apply(document: Document, command: Command): Promise<Document>;
+  /** Admission for new candidates; replay still verifies the original contract
+   * and hashes so older drafts remain recoverable after validation improves. */
+  validateForCommit?(document: Document): void | Promise<void>;
 }
 export interface EditReceipt<Command> {
   operationId: string;
@@ -76,6 +79,7 @@ export class AuthoringSession<D, C> {
       if (this.journal.cursor >= 24) throw Error('This draft has 24 checkpoints. Load the reviewed design before starting another draft.');
       const command = structuredClone(input.command);
       const next = await this.adapter.apply(structuredClone(this.current), command);
+      await this.adapter.validateForCommit?.(next);
       const revision = await this.adapter.revision(next);
       if (this.closed) throw Error('This authoring session is closed.');
       const receipt = {operationId: input.operationId, baseRevision: this.currentRevision, revision, label: input.label, command};

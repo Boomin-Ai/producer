@@ -49,6 +49,7 @@ try {
  await page.getByRole('button',{name:'Close Set assistant'}).click();await page.evaluate(()=>window.mountAssistant());
  await page.getByText('Restored your saved draft.',{exact:true}).waitFor();
  await page.getByRole('button',{name:'Load preparation',exact:true}).click();
+ await page.waitForFunction(()=>window.loads.length===1);
  assert.equal(await page.evaluate(()=>window.loads.length),1);assert.deepEqual(await page.evaluate(()=>window.loads[0].set.controls),await page.evaluate(()=>window.sourceDoc.set.controls));assert.deepEqual(await page.evaluate(()=>window.loads[0].set.controlArrangement),await page.evaluate(()=>window.sourceDoc.set.controlArrangement));
  await page.evaluate(()=>{window.mountAssistant();window.blockNextTurn=true;});await page.waitForFunction(()=>document.querySelector('[aria-label="Assistant model"]')?.value==='test-model');
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Another edit.');await page.getByRole('button',{name:'Send ↗',exact:true}).click();await page.waitForFunction(()=>typeof window.releaseLate==='function');await page.getByRole('button',{name:'Stop',exact:true}).click();await page.evaluate(()=>{window.releaseLate();window.blockNextTurn=false;});

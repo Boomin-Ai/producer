@@ -3,6 +3,8 @@ import fs from 'node:fs/promises';
 import {build} from 'esbuild';
 const bundle=await build({stdin:{contents:`export * from './shared/authoring/session';export * from './src/features/presentation/authoring/service';export * from './src/features/presentation/authoring/catalog';export * from './src/features/presentation/authoring/compiler';export * from './src/features/presentation/schema';`,resolveDir:process.cwd()},bundle:true,platform:'node',format:'esm',write:false});
 const api=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+const styleContract=api.presentationJsonSchema.$defs.node.anyOf[0].properties.styles;
+assert(styleContract.propertyNames.enum.includes('padding'));assert(!styleContract.propertyNames.enum.includes('marginBottom'),'exported authoring schema must reject styles the canonical importer rejects');
 const target={catalogRevision:api.AUTHORING_CATALOG.revision,features:[...api.AUTHORING_CATALOG.features]};
 const original=api.parsePackage(JSON.parse(await fs.readFile('docs/shows/road-to-v1.json','utf8'))),before=JSON.stringify(original);
 const layout=original.set.layouts[0];
@@ -41,4 +43,24 @@ const generic={kind:'test.sequence',revision:async d=>JSON.stringify(d),apply:as
 const second=await api.AuthoringSession.create(generic,{position:0});
 await second.edit({operationId:'place',baseRevision:second.snapshot().revision,label:'Place',command:{position:12}});assert.equal(second.snapshot().document.position,12);
 await second.moveHistory('undo',second.snapshot().revision);assert.equal(second.snapshot().document.position,0);
+// A real schema-valid/default-invalid 3D candidate previously unmounted React.
+// Check all layouts, including a non-selected layout and resolved bindings.
+const musicDoc=structuredClone(original),last=musicDoc.set.layouts.at(-1);
+last.root.children??=[];
+const sceneIndex=last.root.children.length;
+const music={sensitivity:1,intensity:1,waveform:'off',waveHeight:.25,drop:0,money:false,color:'#ffffff',motion:.2};
+last.root.children.push({id:'admissionScene',type:'scene3d',styles:{position:'absolute',left:0,top:0,width:last.width,height:last.height},scene3d:{id:'admission-scene',pass:'background',music,world:{schema:'producer.scene3d/1',fps:30,clearColor:'#000000',fog:{color:'#000000',near:10,far:100},camera:{position:[0,0,10],target:[0,0,0],fov:45},objects:[],slots:[]}}});
+api.validateAuthoredDefaults(musicDoc);
+const guarded=await api.createSetAuthoringSession(musicDoc,target),guardRevision=guarded.snapshot().revision;
+const musicPath=`/set/layouts/${musicDoc.set.layouts.length-1}/root/children/${sceneIndex}/scene3d/music`;
+const invalidCommand={type:'canonical',edit:{schema:'producer.set-edit/2',baseRevision:guardRevision,operations:[{op:'replace',path:musicPath+'/waveHeight',value:{op:'if',args:[true,0,.25]}}]}};
+await assert.rejects(guarded.edit({operationId:'invalidProjection',baseRevision:guardRevision,label:'Invalid resolved music',command:invalidCommand}),/default preview: Invalid music visual controls/);
+assert.equal(guarded.snapshot().revision,guardRevision);assert.equal(guarded.exportJournal().entries.length,0,'failed projection cannot commit or persist');
+const legacyAdapter={...adapter};delete legacyAdapter.validateForCommit;
+const legacy=await api.AuthoringSession.create(legacyAdapter,musicDoc);
+await legacy.edit({operationId:'legacyInvalid',baseRevision:guardRevision,label:'Old draft',command:invalidCommand});
+const recovered=await api.AuthoringSession.restore(adapter,musicDoc,legacy.exportJournal());
+assert.equal(recovered.snapshot().checkpoints.length,1,'validation improvements preserve recoverable older history');
+await recovered.edit({operationId:'repairProjection',baseRevision:recovered.snapshot().revision,label:'Repair old preview',command:{type:'canonical',edit:{schema:'producer.set-edit/2',baseRevision:recovered.snapshot().revision,operations:[{op:'replace',path:musicPath+'/waveHeight',value:.25}]}}});
+api.validateAuthoredDefaults(recovered.snapshot().document);
 console.log('PASS shared authoring: stable-ID edits; preserved controls/assets/layouts; atomic validation/storage failures; revision fencing; idempotency; undo/redo; restored history; concurrent edits; canonical animation; second domain adapter.');

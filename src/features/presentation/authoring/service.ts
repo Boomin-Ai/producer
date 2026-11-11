@@ -2,6 +2,8 @@ import {AuthoringSession, type DocumentAdapter} from '../../../../shared/authori
 import {applyDesignEdits, compileDesignPlan, designContext, packageRevision} from './compiler';
 import type {AuthoringTarget} from './catalog';
 import type {PresentationNode, PresentationPackage} from '../schema';
+import {validateAuthoredDefaults} from './validateDefaults';
+export {validateAuthoredDefaults} from './validateDefaults';
 
 export type SetAuthoringCommand =
   | {type: 'canonical'; edit: unknown}
@@ -24,7 +26,7 @@ function mergeProperties(before:unknown,after:unknown):unknown {
 /** Semantic selectors are resolved at the checked document revision. Nodes,
  * controls, per-layout arrangements and runtime definitions remain canonical. */
 export function setDocumentAdapter(target: AuthoringTarget): DocumentAdapter<PresentationPackage, SetAuthoringCommand> {
-  return {kind: 'producer.presentation/2', revision: packageRevision, async apply(base, command) {
+  return {kind: 'producer.presentation/2', revision: packageRevision, validateForCommit(document) {validateAuthoredDefaults(document);}, async apply(base, command) {
     if (!command || typeof command !== 'object') throw Error('Expected an authoring command.');
     const fields:Record<string,string[]>={canonical:['type','edit'],design:['type','plan'],'node.properties':['type','layoutId','nodeId','properties'],'animation.track':['type','layoutId','track']};
     if(!fields[command.type]||Object.keys(command).some(key=>!fields[command.type].includes(key)))throw Error('Unknown authoring command fields.');

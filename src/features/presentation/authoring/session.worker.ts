@@ -1,5 +1,5 @@
 import {AuthoringSession, type AuthoringJournal} from '../../../../shared/authoring/session';
-import {setDocumentAdapter, inspectAuthoredSet, type SetAuthoringCommand} from './service';
+import {setDocumentAdapter, inspectAuthoredSet, validateAuthoredDefaults, type SetAuthoringCommand} from './service';
 import type {AuthoringTarget} from './catalog';
 import {parsePackage, presentationJsonSchema, type PresentationPackage} from '../schema';
 type Journal = AuthoringJournal<PresentationPackage, SetAuthoringCommand>;
@@ -36,8 +36,9 @@ host.onmessage = async ({data}: MessageEvent<{id: number; method: string; value:
     if (method === 'open') {
       const base = parsePackage(value.document), target = value.target as AuthoringTarget;
       if (typeof value.scope !== 'string' || !value.scope || value.scope.length > 512) throw Error('Invalid authoring scope.');
-      const adapter = setDocumentAdapter(target), key = `${value.scope}:${base.id}`;
-      const stored = await load(key);
+      const adapter = setDocumentAdapter(target), legacyKey = `${value.scope}:${base.id}`;
+      const key = `${legacyKey}:${await adapter.revision(base)}`;
+      const stored = await load(key) ?? await load(legacyKey);
       const writer = (journal: Journal) => save(key, journal);
       let restored = false;
       if (stored && await adapter.revision(stored.base) === await adapter.revision(base)) {session = await AuthoringSession.restore(adapter, base, stored, writer); restored = true;}
@@ -46,6 +47,11 @@ host.onmessage = async ({data}: MessageEvent<{id: number; method: string; value:
     } else {
       if (!session) throw Error('Open an authoring session first.');
       if (method === 'snapshot') result = session.snapshot();
+      else if (method === 'validate') {
+        const snapshot = session.snapshot();
+        if (snapshot.revision !== value.revision) throw Error('The draft changed before validation.');
+        result = {revision: snapshot.revision, ...validateAuthoredDefaults(snapshot.document)};
+      }
       else if (method === 'edit') result = await session.edit(value);
       else if (method === 'history') result = await session.moveHistory(value.direction, value.revision);
       else if (method === 'inspect') {

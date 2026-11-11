@@ -130,11 +130,18 @@ const binding: Codec<Binding> = union(scalar, object({ get: string(128, '^(value
 export const STYLE_KEYS = ['position', 'inset', 'left', 'top', 'right', 'bottom', 'width', 'height', 'display', 'gap', 'padding',
   'background', 'color', 'border', 'borderRadius', 'boxShadow', 'fontSize', 'fontWeight', 'letterSpacing', 'textAlign', 'lineHeight',
   'alignItems', 'justifyContent', 'gridTemplateColumns', 'opacity', 'overflow', 'transform', 'minHeight', 'maxWidth', 'fontFamily', 'fontStyle', 'textTransform', 'textShadow', 'whiteSpace', 'wordSpacing', 'backgroundSize', 'backgroundPosition', 'filter', 'mixBlendMode', 'clipPath', 'isolation'] as const;
-const styles = dictionary(binding, STYLE_KEYS.length);
+const styleDictionary = dictionary(binding, STYLE_KEYS.length);
+const styles = {...styleDictionary, json: {...styleDictionary.json, propertyNames: {enum: [...STYLE_KEYS]},
+  description: 'Only these native style keys are supported. Use gap, padding or explicit placement for spacing; arbitrary CSS properties are not accepted.'}};
 const motion = object({ durationMs: number(200, 30_000), property: union(literal('opacity'), literal('transform')),
   from: scalar, to: scalar });
 const scene3dWorld:Codec<Scene3dWorld>={json:WORLD_SCHEMA,read(v,p){try{return parseWorld(v);}catch(e){return fail(p,String(e));}}};
-const musicBindings=object({sensitivity:binding,intensity:binding,waveform:binding,waveHeight:binding,drop:binding,money:binding,color:binding,motion:binding,soundPopups:optional(binding)});
+// Describe literal domains precisely while retaining the canonical binding
+// importer for old drafts. Resolved values are checked before authored commits.
+const typedBinding = (value: Codec<unknown>): Codec<Binding> => ({...binding,
+  json: {anyOf: [value.json, ...(binding.json.anyOf as JsonSchema[]).slice(1)]}});
+const musicDrop = {...number(0, 1_000_000), json: {type: 'integer', minimum: 0, maximum: 1_000_000}};
+const musicBindings=object({sensitivity:typedBinding(number(0,3)),intensity:typedBinding(number(0,2)),waveform:typedBinding(union(literal('bars'),literal('line'),literal('off'))),waveHeight:typedBinding(number(.25,2)),drop:typedBinding(musicDrop),money:typedBinding(boolean),color:typedBinding(string(7,'^#[0-9a-fA-F]{6}$')),motion:typedBinding(number(0,2)),soundPopups:optional(typedBinding(boolean))});
 const scene3dLayer=object({music:optional(musicBindings),id:string(53,'^[a-z][a-z0-9-]{0,52}$'),pass:union(literal('background'),literal('foreground')),world:scene3dWorld,cue:optional(binding),view:optional(binding),cueSequence:optional(binding)});
 const chart=object({id,kind:union(literal('line'),literal('area'),literal('bar')),unit:optional(binding),timeZone:optional(binding),data:union(string(32768),binding),color:string(9,'^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$'),gridColor:optional(string(9,'^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$')),durationMs:optional(number(0,2000)),lineWidth:optional(number(1,8)),fillOpacity:optional(number(0,.5)),yMin:optional(number(-1e6,1e6)),yMax:optional(number(-1e6,1e6)),windowMs:optional(number(1,604800000))});
 const shader=object({effect:union(literal('aurora'),literal('edgeGlow'),literal('lightSweep'),literal('plasma'),literal('silk'),literal('rings'),literal('grid'),literal('stars'),literal('petals'),literal('contours'),literal('prism'),literal('borderFlare'),literal('rain'),literal('snow'),literal('clouds'),literal('voiceBars'),literal('voiceRing'),literal('launchV1'),literal('voiceSea')),colors:array(string(7),3),speed:number(0,4),intensity:number(0,2),scale:number(.25,4),opacity:number(0,1),radius:number(0,960),glow:optional(number(0,1)),variant:optional(number(0,15)),bindings:optional(object({intensity:optional(binding),speed:optional(binding),glow:optional(binding)})),quality:union(literal('low'),literal('medium')),clock:union(literal('show'),literal('segment'))});

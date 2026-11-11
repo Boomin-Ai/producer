@@ -18,6 +18,19 @@ Undo/redo and saved-journal restore use the same domain adapter. The browser
 Assistant runs authoring in a dedicated worker and persists journals in
 IndexedDB. MCP uses the same Set service with its existing file permissions.
 
+New authored transactions also resolve the default state of every layout using
+the pure rehearsal/projection contracts before committing. This catches valid
+binding shapes with invalid renderer values, such as a zero music waveform
+height. It does not allocate GPU resources, start devices, or prove every
+control state. The same validation gates explicit preparation loading and MCP
+compile/validate operations. It never runs in the room's frame/audio path.
+
+Journals are scoped by source revision as well as endpoint and Set identity.
+Reopening a different source version cannot overwrite its earlier draft.
+Existing journals remain readable and repairable; a preview error boundary
+keeps the Assistant, saved history and undo controls available after a render
+failure. Failed candidates do not replace a working draft.
+
 Set controls remain authored surfaces, including per-layout visibility,
 arrangements, bindings, configuration and minimized controls. Assistant preview
 uses the existing control renderer against an isolated rehearsal session.
@@ -75,6 +88,10 @@ OAuth request/callback contract, real test signatures and stream parsing.
 The test signing key is discarded; committed fixtures contain public keys and
 synthetic test tokens only. Browser/contract passes are separate from real
 ChatGPT authentication, native readiness and physical recording performance.
+`scripts/test-assistant-preview.mjs` covers real React fault isolation and
+repair, a default-invalid alternate layout, older draft recovery, and separate
+journals for source revisions. These browser tests run with mocked inference;
+real signed-app sign-in and focused edits were also checked separately.
 
 For an isolated native login check, start Vite on port 1436 with
 `VITE_PRODUCER_ASSISTANT_WORKBENCH=1` and open the existing signed Producer DJ

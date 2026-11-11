@@ -34,5 +34,5 @@ export async function executeSetTool(worker: SetAuthoringWorker, call: ResponseI
   const operationId=identity?`tool_${Array.from(identity,b=>b.toString(16).padStart(2,'0')).join('')}`:`tool_${crypto.randomUUID()}`;
   const snapshot = await worker.edit(revision, command, label, operationId);
   if (authorized()) update(snapshot);
-  return {ok: true, revision: snapshot.revision, name: snapshot.document.name, layouts: snapshot.document.set.layouts.map(l => ({id: l.id, name: l.label})), validation: 'canonical-schema-and-references', nativeReadiness: 'not-tested'};
+  return {ok: true, revision: snapshot.revision, name: snapshot.document.name, layouts: snapshot.document.set.layouts.map(l => ({id: l.id, name: l.label})), validation: 'canonical-schema-references-and-default-projection', nativeReadiness: 'not-tested'};
 }
