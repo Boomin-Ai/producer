@@ -1,0 +1,25 @@
+name: Assistant authoring foundation
+on:
+  pull_request:
+    paths: ['crates/assistant-runtime/**', 'shared/authoring/**', 'src/features/assistant/**', 'src/features/presentation/authoring/**', 'scripts/test-authoring-foundation.mjs', 'scripts/test-assistant-browser.mjs', '.github/workflows/assistant-foundation.yml']
+  push:
+    branches: ['feat/assistant-authoring-foundation']
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run test:authoring-foundation && bun run test:authoring-full && bun run test:control-arrangements && bun run test:module-arrangements
+      - run: bun run build
+  provider-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --manifest-path crates/assistant-runtime/Cargo.toml --locked

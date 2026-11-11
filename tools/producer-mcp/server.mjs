@@ -79,7 +79,8 @@ export async function createAuthoringServer(directory) {
   tool('producer_compile_set','Compile a compact or full canonical design plan to a new validated .set.json file. Optional assetsFrom supplies existing authorized asset IDs; embedded assets never enter the tool response.',{plan:document,assetsFrom:fileName.optional()},false,async({plan,assetsFrom})=>{checkDesign(plan);const assets=assetsFrom?(await read(assetsFrom)).set.assets:{};return save(api.compileDesignPlan(plan,target,assets));});
   tool('producer_edit_set','Apply atomic revision-fenced edits and save a new draft. The original file stays intact. Inspect the current revision first.',{file:fileName,edit:document},false,async({file,edit})=>{
     checkDesign(edit);const base=await read(file),revision=await api.packageRevision(base);
-    const next=await api.applyDesignEdits(base,edit,target);
+    const session=await api.createSetAuthoringSession(base,target);
+    const {document:next}=await session.edit({operationId:randomUUID(),baseRevision:revision,label:'MCP Set edit',command:{type:'canonical',edit}});
     if(await api.packageRevision(await read(file))!==revision)throw Error('The source Set changed during this edit. Inspect it again.');
     return save(next);
   });

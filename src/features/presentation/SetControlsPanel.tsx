@@ -57,6 +57,10 @@ function DraftPreparation({session,output,bindings,framing}:{session:RehearsalSe
   useEffect(()=>()=>output?.clearDraftPreparation?.(),[]);
   return null;
 }
+/** Same authored controls on a private session; no output or connection owner. */
+export function SetAuthoringControlSurface({session}:{session:RehearsalSession}) {
+  return <SetControlsPanelView session={session} preferenceRoomId={`assistant:${session.package.id}`} onChange={()=>{}}/>;
+}
 export function SetControlsPanel(props:PanelProps) {
   const [draft,setDraft]=useState(()=>new RehearsalSession(props.session.preparedPackage(),undefined,'prepare'));
   const [moduleBindings,setModuleBindings]=useState<ModuleBindings>(props.moduleBindings??{});

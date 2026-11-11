@@ -1,4 +1,5 @@
 mod boomin;
+mod assistant;
 mod cache;
 mod chat;
 mod client;
@@ -276,6 +277,9 @@ pub fn run() {
                 live,
                 chat: chat::ChatHub::new(app.handle().clone()),
             });
+            // Lazy provider initialization: no credential access, networking or
+            // inference is added to room startup or frame processing.
+            app.manage(assistant::AssistantState::default());
 
             #[cfg(all(have_engine, target_os = "macos", feature = "portrait-camera-dev"))]
             if let Some(report) = std::env::var_os("PRODUCER_PORTRAIT_CAMERA_PROBE") {
@@ -301,6 +305,15 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(observe_command_dispatch(tauri::generate_handler![
+            assistant::assistant_status,
+            assistant::assistant_authoring_capabilities,
+            assistant::assistant_sign_in,
+            assistant::assistant_cancel_sign_in,
+            assistant::assistant_select_account,
+            assistant::assistant_disconnect,
+            assistant::assistant_models,
+            assistant::assistant_turn,
+            assistant::assistant_cancel_turn,
             performance_trace::performance_trace_config,
             performance_trace::performance_trace_set_consent,
             performance_trace::performance_trace_write,

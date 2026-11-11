@@ -5,13 +5,15 @@ import {PublishSetDialog} from './PublishSetDialog';
 import {activeEndpointId} from '../../lib/workspace';
 import {ipc} from '../../lib/ipc';
 import {PACKAGE_BYTES} from './assets';
-import { useEffect, useMemo, useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import {packageRevision} from './authoring/compiler';
+import {lazy, Suspense, useEffect, useMemo, useId, useRef, useState, useSyncExternalStore, type ReactNode} from 'react';
 import { BUILTIN_SETS } from './catalog';
 import { PackageAuthoringDialog, type AuthoringIntent } from './PackageAuthoringDialog';
 import { RehearsalSession } from './rehearsal';
 import type { PresentationPackage } from './schema';
 import type { SetOutputControls } from './useSetOutput';
 import './presentation.css';
+const SetAssistantDialog = lazy(() => import('../assistant/SetAssistantDialog'));
 
 export function SetConfiguration({ session, onChange, output, hideOutputAction=false, actions }: {
   actions?:ReactNode; hideOutputAction?:boolean; output?:SetOutputControls; session: RehearsalSession; onChange: (doc: PresentationPackage) => void;
@@ -33,6 +35,14 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
   const [publication,setPublication]=useState<{doc:PresentationPackage;endpointId:string;returnFocus:HTMLElement|null}|null>(null);
   const [help, setHelp] = useState(false);
   const [authoring, setAuthoring] = useState<{ intent: AuthoringIntent; doc: PresentationPackage } | null>(null);
+  const currentSession=useRef(session);currentSession.current=session;
+  const [assistant,setAssistant]=useState<{document:PresentationPackage;source:RehearsalSession}|null>(null);
+  const loadAssistant=async(doc:PresentationPackage)=>{
+    if(!assistant||currentSession.current!==assistant.source||await packageRevision(currentSession.current.exportPreparedPackage())!==await packageRevision(assistant.document))throw Error('The prepared Set changed while this draft was open. Reopen the Assistant from the current Set. Your draft is saved.');
+    await saveImported(doc);
+    if(currentSession.current!==assistant.source)throw Error('The Set editor changed. The candidate is saved in your library.');
+    setSelectedFile('');onChange(doc);setAssistant(null);
+  };
   const edit = (intent: AuthoringIntent) => { setAuthoring({ intent, doc: session.exportPreparedPackage() }); };
   const openPublication=(returnFocus:HTMLElement|null)=>{
     document.getElementById(filesId)?.hidePopover();
@@ -66,6 +76,7 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
       </div>
       <button ref={trigger} type="button" popoverTarget={filesId} onClick={e=>{const r=e.currentTarget.getBoundingClientRect();setPosition({left:Math.max(8,Math.min(r.left,innerWidth-228)),top:r.bottom+6});}}>Files ▾</button>
       <button type="button" className="set-publish-library" aria-label="Publish to producer.dev" title="Publish to producer.dev" aria-haspopup="dialog" onClick={event=>openPublication(event.currentTarget)}>Publish</button>
+      <button type="button" aria-haspopup="dialog" onClick={()=>setAssistant({document:session.exportPreparedPackage(),source:session})}>Assistant</button>
       <div id={filesId} popover="auto" className="set-configuration-popover set-files-popover" style={{left:position.left,top:position.top}}>
         <button onClick={()=>{document.getElementById(filesId)?.hidePopover();edit('edit-set');}}>Generate Set draft</button>
         <button onClick={()=>{document.getElementById(filesId)?.hidePopover();setError('');file.current?.click();}}>Import set</button>
@@ -105,6 +116,7 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
     <input ref={file} className="set-file-input" type="file" accept=".json,application/json" aria-label="Import set package" onChange={e => void importFile(e.target.files?.[0])} />
     {media&&<MediaAssetsDialog doc={session.exportPreparedPackage()} layoutId={state.layoutId} onLoad={onChange} onClose={()=>setMedia(false)}/>}
     {publication&&<PublishSetDialog {...publication} onClose={()=>setPublication(null)}/>}
+    {assistant&&<Suspense fallback={<span role="status">Opening Assistant…</span>}><SetAssistantDialog document={assistant.document} onLoad={loadAssistant} onClose={()=>setAssistant(null)}/></Suspense>}
     {authoring && <PackageAuthoringDialog {...authoring} returnFocus={trigger.current} onLoad={doc => {void saveImported(doc).then(()=>{setSelectedFile('');onChange(doc);}).catch(e=>{setError(String(e));});}} onClose={() => setAuthoring(null)} />}
   </>;
 }

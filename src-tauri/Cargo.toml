@@ -30,6 +30,8 @@ tauri-build = { version = "2", features = [] }
 cc = "1"
 
 [dependencies]
+producer-assistant-runtime = { path = "../crates/assistant-runtime" }
+fs2 = "0.4"
 producer-guest-session = { path = "../crates/guest-session", optional = true }
 producer-guest-runtime = { path = "../crates/guest-runtime", optional = true }
 # macos-private-api is declared PLAIN and macOSPrivateApi lives in the BASE
