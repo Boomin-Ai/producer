@@ -23,13 +23,19 @@ await assert.rejects(chatgpt.turn(turn,()=>{}),/native command rejected/);
 globalThis.__assistantBridgeFixture=async()=>null;
 await assert.rejects(chatgpt.turn(turn,()=>{}),/native completion was not delivered/);
 let attempts=0;const events=[];
-globalThis.__assistantBridgeFixture=async(command)=>{if(command==='assistant_cancel_turn')return;if(++attempts===1)throw 'Could not reach ChatGPT. Check your connection.';return output;};
+globalThis.__assistantBridgeFixture=async(command)=>{if(command!=='assistant_turn')return;if(++attempts===1)throw 'Could not reach ChatGPT. Check your connection.';return output;};
 assert.deepEqual(await chatgpt.turn(turn,event=>events.push(event)),output);assert.equal(attempts,2);assert.equal(events[0].type,'transport');
 attempts=0;
 globalThis.__assistantBridgeFixture=async()=>{attempts++;throw 'ChatGPT request failed before a response (connect_failed; 3 attempts). Your draft is saved.';};
 await assert.rejects(chatgpt.turn(turn,()=>{}),/connect_failed/);assert.equal(attempts,1,'new hosts already own recovery; never multiply their attempts');
 attempts=0;
-globalThis.__assistantBridgeFixture=async command=>{if(command==='assistant_cancel_turn')return;attempts++;throw 'Could not reach ChatGPT. Check your connection.';};
+globalThis.__assistantBridgeFixture=async command=>{if(command!=='assistant_turn')return;attempts++;throw 'Could not reach ChatGPT. Check your connection.';};
 await assert.rejects(chatgpt.turn(turn,event=>{if(event.type==='transport')void chatgpt.cancel(turn.turnId)}),/Assistant stopped/);assert.equal(attempts,1,'cancel during backoff cannot start another native turn');
+const logs=[];
+globalThis.__assistantBridgeFixture=async(command,args)=>{
+ if(command==='ui_log'){logs.push(args.line);return;}
+ args.onEvent.onmessage({type:'transport',stage:'failed',kind:'connection_reset',attempt:3,maxAttempts:3,elapsedMs:100,token:'synthetic-secret',input:'private design'});return output;
+};
+await chatgpt.turn(turn,()=>{});assert.equal(logs.length,1);assert(!logs[0].includes('synthetic-secret'));assert(!logs[0].includes('private design'));assert(logs[0].includes('connection_reset'));
 delete globalThis.__assistantBridgeFixture;
 console.log('PASS Assistant transport: delayed legacy completion, current authoritative output, bounded recovery without multiplying native retries, cancellation during backoff and bounded missing-result failure.');

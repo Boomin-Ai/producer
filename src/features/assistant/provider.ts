@@ -26,6 +26,13 @@ function retryDelay(signal:AbortSignal) {
     signal.addEventListener('abort',cancel,{once:true});if(signal.aborted)cancel();
   });
 }
+function recordTransport(value:Extract<AssistantEvent,{type:'transport'}>) {
+  // Fixed metadata only, never raw errors, account IDs, input or credentials.
+  if(!['retry','failed'].includes(value.stage)||!/^[a-z_]{1,64}$/.test(value.kind)||!Number.isInteger(value.attempt)||!Number.isInteger(value.maxAttempts)||value.attempt<1||value.maxAttempts>3)return;
+  const diagnostic={stage:value.stage,kind:value.kind,attempt:value.attempt,maxAttempts:value.maxAttempts,
+    ...(typeof value.elapsedMs==='number'&&Number.isFinite(value.elapsedMs)&&value.elapsedMs>=0?{elapsedMs:value.elapsedMs}: {})};
+  void invoke('ui_log',{line:'[assistant-transport] '+JSON.stringify(diagnostic)}).catch(()=>{});
+}
 export const chatgpt: AssistantProvider = {
   id: 'chatgpt-plan', label: 'ChatGPT',
   status: () => invoke('assistant_status'),
@@ -45,6 +52,7 @@ export const chatgpt: AssistantProvider = {
     const onEvent = new Channel<AssistantEvent>();
     onEvent.onmessage = value => {
       if(controller.signal.aborted)return;
+      if(value.type==='transport')recordTransport(value);
       if (value.type === 'completed' && Array.isArray(value.output)) complete(value.output);
       event(value);
     };
@@ -56,8 +64,10 @@ export const chatgpt: AssistantProvider = {
         // Compatibility with the installed pre-diagnostic dev host only. New
         // hosts own bounded transport recovery and return classified failures.
         const message=error instanceof Error?error.message:String(error);
-        if(attempt!==0||message!=='Could not reach ChatGPT. Check your connection.')throw error;
-        event({type:'transport',stage:'retry',kind:'legacy_send_failure',attempt:1,maxAttempts:2});
+        if(message!=='Could not reach ChatGPT. Check your connection.')throw error;
+        if(attempt!==0){const failed={type:'transport',stage:'failed',kind:'legacy_send_failure',attempt:2,maxAttempts:2} as const;recordTransport(failed);event(failed);throw error;}
+        const recovery={type:'transport',stage:'retry',kind:'legacy_send_failure',attempt:1,maxAttempts:2} as const;
+        recordTransport(recovery);event(recovery);
         await retryDelay(controller.signal);
       }
     }

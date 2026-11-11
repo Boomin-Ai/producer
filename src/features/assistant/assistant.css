@@ -114,20 +114,21 @@
 .assistant-docked .assistant-compose textarea{min-height:64px;max-height:120px;padding:9px;font-size:11px;resize:none}
 .assistant-docked .assistant-compose>div{margin-top:7px}
 .assistant-docked .assistant-compose button{min-height:28px;padding:4px 10px;font-size:10px}
-.assistant-docked .assistant-error,.assistant-docked .assistant-notice{padding:7px 12px;flex:none;font-size:10px;max-height:64px}
+.assistant-docked .assistant-error,.assistant-docked .assistant-notice{padding:7px 12px;flex:none;font-size:10px;max-height:110px}
 .assistant-mini{display:flex;align-items:center;width:100%;height:100%;min-width:0}
 .assistant-mini>button{width:100%;height:100%;display:flex;align-items:center;gap:8px;border:0;background:transparent;padding:0 12px;min-width:0;text-align:left}
 .assistant-mini strong{font-size:12px}.assistant-mini>button>span:nth-last-child(2){font-size:10px;color:#8fa69f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.assistant-mini>button>span:last-child{margin-left:auto;color:#b7c9c1}
 @container assistant-dock (min-width:650px){
- .assistant-docked:not(.assistant-docked-mini)>.assistant-panel:not(:has(.assistant-connection)){display:grid;grid-template-columns:minmax(0,1.2fr) minmax(240px,.8fr);grid-template-rows:32px auto minmax(0,1fr) auto 28px}
+ .assistant-docked:not(.assistant-docked-mini)>.assistant-panel:not(:has(.assistant-connection)){display:grid;grid-template-columns:minmax(0,1.2fr) minmax(240px,.8fr);grid-template-rows:32px auto minmax(0,1fr) auto auto 28px}
  .assistant-docked .assistant-dock-header{grid-column:1/-1;grid-row:1;padding:3px 12px}
  .assistant-docked .assistant-context{grid-column:1;grid-row:2;padding:5px 12px}
  .assistant-docked .assistant-provider-compact{grid-column:2;grid-row:2;border-bottom:1px solid #29343d}
  .assistant-docked .assistant-messages{grid-column:1;grid-row:3;min-height:0}
- .assistant-docked .assistant-draft-card{grid-column:1;grid-row:4;margin:0 10px 6px;padding:6px 9px}
- .assistant-docked .assistant-compose{grid-column:2;grid-row:3/5;border-left:1px solid #29343d;display:flex;flex-direction:column;min-height:0}
+ .assistant-docked .assistant-error,.assistant-docked .assistant-notice{grid-column:1;grid-row:4;max-height:80px}
+ .assistant-docked .assistant-draft-card{grid-column:1;grid-row:5;margin:0 10px 6px;padding:6px 9px}
+ .assistant-docked .assistant-compose{grid-column:2;grid-row:3/6;border-left:1px solid #29343d;display:flex;flex-direction:column;min-height:0}
  .assistant-docked .assistant-compose textarea{flex:1;min-height:38px;max-height:none}
- .assistant-docked .assistant-sharing{grid-column:1/-1;grid-row:5;padding:4px 12px}
+ .assistant-docked .assistant-sharing{grid-column:1/-1;grid-row:6;padding:4px 12px}
  .assistant-docked .assistant-sharing[open]{position:absolute;z-index:5;bottom:0;background:#111c25;max-height:180px;width:100%;box-sizing:border-box}
  .assistant-docked>.assistant-panel:has(.assistant-connection){overflow:auto}
 }

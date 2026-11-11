@@ -26,6 +26,7 @@ try {
   window.props={session:window.session,scope:'panel-room-1',target:document.getElementById('right'),compact:false,onExpand:()=>{window.expands++;window.render({compact:false});},onReview:async d=>{window.reviews.push(structuredClone(d));}};
   window.render=patch=>{window.props={...window.props,...patch};window.root.render((R.createElement??R.default.createElement)(RoomAssistant,window.props));};
   window.respond=async (turn,event)=>{
+   if(window.failNext){window.failNext=false;throw Error('Test connection dropped.');}
    window.turns.push(turn);const results=turn.input.filter(i=>i.type==='function_call_output');
    if(!results.length){await new Promise(resolve=>window.release=resolve);return [{type:'function_call',name:'inspect_set',arguments:'{}',call_id:'inspect'}];}
    if(results.length===1){const data=JSON.parse(results[0].output),l=data.context.set.layouts[0],n=l.root.children[0];return [{type:'function_call',name:'edit_set',call_id:'edit',arguments:JSON.stringify({baseRevision:data.revision,label:'Panel title',command_json:JSON.stringify({type:'node.properties',layoutId:l.id,nodeId:n.id,properties:{text:'PANEL VERIFIED'}})})}];}
@@ -62,12 +63,14 @@ try {
  assert.equal(await page.getByRole('dialog',{name:'Set assistant',exact:true}).count(),0);
  await page.getByText('Panel draft is ready.',{exact:true}).waitFor();
  assert(!(await page.evaluate(()=>window.nativeCalls)).some(c=>/^live_/.test(c)),'panel has no native room or capture authority');
+ await page.evaluate(()=>window.failNext=true);
+ await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Keep the retry action reachable in every dock.');await page.getByRole('button',{name:'Send ↗',exact:true}).click();await page.getByRole('button',{name:'Retry request',exact:true}).waitFor();
  for(const [name,width,height] of [['side',360,780],['narrow',240,780],['bottom',1100,360],['top',1100,240]]){
   await page.evaluate(({width,height})=>{const target=document.getElementById('right');target.style.width=width+'px';target.style.height=height+'px';document.getElementById('bottom').style.display='none';window.render({target,compact:false});},{width,height});
   await page.waitForFunction(()=>{const element=document.querySelector('.assistant-docked textarea');return element&&element.getBoundingClientRect().height>30});
   const geometry=await page.evaluate(()=>{
    const box=document.querySelector('.assistant-docked').getBoundingClientRect();
-   return [...document.querySelectorAll('.assistant-docked .assistant-compose textarea,.assistant-docked .assistant-compose button')].map(element=>{const r=element.getBoundingClientRect();return {inside:r.left>=box.left-1&&r.right<=box.right+1&&r.top>=box.top-1&&r.bottom<=box.bottom+1,width:r.width,height:r.height};});
+   return [...document.querySelectorAll('.assistant-docked .assistant-compose textarea,.assistant-docked .assistant-compose button,.assistant-docked .assistant-error button')].map(element=>{const r=element.getBoundingClientRect();return {inside:r.left>=box.left-1&&r.right<=box.right+1&&r.top>=box.top-1&&r.bottom<=box.bottom+1,width:r.width,height:r.height};});
   });
   assert(geometry.every(r=>r.inside&&r.width>25&&r.height>25),name+' keeps the composer and send control visible');
   if(process.env.PRODUCER_PANEL_SCREENSHOTS)await page.locator('.assistant-docked').screenshot({path:process.env.PRODUCER_PANEL_SCREENSHOTS+'/'+name+'.png'});
