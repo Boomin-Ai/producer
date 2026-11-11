@@ -25,7 +25,83 @@ const PLAN_SCOPE: &str = "chatgpt.tokens.use.direct";
 // First-time browser sign-in may include account selection, MFA and consent.
 // Keep this bounded, but do not close the callback during a normal setup flow.
 const AUTHORIZATION_WINDOW: Duration = Duration::from_secs(15 * 60);
+const RESPONSE_SEND_ATTEMPTS: usize = 3;
 pub type Result<T> = std::result::Result<T, String>;
+
+/// Diagnostics are deliberately a fixed vocabulary. Never forward reqwest's
+/// Debug/Display text, URLs, headers, credentials or request bodies to the UI.
+fn transport_issue(error: &reqwest::Error) -> (&'static str, bool) {
+    if error.is_builder() {
+        return ("invalid_request", false);
+    }
+    let mut source = std::error::Error::source(error);
+    while let Some(cause) = source {
+        let text = cause.to_string().to_ascii_lowercase();
+        if text.contains("certificate") || text.contains("invalid peer") {
+            return ("tls_certificate", false);
+        }
+        if let Some(io) = cause.downcast_ref::<std::io::Error>() {
+            use std::io::ErrorKind::*;
+            let kind = match io.kind() {
+                ConnectionReset => Some("connection_reset"),
+                ConnectionAborted => Some("connection_aborted"),
+                BrokenPipe => Some("broken_pipe"),
+                UnexpectedEof => Some("connection_closed"),
+                _ => None,
+            };
+            if let Some(kind) = kind {
+                return (kind, true);
+            }
+        }
+        source = cause.source();
+    }
+    if error.is_timeout() {
+        // A connect timeout can be transient. Do not automatically repeat a
+        // full generation that already consumed the 180-second request limit.
+        return if error.is_connect() {
+            ("connect_timeout", true)
+        } else {
+            ("response_timeout", false)
+        };
+    }
+    if error.is_connect() {
+        return ("connect_failed", true);
+    }
+    if error.is_request() {
+        return ("connection_lost_before_headers", true);
+    }
+    ("transport_failed", false)
+}
+
+async fn send_response(
+    http: &reqwest::Client,
+    url: &str,
+    token: &str,
+    body: &Value,
+    emit: &impl Fn(Value) -> Result<()>,
+) -> Result<reqwest::Response> {
+    let started = std::time::Instant::now();
+    for attempt in 1..=RESPONSE_SEND_ATTEMPTS {
+        match http.post(url).bearer_auth(token).json(body).send().await {
+            Ok(response) => return Ok(response),
+            Err(error) => {
+                let (kind, retryable) = transport_issue(&error);
+                let retry = retryable && attempt < RESPONSE_SEND_ATTEMPTS;
+                emit(
+                    json!({"type":"transport", "stage":if retry {"retry"} else {"failed"}, "kind":kind,
+                    "attempt":attempt,"maxAttempts":RESPONSE_SEND_ATTEMPTS,"elapsedMs":started.elapsed().as_millis() as u64}),
+                )?;
+                if !retry {
+                    return Err(format!("ChatGPT request failed before a response ({kind}; {attempt} attempt{}). Your draft is saved. Retry the request.", if attempt == 1 {""} else {"s"}));
+                }
+                // Only the HTTP send is retried, before any response stream or
+                // tool call reaches Producer. Cancellation drops this future.
+                tokio::time::sleep(Duration::from_millis(500 * attempt as u64)).await;
+            }
+        }
+    }
+    unreachable!("bounded response attempts return a response or failure")
+}
 
 async fn authorize_until_deadline<T>(
     cancel: Arc<Notify>,
@@ -637,14 +713,14 @@ impl Client {
         body: Value,
         emit: &impl Fn(Value) -> Result<()>,
     ) -> Result<Vec<Value>> {
-        let mut response = self
-            .http
-            .post(format!("{RESOURCE}/responses"))
-            .bearer_auth(token)
-            .json(&body)
-            .send()
-            .await
-            .map_err(|_| "Could not reach ChatGPT. Check your connection.".to_string())?;
+        let mut response = send_response(
+            &self.http,
+            &format!("{RESOURCE}/responses"),
+            &token,
+            &body,
+            emit,
+        )
+        .await?;
         if !response.status().is_success() {
             return Err(json_response(response)
                 .await
@@ -895,6 +971,169 @@ impl EventStream {
 #[cfg(test)]
 mod tests {
     use super::*;
+    async fn read_test_request(socket: &mut tokio::net::TcpStream) {
+        let mut request = Vec::new();
+        loop {
+            let mut bytes = [0u8; 4096];
+            let read = socket.read(&mut bytes).await.unwrap();
+            assert!(read > 0);
+            request.extend_from_slice(&bytes[..read]);
+            assert!(request.len() < 64 * 1024);
+            if let Some(end) = request.windows(4).position(|bytes| bytes == b"\r\n\r\n") {
+                let header = String::from_utf8_lossy(&request[..end]).to_ascii_lowercase();
+                let length = header
+                    .lines()
+                    .find_map(|line| line.strip_prefix("content-length: "))
+                    .map(|value| value.parse::<usize>().unwrap())
+                    .unwrap_or(0);
+                if request.len() >= end + 4 + length {
+                    break;
+                }
+            }
+        }
+    }
+    #[tokio::test]
+    async fn interrupted_send_recovers_without_replaying_a_stream_or_leaking_data() {
+        let server = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/responses", server.local_addr().unwrap());
+        let fixture = tokio::spawn(async move {
+            let (mut first, _) = server.accept().await.unwrap();
+            read_test_request(&mut first).await;
+            drop(first);
+            let (mut second, _) = server.accept().await.unwrap();
+            read_test_request(&mut second).await;
+            second
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+                .await
+                .unwrap();
+        });
+        let events = std::sync::Mutex::new(Vec::new());
+        let response = send_response(
+            &reqwest::Client::new(),
+            &url,
+            "synthetic-secret",
+            &json!({"private":"synthetic-design"}),
+            &|event| {
+                events.lock().unwrap().push(event);
+                Ok(())
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(response.text().await.unwrap(), "ok");
+        fixture.await.unwrap();
+        let events = events.into_inner().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0]["stage"], "retry");
+        let diagnostic = serde_json::to_string(&events).unwrap();
+        for private in ["synthetic-secret", "synthetic-design", &url] {
+            assert!(!diagnostic.contains(private));
+        }
+    }
+    #[tokio::test]
+    async fn send_recovery_is_bounded_and_reports_the_terminal_transport_stage() {
+        let server = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/responses", server.local_addr().unwrap());
+        let fixture = tokio::spawn(async move {
+            for _ in 0..RESPONSE_SEND_ATTEMPTS {
+                let (mut socket, _) = server.accept().await.unwrap();
+                read_test_request(&mut socket).await;
+            }
+        });
+        let events = std::sync::Mutex::new(Vec::new());
+        let error = send_response(
+            &reqwest::Client::new(),
+            &url,
+            "test-token",
+            &json!({}),
+            &|event| {
+                events.lock().unwrap().push(event);
+                Ok(())
+            },
+        )
+        .await
+        .unwrap_err();
+        fixture.await.unwrap();
+        assert!(error.contains("3 attempts"));
+        assert!(!error.contains(&url));
+        let events = events.into_inner().unwrap();
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[2]["stage"], "failed");
+    }
+    #[tokio::test]
+    async fn http_access_failure_and_started_stream_are_not_automatically_replayed() {
+        for status in ["401 Unauthorized", "200 OK"] {
+            let server = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("http://{}/responses", server.local_addr().unwrap());
+            let fixture = tokio::spawn(async move {
+                let (mut socket, _) = server.accept().await.unwrap();
+                read_test_request(&mut socket).await;
+                socket.write_all(format!("HTTP/1.1 {status}\r\nContent-Length: 1000\r\nConnection: close\r\n\r\ndata: partial").as_bytes()).await.unwrap();
+            });
+            let events = std::sync::Mutex::new(Vec::new());
+            let response = send_response(
+                &reqwest::Client::new(),
+                &url,
+                "test-token",
+                &json!({}),
+                &|event| {
+                    events.lock().unwrap().push(event);
+                    Ok(())
+                },
+            )
+            .await
+            .unwrap();
+            assert!(response.bytes().await.is_err());
+            fixture.await.unwrap();
+            assert!(events.into_inner().unwrap().is_empty());
+        }
+    }
+    #[tokio::test]
+    async fn cancel_during_recovery_stops_before_the_next_send() {
+        let server = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/responses", server.local_addr().unwrap());
+        let fixture = tokio::spawn(async move {
+            let (mut socket, _) = server.accept().await.unwrap();
+            read_test_request(&mut socket).await;
+            drop(socket);
+            assert!(
+                tokio::time::timeout(Duration::from_millis(700), server.accept())
+                    .await
+                    .is_err()
+            );
+        });
+        let cancel = Notify::new();
+        let http = reqwest::Client::new();
+        let body = json!({});
+        let emit = |_| {
+            cancel.notify_one();
+            Ok(())
+        };
+        tokio::select! {
+            _=cancel.notified()=>{},
+            _=send_response(&http,&url,"test-token",&body,&emit)=>panic!("recovery should be canceled"),
+        }
+        fixture.await.unwrap();
+    }
+    #[tokio::test]
+    async fn full_response_timeout_is_reported_without_starting_another_generation() {
+        let server = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/responses", server.local_addr().unwrap());
+        let fixture = tokio::spawn(async move {
+            let (mut socket, _) = server.accept().await.unwrap();
+            read_test_request(&mut socket).await;
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        });
+        let http = reqwest::Client::builder()
+            .timeout(Duration::from_millis(30))
+            .build()
+            .unwrap();
+        let error = send_response(&http, &url, "test-token", &json!({}), &|_| Ok(()))
+            .await
+            .unwrap_err();
+        assert!(error.contains("response_timeout; 1 attempt"));
+        fixture.await.unwrap();
+    }
     #[test]
     fn registration_uses_pkce_stable_host_and_issued_client() {
         let url = reqwest::Url::parse(

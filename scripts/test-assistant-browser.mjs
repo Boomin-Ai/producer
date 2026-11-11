@@ -51,6 +51,26 @@ try {
  await page.getByRole('button',{name:'Load preparation',exact:true}).click();
  await page.waitForFunction(()=>window.loads.length===1);
  assert.equal(await page.evaluate(()=>window.loads.length),1);assert.deepEqual(await page.evaluate(()=>window.loads[0].set.controls),await page.evaluate(()=>window.sourceDoc.set.controls));assert.deepEqual(await page.evaluate(()=>window.loads[0].set.controlArrangement),await page.evaluate(()=>window.sourceDoc.set.controlArrangement));
+ // A failed continuation keeps its completed tool batch. Retry must not repeat
+ // the user message, inspection or a previously committed draft edit.
+ await page.evaluate(()=>{
+  window.sourceDoc={...window.sourceDoc,id:'retry-continuation'};window.originalTurn=window.mockAssistant.turn;window.retryTurns=[];window.failedOnce=false;
+  window.mockAssistant.turn=async(turn,event)=>{
+   window.retryTurns.push(structuredClone(turn));const results=turn.input.filter(i=>i.type==='function_call_output');
+   if(!results.length)return [{type:'function_call',namespace:'producer',name:'inspect_set',arguments:'{}',call_id:'retry-inspect'}];
+   if(results.length===1&&!window.failedOnce){window.failedOnce=true;throw Error('Test connection closed before a response.');}
+   if(results.length===1){const inspected=JSON.parse(results[0].output),layout=inspected.context.set.layouts[0],node=layout.root.children[0];return [{type:'function_call',namespace:'producer',name:'edit_set',call_id:'retry-edit',arguments:JSON.stringify({baseRevision:inspected.revision,label:'Recovered title',command_json:JSON.stringify({type:'node.properties',layoutId:layout.id,nodeId:node.id,properties:{styles:{opacity:.65}}})})}];}
+   event({type:'text',text:'Recovered the same request.'});return [{type:'message',role:'assistant',content:[{type:'output_text',text:'Recovered the same request.'}]}];
+  };window.mountAssistant();
+ });
+ await page.waitForFunction(()=>document.querySelector('[aria-label="Assistant model"]')?.value==='test-model');
+ await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Continue after a connection drop.');await page.getByRole('button',{name:'Send ↗',exact:true}).click();
+ await page.getByRole('button',{name:'Retry request',exact:true}).click();await page.getByText('Recovered the same request.',{exact:true}).waitFor();
+ assert.equal(await page.getByText('Continue after a connection drop.',{exact:true}).count(),1);
+ assert.equal(await page.evaluate(()=>window.retryTurns.filter(t=>!t.input.some(i=>i.type==='function_call_output')).length),1,'inspection is not restarted');
+ assert.equal(await page.evaluate(()=>window.retryTurns.at(-1).input.filter(i=>i.role==='user').length),1,'retry adds no duplicate user prompt');
+ assert.equal(await page.evaluate(()=>window.retryTurns.at(-1).input.filter(i=>i.type==='function_call_output'&&i.call_id==='retry-edit').length),1,'completed draft edit is represented once');
+ await page.getByRole('button',{name:'Close Set assistant'}).click();await page.evaluate(()=>{window.mockAssistant.turn=window.originalTurn});
  await page.evaluate(()=>{window.mountAssistant();window.blockNextTurn=true;});await page.waitForFunction(()=>document.querySelector('[aria-label="Assistant model"]')?.value==='test-model');
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Another edit.');await page.getByRole('button',{name:'Send ↗',exact:true}).click();await page.waitForFunction(()=>typeof window.releaseLate==='function');await page.getByRole('button',{name:'Stop',exact:true}).click();await page.evaluate(()=>{window.releaseLate();window.blockNextTurn=false;});
  assert.equal(await page.getByText('Late result',{exact:true}).count(),0,'stopped provider results are fenced');

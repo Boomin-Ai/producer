@@ -22,5 +22,14 @@ globalThis.__assistantBridgeFixture=async(_command,{onEvent})=>{onEvent.onmessag
 await assert.rejects(chatgpt.turn(turn,()=>{}),/native command rejected/);
 globalThis.__assistantBridgeFixture=async()=>null;
 await assert.rejects(chatgpt.turn(turn,()=>{}),/native completion was not delivered/);
+let attempts=0;const events=[];
+globalThis.__assistantBridgeFixture=async(command)=>{if(command==='assistant_cancel_turn')return;if(++attempts===1)throw 'Could not reach ChatGPT. Check your connection.';return output;};
+assert.deepEqual(await chatgpt.turn(turn,event=>events.push(event)),output);assert.equal(attempts,2);assert.equal(events[0].type,'transport');
+attempts=0;
+globalThis.__assistantBridgeFixture=async()=>{attempts++;throw 'ChatGPT request failed before a response (connect_failed; 3 attempts). Your draft is saved.';};
+await assert.rejects(chatgpt.turn(turn,()=>{}),/connect_failed/);assert.equal(attempts,1,'new hosts already own recovery; never multiply their attempts');
+attempts=0;
+globalThis.__assistantBridgeFixture=async command=>{if(command==='assistant_cancel_turn')return;attempts++;throw 'Could not reach ChatGPT. Check your connection.';};
+await assert.rejects(chatgpt.turn(turn,event=>{if(event.type==='transport')void chatgpt.cancel(turn.turnId)}),/Assistant stopped/);assert.equal(attempts,1,'cancel during backoff cannot start another native turn');
 delete globalThis.__assistantBridgeFixture;
-console.log('PASS Assistant transport: delayed legacy completion, authoritative current result, command rejection and bounded missing-result failure.');
+console.log('PASS Assistant transport: delayed legacy completion, current authoritative output, bounded recovery without multiplying native retries, cancellation during backoff and bounded missing-result failure.');
