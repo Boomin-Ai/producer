@@ -37,6 +37,13 @@ try {
  await page.getByText('Repaired the default projection.',{exact:true}).waitFor();
  assert.equal(await page.getByRole('heading',{name:'Preview needs a correction'}).count(),0,'a valid revision resets the preview boundary');
  assert((await page.evaluate(()=>window.turns[0].instructions)).includes('Invalid music visual controls'),'isolated preview diagnostic reaches the repair turn');
+ const geometry=await page.evaluate(()=>window.invalid.set.layouts.map(l=>({id:l.id,ratio:l.width/l.height})));
+ for(const layout of geometry){
+  await page.getByRole('combobox',{name:'Assistant preview layout',exact:true}).selectOption(layout.id);
+  const box=await page.locator('.assistant-preview-canvas>.set-preview').boundingBox(),frame=await page.locator('.assistant-preview-canvas iframe').boundingBox();
+  assert(Math.abs((box.width-2)/(box.height-2)-layout.ratio)<.02,'Assistant preserves each canvas aspect ratio');
+  assert(Math.abs(frame.width-(box.width-2))<2&&Math.abs(frame.height-(box.height-2))<2,'iframe fills the measured canvas without intrinsic-size distortion');
+ }
  await page.getByRole('button',{name:'Load preparation',exact:true}).click();await page.waitForFunction(()=>window.loads.length===1);
  // A legacy draft whose non-selected layout is invalid must not load.
  await page.evaluate(async()=>{
