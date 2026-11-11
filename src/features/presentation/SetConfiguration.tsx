@@ -37,10 +37,15 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
   const [authoring, setAuthoring] = useState<{ intent: AuthoringIntent; doc: PresentationPackage } | null>(null);
   const currentSession=useRef(session);currentSession.current=session;
   const [assistant,setAssistant]=useState<{document:PresentationPackage;source:RehearsalSession}|null>(null);
+  const assistantRef=useRef(assistant);assistantRef.current=assistant;
+  const mounted=useRef(true);
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
   const loadAssistant=async(doc:PresentationPackage)=>{
-    if(!assistant||currentSession.current!==assistant.source||await packageRevision(currentSession.current.exportPreparedPackage())!==await packageRevision(assistant.document))throw Error('The prepared Set changed while this draft was open. Reopen the Assistant from the current Set. Your draft is saved.');
+    const source=assistant;
+    const current=()=>mounted.current&&!!source&&assistantRef.current===source&&currentSession.current===source.source;
+    if(!current()||await packageRevision(currentSession.current.exportPreparedPackage())!==await packageRevision(source!.document))throw Error('The prepared Set changed while this draft was open. Reopen the Assistant from the current Set. Your draft is saved.');
     await saveImported(doc);
-    if(currentSession.current!==assistant.source)throw Error('The Set editor changed. The candidate is saved in your library.');
+    if(!current()||await packageRevision(currentSession.current.exportPreparedPackage())!==await packageRevision(source!.document))throw Error('The Set editor changed. The candidate is saved in your library.');
     setSelectedFile('');onChange(doc);setAssistant(null);
   };
   const edit = (intent: AuthoringIntent) => { setAuthoring({ intent, doc: session.exportPreparedPackage() }); };

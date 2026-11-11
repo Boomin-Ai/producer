@@ -63,3 +63,11 @@ OAuth request/callback contract, real test signatures and stream parsing.
 The test signing key is discarded; committed fixtures contain public keys and
 synthetic test tokens only. Browser/contract passes are separate from real
 ChatGPT authentication, native readiness and physical recording performance.
+
+For an isolated native login check, start Vite on port 1436 with
+`VITE_PRODUCER_ASSISTANT_WORKBENCH=1` and open the existing signed Producer DJ
+Test bundle. This development-only view reuses SetConfiguration and the real
+Assistant provider without mounting a room or starting capture. The flag is
+removed from production builds. A saved candidate still needs the normal room's
+native preparation before output. `scripts/test-assistant-workbench.mjs` checks
+that this view uses no live-engine commands; it does not qualify authentication.

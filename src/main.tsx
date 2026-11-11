@@ -10,11 +10,15 @@ void initializePerformanceTrace().catch(() => {});
 // WebView2 paints classic ones, macOS overlays are invisible until scrolled).
 document.documentElement.dataset.platform = /Windows/i.test(navigator.userAgent) ? "win" : "mac";
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
+// Explicit authoring-only native verification. No room or device is started.
+if (import.meta.env.DEV && import.meta.env.VITE_PRODUCER_ASSISTANT_WORKBENCH === '1') {
+  void import('./features/assistant/AssistantWorkbench').then(({default: Workbench}) => {
+    root.render(<React.StrictMode><Workbench/></React.StrictMode>);
+  });
+} else {
+  root.render(<React.StrictMode><App/></React.StrictMode>);
+}
 
 // Explicit local native verification only; removed by the production build.
 if(import.meta.env.DEV&&['1','review'].includes(import.meta.env.VITE_THREADS_ROOM_PROOF)){

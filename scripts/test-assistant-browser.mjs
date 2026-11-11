@@ -15,6 +15,7 @@ try {
  await page.evaluate(async()=>{
   const refresh=await import('/@react-refresh');refresh.default.injectIntoGlobalHook(window);window.$RefreshReg$=()=>{};window.$RefreshSig$=()=>type=>type;window.__vite_plugin_react_preamble_installed__=true;
   window.nativeCalls=[];window.signIns=0;window.cancels=0;
+  window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
   const {AUTHORING_CATALOG}=await import('/src/features/presentation/authoring/catalog.ts');
   window.__TAURI_INTERNALS__={invoke:async(command)=>{window.nativeCalls.push(command);if(command==='assistant_authoring_capabilities')return {schema:'producer.native-authoring/1',catalogRevision:2,packageSchema:'producer.presentation/2',features:[...AUTHORING_CATALOG.features],nativeAdmission:'separate-native-preparation-required'};if(command==='plugin:app|version')return '0.4.90';if(command==='plugin:event|listen')return 1;return null;},transformCallback:()=>1,convertFileSrc:p=>p};
   window.mockAssistant={status:async()=>({accounts:[{id:'account-test',email:'test@example.invalid',planEnabled:true,verified:true}],active:'account-test',signIn:null}),turn:async(turn,event)=>{
