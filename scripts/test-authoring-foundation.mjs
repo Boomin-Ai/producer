@@ -33,6 +33,15 @@ await assert.rejects(failed.edit({operationId:'storage',baseRevision:failed.snap
 const concurrent=await api.createSetAuthoringSession(original,target),revision=concurrent.snapshot().revision;
 const results=await Promise.allSettled(['a','b'].map(operationId=>concurrent.edit({operationId,baseRevision:revision,label:operationId,command})));
 assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(concurrent.exportJournal().entries.length,1);
+let releaseWrite,writeStarted;
+const writing=new Promise(resolve=>{writeStarted=resolve;});
+const gated=await api.AuthoringSession.create(adapter,original,async()=>{writeStarted();await new Promise(resolve=>{releaseWrite=resolve;});});
+const gatedRevision=gated.snapshot().revision;
+const pendingEdit=gated.edit({operationId:'queued',baseRevision:gatedRevision,label:'Queued edit',command});
+await writing;
+const staleValidation=assert.rejects(gated.validateCurrent(gatedRevision),/changed before validation/);
+releaseWrite();await pendingEdit;await staleValidation;
+assert.equal((await gated.validateCurrent(gated.snapshot().revision)).revision,gated.snapshot().revision,'validation queues behind in-flight writes before checking the revision');
 const motion={type:'animation.track',layoutId:layout.id,track:{target:node.id,property:'opacity',keyframes:[{atMs:0,value:0},{atMs:1000,value:1}],easing:'easeOut'}};
 const moved=await session.edit({operationId:'motion',baseRevision:session.snapshot().revision,label:'Animate headline',command:motion});
 assert.equal(moved.document.set.layouts[0].animation.tracks.filter(t=>t.target===node.id&&t.property==='opacity').length,1);

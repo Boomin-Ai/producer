@@ -91,6 +91,14 @@ export class AuthoringSession<D, C> {
       return {receipt: {...receipt, replayed: false}, ...this.snapshot()};
     });
   }
+  validateCurrent(expectedRevision: string) {
+    return this.serialize(async () => {
+      if (expectedRevision !== this.currentRevision) throw Error('The draft changed before validation.');
+      await this.adapter.validateForCommit?.(structuredClone(this.current));
+      if (this.closed) throw Error('This authoring session is closed.');
+      return {revision: this.currentRevision};
+    });
+  }
   private async restoreCursor(cursor: number) {
     let current = structuredClone(this.journal.base);
     for (const entry of this.journal.entries.slice(0, cursor)) current = await this.adapter.apply(current, entry.command);
