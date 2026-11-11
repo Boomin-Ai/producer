@@ -24,6 +24,13 @@
 .rm-toolbar-channels .hd-chan-logo {flex:none;}
 .rm-toolbar-channels>svg:last-child {width:11px;height:11px;}
 .rm-top .rm-top-activity.is-compact {min-width:34px;}
+.rm-top-activity.is-compact>.rm-toolbar-action {display:flex;width:100%;min-width:0;}
+.rm-top-activity.is-compact .rm-toolbar-button {width:100%;min-width:0;justify-content:flex-start;gap:8px;padding:0 7px;text-align:left;font:12px/1.5 system-ui,sans-serif;}
+.rm-top-activity.is-compact .rm-activity-preview {display:block;min-width:0;white-space:nowrap;}
+.rm-top-activity.is-compact .rm-activity-preview::before {content:none;}
+.rm-top-activity.is-compact .rm-toolbar-button[data-tone=error]>svg {color:#ff8f9b;}
+.rm-top-activity.is-compact .rm-toolbar-button[data-tone=warning]>svg {color:#edc78b;}
+.rm-top-activity.is-compact .rm-toolbar-button[data-tone=success]>svg {color:var(--mint,#85d8b7);}
 .rm-top-activity.is-compact .rm-activity-panel {width:min(440px,calc(100vw - 32px));max-width:calc(100vw - 32px);}
 .rm-toolbar-separator {height:18px;width:1px;margin-inline:5px;background:var(--line-1,#293442);flex:none;}
 .rm-pop.rm-output-confirmation {box-sizing:border-box;width:min(320px,calc(100vw - 20px));min-width:0;max-height:calc(100dvh - 20px);overflow:auto;padding:16px;border:1px solid #304050;border-radius:13px;background:#111923;color:#eaf0f7;box-shadow:0 12px 38px #0007;outline:none;isolation:isolate;}

@@ -6,6 +6,11 @@ for(const preset of layout.PRESETS)assert.deepEqual(layout.normalize(preset.layo
 const old=structuredClone(layout.DEFAULT_LAYOUT);old.hidden=old.hidden.filter(p=>p!=='assistant');const upgraded=layout.normalize(old);
 assert(upgraded.hidden.includes('assistant'));assert.equal(upgraded.hidden.filter(p=>p==='assistant').length,1);
 for(const dock of ['top','left','right','bottom','hidden'])assert.equal(layout.dockOf(layout.movePanel(upgraded,'assistant',dock),'assistant'),dock);
+const suggestionBundle=await build({entryPoints:['src/features/assistant/suggestions.ts'],bundle:true,write:false,platform:'node',format:'esm'});
+const {roomSuggestions}=await import('data:text/javascript;base64,'+Buffer.from(suggestionBundle.outputFiles[0].text).toString('base64'));
+const room={setOnOutput:true,screenSharing:true,guestsConnected:true};
+assert.deepEqual(roomSuggestions(room,{edited:false,started:true,design:false,canEdit:true}).map(chip=>chip.label),['Continue','Next step','Make an outline'],'an active content conversation gets follow-ups rather than onboarding');
+assert(roomSuggestions(room,{edited:true,started:true,design:true,canEdit:false}).every(chip=>!chip.action&&chip.label!=='Refine controls'),'sharing off never exposes a private edit or review shortcut');
 const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'playwright-core');
 const browser=await chromium.launch({executablePath:process.env.PRODUCER_CHROME??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
 const origin=process.env.PRODUCER_TEST_URL??'http://127.0.0.1:1445/';
@@ -16,6 +21,7 @@ try {
  await page.route('https://**',r=>r.abort());await page.goto(origin);
  await page.evaluate(async()=>{
   const refresh=await import('/@react-refresh');refresh.default.injectIntoGlobalHook(window);window.$RefreshReg$=()=>{};window.$RefreshSig$=()=>t=>t;window.__vite_plugin_react_preamble_installed__=true;
+  await import('/src/App.css');
   const {AUTHORING_CATALOG}=await import('/src/features/presentation/authoring/catalog.ts');window.nativeCalls=[];window.statusCalls=0;window.modelCalls=0;window.cancelled=0;window.turns=[];window.reviews=[];window.externalLoads=[];window.expands=0;
   window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
   window.__TAURI_INTERNALS__={invoke:async c=>{window.nativeCalls.push(c);if(c==='assistant_authoring_capabilities')return {schema:'producer.native-authoring/1',catalogRevision:2,features:[...AUTHORING_CATALOG.features],packageSchema:'producer.presentation/2',nativeAdmission:'separate-native-preparation-required'};if(c==='plugin:app|version')return '0.4.90';if(c==='set_library_list')return [];return null;},transformCallback:()=>1,convertFileSrc:p=>p};
@@ -23,17 +29,32 @@ try {
   window.RehearsalSession=RehearsalSession;window.source=await(await fetch('/src/features/presentation/fixtures/after-hours.json')).json();window.session=new RehearsalSession(window.source,undefined,'prepare');window.original=JSON.stringify(window.session.package);
   const shell=document.createElement('div');shell.innerHTML='<div id="root"></div><section id="right" class="assistant-dock-mount" style="width:360px;height:780px"></section><section id="bottom" class="assistant-dock-mount" style="width:1100px;height:360px"></section>';document.body.append(shell);
   window.root=(D.createRoot??D.default.createRoot)(document.getElementById('root'));
-  window.props={session:window.session,scope:'panel-room-1',target:document.getElementById('right'),compact:false,onExpand:()=>{window.expands++;window.render({compact:false});},onReview:async d=>{window.reviews.push(structuredClone(d));}};
+  window.props={roomState:{setOnOutput:false,screenSharing:false,guestsConnected:false},session:window.session,scope:'panel-room-1',target:document.getElementById('right'),compact:false,onExpand:()=>{window.expands++;window.render({compact:false});},onReview:async d=>{window.reviews.push(structuredClone(d));}};
   window.render=patch=>{window.props={...window.props,...patch};window.root.render((R.createElement??R.default.createElement)(RoomAssistant,window.props));};
   window.respond=async (turn,event)=>{
    if(window.failNext){window.failNext=false;throw Error('Test connection dropped.');}
-   window.turns.push(turn);const results=turn.input.filter(i=>i.type==='function_call_output');
+   window.turns.push(turn);if(window.blockMiniTurn){await new Promise(resolve=>window.releaseMini=resolve);return [{type:'function_call',name:'inspect_set',arguments:'{}',call_id:'cancelled-mini'}];}const results=turn.input.filter(i=>i.type==='function_call_output');
    if(!results.length){await new Promise(resolve=>window.release=resolve);return [{type:'function_call',name:'inspect_set',arguments:'{}',call_id:'inspect'}];}
    if(results.length===1){const data=JSON.parse(results[0].output),l=data.context.set.layouts[0],n=l.root.children[0];return [{type:'function_call',name:'edit_set',call_id:'edit',arguments:JSON.stringify({baseRevision:data.revision,label:'Panel title',command_json:JSON.stringify({type:'node.properties',layoutId:l.id,nodeId:n.id,properties:{text:'PANEL VERIFIED'}})})}];}
    event({type:'text',text:'Panel draft is ready.'});return [{type:'message',role:'assistant',content:[{type:'output_text',text:'Panel draft is ready.'}]}];
   };window.render({});
  });
  await page.getByText('Test model',{exact:true}).waitFor();
+ assert.deepEqual(await page.locator('.assistant-suggestions button').allTextContents(),['Create a Set','Plan a show','Help me get started']);
+ assert.equal(await page.locator('.assistant-context-trigger').count(),0,'an empty room does not present a Set-specific header');
+ await page.getByRole('button',{name:'Plan a show',exact:true}).click();
+ assert.match(await page.getByRole('textbox',{name:'Assistant prompt'}).inputValue(),/Help me plan a show/);
+ assert.equal(await page.evaluate(()=>window.turns.length),0,'a suggestion prepares a prompt; it never submits or changes output');
+ await page.getByRole('textbox',{name:'Assistant prompt'}).fill('');
+ await page.evaluate(()=>window.render({roomState:{setOnOutput:true,screenSharing:false,guestsConnected:false}}));
+ await page.getByRole('button',{name:'Refine this Set',exact:true}).waitFor();
+ assert.deepEqual(await page.locator('.assistant-suggestions button').allTextContents(),['Refine this Set','Add a layout','Design live controls']);
+ await page.evaluate(()=>window.render({roomState:{setOnOutput:true,screenSharing:true,guestsConnected:false}}));
+ await page.getByRole('button',{name:'Frame my screen',exact:true}).waitFor();
+ await page.evaluate(()=>window.render({roomState:{setOnOutput:true,screenSharing:true,guestsConnected:true}}));
+ await page.getByRole('button',{name:'Prepare interview questions',exact:true}).waitFor();
+ assert.equal(await page.locator('.assistant-suggestions button').count(),3);
+ await page.evaluate(()=>window.render({roomState:{setOnOutput:true,screenSharing:false,guestsConnected:false}}));
  assert.equal(await page.getByRole('button',{name:'Use room Set',exact:true}).count(),0,'context switching belongs to the header, not a permanent row');
  assert.equal(await page.locator('.assistant-sharing').count(),0,'sharing and account controls start collapsed into settings');
  assert((await page.locator('.assistant-dock-header').boundingBox()).height<=66,'one compact header replaces the stacked metadata rows');
@@ -42,6 +63,31 @@ try {
  await page.getByText('Test model',{exact:true}).waitFor();
  const feedCheck=await page.evaluate(()=>{const original=window.session.exportPreparedPackage;let exports=0;window.session.exportPreparedPackage=()=>{exports++;return original();};for(let index=0;index<200;index++)window.session.setRoomFeeds({healthProbe:String(index)});window.session.exportPreparedPackage=original;return {exports,models:window.modelCalls};});
  assert.equal(feedCheck.exports,0,'incoming room-feed updates do not clone/hash a Set or reset its authoring context');
+ // Use the actual 56px room dock and its auto-height panel body, not a fixed-height surrogate.
+ await page.evaluate(()=>{
+  const bottom=document.getElementById('bottom');window.miniParent=bottom.parentElement;
+  window.miniFixture=document.createElement('div');window.miniFixture.style.cssText='position:fixed;bottom:0;left:0;z-index:999;width:1100px';
+  window.miniFixture.innerHTML='<div class="rm-dock rm-dock-bottom sized slim" style="height:56px;width:100%"><section class="rm-panel rm-panel-assistant" data-in="top"><div class="rm-panel-body"></div></section></div>';
+  document.body.append(window.miniFixture);window.miniFixture.querySelector('.rm-panel-body').append(bottom);bottom.removeAttribute('style');bottom.dataset.compact='true';
+  window.restoreMini=()=>{bottom.dataset.compact='false';bottom.style.cssText='width:1100px;height:360px';window.miniParent.append(bottom);window.miniFixture.remove();window.render({compact:false});};
+  window.render({target:bottom,compact:true,onExpand:()=>{window.expands++;window.restoreMini();}});
+ });
+ for(const dock of ['top','bottom'])for(const width of [240,360,1100]){
+  await page.evaluate(({dock,width})=>{window.miniFixture.style.width=width+'px';window.miniFixture.firstElementChild.className=dock==='top'?'rm-dock rm-dock-top':'rm-dock rm-dock-bottom sized slim';},{dock,width});
+  const metrics=await page.locator('.assistant-mini').evaluate(el=>{const box=el.getBoundingClientRect();return {height:box.height,controls:[...el.querySelectorAll('textarea,button')].map(control=>{const r=control.getBoundingClientRect();return {inside:r.left>=box.left-1&&r.right<=box.right+1&&r.top>=box.top-1&&r.bottom<=box.bottom+1,width:r.width,height:r.height};})};});
+  assert(metrics.height>=38,`${dock} mini dock supplies a real content height`);
+  assert(metrics.controls.every(control=>control.inside&&control.height>=26&&control.width>=20),`${dock} ${width}px mini prompt and controls remain visible`);
+ }
+ assert.equal(await page.getByRole('button',{name:'Send ↗',exact:true}).isDisabled(),true);
+ await page.getByRole('textbox',{name:'Assistant prompt'}).fill('   ');assert.equal(await page.getByRole('button',{name:'Send ↗',exact:true}).isDisabled(),true);
+ const multiline='A private mini prompt.\nKeep this second line.';
+ await page.getByRole('textbox',{name:'Assistant prompt'}).fill(multiline);
+ assert.equal(await page.getByRole('button',{name:'Send ↗',exact:true}).isEnabled(),true);
+ if(process.env.PRODUCER_PANEL_SCREENSHOTS)await page.locator('.assistant-docked').screenshot({path:process.env.PRODUCER_PANEL_SCREENSHOTS+'/mini.png'});
+ await page.getByRole('button',{name:'Expand Assistant',exact:true}).click();
+ assert.equal(await page.getByRole('textbox',{name:'Assistant prompt'}).inputValue(),multiline,'expanding retains the complete shared prompt');
+ await page.getByRole('textbox',{name:'Assistant prompt'}).fill('');
+ await page.evaluate(()=>window.render({target:document.getElementById('right'),onExpand:()=>{window.expands++;window.render({compact:false});}}));
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Unsent before any private edit.');
  await page.evaluate(()=>{const next=structuredClone(window.source);next.id='room-set-while-typing';next.name='Room changed while typing';window.session=new RehearsalSession(next,undefined,'prepare');window.original=JSON.stringify(window.session.package);window.render({session:window.session});});
  await page.getByRole('button',{name:'Assistant context: Second room Set',exact:true}).click();await page.getByText('The room has changed. This draft is preserved.',{exact:true}).waitFor();await page.getByRole('region',{name:'Assistant Set context'}).press('Escape');
@@ -51,10 +97,11 @@ try {
  await page.getByRole('button',{name:'Send ↗',exact:true}).click();await page.waitForFunction(()=>typeof window.release==='function');
  const modelCalls=await page.evaluate(()=>window.modelCalls);
  await page.evaluate(()=>window.render({target:document.getElementById('bottom'),compact:true}));
- await page.getByRole('button',{name:/Assistant.*Working on draft/}).waitFor();
+ await page.getByRole('button',{name:/Assistant.*Working/}).waitFor();
  await page.evaluate(()=>window.release());await page.getByRole('button',{name:/Assistant.*Draft ready/}).waitFor();
  await page.getByRole('button',{name:/Assistant.*Draft ready/}).click();
  await page.getByText('Panel draft is ready.',{exact:true}).waitFor();
+ assert.deepEqual(await page.locator('.assistant-suggestions button').allTextContents(),['Review changes','Continue editing','Explain changes']);
  if(process.env.PRODUCER_PANEL_SCREENSHOTS)await page.locator('.assistant-docked').screenshot({path:process.env.PRODUCER_PANEL_SCREENSHOTS+'/ready.png'});
  assert.equal(await page.evaluate(()=>window.modelCalls),modelCalls,'docking and compact view retain the provider session');
  assert.equal(await page.evaluate(()=>window.cancelled),0,'moving the panel does not cancel its active turn');
@@ -84,6 +131,20 @@ try {
  assert.equal(await page.evaluate(()=>window.reviews[2].set.layouts[0].root.children[0].text),'PANEL VERIFIED');
  assert.equal(await page.evaluate(()=>window.session.package.name),'Third room Set');
  assert(!(await page.evaluate(()=>window.nativeCalls)).some(c=>/^live_/.test(c)),'panel has no native room or capture authority');
+ // A prompt can be submitted and cancelled from the mini row itself.
+ const turnsBeforeMini=await page.evaluate(()=>window.turns.length);
+ const cancelsBeforeMini=await page.evaluate(()=>window.cancelled);
+ await page.evaluate(()=>{window.blockMiniTurn=true;const bottom=document.getElementById('bottom');bottom.dataset.compact='true';bottom.style.cssText='width:1100px;height:40px';window.render({target:bottom,compact:true});});
+ await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Test cancellation from the mini prompt.');
+ await page.getByRole('textbox',{name:'Assistant prompt'}).press('Enter');
+ await page.waitForFunction(count=>window.turns.length===count+1,turnsBeforeMini);
+ await page.getByRole('button',{name:'Stop',exact:true}).click();
+ await page.waitForFunction(count=>window.cancelled===count+1,cancelsBeforeMini);
+ await page.evaluate(()=>{window.releaseMini();window.blockMiniTurn=false;});
+ await page.getByRole('button',{name:'Send ↗',exact:true}).waitFor();
+ await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Still here after stopping.');
+ await page.evaluate(()=>{document.getElementById('bottom').dataset.compact='false';window.render({target:document.getElementById('right'),compact:false});});
+ assert.equal(await page.getByRole('textbox',{name:'Assistant prompt'}).inputValue(),'Still here after stopping.');
  await page.evaluate(()=>window.failNext=true);
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Keep the retry action reachable in every dock.');await page.getByRole('button',{name:'Send ↗',exact:true}).click();await page.getByRole('button',{name:'Retry request',exact:true}).waitFor();
  for(const [name,width,height] of [['side',360,780],['narrow',240,780],['bottom',1100,360],['top',1100,240]]){
@@ -125,5 +186,5 @@ try {
  await page.evaluate(()=>{window.editorKey='moved';window.renderEditor();});
  assert.equal(await page.locator('.set-preview-dialog').count(),0,'moving a panel does not replay a consumed editor request');
  assert.deepEqual(errors,[]);
- console.log('PASS Assistant panel: inventory migration; dock and compact forms; active-turn/prompt/conversation preservation; one provider owner; private review; same Set Edit draft and cancellation boundaries; no GPU preview or native output calls.');
+ console.log('PASS Assistant panel: real 56px top/bottom mini docks; mini submit/stop; room-context chips; inventory migration; dock and compact forms; active-turn/prompt/conversation preservation; one provider owner; private review; same Set Edit draft and cancellation boundaries; no GPU preview or native output calls.');
 } finally {await browser.close();}

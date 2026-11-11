@@ -22,7 +22,8 @@ export const ToolbarButton = forwardRef<HTMLButtonElement,ToolbarButtonProps>(fu
   useLayoutEffect(()=>{
     if(!hintOpen||!tip.current||!anchor.current)return;
     const place=()=>{
-      const a=anchor.current!.getBoundingClientRect(),b=tip.current!.getBoundingClientRect(),pad=8;
+      if(!anchor.current||!tip.current)return;
+      const a=anchor.current.getBoundingClientRect(),b=tip.current.getBoundingClientRect(),pad=8;
       const left=tooltipAlign==='start'?a.left:tooltipAlign==='end'?a.right-b.width:a.left+(a.width-b.width)/2;
       const top=a.bottom+9+b.height>window.innerHeight-pad?a.top-b.height-9:a.bottom+9;
       setHintPosition({left:Math.max(pad,Math.min(left,window.innerWidth-b.width-pad)),top:Math.max(pad,top)});

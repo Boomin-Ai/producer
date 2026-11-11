@@ -7361,6 +7361,9 @@ export function LiveView({
   const [assistantEditorRequest,setAssistantEditorRequest]=useState<AssistantEditorRequest>();
   const assistantEditorOpened=useCallback((id:string)=>setAssistantEditorRequest(current=>current?.id===id?undefined:current),[]);
   const assistantDock=dockOf(layout,'assistant');
+  const assistantScreenSharing=(sources.items??[]).some(item=>item.kind==='screen'&&item.visible);
+  const assistantGuestsConnected=roster.some(guest=>!!guest.render_url&&guest.state!=='left'&&!guest.monitor&&guest.seat!=='control');
+  const assistantRoomState=useMemo(()=>({setOnOutput:!!setOutput.currentPresented,screenSharing:assistantScreenSharing,guestsConnected:assistantGuestsConnected}),[setOutput.currentPresented,assistantScreenSharing,assistantGuestsConnected]);
   const assistantDockOpen=assistantDock==='top'?topOpen:assistantDock==='bottom'?sheetOpen:assistantDock==='left'?leftOpen:assistantDock==='right'?rightOpen:false;
   const assistantEnabled=visible&&isHost&&docApplied;
   const assistantScope=JSON.stringify([endpointRef.current??'local',roomId??'local']);
@@ -7401,7 +7404,7 @@ export function LiveView({
   const panelBody = (id: PanelId) => {
     switch (id) {
       case "assistant":
-        return isHost ? <div className="assistant-dock-mount" ref={assistantTargetRef}/> : <div className="rm-rows-empty">The host controls the Assistant.</div>;
+        return isHost ? <div className="assistant-dock-mount" data-compact={formDockOf('assistant')==='top'} ref={assistantTargetRef}/> : <div className="rm-rows-empty">The host controls the Assistant.</div>;
       case "setControls":
         return visible?<SetControlsPanel assistantEditorRequest={assistantEditorRequest} onAssistantEditorOpened={assistantEditorOpened} preferenceRoomId={roomId??undefined} endpoint={endpointRef.current??activeEndpointId()??undefined} serverRoomId={cfg.server_room_id??undefined} moduleBindings={cfg.presentation?.moduleBindings} voting={roomAccess.can.interactions?<SetRoomVoting vote={vote} savedVotes={savedVotes} onSelectVote={selectSavedVote} onOpen={openVote} onTransition={(action,hold)=>void transitionVote(action,hold)}/>:undefined} sourceNames={setSourceNames} onFieldEdit={editSetField} session={setRehearsal} output={setOutput} blocked={!docApplied}
           blockedReason={!docApplied ? "Waiting for the room to finish loading." : undefined}
@@ -8831,7 +8834,7 @@ export function LiveView({
 
   return (
     <RoomAssistantContext.Provider value={assistantBridge}><div hidden={!visible} style={visible?undefined:{display:'none'}} className={`room${layoutEdit ? " layout-edit" : ""}`}>
-      {assistantStarted&&assistantEnabled&&<Suspense fallback={null}><RoomAssistant key={JSON.stringify([endpointRef.current??'local',roomId??'local'])} session={setRehearsal} scope={JSON.stringify(['room',endpointRef.current??'local',roomId??'local'])} target={assistantTarget} compact={formDockOf('assistant')==='top'} onExpand={expandAssistant} request={assistantRequest} onReview={reviewAssistantDraft}/></Suspense>}
+      {assistantStarted&&assistantEnabled&&<Suspense fallback={null}><RoomAssistant key={JSON.stringify([endpointRef.current??'local',roomId??'local'])} session={setRehearsal} scope={JSON.stringify(['room',endpointRef.current??'local',roomId??'local'])} target={assistantTarget} compact={formDockOf('assistant')==='top'} roomState={assistantRoomState} onExpand={expandAssistant} request={assistantRequest} onReview={reviewAssistantDraft}/></Suspense>}
       {/* The first-room walkthrough. Renders over everything but the mount
         * veil — teaching a room that has not finished opening would point at
         * controls that are not there yet. */}

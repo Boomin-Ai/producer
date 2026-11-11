@@ -78,7 +78,7 @@
 /* The dock contains a view, while its room owns the long-lived session. */
 .assistant-dock-mount{display:flex;width:100%;height:100%;min-width:0;min-height:0;container:assistant-dock / size}
 .assistant-workspace.assistant-docked{position:relative;inset:auto;display:flex;width:100%;height:100%;max-width:none;max-height:none;margin:0;padding:0;border:0;border-radius:0;box-shadow:none;overflow:hidden;font:12px/1.5 system-ui,sans-serif;background:#0d141b}
-.assistant-docked>.assistant-panel{flex:1;width:100%;min-height:0;border:0;overflow:hidden}
+.assistant-docked>.assistant-panel{flex:1;width:100%;min-height:0;border:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain}
 .assistant-panel{position:relative;min-width:0}
 .assistant-panel [hidden]{display:none!important}
 .assistant-dock-header{position:relative;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid #28343e;box-sizing:border-box;flex:none;min-width:0;height:64px;background:#10171e}
@@ -132,18 +132,26 @@
 .assistant-docked .assistant-compose>div{margin-top:7px}
 .assistant-docked .assistant-compose button{min-height:28px;padding:4px 10px;font-size:10px}
 .assistant-docked .assistant-error,.assistant-docked .assistant-notice{padding:7px 12px;flex:none;font-size:10px;max-height:110px}
-.assistant-mini{display:flex;align-items:center;width:100%;height:100%;min-width:0}
-.assistant-mini>button{width:100%;height:100%;display:flex;align-items:center;gap:8px;border:0;background:transparent;padding:0 12px;min-width:0;text-align:left}
-.assistant-mini strong{font-size:12px}.assistant-mini>button>span:nth-last-child(2){font-size:10px;color:#8fa69f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.assistant-mini>button>span:last-child{margin-left:auto;color:#b7c9c1}
+/* A slim dock must supply its own height: size containment has no intrinsic content height. */
+.assistant-dock-mount[data-compact=true]{height:40px;min-height:40px;flex:0 0 40px;container-type:inline-size;}
+.assistant-mini{display:flex;align-items:center;gap:7px;width:100%;height:40px;min-height:40px;padding:4px 6px;box-sizing:border-box;min-width:0;}
+.assistant-workspace .assistant-mini-open{display:flex;align-items:center;gap:6px;flex:none;min-width:0;width:auto;height:30px;min-height:30px;padding:0 5px;border:0;background:transparent;white-space:nowrap;}
+.assistant-mini-open strong{font-size:11px;font-weight:600;}
+.assistant-mini-status{font-size:10px;color:#9db5ad;max-width:135px;overflow:hidden;text-overflow:ellipsis;}
+.assistant-workspace .assistant-mini-expand{display:grid;place-items:center;flex:none;width:28px;height:28px;min-height:28px;padding:0;border:0;background:transparent;color:#adc1ca;}
+.assistant-suggestions{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:5px 12px 0;flex:none;min-width:0;}
+.assistant-workspace .assistant-suggestions>button{min-height:26px;padding:4px 8px;border-radius:7px;border:1px solid #2c3c47;background:#15212a;color:#b7cbd4;font-size:10px;line-height:1.4;}
+.assistant-workspace .assistant-suggestions>button:hover:not(:disabled){border-color:#547469;background:#1c302a;color:#c5eddf;}
 @container assistant-dock (min-width:650px){
- .assistant-docked:not(.assistant-docked-mini)>.assistant-panel{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:52px minmax(0,1fr) auto auto auto auto}
+ .assistant-docked:not(.assistant-docked-mini)>.assistant-panel{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:52px minmax(0,1fr) auto auto auto auto auto}
  .assistant-docked .assistant-dock-header{grid-column:1;grid-row:1;height:52px;padding:5px 12px}
- .assistant-docked .assistant-settings{grid-column:1;grid-row:2/7}
+ .assistant-docked .assistant-settings{grid-column:1;grid-row:2/8}
  .assistant-docked .assistant-messages{grid-column:1;grid-row:2;min-height:0}
  .assistant-docked .assistant-error{grid-column:1;grid-row:3;max-height:70px}
  .assistant-docked .assistant-notice{grid-column:1;grid-row:4;max-height:50px}
  .assistant-docked .assistant-draft-card{grid-column:1;grid-row:5;margin:0 10px 6px;padding:5px 9px}
- .assistant-docked .assistant-compose{grid-column:1;grid-row:6;padding:8px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;min-height:0}
+ .assistant-docked .assistant-suggestions{grid-column:1;grid-row:6;}
+ .assistant-docked .assistant-compose{grid-column:1;grid-row:7;padding:8px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;min-height:0}
  .assistant-docked .assistant-compose textarea{height:44px;min-height:44px;max-height:80px}
  .assistant-docked .assistant-compose>div{margin:0}
 }
@@ -163,3 +171,23 @@
 .assistant-table th{background:#1b2630;color:#b5c6d0;font-weight:600}
 .assistant-table tr:last-child td{border-bottom:0}
 .assistant-docked .assistant-rich-text{font-size:12px;line-height:1.65}
+
+/* A single composer surface with an inset transport control. */
+.assistant-workspace .assistant-compose{position:relative;display:block;padding:10px 12px;border-top:1px solid #28333d;}
+.assistant-workspace .assistant-compose textarea{min-height:68px;max-height:160px;padding:12px 48px 12px 13px;border:1px solid #30414d;border-radius:13px;background:#111b24;line-height:1.5;resize:none;}
+.assistant-workspace .assistant-compose>div{position:absolute;right:21px;bottom:19px;margin:0;display:flex;}
+.assistant-workspace .assistant-compose>div>span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;}
+.assistant-workspace .assistant-compose .assistant-send{display:grid;place-items:center;width:30px;height:30px;min-height:30px;padding:0;border:0;border-radius:9px;background:#80dbbe;color:#09231c;cursor:pointer;box-shadow:none;}
+.assistant-workspace .assistant-compose .assistant-send:disabled{opacity:1;background:#25323b;color:#65747f;cursor:default;}
+.assistant-workspace .assistant-compose .assistant-send:hover:not(:disabled){background:#a0ead2;}
+.assistant-workspace .assistant-compose .assistant-send.is-stop{background:#30434b;color:#d8e5e9;}
+.assistant-workspace .assistant-compose .assistant-send:focus-visible{outline:2px solid #9ce5d0;outline-offset:3px;}
+@container assistant-dock (min-width:650px){.assistant-docked .assistant-compose textarea{height:48px;min-height:48px;max-height:100px;}}
+
+/* Mini and expanded forms share one prompt and request owner. */
+.assistant-workspace .assistant-mini-compose{flex:1;min-width:0;height:32px;padding:0;border:0;}
+.assistant-workspace .assistant-mini-compose textarea{height:32px;min-height:32px;max-height:32px;min-width:0;width:100%;padding:6px 36px 6px 10px;border-radius:8px;font-size:11px;line-height:18px;}
+.assistant-workspace .assistant-mini-compose>div{right:4px;bottom:3px;}
+.assistant-workspace .assistant-mini-compose .assistant-send{width:26px;height:26px;min-height:26px;border-radius:6px;}
+@container assistant-dock (max-width:500px){.assistant-mini-status{display:none;}}
+@container assistant-dock (max-width:300px){.assistant-mini-open>strong{display:none;}.assistant-header-model{display:none;}}

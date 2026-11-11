@@ -4,6 +4,7 @@ import type {RehearsalSession} from '../presentation/rehearsal';
 import type {PresentationPackage} from '../presentation/schema';
 import SetAssistantDialog, {type AssistantActivity} from './SetAssistantDialog';
 import type {AssistantSetRequest} from './roomBridge';
+import type {AssistantRoomState} from './suggestions';
 
 type Request = AssistantSetRequest & {id: string};
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
   scope: string;
   target: HTMLElement | null;
   compact: boolean;
+  roomState?: AssistantRoomState;
   onExpand(): void;
   request?: Request;
   onReview(document: PresentationPackage): Promise<void>;
@@ -84,7 +86,7 @@ function RoomAssistant(props: Props) {
   },[props.session,contextReady,preserving]);
   const review=useCallback((document:PresentationPackage)=>latest.current.onReview(document),[]);
   return <>
-    <SetAssistantDialog key={context.key} document={context.document} scope={props.scope} onLoad={review} onClose={()=>{}} contextError={error} onDraftChange={draftChanged} onActivityChange={activityChanged}
+    <SetAssistantDialog key={context.key} document={context.document} scope={props.scope} onLoad={review} onClose={()=>{}} roomState={props.roomState} contextError={error} onDraftChange={draftChanged} onActivityChange={activityChanged}
       dock={{target: props.target, compact: props.compact, onExpand: props.onExpand, reviewRequest, roomName:props.session.package.name, roomChanged, contextLabel:preserving?'Private draft':context.origin==='editor'?'Set Edit preview':'Following room', onUseCurrent: () => {
         const source = latest.current.session;
         void select({document: source.exportPreparedPackage()},'room');

@@ -19,6 +19,15 @@ try {
     window.props={visible:true,recording:false,recordingPath:null,recordingElapsed:'0:00',recordingBusy:false,recordDisabled:false,streaming:false,streamBusy:false,streamDisabled:false,destinations:[{id:'twitch',label:'Twitch · Creator',icon:'T'},{id:'youtube',label:'YouTube · Studio',icon:'Y'}],audienceLabel:'Boomin',program:'Current room Set',streamFormat:'1080p · 30 fps · Landscape',recordFormat:'1080p · 30 fps · Landscape + portrait · Two MP4 files',recordingFolder:'Movies / Producer',onOpen:()=>window.calls.push('review-open'),onRecord:async()=>{window.calls.push('record');if(window.failRecord)return false;return true;},onStream:async()=>{window.calls.push('start-stream');if(window.delayStream)await new Promise(resolve=>window.finishStream=resolve);return true;},onStopStream:async()=>{window.calls.push('stop-stream');return true;}};
     window.render=patch=>{window.props={...window.props,...patch};window.root.render(h('header',{className:'rm-top'},h(ToolbarButton,{label:'Edit layout',tooltip:'Edit layout · Keyboard shortcut',tooltipAlign:'start'},h('svg',{width:18,height:18},h('path',{d:'M4 4h10v10H4z'}))),h(NoticeHost,{compact:true}),h('div',{className:'rm-top-right'},h(RoomTransportControls,window.props))));};window.render({});
   });
+  await page.evaluate(async()=>{const {notify}=await import('/src/lib/notices.ts');notify('Camera ready — your room is ready.',{key:'toolbar-test',tone:'success',sticky:true});});
+  const activity=page.getByRole('button',{name:'Room activity',exact:true});
+  await activity.getByText('Camera ready — your room is ready.',{exact:true}).waitFor();
+  assert.equal(await page.getByRole('region',{name:'Room activity feed'}).count(),0,'the latest notification is visible without opening history');
+  const roomBefore=await page.locator('main').boundingBox();await activity.click();await page.getByRole('region',{name:'Room activity feed'}).waitFor();
+  assert.deepEqual(await page.locator('main').boundingBox(),roomBefore,'activity remains an overlay rather than shifting room content');
+  await activity.press('Escape');
+  await page.evaluate(async()=>{const {notify}=await import('/src/lib/notices.ts');notify('A newer room update.',{key:'toolbar-test-next',tone:'info',sticky:true});});
+  await activity.getByText('A newer room update.',{exact:true}).waitFor();
   const actions=()=>page.evaluate(()=>window.calls.filter(call=>call!=='review-open'));
   const dialog=()=>page.getByRole('dialog');
   await page.getByRole('button',{name:'Go live',exact:true}).click();

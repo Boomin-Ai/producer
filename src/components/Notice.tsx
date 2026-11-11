@@ -56,7 +56,7 @@ export function NoticeHost({ action, hidden = false, compact = false }: {
 
   const symbol=<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M3 12h4l3-6 4 12 3-6h4" /></svg>;
   return <div className={`rm-top-activity${compact?' is-compact':''}`} onKeyDown={closeOnEscape}>
-    {compact?<ToolbarButton ref={trigger} label="Room activity" tooltip={activityText?`Activity · ${activityText}`:'Room activity'} tooltipAlign="start" data-tone={latest?.tone} aria-expanded={open} aria-controls={open?panelId:undefined} onClick={()=>setOpen(current=>!current)}>{symbol}{latest&&<span className="rm-toolbar-notice" data-tone={latest.tone} aria-hidden="true"/>}</ToolbarButton>:<button ref={trigger} type="button" className="rm-activity-trigger" aria-label="Room activity" data-tone={latest?.tone}
+    {compact?<ToolbarButton ref={trigger} label="Room activity" tooltip={activityText?`Activity · ${activityText}`:'Room activity'} tooltipAlign="start" data-tone={latest?.tone} aria-expanded={open} aria-controls={open?panelId:undefined} onClick={()=>setOpen(current=>!current)}>{symbol}{activityText&&<span className={`rm-activity-preview tone-${latest?.tone??history[history.length-1]?.tone}`}>{activityText}</span>}</ToolbarButton>:<button ref={trigger} type="button" className="rm-activity-trigger" aria-label="Room activity" data-tone={latest?.tone}
       title={activityText ?? "Room activity"} aria-expanded={open} aria-controls={open ? panelId : undefined}
       onClick={() => setOpen(current => !current)}>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
