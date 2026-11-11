@@ -2,7 +2,7 @@ import {memo, useEffect, useMemo, useRef, useState, useSyncExternalStore} from '
 import {createPortal} from 'react-dom';
 import {activeEndpointId} from '../../lib/workspace';
 import {openUrl} from '@tauri-apps/plugin-opener';
-import {chatgpt, type AssistantStatus, type AssistantModel, type ResponseItem} from './provider';
+import {chatgpt, type AssistantStatus, type AssistantModel} from './provider';
 import {executeSetTool, setAssistantInstructions, setAssistantTools} from './authoringTools';
 import {SetAuthoringWorker, type DraftSnapshot} from '../presentation/authoring/workerClient';
 import {discoverDesktopAuthoringTarget} from '../presentation/authoring/discovery';
@@ -12,7 +12,7 @@ import {SetAuthoringControlSurface} from '../presentation/SetControlsPanel';
 import type {PresentationPackage} from '../presentation/schema';
 import './assistant.css';
 
-type Message = {id: string; role: 'user' | 'assistant' | 'tool'; text: string};
+type Message = {id: string; role: 'user' | 'assistant' | 'tool'; text: string; details?: string};
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
 const DraftPreview = memo(function DraftPreview({document}: {document: PresentationPackage}) {
   const session = useMemo(() => new RehearsalSession(document, undefined, 'prepare'), [document]);
@@ -106,12 +106,11 @@ export default function SetAssistantDialog({document, onLoad, onClose}: {documen
     try {
       for (let round = 0; round < 8 && authorized(); round++) {
         const id = crypto.randomUUID(); turnId.current = id;
-        const messageId = crypto.randomUUID(); let output: ResponseItem[] | undefined;
+        const messageId = crypto.randomUUID();
         setMessages(old => [...old, {id: messageId, role: 'assistant', text: ''}]);
-        await chatgpt.turn({accountId: account, turnId: id, model: selectedModel, instructions: setAssistantInstructions + `\nDesign context sharing is ${shareDesign ? 'enabled' : 'disabled; answer without inspecting or modifying the Set'}.`, input: next, tools: shareDesign ? setAssistantTools : []}, event => {
+        const output = await chatgpt.turn({accountId: account, turnId: id, model: selectedModel, instructions: setAssistantInstructions + `\nDesign context sharing is ${shareDesign ? 'enabled' : 'disabled; answer without inspecting or modifying the Set'}.`, input: next, tools: shareDesign ? setAssistantTools : []}, event => {
           if (!authorized()) return;
           if (event.type === 'text') setMessages(old => old.map(m => m.id === messageId ? {...m, text: m.text + event.text} : m));
-          else output = event.output;
         });
         if (!authorized()) return;
         if (!output) throw Error('The provider did not complete its response. No unfinished edit was applied.');
@@ -127,9 +126,12 @@ export default function SetAssistantDialog({document, onLoad, onClose}: {documen
           catch (e) {result = {ok: false, error: errorText(e), repair: 'Inspect the current draft and schema, then retry a focused edit. The failed candidate was not committed.'};}
           if (!authorized()) return;
           next.push({type: 'function_call_output', call_id: call.call_id, output: JSON.stringify(result)});
-          const record = result as {ok?: boolean};
-          setMessages(old => [...old, {id: crypto.randomUUID(), role: 'tool', text: record.ok === false ? 'Candidate needs a correction; working draft retained.' : call.name === 'edit_set' || call.name === 'create_set' ? 'Draft updated and validated.' : call.name === 'read_schema' ? 'Read the supported design contract.' : 'Inspected the current draft.'}]);
+          const record = result as {ok?: boolean; error?: string};
+          setMessages(old => [...old, {id: crypto.randomUUID(), role: 'tool', text: record.ok === false ? 'Candidate needs a correction; working draft retained.' : call.name === 'edit_set' || call.name === 'create_set' ? 'Draft updated and validated.' : call.name === 'read_schema' ? 'Read the supported design contract.' : 'Inspected the current draft.', details: record.ok === false ? record.error : undefined}]);
         }
+        // Retain complete tool batches so a transport failure can be resumed.
+        // Never keep an unfinished model response or a partially answered batch.
+        if (authorized()) history.current = [...next];
       }
       if (authorized()) {history.current = next; setNotice('Reached this turn’s tool limit. Review the draft or ask the Assistant to continue.');}
     } catch (e) {if (authorized()) setError(errorText(e));}
@@ -158,7 +160,7 @@ export default function SetAssistantDialog({document, onLoad, onClose}: {documen
           {welcome && <div className="assistant-welcome" role="dialog" aria-label="ChatGPT plan connected"><strong>You’re using your ChatGPT plan</strong><p>Eligible requests use your plan. Manage Producer’s usage and access in ChatGPT settings.</p><button onClick={() => {if (active) localStorage.setItem(`producer:assistant:welcome:${active.id}`, '1'); setWelcome(false);}}>Got it</button></div>}
         </div>
         <details className="assistant-sharing"><summary>On request · Data shared</summary><label><input type="checkbox" checked={shareDesign} onChange={event => {void stop(); setShareDesign(event.target.checked); history.current = []; setMessages([]);}}/>Share this Set’s design with ChatGPT</label><p>Includes authored text, controls, source roles and animation. Camera, screen capture, audio, room chat and credentials stay outside this conversation. Changing sharing starts a new conversation.</p><span>Authority: private draft edits</span><button type="button" disabled={busy} onClick={()=>{history.current=[];setMessages([]);setError('');setNotice('New conversation. Your draft is retained.');}}>New conversation</button></details>
-        <div className="assistant-messages" role="log" aria-label="Assistant messages" aria-live="polite">{!messages.length && <div className="assistant-empty"><strong>Your design, down to the details.</strong><p>Create a complete Set, refine one element, or design controls for each layout.</p><button onClick={() => setPrompt('Refine this Set with stronger typography and subtle cinematic motion. Preserve my sources, controls and configured content.')}>Polish this Set</button><button onClick={() => setPrompt('Create a cinematic charcoal-and-chrome teaching Set, with landscape and vertical layouts, host camera and screen-share roles, animated teaching cards and beautifully arranged configurable controls.')}>Create a new Set</button></div>}{messages.filter(m => m.text).map(message => <div key={message.id} className={`assistant-message ${message.role}`}><span>{message.role === 'user' ? 'You' : message.role === 'tool' ? 'Producer' : 'Assistant'}</span><p>{message.text}</p></div>)}</div>
+        <div className="assistant-messages" role="log" aria-label="Assistant messages" aria-live="polite">{!messages.length && <div className="assistant-empty"><strong>Your design, down to the details.</strong><p>Create a complete Set, refine one element, or design controls for each layout.</p><button onClick={() => setPrompt('Refine this Set with stronger typography and subtle cinematic motion. Preserve my sources, controls and configured content.')}>Polish this Set</button><button onClick={() => setPrompt('Create a cinematic charcoal-and-chrome teaching Set, with landscape and vertical layouts, host camera and screen-share roles, animated teaching cards and beautifully arranged configurable controls.')}>Create a new Set</button></div>}{messages.filter(m => m.text).map(message => <div key={message.id} className={`assistant-message ${message.role}`}><span>{message.role === 'user' ? 'You' : message.role === 'tool' ? 'Producer' : 'Assistant'}</span><p>{message.text}</p>{message.details&&<details><summary>Validation details</summary><pre>{message.details}</pre></details>}</div>)}</div>
         {error && <p className="assistant-error" role="alert">{error}</p>}{notice && <p className="assistant-notice" role="status">{notice}</p>}
         <form className="assistant-compose" onSubmit={event => {event.preventDefault(); void send();}}><label htmlFor="assistant-prompt">Describe your Set or an edit</label><textarea id="assistant-prompt" aria-label="Assistant prompt" value={prompt} maxLength={8000} onChange={event => setPrompt(event.target.value)} placeholder="Make KLEVELAND bold chrome, with a slow light sweep…" onKeyDown={event => {if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {event.preventDefault(); void send();}}}/><div><span>{busy ? 'Working on your draft…' : 'Changes stay in your draft.'}</span>{busy ? <button type="button" onClick={() => void stop()}>Stop</button> : <button className="assistant-primary" disabled={!active?.planEnabled || !model || !draft || !prompt.trim()} type="submit">Send ↗</button>}</div></form>
       </section>

@@ -568,7 +568,7 @@ impl Client {
         input: Value,
         tools: Value,
         emit: impl Fn(Value) -> Result<()> + Send + Sync,
-    ) -> Result<()> {
+    ) -> Result<Vec<Value>> {
         if turn_id.len() > 100
             || turn_id.is_empty()
             || instructions.len() > 100_000
@@ -612,7 +612,7 @@ impl Client {
             result = self.stream(token, request, &emit) => result,
         };
         self.turns.lock().await.remove(turn_id);
-        result?;
+        let output = result?;
         let mut store = self.credentials.lock().await;
         if let Some(account) = store
             .accounts
@@ -629,14 +629,14 @@ impl Client {
             self.save(&next).await?;
             *store = next;
         }
-        Ok(())
+        Ok(output)
     }
     async fn stream(
         &self,
         token: String,
         body: Value,
         emit: &impl Fn(Value) -> Result<()>,
-    ) -> Result<()> {
+    ) -> Result<Vec<Value>> {
         let mut response = self
             .http
             .post(format!("{RESOURCE}/responses"))
@@ -652,26 +652,23 @@ impl Client {
                 .unwrap_or_else(|| "ChatGPT request failed.".into()));
         }
         let mut parser = EventStream::default();
-        let mut completed = false;
+        let mut completed = None;
         while let Some(chunk) = response.chunk().await.map_err(|_| {
             "Assistant stream was interrupted. No unfinished edit was applied.".to_string()
         })? {
             for event in parser.push(&chunk)? {
                 match event.get("type").and_then(Value::as_str) {
                     Some("response.output_text.delta") => emit(json!({"type": "text", "text": event.get("delta").and_then(Value::as_str).unwrap_or("")}))?,
-                    Some("response.completed") => {completed = true; emit(json!({"type": "completed", "output": event.pointer("/response/output").cloned().unwrap_or(json!([]))}))?;},
+                    Some("response.completed") => {completed = Some(event.pointer("/response/output").and_then(Value::as_array).cloned().ok_or("ChatGPT returned an invalid completed response.")?);},
                     Some("response.failed") | Some("error") => return Err(provider_error(&event)),
                     Some("response.incomplete") => return Err("ChatGPT stopped before completing this turn. No unfinished edit was applied.".into()),
                     _ => {},
                 }
             }
         }
-        if !completed {
-            return Err(
-                "Assistant stream ended without a completed response. Retry the request.".into(),
-            );
-        }
-        Ok(())
+        completed.ok_or_else(|| {
+            "Assistant stream ended without a completed response. Retry the request.".into()
+        })
     }
 }
 fn check_tokens(tokens: &Tokens) -> Result<()> {

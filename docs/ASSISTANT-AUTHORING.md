@@ -36,6 +36,13 @@ selection, MFA and consent. Producer shows its deadline; cancellation still
 stops the attempt immediately. An expired attempt requires a fresh browser
 flow and a new PKCE/state/nonce; pasted callback URLs are never replayed.
 
+Completed response items return in the native command result; the progress
+channel is only for streaming text. Command completion and channel delivery can
+be reordered by IPC, especially with large tool payloads. The provider adapter
+also awaits the terminal payload from older development hosts. No tool executes
+from partial text or from a command acknowledgment without its completed data.
+The transport regression deliberately delivers that data after the acknowledgment.
+
 The native runtime initializes lazily on opening the Assistant. Model calls and
 credential operations do not run in the audio/graphics path. Existing room
 transitions and preparation/output ownership remain unchanged.

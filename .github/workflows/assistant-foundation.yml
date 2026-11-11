@@ -16,6 +16,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run test:authoring-foundation && bun run test:authoring-full && bun run test:control-arrangements && bun run test:module-arrangements
+      - run: bun scripts/test-assistant-transport.mjs
       - run: bun run build
   provider-runtime:
     runs-on: ubuntu-latest

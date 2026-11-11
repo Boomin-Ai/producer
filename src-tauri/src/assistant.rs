@@ -134,7 +134,7 @@ pub async fn assistant_turn(
     app: tauri::AppHandle,
     turn: Turn,
     on_event: Channel<Value>,
-) -> Result<(), String> {
+) -> Result<Vec<Value>, String> {
     client(&app)
         .await?
         .turn(

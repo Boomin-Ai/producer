@@ -20,16 +20,17 @@ try {
   window.__TAURI_INTERNALS__={invoke:async(command)=>{window.nativeCalls.push(command);if(command==='assistant_authoring_capabilities')return {schema:'producer.native-authoring/1',catalogRevision:2,packageSchema:'producer.presentation/2',features:[...AUTHORING_CATALOG.features],nativeAdmission:'separate-native-preparation-required'};if(command==='plugin:app|version')return '0.4.90';if(command==='plugin:event|listen')return 1;return null;},transformCallback:()=>1,convertFileSrc:p=>p};
   window.mockAssistant={status:async()=>({accounts:[{id:'account-test',email:'test@example.invalid',planEnabled:true,verified:true}],active:'account-test',signIn:null}),turn:async(turn,event)=>{
     window.turns.push(structuredClone(turn));
-    if(window.blockNextTurn){await new Promise(resolve=>{window.releaseLate=()=>{event({type:'text',text:'Late result'});event({type:'completed',output:[]});resolve();}});return;}
-    if(!turn.tools.length){event({type:'text',text:'Design sharing is off.'});event({type:'completed',output:[{type:'message',role:'assistant',content:[{type:'output_text',text:'Design sharing is off.'}]}]});return;}
+    if(window.blockNextTurn)return await new Promise(resolve=>{window.releaseLate=()=>{event({type:'text',text:'Late result'});resolve([]);}});
+    if(!turn.tools.length){event({type:'text',text:'Design sharing is off.'});return [{type:'message',role:'assistant',content:[{type:'output_text',text:'Design sharing is off.'}]}];}
     const results=turn.input.filter(i=>i.type==='function_call_output');
-    if(!results.length){event({type:'completed',output:[{type:'function_call',namespace:'producer',name:'inspect_set',arguments:'{}',call_id:'call-inspect'}]});return;}
-    if(results.length===1){
+    if(!results.length)return [{type:'function_call',namespace:'producer',name:'inspect_set',arguments:'{}',call_id:'call-inspect'}];
+    if(results.length===1||results.length===2){
       const inspected=JSON.parse(results[0].output),layout=inspected.context.set.layouts[0],node=layout.root.children.find(n=>n.type==='text')??layout.root.children[0];
-      const command={type:'node.properties',layoutId:layout.id,nodeId:node.id,properties:{styles:{opacity:0.8}}};
-      event({type:'completed',output:[{type:'function_call',namespace:'producer',name:'edit_set',arguments:JSON.stringify({baseRevision:inspected.revision,label:'Refine headline',command_json:JSON.stringify(command)}),call_id:'call-edit'}]});return;
+      if(results.length===2&&JSON.parse(results[1].output).ok!==false)throw Error('Expected an invalid candidate to be rejected.');
+      const command={type:'node.properties',layoutId:layout.id,nodeId:node.id,properties:{styles:{opacity:results.length===1?9:0.8}}};
+      return [{type:'function_call',namespace:'producer',name:'edit_set',arguments:JSON.stringify({baseRevision:inspected.revision,label:'Refine headline',command_json:JSON.stringify(command)}),call_id:'call-edit-'+results.length}];
     }
-    event({type:'text',text:'Refined your headline while preserving the Set controls.'});event({type:'completed',output:[{type:'message',role:'assistant',content:[{type:'output_text',text:'Refined your headline while preserving the Set controls.'}]}]});
+    event({type:'text',text:'Refined your headline while preserving the Set controls.'});return [{type:'message',role:'assistant',content:[{type:'output_text',text:'Refined your headline while preserving the Set controls.'}]}];
   }};
   const R=await import('/node_modules/.vite/deps/react.js'),D=await import('/node_modules/.vite/deps/react-dom_client.js'),{default:Assistant}=await import('/src/features/assistant/SetAssistantDialog.tsx'),{parsePackage}=await import('/src/features/presentation/schema.ts');
   window.sourceDoc=parsePackage(await(await fetch('/src/features/presentation/fixtures/after-hours.json')).json());window.loads=[];window.turns=[];
@@ -39,6 +40,8 @@ try {
  await page.getByRole('combobox',{name:'Assistant model',exact:true}).waitFor();await page.waitForFunction(()=>document.querySelector('[aria-label="Assistant model"]')?.value==='test-model');
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Refine the headline while preserving all existing controls.');await page.getByRole('button',{name:'Send ↗',exact:true}).click();
  await page.getByText('Refined your headline while preserving the Set controls.',{exact:true}).waitFor();
+ await page.getByText('Validation details',{exact:true}).click();
+ assert((await page.locator('.assistant-message.tool pre').innerText()).length>0,'the rejected candidate exposes actionable feedback');
  assert.equal(await page.evaluate(()=>window.loads.length),0,'tool calls only edit the private draft');
  await page.getByRole('button',{name:'Undo',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('.assistant-history button:nth-child(2)').disabled);
  assert.equal(await page.getByRole('button',{name:'Load preparation',exact:true}).isDisabled(),true);

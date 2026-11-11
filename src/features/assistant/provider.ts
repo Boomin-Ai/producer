@@ -15,7 +15,7 @@ export interface AssistantProvider {
   select(accountId: string): Promise<void>;
   disconnect(accountId: string): Promise<boolean>;
   models(accountId: string): Promise<AssistantModel[]>;
-  turn(input: AssistantTurn, event: (event: AssistantEvent) => void): Promise<void>;
+  turn(input: AssistantTurn, event: (event: AssistantEvent) => void): Promise<ResponseItem[]>;
   cancel(turnId: string): Promise<void>;
 }
 export const chatgpt: AssistantProvider = {
@@ -26,7 +26,26 @@ export const chatgpt: AssistantProvider = {
   select: accountId => invoke('assistant_select_account', {accountId}),
   disconnect: accountId => invoke('assistant_disconnect', {accountId}),
   models: accountId => invoke('assistant_models', {accountId}),
-  async turn(turn, event) {const onEvent = new Channel<AssistantEvent>(); onEvent.onmessage = event; await invoke('assistant_turn', {turn, onEvent});},
+  async turn(turn, event) {
+    // Progress channels and command replies can arrive in either order. The
+    // command result is authoritative in current hosts; older dev hosts send
+    // their completed output through the channel, which must also settle.
+    let complete: (output: ResponseItem[]) => void = () => {};
+    const legacyOutput = new Promise<ResponseItem[]>(resolve => {complete = resolve;});
+    const onEvent = new Channel<AssistantEvent>();
+    onEvent.onmessage = value => {
+      if (value.type === 'completed' && Array.isArray(value.output)) complete(value.output);
+      event(value);
+    };
+    const output = await invoke<unknown>('assistant_turn', {turn, onEvent});
+    if (Array.isArray(output)) return output as ResponseItem[];
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([legacyOutput, new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(Error('The native completion was not delivered. Retry this request.')), 3000);
+      })]);
+    } finally {if (timer) clearTimeout(timer);}
+  },
   cancel: turnId => invoke('assistant_cancel_turn', {turnId}),
 };
 export const assistantProviders: readonly AssistantProvider[] = [chatgpt];
