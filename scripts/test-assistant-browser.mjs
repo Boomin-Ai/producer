@@ -37,7 +37,7 @@ try {
   window.mountAssistant=()=>{const host=document.createElement('div');document.body.replaceChildren(host);window.root=(D.createRoot??D.default.createRoot)(host);window.root.render((R.createElement??R.default.createElement)(Assistant,{document:window.sourceDoc,onLoad:async doc=>{window.loads.push(doc)},onClose:()=>window.root.unmount()}));};
   window.mountAssistant();
  });
- await page.getByRole('combobox',{name:'Assistant model',exact:true}).waitFor();await page.waitForFunction(()=>document.querySelector('[aria-label="Assistant model"]')?.value==='test-model');
+ await page.getByText('Test model',{exact:true}).waitFor();
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Refine the headline while preserving all existing controls.');await page.getByRole('button',{name:'Send ↗',exact:true}).click();
  await page.getByText('Refined your headline while preserving the Set controls.',{exact:true}).waitFor();
  await page.getByText('Validation details',{exact:true}).click();
@@ -63,7 +63,7 @@ try {
    event({type:'text',text:'Recovered the same request.'});return [{type:'message',role:'assistant',content:[{type:'output_text',text:'Recovered the same request.'}]}];
   };window.mountAssistant();
  });
- await page.waitForFunction(()=>document.querySelector('[aria-label="Assistant model"]')?.value==='test-model');
+ await page.getByText('Test model',{exact:true}).waitFor();
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Continue after a connection drop.');await page.getByRole('button',{name:'Send ↗',exact:true}).click();
  await page.getByRole('button',{name:'Retry request',exact:true}).click();await page.getByText('Recovered the same request.',{exact:true}).waitFor();
  assert.equal(await page.getByText('Continue after a connection drop.',{exact:true}).count(),1);
@@ -71,10 +71,10 @@ try {
  assert.equal(await page.evaluate(()=>window.retryTurns.at(-1).input.filter(i=>i.role==='user').length),1,'retry adds no duplicate user prompt');
  assert.equal(await page.evaluate(()=>window.retryTurns.at(-1).input.filter(i=>i.type==='function_call_output'&&i.call_id==='retry-edit').length),1,'completed draft edit is represented once');
  await page.getByRole('button',{name:'Close Set assistant'}).click();await page.evaluate(()=>{window.mockAssistant.turn=window.originalTurn});
- await page.evaluate(()=>{window.mountAssistant();window.blockNextTurn=true;});await page.waitForFunction(()=>document.querySelector('[aria-label="Assistant model"]')?.value==='test-model');
+ await page.evaluate(()=>{window.mountAssistant();window.blockNextTurn=true;});await page.getByText('Test model',{exact:true}).waitFor();
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Another edit.');await page.getByRole('button',{name:'Send ↗',exact:true}).click();await page.waitForFunction(()=>typeof window.releaseLate==='function');await page.getByRole('button',{name:'Stop',exact:true}).click();await page.evaluate(()=>{window.releaseLate();window.blockNextTurn=false;});
  assert.equal(await page.getByText('Late result',{exact:true}).count(),0,'stopped provider results are fenced');
- await page.getByText('On request · Data shared',{exact:true}).click();await page.getByRole('checkbox',{name:'Share this Set’s design with ChatGPT'}).uncheck();
+ await page.getByRole('button',{name:'Assistant settings',exact:true}).click();await page.getByText('On request · Data shared',{exact:true}).click();await page.getByRole('checkbox',{name:'Share this Set’s design with ChatGPT'}).uncheck();await page.getByRole('button',{name:'Close Assistant settings',exact:true}).click();
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('What can you help with?');await page.getByRole('button',{name:'Send ↗',exact:true}).click();await page.getByText('Design sharing is off.',{exact:true}).waitFor();assert.deepEqual(await page.evaluate(()=>window.turns.at(-1).tools),[]);assert.equal(await page.evaluate(()=>window.turns.at(-1).input.length),1,'changed sharing excludes old context/history');
  assert(!(await page.evaluate(()=>window.nativeCalls)).some(c=>/live_.*(apply|create|start|stop|record|stream)/.test(c)),'assistant never owns native output');
  assert.deepEqual(errors,[]);

@@ -7337,15 +7337,18 @@ export function LiveView({
   const assistantDock=dockOf(layout,'assistant');
   const assistantDockOpen=assistantDock==='top'?topOpen:assistantDock==='bottom'?sheetOpen:assistantDock==='left'?leftOpen:assistantDock==='right'?rightOpen:false;
   const assistantEnabled=visible&&isHost&&docApplied;
-  const assistantOwner=useRef({enabled:assistantEnabled,source:setRehearsal});assistantOwner.current={enabled:assistantEnabled,source:setRehearsal};
+  const assistantScope=JSON.stringify([endpointRef.current??'local',roomId??'local']);
+  const assistantOwner=useRef({enabled:assistantEnabled,scope:assistantScope});assistantOwner.current={enabled:assistantEnabled,scope:assistantScope};
+  const assistantMounted=useRef(true);
+  useEffect(()=>{assistantMounted.current=true;return()=>{assistantMounted.current=false;};},[]);
   useEffect(()=>{if(assistantEnabled&&assistantDockOpen&&!layoutEdit)setAssistantStarted(true);},[assistantEnabled,assistantDockOpen,layoutEdit]);
   const assistantBridge=useMemo(()=>({open:(request:AssistantSetRequest)=>{
     if(!assistantOwner.current.enabled)return;
     setAssistantRequest({...request,id:crypto.randomUUID()});setAssistantStarted(true);
   }}),[]);
-  const reviewAssistantDraft=useCallback(async(document:import('../features/presentation/schema').PresentationPackage,source:RehearsalSession)=>{
-    const current=()=>assistantOwner.current.enabled&&assistantOwner.current.source===source;
-    if(!current())throw Error('The room Set changed. Use the current room Set or reopen its editor. Your Assistant draft is saved.');
+  const reviewAssistantDraft=useCallback(async(document:import('../features/presentation/schema').PresentationPackage)=>{
+    const current=()=>assistantMounted.current&&assistantOwner.current.enabled&&assistantOwner.current.scope===assistantScope;
+    if(!current())throw Error('Return to this room as host to review your saved draft.');
     await ipc.setLibrarySave(JSON.stringify(document));
     if(!current())throw Error('The room changed. The candidate is saved in your Set library.');
     // This installs only a PRIVATE editor draft. Existing Show on output owns
@@ -7358,7 +7361,7 @@ export function LiveView({
     if(where==='left')setLeftOpen(true);
     if(where==='top')setTopOpen(true);
     if(where==='bottom')setSheetOpen(true);
-  },[roomId]);
+  },[assistantScope]);
   const expandAssistant=useCallback(()=>{
     const current=cfgRef.current,where=dockOf(normalize(current.layout??DEFAULT_LAYOUT),'assistant');
     const next={...current.sizes};

@@ -32,7 +32,7 @@ try {
  });
  await page.getByRole('heading',{name:'Preview needs a correction'}).waitFor();
  assert(await page.getByRole('button',{name:'Load preparation',exact:true}).isDisabled());
- await page.waitForFunction(()=>document.querySelector('[aria-label="Assistant model"]')?.value==='test');
+ await page.getByText('Test',{exact:true}).waitFor();
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Repair the preview.');await page.getByRole('button',{name:'Send ↗',exact:true}).click();
  await page.getByText('Repaired the default projection.',{exact:true}).waitFor();
  assert.equal(await page.getByRole('heading',{name:'Preview needs a correction'}).count(),0,'a valid revision resets the preview boundary');

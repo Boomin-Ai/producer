@@ -82,7 +82,7 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
       </div>
       <button ref={trigger} type="button" popoverTarget={filesId} onClick={e=>{const r=e.currentTarget.getBoundingClientRect();setPosition({left:Math.max(8,Math.min(r.left,innerWidth-228)),top:r.bottom+6});}}>Files ▾</button>
       <button type="button" className="set-publish-library" aria-label="Publish to producer.dev" title="Publish to producer.dev" aria-haspopup="dialog" onClick={event=>openPublication(event.currentTarget)}>Publish</button>
-      <button type="button" aria-haspopup="dialog" onClick={()=>{const request={document:session.exportPreparedPackage(),source:session};setAssistant(request);if(roomAssistant)roomAssistant.open({document:request.document,onLoad:doc=>loadAssistant(doc,request)});}}>Assistant</button>
+      <button type="button" aria-haspopup="dialog" onClick={()=>{const document=session.exportPreparedPackage();if(roomAssistant)roomAssistant.open({document});else setAssistant({document,source:session});}}>Assistant</button>
       <div id={filesId} popover="auto" className="set-configuration-popover set-files-popover" style={{left:position.left,top:position.top}}>
         <button onClick={()=>{document.getElementById(filesId)?.hidePopover();edit('edit-set');}}>Generate Set draft</button>
         <button onClick={()=>{document.getElementById(filesId)?.hidePopover();setError('');file.current?.click();}}>Import set</button>

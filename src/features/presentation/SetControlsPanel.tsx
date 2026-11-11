@@ -93,7 +93,9 @@ export function SetControlsPanel(props:PanelProps) {
     const request=props.assistantEditorRequest;
     if(!request)return;
     setDraft(new RehearsalSession(request.document,undefined,'prepare'));
-    setModuleBindings(props.moduleBindings??{});setBindings({...props.output?.bindings});setFraming({...props.output?.framing});
+    // An Assistant return to this same private Set must retain the editor's
+    // local source/connection choices, including framing not yet on output.
+    if(request.document.id!==draft.package.id){setModuleBindings(props.moduleBindings??{});setBindings({...props.output?.bindings});setFraming({...props.output?.framing});}
     setPublishError('');setAssistantRequestReady(request.id);
   },[props.assistantEditorRequest?.id]);
   const finishPublish = (error?: unknown) => {
