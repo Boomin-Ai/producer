@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
-const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'playwright-core');
+const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'../tools/producer-mcp/node_modules/playwright-core/index.mjs');
 const browser=await chromium.launch({executablePath:process.env.PRODUCER_CHROME??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
 const origin=process.env.PRODUCER_TEST_URL??'http://127.0.0.1:1445/';
 const screenshots=process.env.PRODUCER_PANEL_SCREENSHOTS;
@@ -47,8 +47,8 @@ try {
   await page.evaluate(width=>document.getElementById('surface').style.width=width+'px',width);
   const geometry=await page.locator('#surface').evaluate(target=>{
    const box=target.getBoundingClientRect(),header=target.querySelector('.assistant-dock-header'),settings=target.querySelector('.assistant-settings-trigger'),icon=settings.querySelector('svg'),context=target.querySelector('.assistant-context-trigger');
-   const b=settings.getBoundingClientRect(),i=icon.getBoundingClientRect(),suggestions=target.querySelector(getComputedStyle(target.querySelector('.assistant-suggestions')).display==='none'?'.assistant-suggestions-compact':'.assistant-suggestions'),s=suggestions.getBoundingClientRect(),input=target.querySelector('textarea').getBoundingClientRect();
-   return {header:header.getBoundingClientRect().height,inside:b.left>=box.left&&b.right<=box.right&&b.top>=box.top,centered:Math.abs((i.left+i.right-b.left-b.right)/2)<1&&Math.abs((i.top+i.bottom-b.top-b.bottom)/2)<1,contextWithin:context.getBoundingClientRect().right<=b.left,suggestionHeight:s.height,separated:input.top>=s.bottom+6,divider:getComputedStyle(suggestions).borderBottomWidth,tops:[...suggestions.querySelectorAll('button')].map(button=>button.getBoundingClientRect().top)};
+   const b=settings.getBoundingClientRect(),i=icon.getBoundingClientRect(),suggestions=target.querySelector('.assistant-suggestions'),s=suggestions.getBoundingClientRect(),input=target.querySelector('textarea').getBoundingClientRect();
+   return {box:box.toJSON(),button:b.toJSON(),header:header.getBoundingClientRect().height,inside:b.left>=box.left&&b.right<=box.right&&b.top>=box.top,centered:Math.abs((i.left+i.right-b.left-b.right)/2)<1&&Math.abs((i.top+i.bottom-b.top-b.bottom)/2)<1,contextWithin:context.getBoundingClientRect().right<=b.left,suggestionHeight:s.height,separated:input.top>=s.bottom+6,divider:getComputedStyle(suggestions).borderBottomWidth,tops:[...suggestions.querySelectorAll('button')].map(button=>button.getBoundingClientRect().top)};
   });
   assert(geometry.header<=66&&geometry.inside&&geometry.centered&&geometry.contextWithin,'header and settings geometry at '+width+': '+JSON.stringify(geometry));
   assert(geometry.suggestionHeight<=40&&geometry.separated&&geometry.divider==='1px'&&new Set(geometry.tops).size===1,'suggestions stay in a single slim row separated from input at '+width+': '+JSON.stringify(geometry));

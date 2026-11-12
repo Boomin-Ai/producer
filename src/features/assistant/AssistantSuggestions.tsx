@@ -1,37 +1,50 @@
-import {useEffect,useId,useLayoutEffect,useRef,useState} from 'react';
-import {createPortal} from 'react-dom';
+import {useId,useLayoutEffect,useRef,useState} from 'react';
 import type {AssistantSuggestion} from './suggestions';
 
 export function AssistantSuggestions({items,disabled,onChoose}:{items:AssistantSuggestion[];disabled:(item:AssistantSuggestion)=>boolean;onChoose:(item:AssistantSuggestion)=>void}) {
-  const id=useId(),trigger=useRef<HTMLButtonElement>(null),panel=useRef<HTMLDivElement>(null);
-  const [open,setOpen]=useState(false),[position,setPosition]=useState<{left:number;top:number}>();
-  const nativePopover=typeof HTMLElement.prototype.showPopover==='function'&&typeof HTMLElement.prototype.hidePopover==='function';
-  const close=()=>{if(nativePopover)panel.current?.hidePopover();else{setOpen(false);setPosition(undefined);}};
-  useEffect(()=>{
-    if(!open||nativePopover)return;
-    const outside=(event:PointerEvent)=>{if(!panel.current?.contains(event.target as Node)&&!trigger.current?.contains(event.target as Node))close();};
-    const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();close();trigger.current?.focus();}};
-    document.addEventListener('pointerdown',outside,true);document.addEventListener('keydown',escape,true);
-    panel.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
-    return()=>{document.removeEventListener('pointerdown',outside,true);document.removeEventListener('keydown',escape,true);};
-  },[open,nativePopover]);
+  const id=useId(),track=useRef<HTMLDivElement>(null);
+  const [edges,setEdges]=useState({overflow:false,start:true,end:true});
+  const signature=JSON.stringify(items.map(({id,label})=>[id,label]));
+  const measure=()=>{
+    const el=track.current;if(!el)return;
+    const nav=el.parentElement?.querySelector<HTMLElement>('.assistant-suggestions-nav');
+    // Test the space available without arrows, so resizing back to a wide dock
+    // removes navigation as soon as every suggestion fits.
+    const available=el.clientWidth+(nav?nav.offsetWidth+parseFloat(getComputedStyle(el.parentElement!).columnGap):0);
+    const next={overflow:el.scrollWidth>available+1,start:el.scrollLeft<=1,end:el.scrollLeft+el.clientWidth>=el.scrollWidth-1};
+    setEdges(old=>old.overflow===next.overflow&&old.start===next.start&&old.end===next.end?old:next);
+  };
   useLayoutEffect(()=>{
-    if(!open)return;
-    const place=()=>{
-      if(!trigger.current||!panel.current)return;
-      const a=trigger.current.getBoundingClientRect(),b=panel.current.getBoundingClientRect(),pad=10;
-      if(!a.width){close();return;}
-      setPosition({left:Math.max(pad,Math.min(a.left,innerWidth-b.width-pad)),top:Math.max(pad,Math.min(a.top-b.height-7,innerHeight-b.height-pad))});
-    };
-    place();const observer=new ResizeObserver(place);observer.observe(panel.current!);observer.observe(trigger.current!);
-    window.addEventListener('resize',place);window.addEventListener('scroll',place,true);
-    return()=>{observer.disconnect();window.removeEventListener('resize',place);window.removeEventListener('scroll',place,true);};
-  },[open]);
-  return <>
-    <div className="assistant-suggestions" aria-label="Suggested actions">{items.map(item=><button type="button" key={item.id} title={item.label} disabled={disabled(item)} onClick={()=>onChoose(item)}>{item.label}</button>)}</div>
-    <div className="assistant-suggestions-compact"><button ref={trigger} type="button" popoverTarget={nativePopover?id:undefined} aria-expanded={open} aria-controls={id} aria-label="Assistant suggestions" title="Suggested actions" onClick={()=>{if(!nativePopover){setPosition(undefined);setOpen(value=>!value);}}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/></svg>Ideas<span aria-hidden="true">⌃</span></button></div>
-    {createPortal(<div ref={panel} popover={nativePopover?'auto':undefined} data-fallback={!nativePopover||undefined} data-over-stage id={id} role="group" aria-label="Assistant suggestions" className="assistant-suggestion-popover" style={{display:!nativePopover&&!open?'none':undefined,left:position?.left??0,top:position?.top??0,visibility:position?'visible':'hidden'}} onToggle={event=>{if(!nativePopover)return;const opened=event.newState==='open';setOpen(opened);if(!opened)setPosition(undefined);}}>
-      <span>Suggested next steps</span>{items.map(item=><button key={item.id} type="button" disabled={disabled(item)} onClick={()=>{close();onChoose(item);}}>{item.label}<span aria-hidden="true">↗</span></button>)}
-    </div>,document.body)}
-  </>;
+    const el=track.current;if(!el)return;
+    el.scrollLeft=0;measure();
+    const observer=new ResizeObserver(measure);observer.observe(el);
+    return()=>observer.disconnect();
+  },[signature]);
+  const reveal=(button:HTMLButtonElement)=>{
+    const el=track.current;if(!el)return;
+    const view=el.getBoundingClientRect(),box=button.getBoundingClientRect();
+    if(box.left<view.left)el.scrollLeft-=view.left-box.left;
+    else if(box.right>view.right)el.scrollLeft+=box.right-view.right;
+  };
+  const move=(direction:number)=>{
+    const el=track.current;if(!el)return;
+    el.scrollBy({left:direction*Math.max(80,el.clientWidth*.85),behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+  };
+  if(!items.length)return null;
+  return <div className="assistant-suggestions" role="group" aria-label="Suggested actions">
+    <div ref={track} id={id} className="assistant-suggestions-track" onScroll={measure}
+      onFocusCapture={event=>{if(event.target instanceof HTMLButtonElement)reveal(event.target);}}
+      onKeyDown={event=>{
+        if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)||!(event.target instanceof HTMLButtonElement))return;
+        const buttons=Array.from(track.current!.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+        const index=buttons.indexOf(event.target),next=event.key==='Home'?0:event.key==='End'?buttons.length-1:index+(event.key==='ArrowRight'?1:-1);
+        if(buttons[next]){event.preventDefault();buttons[next].focus({preventScroll:true});reveal(buttons[next]);}
+      }}>
+      {items.map(item=><button type="button" key={item.id} title={item.label} disabled={disabled(item)} onClick={()=>onChoose(item)}>{item.label}</button>)}
+    </div>
+    {edges.overflow&&<div className="assistant-suggestions-nav">
+      <button type="button" aria-label="Previous suggestions" title="Previous suggestions" aria-controls={id} disabled={edges.start} onClick={()=>move(-1)}><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m10 3-5 5 5 5"/></svg></button>
+      <button type="button" aria-label="Next suggestions" title="Next suggestions" aria-controls={id} disabled={edges.end} onClick={()=>move(1)}><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg></button>
+    </div>}
+  </div>;
 }
