@@ -28,7 +28,7 @@ export function roomControlPlugin() {
           if(clients.size!==1)throw Error(clients.size?'More than one dev window is connected. Close the extra window.':'Open the isolated dev app first.');
           const client=clients.keys().next().value;
           const id=randomBytes(16).toString('hex');
-          const result=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{pending.delete(id);reject(Error('No response from the dev app. Do not repeat a mutation without checking state.'));},30000);pending.set(id,{resolve,reject,timer,client});client.send('producer:room-command',{...request,id});});
+          const result=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>{pending.delete(id);reject(Error('No response from the dev app. Do not repeat a mutation without checking state.'));},request.surface==='room'&&request.command==='clips.save'?90000:30000);pending.set(id,{resolve,reject,timer,client});client.send('producer:room-command',{...request,id});});
           res.end(JSON.stringify({result}));
         }catch(error){reject(400,error.message);}
       });

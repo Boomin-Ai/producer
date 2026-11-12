@@ -108,7 +108,7 @@ pub fn directory() -> PathBuf {
         .unwrap_or_else(default_directory)
 }
 pub fn init(db: &rusqlite::Connection) -> EngineResult<()> {
-    db.execute_batch("CREATE TABLE IF NOT EXISTS local_clips(id TEXT PRIMARY KEY,room_id TEXT NOT NULL,created_ms INTEGER NOT NULL,status TEXT NOT NULL CHECK(status IN ('saving','ready','failed')),requested_seconds INTEGER NOT NULL,files_json TEXT NOT NULL DEFAULT '[]',error TEXT);")?;
+    db.execute_batch("CREATE TABLE IF NOT EXISTS local_clips(id TEXT PRIMARY KEY,room_id TEXT NOT NULL,created_ms INTEGER NOT NULL,status TEXT NOT NULL CHECK(status IN ('saving','ready','failed')),requested_seconds INTEGER NOT NULL,files_json TEXT NOT NULL DEFAULT '[]',error TEXT);CREATE INDEX IF NOT EXISTS local_clips_room_time ON local_clips(room_id,created_ms DESC);")?;
     db.execute("UPDATE local_clips SET status='failed',error='Producer closed before this clip was confirmed. Check the recording folder for a recovered file.' WHERE status='saving'",[])?;
     let value: Option<String> = db
         .query_row(
@@ -241,12 +241,19 @@ pub async fn clips_save(state: State<'_, AppState>, room_id: String) -> EngineRe
             directory: directory.to_string_lossy().into_owned(),
         },
     };
-    let result = apply(&state, request).await;
+    let result = apply(&state, request).await.and_then(|value| {
+        let files: Vec<ClipFile> = serde_json::from_value(value["files"].clone())
+            .map_err(|e| EngineError::Other(e.to_string()))?;
+        if files.is_empty() || files.len() > 2 {
+            return Err(EngineError::Other(
+                "The clip writer returned no confirmed output files".into(),
+            ));
+        }
+        Ok(files)
+    });
     let db = state.db.lock().unwrap();
     match result {
-        Ok(value) => {
-            let mut files: Vec<ClipFile> = serde_json::from_value(value["files"].clone())
-                .map_err(|e| EngineError::Other(e.to_string()))?;
+        Ok(mut files) => {
             let registered = (|| -> EngineResult<()> {
                 let tx = db.unchecked_transaction()?;
                 for file in &mut files {

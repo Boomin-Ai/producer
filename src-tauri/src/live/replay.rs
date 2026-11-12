@@ -344,6 +344,16 @@ impl Replay {
         }
     }
     fn fail(&mut self, error: String) {
+        // A partial dual-output failure is not an active capture session.
+        // Disconnect both packet streams immediately; keep their owner alive
+        // until OBS's asynchronous file writer has drained or the room exits.
+        for buffer in &self.buffers {
+            unsafe {
+                if ffi::obs_output_active(buffer.output) {
+                    ffi::obs_output_force_stop(buffer.output);
+                }
+            }
+        }
         self.error = Some(error.clone());
         if let Some(p) = self.pending.take() {
             let _ = p.reply.send(Err(error));

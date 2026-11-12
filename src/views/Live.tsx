@@ -31,6 +31,9 @@ import { openingScene, scenePlan } from "../lib/scenePlan";
 import { SoundboardPanel } from "../components/SoundboardPanel";
 import { sounds } from "../lib/soundboard";
 import { DJPanel } from "../components/DJPanel";
+import {ClipsPanel} from "../features/clips/ClipsPanel";
+import {useClips} from "../features/clips/useClips";
+import {validateClipSettings} from "../features/clips/clips";
 import { DJSlider } from "../components/DJSlider";
 import { AudienceDestination, AudienceDestinationMark } from "../components/AudienceDestination";
 import type { LocalRecording } from "../lib/ipc";
@@ -4724,6 +4727,8 @@ export function LiveView({
    * NOT applied and the engine cleared, once per room open. */
   const localSetSkipped = useRef(false);
   const roomId = room?.id ?? null;
+  const clipsController=useClips(roomId??"local",isHost&&docApplied,visible,dockOf(layout,"clips")!=="hidden");
+
   useEffect(() => {
     if (!docApplied || !isHost) return;
     void roomEngineRef.current?.run(async () => { await sounds.activate(roomId ?? "local"); }).catch(error => notifyError(error, {key:"soundboard"}));
@@ -7410,6 +7415,7 @@ export function LiveView({
     sources,scenes,activeScene,meters:extraLevels,access:roomAccess,interactions:{vote,savedVotes},chat:{messages:chatMsgs,filters:chatFilters,connections:chatConns,error:chatError},guests:roster.map(({id,display_name,state,seat})=>({id,display_name,state,seat})),
     presentation:{document:setRehearsal.package,state:setRehearsal.snapshot(),bindings:setOutput.bindings,framing:setOutput.framing,renderer:setOutput.renderer,busy:setOutput.busy,error:setOutput.error,readiness:setOutput.layoutReadiness,active:!!setOutput.active,currentPresented:!!setOutput.currentPresented},
     output:{streaming,recording:!!recPath,outputView,engine:snapshot},
+    clips:{capture:clipsController.capture,settings:clipsController.settings,recent:clipsController.recent},
     assistant:{started:assistantStarted,enabled:assistantEnabled,dock:assistantDock,scope:assistantScope},
     ...(import.meta.env.DEV?{preparation:preparationDebug()}:{}),
   }),{
@@ -7417,6 +7423,12 @@ export function LiveView({
     'dock.set':({dock,open,size})=>{if(!['top','bottom','left','right'].includes(dock)||typeof open!=='boolean')throw Error('Expected dock and open boolean.');if(size!==undefined&&(!Number.isFinite(size)||size<56||size>560))throw Error('Dock size must be 56–560 pixels.');({top:setTopOpen,bottom:setSheetOpen,left:setLeftOpen,right:setRightOpen}[dock as 'top'|'bottom'|'left'|'right'])(open);if(size!==undefined){writeCfg({...cfgRef.current,sizes:{...cfgRef.current.sizes,[dock]:size}});}return {dock,open,size};},
     'layout.edit':({enabled})=>{if(typeof enabled!=='boolean')throw Error('Expected enabled boolean.');setLayoutEdit(enabled);return {enabled};},
     'scene.select':async({id})=>{const scene=cfgRef.current.scenes.find(item=>item.id===id),owner=roomEngineRef.current;if(!scene||!owner)throw Error('Choose a scene in the open room.');let applied=false;await owner.run(async()=>{applied=await applyScene(scene,{cut:true})===true;});if(!applied)throw Error('The scene could not be selected. Check room readiness.');return {id};},
+    'clips.status':async()=>({...await clipsController.refresh(),settings:clipsController.settings,error:clipsController.error}),
+    'clips.configure':args=>clipsController.configure(validateClipSettings(args)),
+    'clips.enable':async()=>{if(clipsController.capture.enabled)return clipsController.capture;return clipsController.toggle();},
+    'clips.disable':async()=>{if(!clipsController.capture.enabled&&!clipsController.capture.error)return clipsController.capture;return clipsController.toggle();},
+    'clips.save':()=>clipsController.save(),
+    'clips.list':async()=>({recent:(await clipsController.refresh())?.recent??[]}),
     'scene.add':()=>{addScene();return {requested:true};},
     'scene.create':({name})=>{if(typeof name!=='string'||!name.trim()||name.length>80)throw Error('Expected a scene name up to 80 characters.');const next:RoomScene={id:'scene-'+crypto.randomUUID(),name:name.trim(),look:{}};const current=cfgRef.current;writeCfg({...current,scenes:[...current.scenes,next]});return next;},
     'scene.source':async({sceneId,sourceId,visible,x,y,w,h,z})=>{
@@ -7467,6 +7479,8 @@ export function LiveView({
         return visible?<SetControlsPanel assistantEditorRequest={assistantEditorRequest} onAssistantEditorOpened={assistantEditorOpened} preferenceRoomId={roomId??undefined} endpoint={endpointRef.current??activeEndpointId()??undefined} serverRoomId={cfg.server_room_id??undefined} moduleBindings={cfg.presentation?.moduleBindings} voting={roomAccess.can.interactions?<SetRoomVoting vote={vote} savedVotes={savedVotes} onSelectVote={selectSavedVote} onOpen={openVote} onTransition={(action,hold)=>void transitionVote(action,hold)}/>:undefined} sourceNames={setSourceNames} onFieldEdit={editSetField} session={setRehearsal} output={setOutput} blocked={!docApplied}
           blockedReason={!docApplied ? "Waiting for the room to finish loading." : undefined}
           onChange={changeSet} />:null;
+      case "clips":
+        return isHost?<ClipsPanel controller={clipsController} compact={formDockOf("clips")==="top"}/>:<div className="rm-rows-empty">The host controls Clips.</div>;
       case "sounds":
         return isHost ? <SoundboardPanel key={roomId??"local"} roomId={roomId??"local"} enabled={docApplied} visible={visible} compact={formDockOf("sounds")==="top"}/> : <div className="rm-rows-empty">The host controls room sounds.</div>;
       case "dj":
@@ -9179,7 +9193,7 @@ export function LiveView({
             streamReason={!streaming?(!engineOk?'The room engine is starting':micUnready?'Waiting for the microphone':!!room&&!docApplied?'The room is still loading':!enabledDests.length?'Select a streaming destination in Channels':undefined):undefined}
             destinations={enabledDests.map(d=>({id:d.id,label:d.label,icon:PLATFORM_LOGO[d.preset]??ic.onair}))} audienceLabel={audienceEnabled?(boominRoom?'Boomin':'Room'):undefined}
             program={studioOn?'Studio · Entire Producer window':setOutput.currentPresented?setRehearsal.package.name:'Room scene'} streamFormat={`${vh}p · ${vf} fps · ${outputView==='portrait'?'Portrait':'Landscape'}`}
-            recordFormat={`${vh}p · ${vf} fps · ${outputView==='both'?'Landscape + portrait · Two MP4 files':outputView==='portrait'?'Portrait · MP4':'Landscape · MP4'}`} recordingFolder={IS_WINDOWS?'Videos / Producer':'Movies / Producer'}
+            recordFormat={`${vh}p · ${vf} fps · ${outputView==='both'?'Landscape + portrait · Two MP4 files':outputView==='portrait'?'Portrait · MP4':'Landscape · MP4'}`} recordingFolder={clipsController.directory||(IS_WINDOWS?'Videos / Producer':'Movies / Producer')}
             onRecord={toggleRecord} onStream={goLive} onStopStream={stopStream}/>
 
           {qualityOpen && (
