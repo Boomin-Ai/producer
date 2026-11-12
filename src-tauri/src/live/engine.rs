@@ -1086,6 +1086,7 @@ pub enum Command {
         dual: bool,
         reply: std::sync::mpsc::Sender<Result<String, String>>,
     },
+    Clips { request:crate::clips::ClipRequest, reply:mpsc::Sender<Result<serde_json::Value,String>> },
     StopRecording {
         reply: std::sync::mpsc::Sender<Option<String>>,
     },
@@ -1222,6 +1223,7 @@ fn cmd_name(c: &Command) -> &'static str {
         Command::VirtualCamMirror { .. } => "VirtualCamMirror",
         Command::StartRecording { .. } => "StartRecording",
         Command::StopRecording { .. } => "StopRecording",
+        Command::Clips { .. } => "Clips",
         Command::SetSyncOffset { .. } => "SetSyncOffset",
         Command::SetSourceAudio { .. } => "SetSourceAudio",
         Command::SetItemOpacity { .. } => "SetItemOpacity",
@@ -1837,6 +1839,9 @@ impl LiveHandle {
             .map_err(|e| e.to_string())
     }
 
+    pub fn clips_dispatch(&self)->Result<Box<dyn FnOnce(crate::clips::ClipRequest)->Result<serde_json::Value,String>+Send>,String>{
+        let sender=self.cmd.clone();Ok(Box::new(move|request|{let(tx,rx)=mpsc::channel();sender.send(Command::Clips{request,reply:tx}).map_err(|e|e.to_string())?;rx.recv_timeout(Duration::from_secs(75)).map_err(|_|"Clips engine did not answer".to_string())?}))
+    }
     pub fn soundboard_dispatch(
         &self,
     ) -> Result<
@@ -2978,6 +2983,7 @@ pub fn start(
             // record without streaming and keep recording after a stream ends.
             let mut recorder: Option<record::Recorder> = None;
             let mut portrait_recorder: Option<record::Recorder> = None;
+            let mut replay: Option<super::replay::Replay> = None;
             // The virtual camera runs independently of streaming and
             // recording — all three can be on at once.
             let mut vcam: Option<*mut ffi::obs_output_t> = None;
@@ -3184,6 +3190,7 @@ pub fn start(
                         }
                     }
                 }
+                if let Some(buffer)=replay.as_mut(){buffer.poll();}
                 let iter_t0 = Instant::now();
                 let mut iter_label: &'static str = "idle";
                 for recording in [recorder.as_ref(), portrait_recorder.as_ref()].into_iter().flatten() {
@@ -3458,6 +3465,7 @@ pub fn start(
                             #[cfg(feature = "guest-rtc-pilot")]
                             if !appearance_media.is_empty() { return Err("Leave the appearance before changing output orientation".into()); }
                             if vcam.is_some(){return Err("Stop the virtual camera before changing the output canvas".into());}
+                            if replay.is_some(){return Err("Stop rolling capture in Clips before changing the output canvas".into());}
                             if session.is_some()||recorder.is_some()||portrait_recorder.is_some(){return Err("Stop streaming and recording before changing the output canvas".into());}
                             let video=if portrait{
                                 #[cfg(any(target_os = "macos", target_os = "windows"))]{scene.as_mut().ok_or("Room is not ready")?.portrait_video()?}
@@ -3581,7 +3589,7 @@ pub fn start(
                         let retain_portrait = appearance_lease_policy::retain_portrait(portrait_recorder.is_some(),selected_portrait,appearance_portrait);
                         #[cfg(not(feature = "guest-rtc-pilot"))]
                         let retain_portrait = portrait_recorder.is_some()||selected_portrait||appearance_portrait;
-                        if retain_portrait {
+                        if retain_portrait || replay.as_ref().is_some_and(|r|r.portrait()) {
                             performance_stage("native.portrait.stop.output_retained",service.elapsed(),Some(true));
                             let _=reply.send(());continue;
                         }
@@ -3692,6 +3700,29 @@ pub fn start(
                                 match unsafe{record::Recorder::start_video(&stamp,br,if selected_portrait{selected_video}else{ffi::obs_get_video()})}{Ok(r)=>{let path=r.path();recorder=Some(r);Ok(path)},Err(e)=>{if let Some(r)=portrait_recorder.take(){r.stop();}Err(e)}}
                             })();
                             if let Err(e)=&result{sink(&LiveEvent::EngineError{message:e.clone()});}let _=reply.send(result);
+                        }
+                    }
+                    Ok(Command::Clips{request,reply})=>{
+                        use crate::clips::{ClipAction,ClipOutput,ClipStatus};
+                        if bound_room_id.as_deref()!=Some(request.room_id.as_str()) {
+                            let result=if matches!(request.action,ClipAction::Status|ClipAction::Disable){Ok(serde_json::json!(ClipStatus::default()))}else{Err("Open this room before starting rolling capture".into())};
+                            let _=reply.send(result);continue;
+                        }
+                        match request.action {
+                            ClipAction::Status=>{let _=reply.send(Ok(serde_json::json!(replay.as_ref().map(|r|r.status()).unwrap_or_default())));},
+                            ClipAction::Disable=>{drop(replay.take());let _=reply.send(Ok(serde_json::json!(ClipStatus::default())));},
+                            ClipAction::Enable{settings}=>{
+                                let result=(||->Result<serde_json::Value,String>{
+                                    if replay.is_some(){return Err("Stop rolling capture before changing its settings".into())}if !report.ok{return Err("The native recording engine is unavailable".into())}settings.validate()?;
+                                    let portrait=if settings.output!=ClipOutput::Landscape{
+                                        #[cfg(any(target_os="macos",target_os="windows"))]{scene.as_mut().ok_or("The room is not ready")?.portrait_video()?}
+                                        #[cfg(not(any(target_os="macos",target_os="windows")))]{return Err("Portrait Clips is unavailable in this build".into())}
+                                    }else{ptr::null_mut()};
+                                    let bitrate={let s=snap.lock().unwrap();record_kbps(s.video_height,s.video_fps)};
+                                    let buffer=unsafe{super::replay::Replay::start(request.room_id,settings,bitrate,ffi::obs_get_video(),portrait)?};let status=serde_json::json!(buffer.status());replay=Some(buffer);Ok(status)
+                                })();let _=reply.send(result);
+                            },
+                            ClipAction::Save{job_id,directory}=>{if let Some(buffer)=replay.as_mut(){buffer.save(&job_id,&directory,reply)}else{let _=reply.send(Err("Enable rolling capture first".into()));}}
                         }
                     }
                     Ok(Command::StopRecording { reply }) => {
@@ -3949,6 +3980,7 @@ pub fn start(
                         } else if restore.extras.len() > 128 || restore.changes.len() > 128 {
                             Err("A room has too many sources".into())
                         } else {
+                            drop(replay.take());
                             microphones.retain(|mic| mic.is_attached() && restore.keep_ids.contains(&mic.extra.id));
                             for mic in &mut microphones {
                                 mic.change.patch.visible = Some(false);
@@ -4044,6 +4076,7 @@ pub fn start(
                         #[cfg(feature = "guest-rtc-pilot")]
                         if !appearance_media.is_empty() { sink(&LiveEvent::EngineError { message: "Leave the appearance before changing video settings".into() }); continue; }
                         if selected_portrait && vcam.is_some(){sink(&LiveEvent::EngineError{message:"Stop the portrait virtual camera before changing video settings".into()});continue;}
+                        if replay.is_some(){sink(&LiveEvent::EngineError{message:"Stop rolling capture in Clips before changing video settings".into()});continue;}
                         if recorder.is_some()||portrait_recorder.is_some(){sink(&LiveEvent::EngineError{message:"Stop recording before changing video settings".into()});continue;}
                         if session.is_some() {
                             sink(&LiveEvent::EngineError {
@@ -4208,6 +4241,7 @@ pub fn start(
                         // underneath a Set while that graph is being cleared.
                         if let Some(p)=preview.as_ref(){p.conceal();}
                         if let Some(p)=portrait_preview.as_ref(){p.conceal();}
+                        drop(replay.take());
                         // Evaluate on the engine thread, so an output starting
                         // during navigation cannot lose its capture sources.
                         #[cfg(feature = "guest-rtc-pilot")]
@@ -4271,6 +4305,7 @@ pub fn start(
                             appearance_shutdown_pending = true;
                             continue;
                         }
+                        drop(replay.take());
                         microphones.clear();
                         if let Some(r)=portrait_recorder.take(){r.stop();}
                         if let Some(r)=recorder.take(){r.stop();}

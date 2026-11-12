@@ -75,6 +75,8 @@ pub mod multi;
 pub mod encoders;
 #[cfg(have_engine)]
 mod record;
+#[cfg(have_engine)]
+mod replay;
 mod recording_name;
 #[cfg(have_engine)]
 pub mod stream;
@@ -622,6 +624,13 @@ impl Live {
         Err("live engine not bundled in this build".into())
     }
 
+    pub fn clips(&self, request:crate::clips::ClipRequest)->Result<serde_json::Value,String>{
+        self.clips_dispatch()?(request)
+    }
+    pub fn clips_dispatch(&self)->Result<Box<dyn FnOnce(crate::clips::ClipRequest)->Result<serde_json::Value,String>+Send>,String>{
+        #[cfg(have_engine)]{self.handle.as_ref().ok_or("Open a room first")?.clips_dispatch()}
+        #[cfg(not(have_engine))]{Err("Clips requires the native recording engine".into())}
+    }
     pub fn start_recording_mode(&self, stamp: String, dual: bool) -> Result<String, String> {
         #[cfg(have_engine)]
         {

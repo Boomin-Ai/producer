@@ -4,6 +4,8 @@ mod builtin_audio;
 mod cache;
 mod chat;
 mod client;
+mod clips;
+mod clips_media;
 mod dj;
 mod error;
 mod firewall;
@@ -251,6 +253,7 @@ pub fn run() {
             let conn = store::open(&data_dir.join("producer.db"))
                 .map_err(|e| std::io::Error::other(e.to_string()))?;
             recordings::recover(&conn).map_err(|e| std::io::Error::other(e.to_string()))?;
+            clips::init(&conn).map_err(|e| std::io::Error::other(e.to_string()))?;
             #[cfg(all(feature = "guest-rtc-pilot", debug_assertions))]
             rtc_ipc::seed_dev_room(&conn, &app.config().identifier)
                 .map_err(std::io::Error::other)?;
@@ -346,6 +349,12 @@ pub fn run() {
             storage::producer_storage_usage,
             ipc::pref_get,
             ipc::pref_set,
+            clips::clips_status,
+            clips::clips_enable,
+            clips::clips_disable,
+            clips::clips_save,
+            clips::clips_list,
+            clips::clips_pick_directory,
             recordings::recordings_list,
             recordings::recordings_sync,
             recordings::recording_by_path,
