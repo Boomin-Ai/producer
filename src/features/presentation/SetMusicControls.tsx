@@ -17,21 +17,21 @@ export function SetMusicControls({definition,compact=false,disabled=false}:{defi
   const {status,pending,error:playbackError}=useDjStatus(!disabled),[library,setLibrary]=useState<DJLibrary>(),[selected,setSelected]=useState(''),[error,setError]=useState(''),[retry,setRetry]=useState(0);
   const id=useId(),[position,setPosition]=useState({left:8,top:8});
   const lifetime=useRef(0),enabled=useRef(false);
-  useLayoutEffect(()=>{enabled.current=!disabled;++lifetime.current;return()=>{enabled.current=false;++lifetime.current;};},[disabled,definition.id]);
+  useLayoutEffect(()=>{enabled.current=!disabled;++lifetime.current;setError('');return()=>{enabled.current=false;++lifetime.current;};},[disabled,definition]);
   useEffect(()=>{if(disabled)return;let alive=true;void ensureStarterAudio().then(async pack=>{const lib=await dj.library();if(!lib?.tracks||!pack?.assets)throw Error('Music library is unavailable.');if(!alive)return;const preferred=lib.tracks.find(t=>t.path===pack.assets.find(a=>a.id===definition.defaultTrack)?.path)?.id??'';setLibrary(lib);setSelected(old=>lib.tracks.some(t=>t.id===old)?old:preferred);setError('');}).catch(e=>{if(alive)setError(String(e));});return()=>{alive=false;};},[disabled,definition.defaultTrack,retry]);
-  const track=library?.tracks.find(t=>t.id===selected),deck=status?.active??0,current=status?.decks[deck],same=!!track&&current?.track?.id===track.id,playing=same&&current?.state===1;
+  const track=library?.tracks.find(t=>t.id===selected),deck=status?.active??0,current=status?.decks[deck],same=!!track&&current?.track?.id===track.id,playing=same&&!!current&&current.state>=1&&current.state<=3;
   const previousTrack=useRef<string|undefined>(undefined);
   useEffect(()=>{const active=current?.track?.id,previous=previousTrack.current;previousTrack.current=active;if(active&&library?.tracks.some(t=>t.id===active))setSelected(old=>!old||old===previous?active:old);},[current?.track?.id,library]);
   const run=(fn:(check:()=>void)=>Promise<unknown>)=>{const epoch=lifetime.current;const check=()=>{if(!enabled.current||epoch!==lifetime.current)throw new DOMException('Music control is no longer active.','AbortError');};setError('');void fn(check).catch(e=>{if(enabled.current&&epoch===lifetime.current)setError(String(e));});};
   const toggle=async(check:()=>void)=>{
     if(!track)return;
     let loaded=false;
-    await commandDj(now=>{check();const n=now.active,d=now.decks[n];loaded=d.track?.id!==track.id;return !loaded?(d.state===1?{kind:'pause',deck:n}:{kind:'play',deck:n}):{kind:'load',deck:n,track:queueTrack(track)};});
+    await commandDj(now=>{check();const n=now.active,d=now.decks[n];loaded=d.track?.id!==track.id;return !loaded?(d.state>=1&&d.state<=3?{kind:'pause',deck:n}:{kind:'play',deck:n}):{kind:'load',deck:n,track:queueTrack(track)};});
     // Loading prepares a deck; play is always an explicit consequence of this click.
     if(loaded){check();await commandDj(now=>{check();if(now.decks[now.active].track?.id!==track.id)throw Error('The DJ track changed. Select it again.');return {kind:'play',deck:now.active};});}
   };
   const content=<section className="set-music" aria-label={definition.label}>
-    <div className="set-music-heading"><strong>{definition.label}</strong><small>{playing?'Playing':same&&current?.position_ms?'Paused':'Ready'}</small></div>
+    <div className="set-music-heading"><strong>{definition.label}</strong><small>{playing?(current?.state===1?'Playing':'Starting…'):same&&current?.state===4?'Paused':'Ready'}</small></div>
     <div className="set-music-track"><button type="button" aria-label={playing?'Pause music':'Play music'} title={playing?'Pause music':'Play music'} disabled={disabled||pending||!track} onClick={()=>run(toggle)}><MusicIcon kind={playing?'pause':'play'}/></button>
       <select aria-label="Waiting music track" disabled={disabled||pending||!library} value={selected} onChange={e=>setSelected(e.target.value)}><option value="">Choose music</option>{library?.tracks.map(t=><option key={t.id} value={t.id}>{t.title}</option>)}</select>
       <button type="button" aria-label="Stop music" title="Stop music" disabled={disabled||pending||!same} onClick={()=>run(check=>commandDj(now=>{check();if(now.decks[now.active].track?.id!==track?.id)throw Error('The DJ track changed.');return {kind:'stop',deck:now.active};}))}><MusicIcon kind="stop"/></button>

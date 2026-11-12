@@ -9,12 +9,12 @@ try{
  await page.route(origin,r=>r.fulfill({contentType:'text/html',body:'<!doctype html><html><body style="margin:0;background:#070d14"></body></html>'}));await page.route('https://**',r=>r.abort());await page.goto(origin);
  await page.evaluate(async()=>{
   const refresh=await import('/@react-refresh');refresh.default.injectIntoGlobalHook(window);window.$RefreshReg$=()=>{};window.$RefreshSig$=()=>t=>t;window.__vite_plugin_react_preamble_installed__=true;await import('/src/App.css');
-  window.nativeActions=[];const track={id:'in-case',path:'/fixture/in-case.mp3',title:'IN CASE',artist:'Producer',duration_ms:187298,cover:null,bpm:null,analyzed:false,fingerprint:'fixture'},deck=()=>({track:null,position_ms:0,duration_ms:0,state:0,looping:false});window.djStatus={decks:[deck(),deck()],active:0,volume:.65,crossfader:0,fade:2,repeat:false,shuffle:false,duck:false,transitioning:false,error:null};
+  window.nativeActions=[];const track={id:'in-case',path:'/fixture/in-case.mp3',title:'IN CASE',artist:'Producer',duration_ms:187298,cover:null,bpm:null,analyzed:false,fingerprint:'fixture'},deck=()=>({track:null,position_ms:0,duration_ms:0,state:5,looping:false});window.djStatus={decks:[deck(),deck()],active:0,volume:.65,crossfader:0,fade:2,repeat:false,shuffle:false,duck:false,transitioning:false,error:null};
   window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};window.__TAURI_INTERNALS__={invoke:async(command,args)=>{
    if(command==='set_library_list')return [];
    if(command==='starter_audio_install')return {version:'fixture',assets:[{id:'waiting-in-case',kind:'music',name:'IN CASE',path:track.path}]};
    if(command==='dj_library')return {folder:'',tracks:[track],playlists:[]};
-   if(command==='dj_control'){const a=args.action,s=window.djStatus;if(a.kind!=='status'){window.nativeActions.push(a);const d=s.decks[a.deck??s.active];if(a.kind==='load')d.track=a.track;if(a.kind==='play')d.state=1;if(a.kind==='pause')d.state=2;if(a.kind==='stop'){d.state=0;d.position_ms=0;}if(a.kind==='mix')Object.assign(s,a);}return structuredClone(s);}
+   if(command==='dj_control'){const a=args.action,s=window.djStatus;if(a.kind!=='status'){window.nativeActions.push(a);const d=s.decks[a.deck??s.active];if(a.kind==='load'){d.track=a.track;if(window.holdLoad){window.holdLoad=false;await new Promise(resolve=>window.finishLoad=resolve);}}if(a.kind==='play')d.state=1;if(a.kind==='pause')d.state=4;if(a.kind==='stop'){d.state=5;d.position_ms=0;}if(a.kind==='mix')Object.assign(s,a);}return structuredClone(s);}
    return null;
   },transformCallback:()=>1,convertFileSrc:p=>p};
   const R=await import('/node_modules/.vite/deps/react.js'),D=await import('/node_modules/.vite/deps/react-dom_client.js');
@@ -36,6 +36,7 @@ try{
  await page.getByRole('button',{name:'Play music',exact:true}).click();
  await page.getByRole('button',{name:'Pause music',exact:true}).waitFor();
  assert.deepEqual(await page.evaluate(()=>window.nativeActions.map(a=>a.kind)),['load','play']);
+ await page.evaluate(()=>window.djStatus.decks[0].state=2);await page.getByText('Starting…',{exact:true}).first().waitFor();
  await page.getByRole('button',{name:'Pause music',exact:true}).click();await page.getByRole('button',{name:'Play music',exact:true}).waitFor();
  const volume=page.getByRole('slider',{name:'Music volume',exact:true});await volume.focus();await page.keyboard.press('End');
  await page.waitForFunction(()=>window.nativeActions.some(a=>a.kind==='mix'&&a.volume===1));
@@ -63,6 +64,19 @@ try{
   await page.getByRole('button',{name:'Arrange controls',exact:true}).click();assert(await page.getByRole('dialog',{name:'Arrange set controls'}).evaluate(el=>el.matches(':popover-open')));await page.keyboard.press('Escape');
   await page.locator('.rm-panel-setControls').screenshot({path:`${folder}/controls-${dock}-mini-${width}.png`});report.push({dock,width,height:56,overflow:false});
  }
+ // A Set replacement can retain the component ID; it must still fence old playback.
+ await page.evaluate(async()=>{
+  window.panelRoot.unmount();document.getElementById('dock').style.display='none';
+  const R=await import('/node_modules/.vite/deps/react.js'),D=await import('/node_modules/.vite/deps/react-dom_client.js'),{SetMusicControls}=await import('/src/features/presentation/SetMusicControls.tsx');
+  const node=document.createElement('div');node.id='music-owner-proof';document.body.append(node);window.musicRoot=(D.createRoot??D.default.createRoot)(node);
+  window.paintMusic=definition=>window.musicRoot.render((R.createElement??R.default.createElement)(SetMusicControls,{definition}));window.nativeActions=[];window.djStatus.decks[0].track=null;window.djStatus.decks[0].state=5;window.paintMusic(window.doc.set.operatorComponents[0]);
+ });
+ await page.getByRole('button',{name:'Play music',exact:true}).waitFor();await page.waitForFunction(()=>document.querySelector('#music-owner-proof select')?.value==='in-case');
+ await page.evaluate(()=>window.holdLoad=true);await page.getByRole('button',{name:'Play music',exact:true}).click();await page.waitForFunction(()=>!!window.finishLoad);
+ await page.evaluate(()=>window.paintMusic(structuredClone(window.doc.set.operatorComponents[0])));await page.waitForTimeout(30);await page.evaluate(()=>window.finishLoad());await page.waitForTimeout(100);
+ assert.deepEqual(await page.evaluate(()=>window.nativeActions.map(a=>a.kind)),['load'],'Replacement owner must not play an old asynchronous request');
+ await page.evaluate(()=>{window.musicRoot.unmount();document.getElementById('music-owner-proof').remove();});
+ console.log('PASS registered music: Set replacement with the same component ID fences an in-flight load before play.');
  // Actual renderer previews, independently authored in both orientations/themes.
  await page.evaluate(()=>document.getElementById('dock').style.display='none');await page.setViewportSize({width:1100,height:2100});
  for(const theme of ['dark','light'])for(const layout of await page.evaluate(()=>window.doc.set.layouts.map(l=>({id:l.id,width:l.width,height:l.height})))){
