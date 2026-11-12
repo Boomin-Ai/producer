@@ -43,7 +43,7 @@
 .assistant-sharing label{flex-direction:row;align-items:center;margin-top:10px}
 .assistant-sharing p{font-size:11px;line-height:1.6;margin:8px 0;color:#8d9fae}
 .assistant-sharing span{color:#78bcaa}
-.assistant-messages{flex:1;min-height:80px;overflow:auto;padding:20px;scroll-behavior:smooth}
+.assistant-messages{flex:1;min-height:80px;overflow:auto;padding:20px;scroll-behavior:auto}
 .assistant-empty{margin:auto;padding:18px 0;color:#9cabb7}
 .assistant-empty strong{font-size:16px;letter-spacing:-.025em;color:#d8e0e7}
 .assistant-empty p{font-size:12px;line-height:1.7;margin-bottom:20px;max-width:36ch}
