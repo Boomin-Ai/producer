@@ -64,19 +64,50 @@ References: [registration](https://developers.openai.com/siwc/token-sharing-open
 [inference](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference),
 [limits](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations).
 
-## First scope and future extension
+## Room, Set and Show authoring
 
-The first tools inspect/read schema and create/edit private Set drafts. The host
+The host Assistant distinguishes the Room workspace (scenes, native sources,
+source assignments and docks), the reusable Set design, and the Show rundown.
+An explicit room-tool allowlist shares existing host actions with the development
+CLI. It has no generic eval, native invocation or arbitrary integration proxy.
+Room context is inspected on request; no serialization or inference runs on
+incoming media frames. Source creation uses the native engine's supported hidden
+camera, screen and color recipes. Text graphics and imported media are authored
+inside the private Set. Capture and live-output changes wait for host approval.
+
+`producer.author_show` writes a real canonical `package.show`, validates phase
+layout references and adds Start/Previous/Next controls without replacing authored
+controls. Shows use existing runtime cues. `collectMs` is a voting collection
+timer, not a general-purpose automatic segment scheduler.
+
+Explicit attachments distinguish inspiration from production material. Attached
+image previews use image input; reference images are not imported as Set assets.
+Production files pass the existing local asset validator and receive stable IDs
+the model may reference. Full production bytes stay in the local draft worker;
+the model receives metadata and image previews where supported. Attachment text
+is untrusted content. This does not add an image-generation provider.
+
+## Future extension
+
+Set tools inspect/read schema and create/edit private Set/Show drafts. The host
 explicitly loads preparation; existing native readiness and output confirmation
 remain required. Changing account, model, sharing policy or closing the editor
 fences old inference results. Completed edits are retained; unfinished responses
-cannot execute tools. No room capture, chat, audio or credentials are shared.
+cannot execute tools. No automatic room capture, chat, audio or credentials are shared.
 
 Timeline and audio documents can add domain adapters to the shared service.
 Reusable animation still needs explicit composition-local time, deterministic
 procedural sampling and qualified seek/export before timeline reuse is claimed.
 This first slice does not implement a DAW, timeline renderer, continuous room
 following, voice, arbitrary host control or media-generation approval workflow.
+
+`scripts/test-assistant-room-authoring.mjs` checks room authority, replay and
+approval fences, linked Show execution and asset-purpose separation.
+`scripts/test-assistant-room-browser.mjs` exercises the actual React tool loop,
+worker and file selection with mocked inference. Real ChatGPT image recognition,
+Set/Show creation, source binding and native Show Start/Next were separately
+qualified in the signed dev bundle; synthetic color sources are not camera or
+microphone performance evidence.
 
 ## Verification
 

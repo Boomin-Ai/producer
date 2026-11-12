@@ -1,12 +1,12 @@
 /** Named host operations shared by the room UI and the opt-in development CLI.
  * No eval, native invoke proxy, credentials or media bytes cross this boundary.
- * Registration is inert in production; the transport is development-only. */
+ * The internal registry is available to the host Assistant. Only the CLI
+ * transport is development-only; it is never shipped as an external API. */
 export interface ControlRequest {surface:string; command:string; args?:Record<string,unknown>; roomId?:string; epoch?:string}
 export interface ControlSurface {epoch:string; roomId?:string; snapshot():unknown; commands:Record<string,(args:Record<string,any>)=>unknown>}
 const surfaces:Map<string,ControlSurface>=import.meta.hot?.data.roomSurfaces??new Map();
 if(import.meta.hot)import.meta.hot.data.roomSurfaces=surfaces;
 export function registerRoomControl(name:string,surface:ControlSurface) {
-  if(!import.meta.env.DEV||import.meta.env.VITE_ROOM_CLI!=='1')return ()=>{};
   surfaces.set(name,surface);
   return ()=>{if(surfaces.get(name)===surface)surfaces.delete(name);};
 }

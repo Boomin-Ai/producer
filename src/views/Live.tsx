@@ -1,4 +1,5 @@
 import {useRoomControl} from '../features/room-control/useRoomControl';
+import {HIDDEN_ROOM_SOURCE_KINDS} from '../features/room-control/sourceKinds';
 import {RoomAssistantContext, type AssistantSetRequest, type AssistantEditorRequest} from '../features/assistant/roomBridge';
 import {RoomTransportControls,ToolbarButton} from '../components/RoomToolbar';
 import {IS_MAC,IS_WINDOWS} from '../lib/platform';
@@ -4750,7 +4751,7 @@ export function LiveView({
   if(setOutput.renderer==='native')setOutput.createSource=async(slot,spec,label,assign=true)=>{
     const id='set-source-'+crypto.randomUUID();
     const next=await invoke<LiveSources>('live_set_source_create',{id,label,spec});
-    setSources(next);
+    sourcesRef.current=next;setSources(next);
     const c=cfgRef.current;
     const scenes=c.scenes.map(scene=>scene.id===c.active_scene?{...scene,look:{...scene.look,[id]:{visible:false}}}:scene);
     writeCfg({...c,scenes,sources:{...c.sources,extras:[...(c.sources.extras??[]),{id,label,spec}]}});
@@ -7364,7 +7365,7 @@ export function LiveView({
   const assistantDock=dockOf(layout,'assistant');
   const assistantScreenSharing=(sources.items??[]).some(item=>item.kind==='screen'&&item.visible);
   const assistantGuestsConnected=roster.some(guest=>!!guest.render_url&&guest.state!=='left'&&!guest.monitor&&guest.seat!=='control');
-  const assistantRoomState=useMemo(()=>({setOnOutput:!!setOutput.currentPresented,screenSharing:assistantScreenSharing,guestsConnected:assistantGuestsConnected}),[setOutput.currentPresented,assistantScreenSharing,assistantGuestsConnected]);
+  const assistantRoomState=useMemo(()=>({roomId:roomId??'local',setOnOutput:!!setOutput.currentPresented,screenSharing:assistantScreenSharing,guestsConnected:assistantGuestsConnected}),[roomId,setOutput.currentPresented,assistantScreenSharing,assistantGuestsConnected]);
   const assistantDockOpen=assistantDock==='top'?topOpen:assistantDock==='bottom'?sheetOpen:assistantDock==='left'?leftOpen:assistantDock==='right'?rightOpen:false;
   const assistantEnabled=visible&&isHost&&docApplied;
   const assistantScope=JSON.stringify([endpointRef.current??'local',roomId??'local']);
@@ -7402,7 +7403,7 @@ export function LiveView({
     writeCfg({...current,sizes:next});
   },[roomId]);
 
-  useRoomControl('room',roomId??undefined,visible&&isHost&&docApplied,()=>({
+  useRoomControl('room',roomId??'local',visible&&isHost&&docApplied,()=>({
     id:roomId,name:room?.name,ready:docApplied,host:isHost,layoutEdit,
     config:cfgRef.current, docks:{top:{open:topOpen},bottom:{open:sheetOpen},left:{open:leftOpen},right:{open:rightOpen}},
     sources,scenes,activeScene,meters:extraLevels,access:roomAccess,interactions:{vote,savedVotes},chat:{messages:chatMsgs,filters:chatFilters,connections:chatConns,error:chatError},guests:roster.map(({id,display_name,state,seat})=>({id,display_name,state,seat})),
@@ -7413,10 +7414,31 @@ export function LiveView({
     'panel.move':({panel,dock})=>{if(!PANEL_ORDER.includes(panel)||!['top','bottom','left','right','hidden'].includes(dock))throw Error('Unknown panel or dock.');setLayout(movePanel(normalize(cfgRef.current.layout??DEFAULT_LAYOUT),panel,dock));if(panel==='assistant')setAssistantStarted(true);return {panel,dock};},
     'dock.set':({dock,open,size})=>{if(!['top','bottom','left','right'].includes(dock)||typeof open!=='boolean')throw Error('Expected dock and open boolean.');if(size!==undefined&&(!Number.isFinite(size)||size<56||size>560))throw Error('Dock size must be 56–560 pixels.');({top:setTopOpen,bottom:setSheetOpen,left:setLeftOpen,right:setRightOpen}[dock as 'top'|'bottom'|'left'|'right'])(open);if(size!==undefined){writeCfg({...cfgRef.current,sizes:{...cfgRef.current.sizes,[dock]:size}});}return {dock,open,size};},
     'layout.edit':({enabled})=>{if(typeof enabled!=='boolean')throw Error('Expected enabled boolean.');setLayoutEdit(enabled);return {enabled};},
-    'scene.select':async({id})=>{const scene=scenes.find(item=>item.id===id);if(!scene)throw Error('Unknown scene.');await applyScene(scene,{cut:true});return {id};},
+    'scene.select':async({id})=>{const scene=cfgRef.current.scenes.find(item=>item.id===id),owner=roomEngineRef.current;if(!scene||!owner)throw Error('Choose a scene in the open room.');let applied=false;await owner.run(async()=>{applied=await applyScene(scene,{cut:true})===true;});if(!applied)throw Error('The scene could not be selected. Check room readiness.');return {id};},
     'scene.add':()=>{addScene();return {requested:true};},
+    'scene.create':({name})=>{if(typeof name!=='string'||!name.trim()||name.length>80)throw Error('Expected a scene name up to 80 characters.');const next:RoomScene={id:'scene-'+crypto.randomUUID(),name:name.trim(),look:{}};const current=cfgRef.current;writeCfg({...current,scenes:[...current.scenes,next]});return next;},
+    'scene.source':async({sceneId,sourceId,visible,x,y,w,h,z})=>{
+      const current=cfgRef.current,scene=current.scenes.find(item=>item.id===sceneId);
+      if(!scene||!sourcesRef.current.items?.some(item=>item.id===sourceId))throw Error('Choose an existing scene and room source.');
+      if(typeof visible!=='boolean')throw Error('Expected source visibility.');
+      const patch:SceneItemLook={visible};for(const [key,value]of Object.entries({x,y,w,h,z})){if(value===undefined)continue;if(typeof value!=='number'||!Number.isFinite(value)||value<0||value>16384||(['w','h'].includes(key)&&value<1))throw Error('Invalid scene geometry.');(patch as any)[key]=value;}
+      const look:Record<string,SceneItemLook>={...scene.look,[sourceId]:{...scene.look?.[sourceId],...patch}};
+      if(sceneId===current.active_scene){const owner=roomEngineRef.current;if(!owner)throw Error('This room is closed.');let applied=false;await owner.run(async()=>{if(cfgRef.current.active_scene!==sceneId||!sourcesRef.current.items?.some(item=>item.id===sourceId))throw Error('The scene or source changed before applying this edit.');const next=await ipc.liveApplyScene([{id:sourceId,patch}]);sourcesRef.current=next;setSources(next);applied=true;});if(!applied)throw Error('The room closed before applying the source change.');}
+      writeCfg({...cfgRef.current,scenes:cfgRef.current.scenes.map(item=>item.id===sceneId?{...item,look}:item)});return {sceneId,sourceId,look:look[sourceId]};
+    },
+    'source.devices':({kind})=>{if(!['camera','screen','mic'].includes(kind))throw Error('Choose camera, screen or mic.');return deviceIpc.list(kind);},
+    'source.add':async({kind,label,color,device})=>{
+      if(!setOutput.createSource)throw Error('Native source creation is unavailable in this room.');
+      if(typeof label!=='string'||!label.trim()||label.length>100)throw Error('Expected a source label up to 100 characters.');
+      if(!(HIDDEN_ROOM_SOURCE_KINDS as readonly string[]).includes(kind))throw Error('This engine supports hidden camera, screen and color sources. Author text and media in the Set.');
+      if(device!==undefined&&(typeof device!=='string'||device.length>512))throw Error('Invalid device.');
+      if(kind==='color'&&(typeof color!=='string'||!/^#[0-9a-f]{6}$/i.test(color)))throw Error('Expected a six-digit color.');
+      const spec:ExtraSpec=kind==='color'?{kind,color}:kind==='screen'?{kind,...(device?{display:device}:{})}:{kind:'camera',...(device?{device}:{})};
+      const owner=roomEngineRef.current;if(!owner)throw Error('This room is closed.');const created:{id?:string}={};
+      await owner.run(async()=>{created.id=(await setOutput.createSource!('',spec,label,false))||undefined;});if(!created.id)throw Error('The room closed before creating the source.');return {id:created.id,label,kind,visible:false};
+    },
     'source.create':async({slot,kind,label,color,device})=>{if(!setOutput.createSource||!setRehearsal.package.set.slots.some(item=>item.id===slot))throw Error('Choose an existing Set source role.');if(typeof label!=='string'||!label.trim()||label.length>100)throw Error('Expected a source label up to 100 characters.');if(kind!=='camera'&&kind!=='color')throw Error('This development command supports camera or color sources.');if(kind==='color'&&(typeof color!=='string'||!/^#[0-9a-f]{6}$/i.test(color)))throw Error('Expected a six-digit color.');if(device!==undefined&&typeof device!=='string')throw Error('Invalid camera device.');const id=await setOutput.createSource(slot,kind==='color'?{kind,color}:{kind:'camera',...(device?{device}:{})},label);return {id};},
-    'set.bind':({slot,source})=>{if(!setRehearsal.package.set.slots.some(item=>item.id===slot)||!sources.items?.some(item=>item.id===source&&item.kind!=='mic'))throw Error('Choose an existing source and role.');setOutput.bind(slot,source);return {slot,source};},
+    'set.bind':({slot,source})=>{if(!setRehearsal.package.set.slots.some(item=>item.id===slot)||!sourcesRef.current.items?.some(item=>item.id===source&&item.kind!=='mic'))throw Error('Choose an existing source and role.');setOutput.bind(slot,source);return {slot,source};},
     'set.show':async()=>{await (setOutput.applyConfirmed??setOutput.apply)();if(setOutput.error)throw Error(setOutput.error);return {requested:true};},
     'set.hide':async()=>({hidden:await setOutput.returnToRoom()}),
     'sets.list':()=>ipc.setLibraryList(),
@@ -7425,7 +7447,7 @@ export function LiveView({
     'set.value':({key,value})=>{if(!Object.prototype.hasOwnProperty.call(setRehearsal.package.set.values,key))throw Error('Unknown field.');setRehearsal.send({type:'control',action:{type:'value.set',key,value}});return {key};},
     'assistant.open':()=>{setAssistantStarted(true);const existing=normalize(cfgRef.current.layout??DEFAULT_LAYOUT);if(dockOf(existing,'assistant')==='hidden')setLayout(movePanel(existing,'assistant','left'));setLeftOpen(true);setRightOpen(true);return {opened:true};},
     leave:()=>{if(streaming||recPath)throw Error('Stop output in the UI before navigating away in a test.');onLeave?.();return {leaving:true};},
-  });
+  },true);
 
   const panelBody = (id: PanelId) => {
     switch (id) {

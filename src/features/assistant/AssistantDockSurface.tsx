@@ -14,7 +14,7 @@ export function AssistantDockSurface({dock,parking,reviewOpen,busy,connected,con
   const [dismissedNotification,setDismissedNotification]=useState<string>();
   const [position,setPosition]=useState<{left:number;top:number}>(),[toastPosition,setToastPosition]=useState<{left:number;top:number;width:number}>();
   const panel=useRef<HTMLDivElement>(null),toast=useRef<HTMLDivElement>(null),trigger=useRef<HTMLButtonElement>(null);
-  const compact=dock.compact||shallow||reviewOpen;
+  const compact=dock.compact||shallow||reviewOpen||!dock.target;
   const unread=!!completion;
   const label=busy?`Working · ${status}`:unread?(completion.kind==='error'?'Needs attention':'Reply ready'):status;
   const openConversation=()=>{if(reviewOpen||open)return;setPosition(undefined);setOpen(true);onRead();};
@@ -23,7 +23,7 @@ export function AssistantDockSurface({dock,parking,reviewOpen,busy,connected,con
   useEffect(()=>setOpen(false),[dismissKey]);
   useLayoutEffect(()=>{
     if(!dock.target)return;
-    const update=()=>{const height=dock.target!.getBoundingClientRect().height;setShallow(height>40&&height<320);};
+    const update=()=>{const height=dock.target!.getBoundingClientRect().height;setShallow(height<320);};
     update();const observer=new ResizeObserver(update);observer.observe(dock.target);return()=>observer.disconnect();
   },[dock.target]);
   useEffect(()=>{if(!compact||reviewOpen)setOpen(false);if(!compact||open||reviewOpen)onRead();},[compact,open,reviewOpen,completion?.id]);

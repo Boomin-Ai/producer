@@ -48,12 +48,24 @@ package:...,assetRefs:[]},label:"..."}`. It does not publish or change output.
 `set.load` explicitly selects a saved Set using the room's normal preparation
 handler. Device capture and output actions retain their existing native checks.
 
-The current catalog covers room creation/entry/exit, panels, docks, scene selection,
-Set selection/layout/fields/output, source binding and camera/color creation, and Assistant authoring/review. It deliberately does
+The current catalog covers room creation/entry/exit, panels, docks, inactive scene
+creation, scene source placement/selection, Set selection/layout/fields/output,
+device inventory, hidden camera/screen/color creation, source binding and
+Assistant authoring/review. It deliberately does
 not expose streaming/recording start, guest admission, microphone mute, publishing
-or arbitrary integration calls yet. The model still has **private Set-authoring
-tools only**. Expanding its authority should reuse named operations and add the
-appropriate permission, confirmation, and result verification for each action.
+or arbitrary integration calls. The host Assistant now uses an explicit subset
+of these named room actions alongside private Set/Show authoring. It receives
+fresh structural context on inference rounds, not automatic camera pixels,
+audio, chat or credentials. Scene cuts, active scene edits, capture starts and
+on-output Set-role changes require host confirmation; room and epoch fences
+are checked again after approval. The internal action registry ships with the
+app; this HTTP/HMR transport remains development-only.
+
+`assistant attachments.add` accepts explicitly supplied synthetic bytes for
+development tests, never a local file path. `assistant room.approve` resolves
+the current approval ID for an authorized test. Neither command is advertised
+to the model. Production attachment selection uses the native file picker or
+an explicitly pasted screenshot, with separate inspiration/production purposes.
 
 The CLI token is generated per dev-server session and stored in
 `.room-control/session.json` (directory 0700, file 0600, ignored by Git). HTTP accepts
