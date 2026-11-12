@@ -576,11 +576,23 @@ impl Bridge {
             if stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n").is_err(){return}
             let mut previous = String::new();
             let mut heartbeat = std::time::Instant::now();
-            let music = self.world["world"].get("dj").is_some();
-            let _music_subscription = music.then(super::super::dj_audio::subscribe);
+            let role = self.world["world"]["dj"]["role"].as_str();
+            let music = role.is_some_and(|r| r != "frame");
+            let mut music_subscription = None;
             let mut music_at = Instant::now();
             let mut sound_sequence = 0;
             while self.active.load(Ordering::Acquire) {
+                let rendering = self.state.lock().unwrap().control.rendering;
+                // Signature edge lights need no audio analysis. The new waiting
+                // waveform subscribes only while presented, not in warm caches.
+                // Keep existing DJ stage/spectrum subscription behavior intact.
+                if music_demand(role, rendering) {
+                    if music_subscription.is_none() {
+                        music_subscription = Some(super::super::dj_audio::subscribe());
+                    }
+                } else {
+                    music_subscription.take();
+                }
                 let value = self.snapshot();
                 if value != previous || heartbeat.elapsed() > Duration::from_secs(1) {
                     if stream
@@ -592,10 +604,7 @@ impl Bridge {
                     previous = value;
                     heartbeat = std::time::Instant::now();
                 }
-                if music
-                    && music_at.elapsed() >= Duration::from_millis(33)
-                    && self.state.lock().unwrap().control.rendering
-                {
+                if music && music_at.elapsed() >= Duration::from_millis(33) && rendering {
                     let value = serde_json::to_string(&super::super::dj_audio::snapshot()).unwrap();
                     if stream
                         .write_all(format!("event: music\ndata: {value}\n\n").as_bytes())
@@ -961,9 +970,30 @@ pub fn key(instance: &str, spec: &Spec, w: u32, h: u32) -> String {
     )
 }
 
+fn music_demand(role: Option<&str>, rendering: bool) -> bool {
+    match role {
+        None | Some("frame") => false,
+        Some("ring") => rendering,
+        Some(_) => true,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn signature_graphics_do_not_keep_audio_analysis_alive_in_caches() {
+        for rendering in [false, true] {
+            assert!(!music_demand(None, rendering));
+            assert!(!music_demand(Some("frame"), rendering));
+            for legacy in ["stage", "spectrum"] {
+                assert!(music_demand(Some(legacy), rendering));
+            }
+        }
+        assert!(!music_demand(Some("ring"), false));
+        assert!(music_demand(Some("ring"), true));
+    }
 
     #[test]
     fn renderer_response_survives_a_nonblocking_accepted_socket() {
