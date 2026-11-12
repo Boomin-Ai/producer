@@ -1,5 +1,6 @@
 name: Assistant authoring foundation
 on:
+  workflow_dispatch:
   pull_request:
     paths: ['crates/assistant-runtime/**', 'shared/authoring/**', 'src/features/assistant/**', 'src/features/presentation/authoring/**', 'src/features/presentation/schema.ts', 'src/features/presentation/SetConfiguration.tsx', 'src/features/presentation/SetControlsPanel.tsx', 'src/features/presentation/RehearsalPreview.tsx', 'src/features/presentation/SetSourceCreator.tsx', 'src/features/presentation/SetSourceRecovery.tsx', 'src/features/presentation/sourceRecovery.ts', 'src/components/RoomToolbar*', 'src/views/Live.tsx', 'src/lib/layout.ts', 'tools/producer-mcp/**', 'scripts/test-authoring-foundation.mjs', 'scripts/test-assistant-*.mjs', 'scripts/test-room-toolbar-browser.mjs', 'scripts/test-set-source-recovery-browser.mjs', 'scripts/test-set-chat-source-browser.mjs', 'scripts/test-set-capture-recovery-browser.mjs', '.github/workflows/assistant-foundation.yml']
   push:
