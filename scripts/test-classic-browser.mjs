@@ -32,6 +32,12 @@ try{
  await page.getByRole('button',{name:'Opening',exact:true}).click();
  await page.getByRole('button',{name:'Play music',exact:true}).waitFor();
  await page.waitForFunction(()=>document.querySelector('select[aria-label="Waiting music track"]')?.value==='in-case');
+ // Accordion headers stay flush, including on hover; only expanded contents have a frame.
+ const musicSection=page.locator('.set-arranged-section').filter({has:page.locator('.set-music')});
+ const header=musicSection.locator('h4>button');await header.hover();
+ const spacing=await musicSection.evaluate(el=>{const section=getComputedStyle(el),header=getComputedStyle(el.querySelector('h4>button')),body=getComputedStyle(el.querySelector('.set-arranged-section-controls'));return {padding:section.padding,border:section.borderTopWidth,headerPadding:header.padding,headerBackground:header.backgroundColor,bodyPadding:body.padding,bodyBorder:body.borderTopWidth};});
+ assert.deepEqual(spacing,{padding:'0px',border:'0px',headerPadding:'0px',headerBackground:'rgba(0, 0, 0, 0)',bodyPadding:'8px',bodyBorder:'1px'});
+ await header.click();assert(await musicSection.locator('.set-arranged-section-controls').isHidden());await header.click();
  assert((await page.locator('.set-music:visible').boundingBox()).height<200,'Music slider must size to its content in the column player');
  assert.deepEqual(await page.evaluate(()=>window.nativeActions),[],'Opening must not autoplay');
  await page.getByRole('button',{name:'Play music',exact:true}).click();
@@ -50,6 +56,7 @@ try{
   await page.setViewportSize({width:Math.max(width+20,960),height:1100});await page.evaluate(args=>window.configure(...args),[dock,width,height]);
   await page.waitForTimeout(60);
   const fit=await page.locator('.set-controls--standalone').evaluate(el=>({width:el.clientWidth,scroll:el.scrollWidth,pickers:[...el.querySelectorAll('.set-primary-layout button')].filter(b=>b.getClientRects().length).map(b=>b.textContent)}));assert(fit.scroll<=fit.width+1,JSON.stringify({dock,width,...fit}));assert.equal(fit.pickers.length,8);
+  const sections=await page.locator('.set-arranged-section').evaluateAll(items=>items.map(el=>({padding:getComputedStyle(el).padding,headerPadding:getComputedStyle(el.querySelector('h4>button')).padding})));assert(sections.every(s=>s.padding==='0px'&&s.headerPadding==='0px'),JSON.stringify({dock,width,sections}));
   for(const label of ['Opening','Solo','Demo','Conversation','Roundtable','Spotlight','Break','Closing']){await page.getByRole('button',{name:label,exact:true}).click();}
   await page.getByRole('button',{name:'Demo',exact:true}).click();await page.getByRole('button',{name:'Use screen',exact:true}).click();assert(await page.getByRole('slider',{name:'Screen zoom'}).count());
   await page.getByRole('button',{name:'Use example',exact:true}).click();assert.equal(await page.getByRole('slider',{name:'Screen zoom'}).count(),0);
