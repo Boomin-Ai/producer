@@ -63,6 +63,14 @@ jobs:
           node scripts/test-set-chat-source-browser.mjs
           node scripts/test-set-capture-recovery-browser.mjs
           node scripts/test-assistant-workbench.mjs
+          node scripts/test-assistant-room-authoring.mjs
+          node scripts/test-assistant-room-browser.mjs
+          node scripts/test-assistant-scroll.mjs
+          node scripts/test-assistant-surface.mjs
+          node scripts/test-assistant-carousel.mjs
+          node scripts/test-classic-browser.mjs
+          node scripts/test-classic-graphics-browser.mjs
+          node scripts/test-clips-panel.mjs
   provider-runtime:
     runs-on: ubuntu-latest
     steps:

@@ -7,7 +7,7 @@ const {RehearsalSession,outputProjection}=await import('data:text/javascript;bas
 const doc=JSON.parse(readFileSync('docs/shows/classic.json')),session=new RehearsalSession(doc);
 session.send({type:'control',action:{type:'layout.select',layoutId:'break-landscape'}});
 const nodes=outputProjection(doc,session.snapshot()).root.children.filter(n=>n.type==='scene3d');
-const browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
+const browser=await chromium.launch({executablePath:process.env.PRODUCER_CHROME??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
 try{
  const page=await browser.newPage({viewport:{width:1100,height:700}});await page.setContent('<body style="margin:0;background:#141a20"></body>');
  await page.addScriptTag({path:'src/features/presentation/vendor/scene3d-renderer.js'});

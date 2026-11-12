@@ -41,6 +41,8 @@ jobs:
       - run: bun run build
       - run: bun run test:performance-trace
       - run: python3 scripts/profile-production.py --self-test
+      - run: node scripts/test-classic.mjs
+      - run: node scripts/test-starter-audio.mjs
       - run: bun run test:presentation
       - run: bun run test:camera-background
       - run: node scripts/test-dj-set-feed.mjs
