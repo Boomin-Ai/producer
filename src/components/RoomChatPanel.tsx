@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import type { AudienceChatMessage } from './AudiencePanel';
 import { AudienceDestinationMark } from './AudienceDestination';
 import './RoomChatPanel.css';
@@ -46,8 +46,13 @@ export function RoomChatPanel({ messages, roomMessages, available, canControl, l
   const [behind, setBehind] = useState(0);
   const [pinned, setPinned] = useState(pinnedRef.current);
   const list = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+  const lastScrollTop = useRef(0);
+  const lastSize = useRef({ height: 0, viewport: 0 });
+  const touchY = useRef<number | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const previousKeys = useRef(new Set<string>());
+  const previousKeys = useRef<Set<string> | null>(null);
   const composeId = useId();
   const enabled = CHANNELS.filter(channel => channel !== 'boomin' || available);
   const active = enabled.filter(channel => channels[channel]);
@@ -57,17 +62,45 @@ export function RoomChatPanel({ messages, roomMessages, available, canControl, l
   ].filter(message => channels[message.platform] !== false).sort((a, b) => (a.at ?? 0) - (b.at ?? 0)), [messages, roomMessages, channels, available]);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   useEffect(() => { setDismissedError(null); }, [error]);
-  useEffect(() => {
-    const added = rows.filter(row => !previousKeys.current.has(row.key)).length;
+  const scrollToLatest = () => {
+    const element = list.current; if (!element) return;
+    element.scrollTop = element.scrollHeight;
+    lastScrollTop.current = element.scrollTop;
+    lastSize.current = { height: element.scrollHeight, viewport: element.clientHeight };
+  };
+  const pauseFollowing = () => {
+    const element = list.current;
+    if (!element || element.scrollHeight <= element.clientHeight + 1) return;
+    pinnedRef.current = false; setPinned(false);
+  };
+  useLayoutEffect(() => {
+    const previous = previousKeys.current;
+    const added = previous ? rows.filter(row => !previous.has(row.key)).length : 0;
     previousKeys.current = new Set(rows.map(row => row.key));
     if (pinnedRef.current) {
-      if (list.current) list.current.scrollTop = list.current.scrollHeight;
+      scrollToLatest();
       setBehind(0);
     } else if (added) setBehind(count => count + added);
   }, [rows, mini, pinnedRef]);
+  useLayoutEffect(() => {
+    const element = list.current, contents = content.current;
+    if (!element || !contents) return;
+    // Messages, late-loading emotes and dock resizes can all change the bottom.
+    // Their scroll events must not be mistaken for someone reading history.
+    const observer = new ResizeObserver(() => { if (pinnedRef.current) scrollToLatest(); });
+    observer.observe(element); observer.observe(contents);
+    const endDrag = () => { dragging.current = false; };
+    window.addEventListener('pointerup', endDrag);
+    window.addEventListener('pointercancel', endDrag);
+    return () => {
+      observer.disconnect(); endDrag();
+      window.removeEventListener('pointerup', endDrag);
+      window.removeEventListener('pointercancel', endDrag);
+    };
+  }, [mini, pinnedRef]);
   const follow = () => {
     pinnedRef.current = true; setPinned(true); setBehind(0);
-    if (list.current) list.current.scrollTop = list.current.scrollHeight;
+    scrollToLatest();
   };
   const toggle = (channel: string) => { follow(); onChannelsChange({ ...channels, [channel]: !channels[channel] }); };
   const submit = (event: React.FormEvent) => {
@@ -105,9 +138,20 @@ export function RoomChatPanel({ messages, roomMessages, available, canControl, l
       {rows.length === 0 && <div className="rm-chat-mini-empty">{empty}</div>}
     </div> : <div className="rm-chat-list" ref={list} tabIndex={0} aria-label="Room and platform messages" onScroll={() => {
       const element = list.current; if (!element) return;
+      const delta = element.scrollTop - lastScrollTop.current;
+      const sameSize = element.scrollHeight === lastSize.current.height && element.clientHeight === lastSize.current.viewport;
       const atBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 24;
-      pinnedRef.current = atBottom; setPinned(atBottom); if (atBottom) setBehind(0);
-    }} onWheel={event => { if (event.deltaY < 0) { pinnedRef.current = false; setPinned(false); } }}>
+      // Accessibility scrolling may not dispatch wheel/pointer events.
+      if (delta < -1 && (dragging.current || sameSize)) pauseFollowing();
+      else if (!pinnedRef.current && delta > 1 && sameSize && atBottom) { pinnedRef.current = true; setPinned(true); setBehind(0); }
+      lastScrollTop.current = element.scrollTop;
+      lastSize.current = { height: element.scrollHeight, viewport: element.clientHeight };
+    }} onWheel={event => { if (event.deltaY < 0) pauseFollowing(); }}
+      onPointerDown={() => { dragging.current = true; }}
+      onKeyDown={event => { if (event.target === event.currentTarget && (['ArrowUp', 'PageUp', 'Home'].includes(event.key) || (event.key === ' ' && event.shiftKey))) pauseFollowing(); }}
+      onTouchStart={event => { touchY.current = event.touches[0]?.clientY ?? null; }}
+      onTouchMove={event => { const y = event.touches[0]?.clientY; if (y !== undefined && touchY.current !== null && y > touchY.current + 1) pauseFollowing(); touchY.current = y ?? null; }}>
+      <div className="room-chat-rows" ref={content}>
       {rows.map(message => <div key={message.key} className="rm-chat-msg room-chat-message" data-channel={message.platform}>
         <div className="room-chat-message-body"><span className="room-chat-platform" title={message.platform === 'boomin' ? 'Boomin' : message.platform} aria-label={message.platform === 'boomin' ? 'Boomin message' : `${message.platform} message`}>{mark(message.platform)}</span><span className="rm-chat-user" style={{ color: message.color || (message.platform === 'boomin' ? 'var(--mint)' : tints[message.platform]) }}>{message.user}</span>{message.room ? <span className="rm-chat-text">{message.text}</span> : renderText(message)}</div>
         {message.room && canControl && <details className="room-chat-actions"><summary aria-label={`Actions for message from ${message.user}`}>More</summary><div>
@@ -119,6 +163,7 @@ export function RoomChatPanel({ messages, roomMessages, available, canControl, l
         </div></details>}
       </div>)}
       {rows.length === 0 && <div className="rm-alerts-empty">{empty}</div>}
+      </div>
     </div>}
     {!mini && !pinned && <button type="button" className="rm-chat-jump" onClick={follow}>{behind ? `${behind} new message${behind === 1 ? '' : 's'}` : 'Jump to latest'}</button>}
     {mini && available && channels.boomin && canControl ? <>

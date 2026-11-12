@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 const { chromium, webkit } = await import(process.env.PRODUCER_PLAYWRIGHT_MODULE ?? '/private/tmp/rene-browser/node_modules/playwright/index.mjs');
 const origin = process.env.PRODUCER_PREVIEW_ORIGIN ?? 'http://127.0.0.1:1420';
-for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome' }], ['webkit', webkit, {}]]) {
+for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome' }], ['webkit', webkit, {}]].filter(([name]) => (process.env.PRODUCER_TEST_ENGINES ?? 'chromium,webkit').split(',').includes(name))) {
   const browser = await engine.launch({ headless: true, ...options });
   try {
     const page = await browser.newPage({ viewport: { width: 900, height: 900 } });
@@ -53,11 +53,37 @@ for (const [name, engine, options] of [['chromium', chromium, { channel: 'chrome
     await chat.getByText('Incoming 2', { exact: true }).waitFor();
     await chat.getByRole('button', { name: 'Twitch', exact: true }).click();
     for (let i = 0; i < 15; i++) await page.getByRole('button', { name: 'Receive room message' }).click();
-    await chat.locator('.rm-chat-list').evaluate(element => { element.scrollTop = 0; element.dispatchEvent(new Event('scroll')); });
+    const list = chat.locator('.rm-chat-list');
+    const atLatest = () => page.waitForFunction(() => { const e = document.querySelector('.rm-chat-list'); return e.scrollHeight - e.scrollTop - e.clientHeight <= 1; });
+    await atLatest();
+    await page.getByRole('button', { name: 'Receive delayed emote', exact: true }).click();
+    await atLatest();
+    await page.getByRole('button', { name: 'Load emote', exact: true }).click();
+    await chat.getByAltText('Delayed emote').waitFor();await atLatest();
+    await page.locator('.rm-panel-chat').evaluate(element => { element.style.width = '240px'; element.style.height = '180px'; });
+    await atLatest();assert.equal(await chat.locator('.rm-chat-jump').count(), 0, 'late emotes and resizing keep following');
+    await list.hover();await page.mouse.wheel(0, -600);
+    await chat.getByRole('button', { name: 'Jump to latest', exact: true }).waitFor();
+    const historyTop = await list.evaluate(element => element.scrollTop);
     await page.getByRole('button', { name: 'Receive room message' }).click();
     await chat.getByRole('button', { name: '1 new message', exact: true }).waitFor();
+    assert(Math.abs(await list.evaluate(element => element.scrollTop) - historyTop) <= 1, 'new messages leave the reading position alone');
     await chat.getByRole('button', { name: '1 new message', exact: true }).click();
+    await atLatest();
+    for (let i = 0; i < 5; i++) await page.getByRole('button', { name: 'Receive platform message', exact: true }).click();
+    await atLatest();
     assert.equal(await chat.locator('.rm-chat-jump').count(), 0);
+    await list.focus();await page.keyboard.press('PageUp');
+    await chat.getByRole('button', { name: 'Jump to latest', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Receive platform message', exact: true }).click();
+    await chat.getByRole('button', { name: '1 new message', exact: true }).click();await atLatest();
+    // A scrollbar drag can move upward without a wheel or keyboard event.
+    await list.evaluate(element => { element.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true})); element.scrollTop = 0; element.dispatchEvent(new Event('scroll')); window.dispatchEvent(new PointerEvent('pointerup')); });
+    await chat.getByRole('button', { name: 'Jump to latest', exact: true }).waitFor();
+    await chat.getByRole('button', { name: 'Jump to latest', exact: true }).click();await atLatest();
+    await list.evaluate(element => { element.scrollTop = 0; element.dispatchEvent(new Event('scroll')); });
+    await chat.getByRole('button', { name: 'Jump to latest', exact: true }).waitFor();
+    await chat.getByRole('button', { name: 'Jump to latest', exact: true }).click();await atLatest();
     const overflow = await chat.evaluate(element => element.scrollWidth > element.clientWidth);
     assert.equal(overflow, false, '300px side dock must not overflow horizontally');
     await page.screenshot({ path: `/private/tmp/${name}-boomin-chat.png` });

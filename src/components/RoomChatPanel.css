@@ -1,6 +1,7 @@
 .room-chat { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; gap: 8px; }
 .room-chat .rm-chat-chips { flex-wrap: wrap; gap: 4px; }
 .room-chat .rm-chat-list { overscroll-behavior: contain; }
+.room-chat-rows { display: flex; flex-direction: column; flex-shrink: 0; gap: inherit; }
 .room-chat-message { display: flex; align-items: flex-start; gap: 6px; }
 .room-chat-message-body { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .room-chat-platform { display: inline-flex; width: 14px; height: 14px; margin-right: 5px; vertical-align: middle; }
