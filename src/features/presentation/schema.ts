@@ -273,7 +273,10 @@ export function parsePackage(value: unknown): PresentationPackage {
         return;
       }
       if (rest.length || unsafeKey(key) || (root === 'props' ? !scope.has(key) : root === 'values' ? !hasOwn(doc.set.values, key)
-        : root === 'feeds' ? !hasOwn(doc.set.feeds, key) : root === 'tokens' ? !hasOwn(doc.set.tokens??{},key) : !doc.show || !['layoutId', 'phase', 'collecting', 'revealed', 'winner', 'result', 'ballot', 'heat', 'remainingMs', 'total'].includes(key))) fail('$', `Unknown binding ${b.get}.`);
+        : root === 'feeds' ? !hasOwn(doc.set.feeds, key) : root === 'tokens' ? !hasOwn(doc.set.tokens??{},key)
+        // The active layout exists for standalone Sets too. Other Show fields
+        // still require an actual rundown; evaluate() already shares this ID.
+        : key !== 'layoutId' && (!doc.show || !['phase', 'collecting', 'revealed', 'winner', 'result', 'ballot', 'heat', 'remainingMs', 'total'].includes(key)))) fail('$', `Unknown binding ${b.get}.`);
     } else {
       if (b.op === 'eq' && b.args.length !== 2 || b.op === 'if' && b.args.length !== 3) fail('$', 'Wrong binding argument count.');
       b.args.forEach(x => checkBinding(x, scope));

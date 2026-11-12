@@ -853,6 +853,13 @@
 }
 
 .set-primary-layout { min-width:0; }
+.set-layout-menu-trigger { display:none; }
+.set-layout-menu-icon { display:none; flex-shrink:0; }
+.set-layout-menu:not(:popover-open) { display:none; }
+.set-layout-menu:popover-open { display:block; position:fixed; inset:auto; margin:0; width:min(280px,calc(100vw - 16px)); padding:12px; border:1px solid var(--line-1,#344650); border-radius:10px; background:var(--surface-0,#0b131d); color:var(--fg-1,#e5edf1); box-shadow:0 12px 40px #0006; }
+.set-layout-menu > strong { display:block; margin-bottom:10px; font-size:11px; color:var(--fg-2,#a4b6c3); }
+.set-layout-menu .set-layout-picker { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+.set-layout-menu .set-layout-picker > button { width:100%; text-align:left; }
 .set-controls--standalone .set-header-mode { display:none; }
 .set-controls--standalone .set-header-main { flex-direction:row; }
 .set-controls--standalone .set-header-main > .set-mode-badge { width:auto; }
@@ -993,10 +1000,13 @@
 :is(.rm-dock-top:not(.expanded), .rm-dock-bottom.slim) > .rm-panel-setControls .set-primary-layout {
   display:block;
   order:1;
-  flex:1 1 auto;
-  overflow:auto hidden;
+  flex:0 1 138px;
+  overflow:visible;
   padding:2px;
 }
+:is(.rm-dock-top:not(.expanded), .rm-dock-bottom.slim) > .rm-panel-setControls .set-primary-layout > .set-layout-picker { display:none; }
+:is(.rm-dock-top:not(.expanded), .rm-dock-bottom.slim) > .rm-panel-setControls .set-layout-menu-trigger { display:flex; align-items:center; gap:6px; width:100%; white-space:nowrap; }
+.set-layout-menu-trigger > span:first-child { overflow:hidden; text-overflow:ellipsis; }
 :is(.rm-dock-top:not(.expanded), .rm-dock-bottom.slim) > .rm-panel-setControls .set-layout-picker { flex-wrap:nowrap; }
 :is(.rm-dock-top:not(.expanded), .rm-dock-bottom.slim) > .rm-panel-setControls .set-output-actions { display:flex; flex:0 0 auto; padding:0; border:0; }
 :is(.rm-dock-top:not(.expanded), .rm-dock-bottom.slim) > .rm-panel-setControls .set-output-switch { min-height:28px; width:auto; padding:3px 6px; gap:5px; }
@@ -1040,6 +1050,12 @@
 @container panel (max-width:375px) {
   :is(.rm-dock-top:not(.expanded), .rm-dock-bottom.slim) > .rm-panel-setControls .set-rundown-trigger > strong { display:none; }
   :is(.rm-dock-top:not(.expanded), .rm-dock-bottom.slim) > .rm-panel-setControls .set-controls:not(.set-controls--standalone) .set-output-actions { display:none; }
+  :is(.rm-dock-top:not(.expanded), .rm-dock-bottom.slim) > .rm-panel-setControls .set-controls--standalone .set-output-action-short { display:none; }
+  :is(.rm-dock-top:not(.expanded), .rm-dock-bottom.slim) > .rm-panel-setControls .set-controls--standalone .set-output-icon { display:block; }
+  :is(.rm-dock-top:not(.expanded), .rm-dock-bottom.slim) > .rm-panel-setControls .set-controls--standalone .set-primary-layout { flex:0 0 44px; }
+  :is(.rm-dock-top:not(.expanded), .rm-dock-bottom.slim) > .rm-panel-setControls .set-layout-menu-trigger > span:first-child { display:none; }
+  :is(.rm-dock-top:not(.expanded), .rm-dock-bottom.slim) > .rm-panel-setControls .set-layout-menu-icon { display:block; }
+  :is(.rm-dock-top:not(.expanded), .rm-dock-bottom.slim) > .rm-panel-setControls .set-controls--standalone .set-compact-run:not(:empty) { flex:1 0 76px; min-width:76px; }
 }
 @container panel (max-width:265px) {
   :is(.rm-dock-top:not(.expanded), .rm-dock-bottom.slim) > .rm-panel-setControls .set-controls-toolbar { gap:3px; }

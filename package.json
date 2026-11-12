@@ -10,6 +10,8 @@
   },
   "type": "module",
   "scripts": {
+    "test:classic": "node scripts/test-classic.mjs",
+    "test:classic-browser": "node scripts/test-classic-browser.mjs",
     "test:authoring-foundation": "node scripts/test-authoring-foundation.mjs",
     "test:camera-background": "node scripts/test-camera-background.mjs",
     "test:camera-background-browser": "node scripts/test-camera-background-browser.mjs",

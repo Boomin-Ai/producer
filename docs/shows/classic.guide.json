@@ -1,0 +1,83 @@
+{
+  "schema": "producer.reference-guide/1",
+  "setId": "classic",
+  "version": "1.0.0",
+  "purpose": "A complete, neutral studio with eight independently composed landscape/portrait views.",
+  "views": {
+    "opening": "Opening",
+    "solo": "Solo",
+    "demo": "Demo",
+    "conversation": "Conversation",
+    "roundtable": "Roundtable",
+    "spotlight": "Spotlight",
+    "break": "Break",
+    "closing": "Closing"
+  },
+  "sourceRoles": [
+    {
+      "id": "host",
+      "label": "Host camera"
+    },
+    {
+      "id": "screen",
+      "label": "Screen share"
+    },
+    {
+      "id": "guest1",
+      "label": "Guest one"
+    },
+    {
+      "id": "guest2",
+      "label": "Guest two"
+    },
+    {
+      "id": "guest3",
+      "label": "Guest three"
+    },
+    {
+      "id": "media",
+      "label": "Featured image or clip"
+    },
+    {
+      "id": "chat",
+      "label": "Room chat"
+    }
+  ],
+  "defaultView": "solo",
+  "themes": [
+    "dark",
+    "light"
+  ],
+  "principles": [
+    "Large source regions, restrained chrome and deliberate type hierarchy.",
+    "Optional chat reflows the camera.",
+    "Current-layout controls use the existing show.layoutId binding; this Set has no Show.",
+    "Device identity and account connections remain outside the package.",
+    "Motion animates only a graphics-only layer; native source ancestry stays static."
+  ],
+  "qualification": "Canonical MCP compilation and both-theme visual checks; real-camera native layout preparation, dock actions and dual-format recording tested locally on Apple Silicon. Synthetic guest/content signals do not qualify network guest audio/video.",
+  "controls": {
+    "layouts": "Eight logical views; independently composed landscape and portrait variants",
+    "liveCues": [
+      "Name card",
+      "Teaching card",
+      "Show CTA",
+      "Clear overlay"
+    ],
+    "thisView": [
+      "Host visibility",
+      "Chat reflow",
+      "Screen/example",
+      "Screen zoom",
+      "Media/teaching card",
+      "Guest count"
+    ],
+    "lookAndFeel": [
+      "Dark/light",
+      "Mint/silver accent",
+      "Quiet motion",
+      "Camera corner radius"
+    ],
+    "storage": "Set Edit saves configured defaults; live cues remain transient. Room bindings and personal dock arrangements remain outside the portable package."
+  }
+}

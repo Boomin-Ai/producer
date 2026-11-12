@@ -182,6 +182,8 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
   const arrangements=useControlArrangement(session.package,JSON.stringify([endpoint??'local',serverRoomId??preferenceRoomId??'preview']));
   const [player, setPlayer] = useState('player-1');
   const rundownId = useId();
+  const layoutMenuId = useId();
+  const [layoutMenuPosition,setLayoutMenuPosition]=useState({left:12,top:64});
   useShowClock(session);
   useSocialRehearsal(session,endpoint,moduleBindings,connections,state.workspaceMode);
   // Fast Refresh can retain a session built by the previous runtime module.
@@ -435,7 +437,17 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
         </button>
         <span className="set-output-announcement" role="status">{outputStatus}</span>
       </div>}
-      {!doc.show && views.length > 1 && <div className="set-primary-layout">{arrangedControl('builtin:layout')}</div>}
+      {!doc.show && views.length > 1 && <div className="set-primary-layout">
+        {arrangedControl('builtin:layout')}
+        <button type="button" className="set-layout-menu-trigger" aria-label="Choose layout" title={`Layout · ${selectedView?.label??'Choose layout'}`} popoverTarget={layoutMenuId}
+          onClick={event=>{const rect=event.currentTarget.getBoundingClientRect();setLayoutMenuPosition({left:Math.max(8,Math.min(rect.left,window.innerWidth-296)),top:Math.max(8,Math.min(rect.bottom+8,window.innerHeight-240))});}}>
+          <span>{selectedView?.label??'Layout'}</span><svg className="set-layout-menu-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true"><rect x="1.5" y="2" width="13" height="12" rx="1.5"/><path d="M1.5 6h13M7 6v8"/></svg><span aria-hidden="true">⌄</span>
+        </button>
+        <div id={layoutMenuId} popover="auto" className="set-layout-menu" role="dialog" aria-label="Choose Set layout" style={layoutMenuPosition}
+          onClick={event=>{if((event.target as HTMLElement).closest('button[data-layout-id]'))event.currentTarget.hidePopover();}}>
+          <strong>Layouts</strong>{arrangedControl('builtin:layout')}
+        </div>
+      </div>}
       {doc.show && <div className="set-fixed-playback">{transport}</div>}
       {doc.show && <button type="button" className="set-rundown-trigger" popoverTarget={rundownId} aria-label="Show rundown" title={phase?.label}>
         <span>{String(displayedStepIndex + 1).padStart(2, '0')}/{schedule.phases.length}</span>
