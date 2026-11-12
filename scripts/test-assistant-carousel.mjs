@@ -31,7 +31,7 @@ try{
    const hit=await next.boundingBox();assert.equal(await next.locator('svg').evaluate(el=>el.getBoundingClientRect().width),6,'resting arrow is very small');
    await next.hover();assert.equal(await next.locator('svg').evaluate(el=>el.getBoundingClientRect().width),12,'hover restores the previous arrow size');assert.deepEqual(await next.boundingBox(),hit,'hover never changes the row layout or click area');
    await page.mouse.move(0,0);
-   await next.click();await page.waitForFunction(()=>document.querySelector('.assistant-suggestions-track').scrollLeft>0);assert(await previous.isEnabled());
+   await next.click();await page.waitForFunction(()=>document.querySelector('.assistant-suggestions-track').scrollLeft>0);await page.waitForFunction(()=>!document.querySelector('[aria-label="Previous suggestions"]').disabled);assert(await previous.isEnabled());
    const last=track.getByRole('button',{name:'Plan a walkthrough'});await last.focus();
    assert(await last.evaluate(button=>{const b=button.getBoundingClientRect(),t=button.parentElement.getBoundingClientRect();return b.left>=t.left-1&&b.right<=t.right+1;}),'keyboard focus reveals the entire button');
    await last.press('Home');assert.equal(await track.getByRole('button').first().evaluate(el=>el===document.activeElement),true);
