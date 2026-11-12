@@ -421,3 +421,120 @@ impl Drop for Replay {
         }
     }
 }
+
+#[cfg(all(test, any(target_os = "macos", target_os = "windows")))]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "requires a native graphics engine and recording muxer; run alone"]
+    fn native_dual_clips_start_rearm_and_save_without_audio_sources() {
+        let temp =
+            std::env::temp_dir().join(format!("producer-clips-proof-{}", std::process::id()));
+        std::fs::create_dir_all(&temp).unwrap();
+        super::super::engine::persist_video(&temp, 720, 30);
+        let report = super::super::engine::bootstrap_with_config(&temp);
+        assert!(report.ok, "native bootstrap: {report:?}");
+        let mut graph = super::super::graph::SceneGraph::create().unwrap();
+        graph
+            .add_extra(
+                "clip-proof",
+                "Clips proof",
+                &super::super::graph::ExtraSpec::Color {
+                    color: "#008877".into(),
+                },
+            )
+            .unwrap();
+        for cycle in 0..2 {
+            // No mic, media or artificial tone: an empty program audio mix must
+            // still let both encoded outputs start and produce valid files.
+            let mut replay = unsafe {
+                Replay::start(
+                    "proof".into(),
+                    ClipSettings {
+                        seconds: 3,
+                        memory_mb: 64,
+                        output: ClipOutput::Both,
+                    },
+                    2000,
+                    ffi::obs_get_video(),
+                    graph.portrait_video().unwrap(),
+                )
+            }
+            .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(8);
+            loop {
+                replay.poll();
+                let status = replay.status();
+                assert!(status.error.is_none(), "startup: {status:?}");
+                if status.elapsed_seconds >= 2 && status.video_frames > 0 {
+                    break;
+                }
+                assert!(Instant::now() < deadline, "no captured frames: {status:?}");
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            let (tx, rx) = mpsc::channel();
+            replay.save(
+                &uuid::Uuid::new_v4().to_string(),
+                temp.to_str().unwrap(),
+                tx,
+            );
+            let deadline = Instant::now() + Duration::from_secs(12);
+            let receipt = loop {
+                replay.poll();
+                if let Ok(receipt) = rx.try_recv() {
+                    break receipt.unwrap();
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "clip save did not finalize: {:?}",
+                    replay.status()
+                );
+                std::thread::sleep(Duration::from_millis(50));
+            };
+            let files: Vec<ClipFile> = serde_json::from_value(receipt["files"].clone()).unwrap();
+            assert_eq!(files.len(), 2);
+            drop(replay);
+            for file in files {
+                crate::recordings::validate_mp4(std::path::Path::new(&file.path)).unwrap();
+                let probe = std::process::Command::new("ffprobe")
+                    .args([
+                        "-v",
+                        "error",
+                        "-count_frames",
+                        "-show_streams",
+                        "-of",
+                        "json",
+                    ])
+                    .arg(&file.path)
+                    .output()
+                    .unwrap();
+                assert!(
+                    probe.status.success(),
+                    "ffprobe: {}",
+                    String::from_utf8_lossy(&probe.stderr)
+                );
+                let probe: Value = serde_json::from_slice(&probe.stdout).unwrap();
+                let streams = probe["streams"].as_array().unwrap();
+                let video = streams.iter().find(|s| s["codec_type"] == "video").unwrap();
+                assert_eq!(video["codec_name"], "h264");
+                assert!(
+                    video["nb_read_frames"]
+                        .as_str()
+                        .unwrap()
+                        .parse::<u64>()
+                        .unwrap()
+                        > 20
+                );
+                assert!(streams
+                    .iter()
+                    .any(|s| s["codec_type"] == "audio" && s["codec_name"] == "aac"));
+                println!(
+                    "PASS Clips cycle={cycle} output={:?} decoded_frames={}",
+                    file.output, video["nb_read_frames"]
+                );
+            }
+        }
+        drop(graph);
+    }
+}

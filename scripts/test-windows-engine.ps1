@@ -24,6 +24,7 @@ $tests = @(
   'windows_gpu_presets_compile_and_render',
   'obs_program_tap_copies_timestamped_video_and_stage_audio_then_disconnects',
   'windows_dual_recordings_finalize_with_video_and_audio',
+  'native_dual_clips_start_rearm_and_save_without_audio_sources',
   'windows_native_guest_ingress_and_retirement',
   'windows_cutout_and_virtual_camera_pixels_and_lifecycle'
 )
