@@ -457,6 +457,31 @@ mod tests {
                 },
             )
             .unwrap();
+        // A capture can be closed before its first packet. Replay's normal
+        // stop callback waits for another packet, so exercise the terminal
+        // stop path before qualifying the longer save/rearm cycles below.
+        for output in [ClipOutput::Portrait, ClipOutput::Both] {
+            let replay = unsafe {
+                Replay::start(
+                    "early-stop".into(),
+                    ClipSettings {
+                        seconds: 3,
+                        memory_mb: 64,
+                        output,
+                    },
+                    2000,
+                    ffi::obs_get_video(),
+                    graph.portrait_video().unwrap(),
+                )
+            }
+            .unwrap();
+            let stopping = Instant::now();
+            drop(replay);
+            assert!(
+                stopping.elapsed() < Duration::from_secs(3),
+                "early Clips stop waited for a future packet: {output:?}"
+            );
+        }
         for cycle in 0..2 {
             // No mic, media or artificial tone: an empty program audio mix must
             // still let both encoded outputs start and produce valid files.
