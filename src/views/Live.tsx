@@ -7445,6 +7445,13 @@ export function LiveView({
     'set.hide':async()=>({hidden:await setOutput.returnToRoom()}),
     'sets.list':()=>ipc.setLibraryList(),
     'sets.save':async({document})=>{const {parsePackage}=await import('../features/presentation/schema');const doc=parsePackage(document);await ipc.setLibrarySave(JSON.stringify(doc));window.dispatchEvent(new Event('producer:set-library-changed'));return {id:doc.id,name:doc.name,version:doc.version,outputChanged:false};},
+    ...(import.meta.env.DEV?{'set.inspect':async()=>{
+      if(setOutput.renderer!=='native')throw Error('Native Set output is unavailable.');
+      const {generation}=await ipc.liveSetStatus();
+      const read=(outputId:string)=>invoke('live_set_v2',{request:{op:'status',generation,outputId}});
+      const [program,portrait,engine,music]=await Promise.all([read('program'),outputView==='landscape'?null:read('portrait'),ipc.liveEngineStatus(),invoke('dj_control',{action:{kind:'status'}})]);
+      return {program,portrait,engine,music};
+    }}:{}),
     'set.load':async({id})=>{if(typeof id!=='string')throw Error('Expected library Set id.');const item=(await ipc.setLibraryList()).find(item=>item.id===id);if(!item)throw Error('Unknown library Set.');const raw=await ipc.setLibraryRead(item.file);const {parsePackage}=await import('../features/presentation/schema');const next=await changeSet(parsePackage(JSON.parse(raw)));return {id:next?.package.id,name:next?.package.name};},
     'set.layout':({id})=>{if(!setRehearsal.package.set.layouts.some(item=>item.id===id))throw Error('Unknown layout.');setRehearsal.send({type:'control',action:{type:'layout.select',layoutId:id}});return {id};},
     'set.value':({key,value})=>{if(!Object.prototype.hasOwnProperty.call(setRehearsal.package.set.values,key))throw Error('Unknown field.');setRehearsal.send({type:'control',action:{type:'value.set',key,value}});return {key};},

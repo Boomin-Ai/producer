@@ -1,5 +1,6 @@
 .set-arranged-operator{flex:1 1 100%;width:100%;min-width:0}
 .set-music{display:flex;flex-direction:column;gap:10px;min-width:0}
+.set-music>.set-number-slider{flex:none}
 .set-music-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px}
 .set-music-heading small{font-size:10px;color:var(--fg-3,#8194a2)}
 .set-music-track{display:flex;align-items:center;gap:7px;min-width:0}

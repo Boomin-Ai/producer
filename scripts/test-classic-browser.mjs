@@ -32,6 +32,7 @@ try{
  await page.getByRole('button',{name:'Opening',exact:true}).click();
  await page.getByRole('button',{name:'Play music',exact:true}).waitFor();
  await page.waitForFunction(()=>document.querySelector('select[aria-label="Waiting music track"]')?.value==='in-case');
+ assert((await page.locator('.set-music:visible').boundingBox()).height<200,'Music slider must size to its content in the column player');
  assert.deepEqual(await page.evaluate(()=>window.nativeActions),[],'Opening must not autoplay');
  await page.getByRole('button',{name:'Play music',exact:true}).click();
  await page.getByRole('button',{name:'Pause music',exact:true}).waitFor();
