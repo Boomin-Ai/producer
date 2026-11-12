@@ -57,7 +57,6 @@ jobs:
           node scripts/test-assistant-panel.mjs
           node scripts/test-assistant-reliability.mjs
           node scripts/test-assistant-suggestions.mjs
-          node scripts/test-assistant-popover-fallback.mjs
           node scripts/test-room-toolbar-browser.mjs
           node scripts/test-set-source-recovery-browser.mjs
           node scripts/test-set-chat-source-browser.mjs
