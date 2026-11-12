@@ -6,6 +6,8 @@ type Journal = AuthoringJournal<PresentationPackage, SetAuthoringCommand>;
 const host = globalThis as unknown as {onmessage: ((event: MessageEvent) => void) | null; postMessage(value: unknown): void};
 let session: AuthoringSession<PresentationPackage, SetAuthoringCommand> | undefined;
 let database: Promise<IDBDatabase> | undefined;
+let branch='';
+let recoverable:Array<{branch:string;name:string}>=[];
 function db() {
   return database ??= new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open('producer-authoring', 1);
@@ -14,14 +16,14 @@ function db() {
     request.onerror = () => reject(Error('Draft storage is unavailable.'));
   });
 }
-async function load(key: string): Promise<Journal | undefined> {
+async function load<T=Journal>(key: string): Promise<T | undefined> {
   const database = await db();
   return new Promise((resolve, reject) => {
     const request = database.transaction('drafts', 'readonly').objectStore('drafts').get(key);
     request.onsuccess = () => resolve(request.result); request.onerror = () => reject(Error('Could not restore the saved draft.'));
   });
 }
-async function save(key: string, value: Journal) {
+async function save(key: string, value: unknown) {
   const database = await db();
   return new Promise<void>((resolve, reject) => {
     const transaction = database.transaction('drafts', 'readwrite');
@@ -38,11 +40,25 @@ host.onmessage = async ({data}: MessageEvent<{id: number; method: string; value:
       if (typeof value.scope !== 'string' || !value.scope || value.scope.length > 512) throw Error('Invalid authoring scope.');
       const adapter = setDocumentAdapter(target), legacyKey = `${value.scope}:${base.id}`;
       const key = `${legacyKey}:${await adapter.revision(base)}`;
-      const stored = await load(key) ?? await load(legacyKey);
-      const writer = (journal: Journal) => save(key, journal);
+      const pointer=await load<string>(key+':active');
+      recoverable=await load<Array<{branch:string;name:string}>>(key+':saved')??[];
+      branch=typeof value.branch==='string'?value.branch:pointer??key;
+      if(branch!==key&&!branch.startsWith(key+':branch:'))throw Error('This saved draft belongs to another source.');
+      const stored = await load(branch) ?? (branch===key?await load(legacyKey):undefined);
       let restored = false;
-      if (stored && await adapter.revision(stored.base) === await adapter.revision(base)) {session = await AuthoringSession.restore(adapter, base, stored, writer); restored = true;}
-      else session = await AuthoringSession.create(adapter, base, writer);
+      if (stored && await adapter.revision(stored.base) === await adapter.revision(base)) {session = await AuthoringSession.restore(adapter, base, stored, ((key:string)=> (journal:Journal)=>save(key,journal))(branch)); restored = true;}
+      else session = await AuthoringSession.create(adapter, base, ((key:string)=> (journal:Journal)=>save(key,journal))(branch));
+      const candidate=session.snapshot().document;
+      // A new Set created from this source remains recoverable, but is not
+      // silently adopted when the room later returns to the original Set.
+      if(value.followRoom&&restored&&(candidate.id!==base.id||candidate.name!==base.name)){
+        await save(branch,stored);
+        recoverable=[{branch,name:candidate.name},...recoverable.filter(item=>item.branch!==branch)].slice(0,8);
+        await save(key+':saved',recoverable);
+        branch=key+':branch:'+crypto.randomUUID();
+        session=await AuthoringSession.create(adapter,base,((key:string)=> (journal:Journal)=>save(key,journal))(branch));
+        await save(branch,session.exportJournal());await save(key+':active',branch);restored=false;
+      }
       result = {...session.snapshot(), restored};
     } else {
       if (!session) throw Error('Open an authoring session first.');
@@ -60,6 +76,7 @@ host.onmessage = async ({data}: MessageEvent<{id: number; method: string; value:
         result = sections[value.section];
       } else throw Error('Unknown authoring operation.');
     }
+    if(result&&typeof result==='object'&&'document' in result)result={...result,branch,recoverable};
     host.postMessage({id, result});
   } catch (error) {host.postMessage({id, error: error instanceof Error ? error.message : String(error)});}
 };

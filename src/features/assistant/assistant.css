@@ -248,3 +248,8 @@
 @container assistant-dock (max-width:160px){.assistant-mini:not(.assistant-tight)>.assistant-mini-compose{display:none;}.assistant-mini:not(.assistant-tight)>.assistant-mini-open{flex:1;}}
 @container assistant-dock (max-width:220px){.assistant-mini-disconnected:not(.assistant-tight)>.assistant-mini-open{flex:none;}.assistant-mini-disconnected:not(.assistant-tight)>.assistant-mini-open strong,.assistant-mini-disconnected:not(.assistant-tight)>.assistant-mini-expand,.assistant-mini-disconnected .assistant-mini-status{display:none;}}
 @media(prefers-reduced-motion:reduce){.assistant-connected-dot.working{animation:none;}}
+
+.assistant-progress{display:flex;align-items:center;gap:9px;padding:10px 16px;color:var(--assistant-muted,#a1b9b5);font-size:12px;border-top:1px solid #ffffff0c}
+.assistant-progress strong{font-weight:500;flex:1;min-width:0}.assistant-progress time{font-variant-numeric:tabular-nums}.assistant-progress-spinner{width:12px;height:12px;border:1.5px solid #79ddbd30;border-top-color:#79ddbd;border-radius:50%;animation:assistant-progress-spin 1s linear infinite;flex:none}@keyframes assistant-progress-spin{to{transform:rotate(360deg)}}
+.assistant-message.rejected>span{color:#e7bc95}.assistant-context-changed{padding:9px 16px;background:#d7b0710c;display:flex;gap:10px;align-items:center;font-size:12px}.assistant-context-changed>span{flex:1;min-width:0}.assistant-context-changed small{display:block;color:#8ea49f;margin-top:4px}.assistant-context-changed button{font-size:12px;flex:none}
+@media(prefers-reduced-motion:reduce){.assistant-progress-spinner{animation:none}}

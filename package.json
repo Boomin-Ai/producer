@@ -98,7 +98,10 @@
     "test:threads-browser": "node scripts/test-threads-browser.mjs",
     "export:set-publication": "node scripts/export-set-publication.mjs",
     "publish:set": "node scripts/publish-set.mjs",
-    "test:set-publication": "node scripts/test-set-publication.mjs && node scripts/test-publication-client.mjs && node scripts/test-site-public-routes.mjs"
+    "test:set-publication": "node scripts/test-set-publication.mjs && node scripts/test-publication-client.mjs && node scripts/test-site-public-routes.mjs",
+    "room:cli": "node scripts/room-cli.mjs",
+    "test:room-cli": "node scripts/test-room-cli.mjs",
+    "test:assistant-reliability": "node scripts/test-assistant-reliability.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.0",

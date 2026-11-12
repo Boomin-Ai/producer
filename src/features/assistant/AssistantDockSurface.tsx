@@ -16,7 +16,7 @@ export function AssistantDockSurface({dock,parking,reviewOpen,busy,connected,con
   const panel=useRef<HTMLDivElement>(null),toast=useRef<HTMLDivElement>(null),trigger=useRef<HTMLButtonElement>(null);
   const compact=dock.compact||shallow||reviewOpen;
   const unread=!!completion;
-  const label=busy?'Working…':unread?(completion.kind==='error'?'Needs attention':'Reply ready'):status;
+  const label=busy?`Working · ${status}`:unread?(completion.kind==='error'?'Needs attention':'Reply ready'):status;
   const openConversation=()=>{if(reviewOpen||open)return;setPosition(undefined);setOpen(true);onRead();};
   const close=()=>{setOpen(false);trigger.current?.focus();};
   const toggleConversation=()=>{if(open)close();else openConversation();};
@@ -67,7 +67,7 @@ export function AssistantDockSurface({dock,parking,reviewOpen,busy,connected,con
   const dot=<span className={`assistant-connected-dot${busy?' working':''}${!connected?' disconnected':''}`}/>;
   const expand=<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M14 4h6v6m0-6-7 7M10 20H4v-6m0 6 7-7"/></svg>;
   const mini=<div className={`assistant-mini${shallow&&!dock.compact?' assistant-tight':''}${!connected?' assistant-mini-disconnected':''}`}>
-    <button ref={trigger} className="assistant-mini-open" type="button" aria-label={`Assistant · ${label}`} aria-haspopup="dialog" aria-expanded={open} title={open?'Close conversation':'Open conversation'} onClick={toggleConversation}>{dot}<strong>{busy?'Working':unread?(completion.kind==='error'?'Needs attention':'Reply ready'):'Assistant'}</strong>{unread&&<span className="assistant-unread-dot" aria-label="Unread Assistant reply"/>}{!busy&&!unread&&<span className="assistant-mini-status">{label}</span>}</button>
+    <button ref={trigger} className="assistant-mini-open" type="button" aria-label={`Assistant · ${label}`} aria-haspopup="dialog" aria-expanded={open} title={open?'Close conversation':'Open conversation'} onClick={toggleConversation}>{dot}<strong>{busy?'Working':unread?(completion.kind==='error'?'Needs attention':'Reply ready'):'Assistant'}</strong>{unread&&<span className="assistant-unread-dot" aria-label="Unread Assistant reply"/>}{!unread&&<span className="assistant-mini-status">{label}</span>}</button>
     {shallow&&!dock.compact&&<button type="button" className="assistant-tight-summary" onClick={openConversation}>{previewText(summary)||'Ask Producer. Your conversation opens in a full-size panel.'}</button>}
     {!reviewOpen&&!open&&(connected?composer:<button type="button" className="assistant-mini-connect" data-oai-siwc-button="" disabled={connecting} onClick={onConnect}>{connecting?'Connecting…':'Continue with ChatGPT'}</button>)}
     <button className="assistant-mini-expand" type="button" aria-label="Expand Assistant" aria-haspopup="dialog" aria-expanded={open} title={open?'Close conversation':'Open full conversation'} onClick={toggleConversation}>{expand}</button>

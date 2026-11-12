@@ -1,3 +1,4 @@
+import {useRoomControl} from '../features/room-control/useRoomControl';
 import {notify,dismissKey} from "../lib/notices";
 import {DataIntegrations} from "../components/DataIntegrations";
 import { PerformanceDiagnostics } from "../components/PerformanceDiagnostics";
@@ -556,6 +557,10 @@ export function Home({
     if (access) void access.result.then(() => { access.receivedAt = performance.now(); });
     setView({ kind: "opening", room, access });
   };
+  useRoomControl('home',undefined,true,()=>({view:view.kind,surface,workspace:activeEndpointId(),rooms:rooms.map(({id,name,endpoint_id})=>({id,name,endpoint_id})),runtime:roomRuntime}),{
+    'room.create':async({name})=>{if(view.kind!=='home')throw Error('Return to room cards first.');if(typeof name!=='string'||!name.trim()||name.length>100)throw Error('Expected a room name up to 100 characters.');const room=await ipc.liveCreateRoom(name.trim(),activeEndpointId()??undefined);notifyRoomsChanged();void loadLive();openRoom(room);return {opening:room.id};},
+    'room.open':({id})=>{const room=roomsRef.current.find(item=>item.id===id);if(!room)throw Error('Unknown room in this workspace.');if(view.kind!=='home')throw Error('Return to room cards first.');openRoom(room);return {opening:room.id};},
+  });
   const back = () => {
     const retain = view.kind === 'room' && nativeAppearances &&
       (roomRuntimeRef.current?.roomId === view.room.id && roomRuntimeRef.current.outputsActive || !!outgoingSeat);

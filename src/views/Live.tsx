@@ -1,3 +1,4 @@
+import {useRoomControl} from '../features/room-control/useRoomControl';
 import {RoomAssistantContext, type AssistantSetRequest, type AssistantEditorRequest} from '../features/assistant/roomBridge';
 import {RoomTransportControls,ToolbarButton} from '../components/RoomToolbar';
 import {IS_MAC,IS_WINDOWS} from '../lib/platform';
@@ -7400,6 +7401,31 @@ export function LiveView({
     if(where==='right'){next.right=Math.max(320,next.right??0);setRightOpen(true);}
     writeCfg({...current,sizes:next});
   },[roomId]);
+
+  useRoomControl('room',roomId??undefined,visible&&isHost&&docApplied,()=>({
+    id:roomId,name:room?.name,ready:docApplied,host:isHost,layoutEdit,
+    config:cfgRef.current, docks:{top:{open:topOpen},bottom:{open:sheetOpen},left:{open:leftOpen},right:{open:rightOpen}},
+    sources,scenes,activeScene,meters:extraLevels,access:roomAccess,interactions:{vote,savedVotes},chat:{messages:chatMsgs,filters:chatFilters,connections:chatConns,error:chatError},guests:roster.map(({id,display_name,state,seat})=>({id,display_name,state,seat})),
+    presentation:{document:setRehearsal.package,state:setRehearsal.snapshot(),bindings:setOutput.bindings,framing:setOutput.framing,renderer:setOutput.renderer,busy:setOutput.busy,error:setOutput.error,readiness:setOutput.layoutReadiness,active:!!setOutput.active,currentPresented:!!setOutput.currentPresented},
+    output:{streaming,recording:!!recPath,outputView,engine:snapshot},
+    assistant:{started:assistantStarted,enabled:assistantEnabled,dock:assistantDock,scope:assistantScope},
+  }),{
+    'panel.move':({panel,dock})=>{if(!PANEL_ORDER.includes(panel)||!['top','bottom','left','right','hidden'].includes(dock))throw Error('Unknown panel or dock.');setLayout(movePanel(normalize(cfgRef.current.layout??DEFAULT_LAYOUT),panel,dock));if(panel==='assistant')setAssistantStarted(true);return {panel,dock};},
+    'dock.set':({dock,open,size})=>{if(!['top','bottom','left','right'].includes(dock)||typeof open!=='boolean')throw Error('Expected dock and open boolean.');if(size!==undefined&&(!Number.isFinite(size)||size<56||size>560))throw Error('Dock size must be 56–560 pixels.');({top:setTopOpen,bottom:setSheetOpen,left:setLeftOpen,right:setRightOpen}[dock as 'top'|'bottom'|'left'|'right'])(open);if(size!==undefined){writeCfg({...cfgRef.current,sizes:{...cfgRef.current.sizes,[dock]:size}});}return {dock,open,size};},
+    'layout.edit':({enabled})=>{if(typeof enabled!=='boolean')throw Error('Expected enabled boolean.');setLayoutEdit(enabled);return {enabled};},
+    'scene.select':async({id})=>{const scene=scenes.find(item=>item.id===id);if(!scene)throw Error('Unknown scene.');await applyScene(scene,{cut:true});return {id};},
+    'scene.add':()=>{addScene();return {requested:true};},
+    'source.create':async({slot,kind,label,color,device})=>{if(!setOutput.createSource||!setRehearsal.package.set.slots.some(item=>item.id===slot))throw Error('Choose an existing Set source role.');if(typeof label!=='string'||!label.trim()||label.length>100)throw Error('Expected a source label up to 100 characters.');if(kind!=='camera'&&kind!=='color')throw Error('This development command supports camera or color sources.');if(kind==='color'&&(typeof color!=='string'||!/^#[0-9a-f]{6}$/i.test(color)))throw Error('Expected a six-digit color.');if(device!==undefined&&typeof device!=='string')throw Error('Invalid camera device.');const id=await setOutput.createSource(slot,kind==='color'?{kind,color}:{kind:'camera',...(device?{device}:{})},label);return {id};},
+    'set.bind':({slot,source})=>{if(!setRehearsal.package.set.slots.some(item=>item.id===slot)||!sources.items?.some(item=>item.id===source&&item.kind!=='mic'))throw Error('Choose an existing source and role.');setOutput.bind(slot,source);return {slot,source};},
+    'set.show':async()=>{await (setOutput.applyConfirmed??setOutput.apply)();if(setOutput.error)throw Error(setOutput.error);return {requested:true};},
+    'set.hide':async()=>({hidden:await setOutput.returnToRoom()}),
+    'sets.list':()=>ipc.setLibraryList(),
+    'set.load':async({id})=>{if(typeof id!=='string')throw Error('Expected library Set id.');const item=(await ipc.setLibraryList()).find(item=>item.id===id);if(!item)throw Error('Unknown library Set.');const raw=await ipc.setLibraryRead(item.file);const {parsePackage}=await import('../features/presentation/schema');const next=await changeSet(parsePackage(JSON.parse(raw)));return {id:next?.package.id,name:next?.package.name};},
+    'set.layout':({id})=>{if(!setRehearsal.package.set.layouts.some(item=>item.id===id))throw Error('Unknown layout.');setRehearsal.send({type:'control',action:{type:'layout.select',layoutId:id}});return {id};},
+    'set.value':({key,value})=>{if(!Object.prototype.hasOwnProperty.call(setRehearsal.package.set.values,key))throw Error('Unknown field.');setRehearsal.send({type:'control',action:{type:'value.set',key,value}});return {key};},
+    'assistant.open':()=>{setAssistantStarted(true);const existing=normalize(cfgRef.current.layout??DEFAULT_LAYOUT);if(dockOf(existing,'assistant')==='hidden')setLayout(movePanel(existing,'assistant','left'));setLeftOpen(true);setRightOpen(true);return {opened:true};},
+    leave:()=>{if(streaming||recPath)throw Error('Stop output in the UI before navigating away in a test.');onLeave?.();return {leaving:true};},
+  });
 
   const panelBody = (id: PanelId) => {
     switch (id) {
