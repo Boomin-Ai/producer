@@ -20,3 +20,5 @@
 @container(max-width:210px){.clips-body{padding:10px;gap:12px}.clips-times,.clips-formats{flex-wrap:wrap}.clips-field{flex-wrap:wrap}.clips-location{flex-wrap:wrap}.clips-console{gap:2px}.clips-console .clips-save svg{display:none}.clips-console .clips-arm{width:22px}.clips-console .clips-expand{width:22px}.clips-console .clips-save{padding-inline:3px;font-size:10px}}
 @media(max-width:480px){.clips-dialog .clips-options{grid-template-columns:1fr}.clips-dialog .clips-body{padding:14px}}
 @media(prefers-reduced-motion:reduce){.clips-switch>span:first-child,.clips-switch>span:first-child:after{transition:none}}
+
+.rm-foot-clips{border:0;background:none;padding:0;color:#79d6b6;font:inherit;cursor:pointer;white-space:nowrap}.rm-foot-clips:hover{text-decoration:underline}

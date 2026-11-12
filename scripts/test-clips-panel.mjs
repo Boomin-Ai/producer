@@ -22,7 +22,7 @@ try{
    if(command==='clips_disable'){window.capture={...window.capture,enabled:false,saving:false,room_id:null};return window.capture;}
    if(command==='clips_save'){window.capture={...window.capture,saving:true};await new Promise(resolve=>setTimeout(resolve,400));window.capture={...window.capture,saving:false};const files=[{path:'/Volumes/CanonA002/Producer Recordings/clip.mp4',output:'landscape',duration_ms:12450}];window.saved=[{id:'clip1',created_ms:Date.now(),status:'ready',requested_seconds:window.capture.settings.seconds,files,error:null}];return {id:'clip1',files};}
    if(command==='clips_pick_directory')return null;
-   if(command==='live_reveal_file')return;
+   if(command==='plugin:opener|reveal_item_in_dir')return;
    throw Error('Unexpected command: '+command);
   }};
   window.props={width:360,height:800,compact:false,visible:true,show:true};
@@ -37,6 +37,7 @@ try{
  assert.deepEqual(await page.evaluate(()=>window.calls.find(c=>c.command==='clips_enable').args.settings),{seconds:30,memory_mb:256,output:'both'});
  assert(await page.getByRole('button',{name:'15s',exact:true}).isDisabled(),'settings locked during rolling capture');
  await page.getByRole('button',{name:'Save last 30s',exact:true}).click();await page.getByRole('button',{name:'Saving…',exact:true}).waitFor();assert(await page.getByRole('button',{name:'Saving…',exact:true}).isDisabled());await page.getByRole('button',{name:'Preview landscape clip',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Show landscape clip in folder',exact:true}).click();assert.equal(await page.evaluate(()=>window.calls.filter(c=>c.command==='plugin:opener|reveal_item_in_dir').length),1,'cross-platform reveal uses the native opener');
  assert.equal(await page.evaluate(()=>window.calls.filter(c=>c.command==='clips_save').length),1,'one explicit save');
  assert(await page.getByText('Landscape · 0:12',{exact:true}).isVisible(),'actual container duration, not requested window');
  await page.evaluate(()=>window.render({show:false}));await page.waitForTimeout(100);assert.equal(await page.evaluate(()=>window.capture.enabled),true,'hiding panel preserves buffer');assert.equal(await page.evaluate(()=>window.calls.filter(c=>c.command==='clips_disable').length),0);

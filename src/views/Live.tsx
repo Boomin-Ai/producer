@@ -7425,8 +7425,8 @@ export function LiveView({
     'scene.select':async({id})=>{const scene=cfgRef.current.scenes.find(item=>item.id===id),owner=roomEngineRef.current;if(!scene||!owner)throw Error('Choose a scene in the open room.');let applied=false;await owner.run(async()=>{applied=await applyScene(scene,{cut:true})===true;});if(!applied)throw Error('The scene could not be selected. Check room readiness.');return {id};},
     'clips.status':async()=>({...await clipsController.refresh(),settings:clipsController.settings,error:clipsController.error}),
     'clips.configure':args=>clipsController.configure(validateClipSettings(args)),
-    'clips.enable':async()=>{if(clipsController.capture.enabled)return clipsController.capture;return clipsController.toggle();},
-    'clips.disable':async()=>{if(!clipsController.capture.enabled&&!clipsController.capture.error)return clipsController.capture;return clipsController.toggle();},
+    'clips.enable':async()=>{if(clipsController.capture.enabled)return clipsController.capture;return clipsController.setEnabled(true);},
+    'clips.disable':async()=>{if(!clipsController.capture.enabled&&!clipsController.capture.error)return clipsController.capture;return clipsController.setEnabled(false);},
     'clips.save':()=>clipsController.save(),
     'clips.list':async()=>({recent:(await clipsController.refresh())?.recent??[]}),
     'scene.add':()=>{addScene();return {requested:true};},
@@ -9837,6 +9837,7 @@ export function LiveView({
             Studio
           </span>
         )}
+        {(clipsController.capture.enabled||clipsController.capture.saving||clipsController.pending==='save')&&<button className="rm-foot-clips" title="Rolling capture is on · Open Clips" onClick={()=>{const dock=dockOf(layout,'clips');if(dock==='hidden'){setLayout(movePanel(layout,'clips','bottom'));setSheetOpen(true);}else({top:setTopOpen,bottom:setSheetOpen,left:setLeftOpen,right:setRightOpen}[dock])(true);}}>Clips · {clipsController.capture.saving||clipsController.pending==='save'?'Saving…':'Buffering'}</button>}
         {recPath && (
           <span className="rm-foot-item rec">
             <span className="rm-rec-dot" /> Recording {`${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`}
