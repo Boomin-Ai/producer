@@ -1016,6 +1016,9 @@
   min-height:0;
 }
 :is(.rm-dock-top:not(.expanded), .rm-dock-bottom.slim) > .rm-panel-setControls .set-controls {
+  width:100%;
+  max-width:100%;
+  align-self:stretch;
   padding:0;
   justify-content:center;
   overflow:hidden;
