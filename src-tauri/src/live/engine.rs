@@ -18,6 +18,9 @@ use serde::Serialize;
 use super::ffi;
 use super::record;
 use super::studio;
+#[cfg(feature = "guest-rtc-pilot")]
+#[path = "appearance_lease_policy.rs"]
+mod appearance_lease_policy;
 
 /// Registration IDs the product requires, per LIVE-REVIEW.md §2.1 / M-L1.
 ///
@@ -917,6 +920,29 @@ pub enum FilterOp {
 }
 
 pub enum Command {
+    #[cfg(feature = "guest-rtc-pilot")]
+    AppearanceMedia {
+        local_room_id: String,
+        portrait: bool,
+        quality: u32,
+        appearance_id: String,
+        lease_id: String,
+        keeper: Arc<dyn Send + Sync>,
+        reply: mpsc::Sender<
+            Result<
+                (
+                    super::rtc_program::CaptureTarget,
+                    Arc<super::appearance_media::AppearanceOutputs>,
+                ),
+                String,
+            >,
+        >,
+    },
+    #[cfg(feature = "guest-rtc-pilot")]
+    ReleaseAppearance {
+        appearance_id: String,
+        lease_id: String,
+    },
     PortraitRoom {
         reply: mpsc::Sender<Result<graph::SourcesState, String>>,
     },
@@ -1122,6 +1148,7 @@ pub enum Command {
     RestoreRoom {
         queued_at: Instant,
         restore: graph::RoomRestore,
+        room_id: Option<String>,
         reply: mpsc::Sender<Result<graph::RoomRestoreResult, String>>,
     },
     AddExtra {
@@ -1157,6 +1184,10 @@ pub enum Command {
 /// Variant name for the engine-loop stall log (no reflection in Rust).
 fn cmd_name(c: &Command) -> &'static str {
     match c {
+        #[cfg(feature = "guest-rtc-pilot")]
+        Command::AppearanceMedia { .. } => "AppearanceMedia",
+        #[cfg(feature = "guest-rtc-pilot")]
+        Command::ReleaseAppearance { .. } => "ReleaseAppearance",
         Command::Soundboard { .. } => "Soundboard",
         Command::Dj { .. } => "Dj",
         Command::SetPreviewSources { .. } => "SetPreviewSources",
@@ -1355,6 +1386,25 @@ pub struct LiveHandle {
     cmd: mpsc::Sender<Command>,
     pub snapshot: Arc<Mutex<Snapshot>>,
     streaming: Arc<AtomicBool>,
+}
+
+/// Dropping an appearance must never execute OBS teardown on an SDK thread.
+/// The engine keeps the selected view and monitor sources until this last lease
+/// has retired; its command also orders release after in-flight engine work.
+#[cfg(feature = "guest-rtc-pilot")]
+struct AppearanceKeeper {
+    appearance_id: String,
+    lease_id: String,
+    commands: mpsc::Sender<Command>,
+}
+#[cfg(feature = "guest-rtc-pilot")]
+impl Drop for AppearanceKeeper {
+    fn drop(&mut self) {
+        let _ = self.commands.send(Command::ReleaseAppearance {
+            appearance_id: self.appearance_id.clone(),
+            lease_id: self.lease_id.clone(),
+        });
+    }
 }
 
 impl LiveHandle {
@@ -1610,18 +1660,68 @@ impl LiveHandle {
         &self,
         restore: graph::RoomRestore,
     ) -> Result<graph::RoomRestoreResult, String> {
+        self.restore_room_bound(restore, None)
+    }
+    pub fn restore_room_bound(
+        &self,
+        restore: graph::RoomRestore,
+        room_id: Option<String>,
+    ) -> Result<graph::RoomRestoreResult, String> {
         let (tx, rx) = mpsc::channel();
         performance_stage("native.room.restore.queued", Duration::ZERO, None);
         self.cmd
             .send(Command::RestoreRoom {
                 queued_at: Instant::now(),
                 restore,
+                room_id,
                 reply: tx,
             })
             .map_err(|e| e.to_string())?;
         // Multiple cold browser/capture creations can take longer than a cut.
         rx.recv_timeout(Duration::from_secs(120))
             .map_err(|_| "Room restoration did not finish".to_string())?
+    }
+    #[cfg(feature = "guest-rtc-pilot")]
+    pub fn appearance_media(
+        &self,
+        local_room_id: String,
+        portrait: bool,
+        quality: u32,
+        appearance_id: String,
+    ) -> Result<
+        (
+            super::rtc_program::CaptureTarget,
+            Arc<super::appearance_media::AppearanceOutputs>,
+        ),
+        String,
+    > {
+        if local_room_id.is_empty()
+            || local_room_id.len() > 256
+            || uuid::Uuid::parse_str(&appearance_id).is_err()
+        {
+            return Err("Invalid local appearance binding".into());
+        }
+        let lease_id = uuid::Uuid::new_v4().to_string();
+        let keeper: Arc<dyn Send + Sync> = Arc::new(AppearanceKeeper {
+            appearance_id: appearance_id.clone(),
+            lease_id: lease_id.clone(),
+            commands: self.cmd.clone(),
+        });
+        let (reply, result) = mpsc::channel();
+        self.cmd
+            .send(Command::AppearanceMedia {
+                local_room_id,
+                portrait,
+                quality,
+                appearance_id,
+                lease_id,
+                keeper,
+                reply,
+            })
+            .map_err(|_| "Appearance engine unavailable".to_string())?;
+        result
+            .recv_timeout(Duration::from_secs(10))
+            .map_err(|_| "Appearance engine did not answer".to_string())?
     }
     pub fn apply_scene(
         &self,
@@ -3007,6 +3107,15 @@ pub fn start(
             let mut preview: Option<Preview> = None;
             let mut portrait_preview: Option<Preview> = None;
             let mut selected_portrait=false;
+            // Only successful full room restoration establishes this identity.
+            // A caller cannot relabel an active graph by attaching a new view.
+            let mut bound_room_id: Option<String> = None;
+            #[cfg(feature = "guest-rtc-pilot")]
+            let mut appearance_media: std::collections::HashMap<String, (Arc<super::appearance_media::AppearanceOutputs>, bool, String)> = std::collections::HashMap::new();
+            #[cfg(feature = "guest-rtc-pilot")]
+            let mut appearance_view: Option<studio::RoomMix> = None;
+            #[cfg(feature = "guest-rtc-pilot")]
+            let mut appearance_shutdown_pending = false;
             let mut selected_video=unsafe{ffi::obs_get_video()};
             let mut session: Option<Session> = None;
             let mut state = SessionState::Idle;
@@ -3262,12 +3371,57 @@ pub fn start(
                 }
                 // 120ms tick: meters want ~8Hz; command latency stays low.
                 if let Some(g)=scene.as_mut(){g.warm_ready_buffers();}
+                #[cfg(feature = "guest-rtc-pilot")]
+                let received = if appearance_shutdown_pending && appearance_lease_policy::shutdown_ready(appearance_media.len()) {
+                    Ok(Command::Shutdown)
+                } else { cmd_rx.recv_timeout(Duration::from_millis(120)) };
+                #[cfg(not(feature = "guest-rtc-pilot"))]
                 let received = cmd_rx.recv_timeout(Duration::from_millis(120));
                 if let Ok(c) = &received {
                     iter_label = cmd_name(c);
                 }
                 iter_prev = Some((iter_t0, iter_label));
                 match received {
+                    #[cfg(feature = "guest-rtc-pilot")]
+                    Ok(Command::AppearanceMedia { local_room_id, portrait, quality, appearance_id, lease_id, keeper, reply }) => {
+                        let result = (|| -> Result<_, String> {
+                            if appearance_shutdown_pending { return Err("The room engine is closing".into()); }
+                            appearance_lease_policy::can_acquire(bound_room_id.as_deref(), &local_room_id, appearance_media.contains_key(&appearance_id), appearance_media.len())?;
+                            let profile = producer_guest_runtime::program::VideoProfile::appearance(quality, portrait).map_err(str::to_string)?;
+                            let video = if portrait {
+                                #[cfg(any(target_os = "macos", target_os = "windows"))]
+                                { scene.as_mut().ok_or("The room is not ready")?.portrait_video()? }
+                                #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+                                { return Err("Native portrait appearance is unavailable on this platform".into()); }
+                            } else {
+                                // A single unmirrored room-only view is shared by
+                                // appearances, independently of virtual-camera
+                                // ownership and Studio/window-capture changes.
+                                if appearance_view.is_none() {
+                                    let room = unsafe { ffi::obs_get_output_source(0) };
+                                    let created = unsafe { studio::RoomMix::build(room) };
+                                    if !room.is_null() { unsafe { ffi::obs_source_release(room); } }
+                                    appearance_view = Some(created?);
+                                }
+                                appearance_view.as_ref().unwrap().video()
+                            };
+                            let target = unsafe { super::rtc_program::CaptureTarget::new(video as usize, profile, keeper) }.map_err(str::to_string)?;
+                            let outputs = unsafe { super::appearance_media::AppearanceOutputs::create(&appearance_id)? };
+                            appearance_media.insert(appearance_id.clone(), (outputs.clone(), portrait, lease_id));
+                            Ok((target, outputs))
+                        })();
+                        if result.is_err() && appearance_media.is_empty() { appearance_view = None; }
+                        let _ = reply.send(result);
+                    }
+                    #[cfg(feature = "guest-rtc-pilot")]
+                    Ok(Command::ReleaseAppearance { appearance_id, lease_id }) => {
+                        // A failed duplicate acquisition owns a different receipt
+                        // and must never retire the already-running appearance.
+                        if let Some((outputs, _portrait, _lease)) = appearance_lease_policy::take_matching(&mut appearance_media, &appearance_id, &lease_id) {
+                            unsafe { outputs.retire(); }
+                          if appearance_media.is_empty() { appearance_view = None; }
+                        }
+                    }
                     Ok(Command::Soundboard { action, reply }) => {
                         let changing=matches!(&action,crate::soundboard::Native::Activate(room) if !soundboard.room().is_empty() && soundboard.room()!=room);
                         let _=reply.send(if changing&&(session.is_some()||recorder.is_some()){Err("Stop the current output before switching soundboard rooms".into())}else if report.ok {soundboard.apply(action)} else {Err("Room audio engine unavailable".into())});
@@ -3301,6 +3455,8 @@ pub fn start(
                     Ok(Command::SelectOutput{portrait,reply})=>{
                         let result=(||->Result<(),String>{
                             if selected_portrait==portrait{return Ok(());}
+                            #[cfg(feature = "guest-rtc-pilot")]
+                            if !appearance_media.is_empty() { return Err("Leave the appearance before changing output orientation".into()); }
                             if vcam.is_some(){return Err("Stop the virtual camera before changing the output canvas".into());}
                             if session.is_some()||recorder.is_some()||portrait_recorder.is_some(){return Err("Stop streaming and recording before changing the output canvas".into());}
                             let video=if portrait{
@@ -3368,7 +3524,11 @@ pub fn start(
                         }
                     }
                     Ok(Command::PortraitRoom{reply})=>{
-                        #[cfg(any(target_os = "macos", target_os = "windows"))]let result=scene.as_mut().ok_or("Room is not ready".into()).and_then(|g|g.portrait_room());
+                        #[cfg(feature = "guest-rtc-pilot")]
+                        let retained = appearance_media.values().any(|(_, portrait, _)| *portrait);
+                        #[cfg(not(feature = "guest-rtc-pilot"))]
+                        let retained = false;
+                        #[cfg(any(target_os = "macos", target_os = "windows"))]let result=scene.as_mut().ok_or("Room is not ready".into()).and_then(|g|if retained { Ok(g.portrait_state()) } else { g.portrait_room() });
                         #[cfg(not(any(target_os = "macos", target_os = "windows")))]let result=Err("Portrait output is unavailable on this platform".into());let _=reply.send(result);
                     }
                     Ok(Command::PortraitState{reply})=>{
@@ -3413,7 +3573,15 @@ pub fn start(
                     Ok(Command::PortraitStop{queued_at,reply})=>{
                         performance_stage("native.portrait.stop.engine_wait",queued_at.elapsed(),None);
                         let service=Instant::now();
-                        if portrait_recorder.is_some()||selected_portrait{
+                        #[cfg(feature = "guest-rtc-pilot")]
+                        let appearance_portrait = appearance_media.values().any(|(_, portrait, _)| *portrait);
+                        #[cfg(not(feature = "guest-rtc-pilot"))]
+                        let appearance_portrait = false;
+                        #[cfg(feature = "guest-rtc-pilot")]
+                        let retain_portrait = appearance_lease_policy::retain_portrait(portrait_recorder.is_some(),selected_portrait,appearance_portrait);
+                        #[cfg(not(feature = "guest-rtc-pilot"))]
+                        let retain_portrait = portrait_recorder.is_some()||selected_portrait||appearance_portrait;
+                        if retain_portrait {
                             performance_stage("native.portrait.stop.output_retained",service.elapsed(),Some(true));
                             let _=reply.send(());continue;
                         }
@@ -3763,14 +3931,20 @@ pub fn start(
                         }
                         let _ = reply.send(result);
                     }
-                    Ok(Command::RestoreRoom { queued_at, mut restore, reply }) => {
+                    Ok(Command::RestoreRoom { queued_at, mut restore, room_id, reply }) => {
                         performance_stage("native.room.restore.queue_wait", queued_at.elapsed(), None);
                         performance_stage("native.room.restore.start", Duration::ZERO, None);
                         let restore_started = Instant::now();
                         if trace_room_open {
                             eprintln!("[room-open] engine_queue_ms={}", queued_at.elapsed().as_millis());
                         }
-                        let result = if session.is_some() || recorder.is_some() || portrait_recorder.is_some() {
+                        #[cfg(feature = "guest-rtc-pilot")]
+                        let appearance_active = !appearance_media.is_empty();
+                        #[cfg(not(feature = "guest-rtc-pilot"))]
+                        let appearance_active = false;
+                        let result = if appearance_active {
+                            Err("Leave the appearance before restoring another room".into())
+                        } else if session.is_some() || recorder.is_some() || portrait_recorder.is_some() {
                             Err("Stop streaming and recording before restoring a room".into())
                         } else if restore.extras.len() > 128 || restore.changes.len() > 128 {
                             Err("A room has too many sources".into())
@@ -3791,7 +3965,8 @@ pub fn start(
                                 Some(g) => g.restore_room(restore),
                                 None => Err("The room scene is not running".into()),
                             };
-                            if result.is_ok() { microphones.extend(deferred); }
+                            if result.is_ok() { microphones.extend(deferred); bound_room_id = room_id; }
+                            else { bound_room_id = None; }
                             let mut snapshot = snap.lock().unwrap();
                             room_mic_status(&mut snapshot, &microphones);
                             if let Ok(restored) = &mut result {
@@ -3866,6 +4041,8 @@ pub fn start(
                         }
                     }
                     Ok(Command::SetVideo { height, fps }) => {
+                        #[cfg(feature = "guest-rtc-pilot")]
+                        if !appearance_media.is_empty() { sink(&LiveEvent::EngineError { message: "Leave the appearance before changing video settings".into() }); continue; }
                         if selected_portrait && vcam.is_some(){sink(&LiveEvent::EngineError{message:"Stop the portrait virtual camera before changing video settings".into()});continue;}
                         if recorder.is_some()||portrait_recorder.is_some(){sink(&LiveEvent::EngineError{message:"Stop recording before changing video settings".into()});continue;}
                         if session.is_some() {
@@ -4033,10 +4210,19 @@ pub fn start(
                         if let Some(p)=portrait_preview.as_ref(){p.conceal();}
                         // Evaluate on the engine thread, so an output starting
                         // during navigation cannot lose its capture sources.
-                        if session.is_some() || recorder.is_some() || portrait_recorder.is_some() {
+                        #[cfg(feature = "guest-rtc-pilot")]
+                        let appearance_active = !appearance_media.is_empty();
+                        #[cfg(not(feature = "guest-rtc-pilot"))]
+                        let appearance_active = false;
+                        #[cfg(feature = "guest-rtc-pilot")]
+                        let retain_room = appearance_lease_policy::retain_room(session.is_some(),recorder.is_some(),portrait_recorder.is_some(),appearance_media.len());
+                        #[cfg(not(feature = "guest-rtc-pilot"))]
+                        let retain_room = session.is_some() || recorder.is_some() || portrait_recorder.is_some() || appearance_active;
+                        if retain_room {
                             performance_stage("native.room.release.skipped", release_started.elapsed(), None);
                             let _ = reply.send(Ok(false));
                         } else {
+                            bound_room_id = None;
                             microphones.clear();
                             room_mic_status(&mut snap.lock().unwrap(), &microphones);
                             #[cfg(any(target_os = "macos", target_os = "windows"))]super::portrait::select_program(false);
@@ -4077,6 +4263,14 @@ pub fn start(
                         let _=reply.send(());
                     }
                     Ok(Command::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        #[cfg(feature = "guest-rtc-pilot")]
+                        if !appearance_lease_policy::shutdown_ready(appearance_media.len()) {
+                            // A direct shutdown cannot destroy views under an SDK
+                            // callback. The normal app exit first closes owners;
+                            // delayed lease receipts still drain through this loop.
+                            appearance_shutdown_pending = true;
+                            continue;
+                        }
                         microphones.clear();
                         if let Some(r)=portrait_recorder.take(){r.stop();}
                         if let Some(r)=recorder.take(){r.stop();}

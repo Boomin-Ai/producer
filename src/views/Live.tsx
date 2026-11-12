@@ -1,3 +1,6 @@
+import {RoomAssistantContext, type AssistantSetRequest, type AssistantEditorRequest} from '../features/assistant/roomBridge';
+import {RoomTransportControls,ToolbarButton} from '../components/RoomToolbar';
+import {IS_MAC,IS_WINDOWS} from '../lib/platform';
 import { windowSourceLabel } from "../lib/sourceSpec";
 import { listen as listenSoundboard } from "@tauri-apps/api/event";
 import {LiveCaptions} from '../features/transcription/LiveCaptions';
@@ -29,7 +32,7 @@ import { DJSlider } from "../components/DJSlider";
 import { AudienceDestination, AudienceDestinationMark } from "../components/AudienceDestination";
 import type { LocalRecording } from "../lib/ipc";
 import { RoomOpening } from "./RoomOpening";
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Fragment, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { installStageCutouts } from "../lib/stageCutouts";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -77,6 +80,7 @@ import {
   type FilterState,
 } from "../lib/filters";
 import { filterEditQueue, withSourceFilters } from "../lib/sourceFilters";
+import { cameraBackgroundControls, type CameraBackgroundContext } from "../lib/cameraBackground";
 import { DEMO_CHAT, DEMO_VIDEO_URL, demoOn } from "../lib/demo";
 import { activeEndpointId, isBoomin, resolveActiveEndpoint } from "../lib/workspace";
 import { nativeGuestSources } from "../lib/nativeGuestSources";
@@ -91,6 +95,8 @@ import { Select } from "../components/Select";
 import { fromCanvas, modFeedRect, modFeedZ, modSourceOwner, rememberModFeed, toCanvas, type ModFeedTrack } from "../lib/modFeed";
 import {
   PANEL_META,
+  normalize,
+  DEFAULT_LAYOUT,
   PANEL_ORDER,
   PRESETS as LAYOUT_PRESETS,
   dockOf,
@@ -1840,10 +1846,12 @@ function PermBanner({
   sources,
   micStarting,
   onGranted,
+  visible = true,
 }: {
   sources: LiveSources;
   micStarting?: boolean;
   onGranted?: (kind: "screen" | "camera" | "mic") => void;
+  visible?: boolean;
 }) {
   const [perms, setPerms] = useState<LivePermissions | null>(null);
   const prevPerms = useRef<LivePermissions | null>(null);
@@ -1851,6 +1859,7 @@ function PermBanner({
   onGrantedRef.current = onGranted;
 
   useEffect(() => {
+    if (!visible) return;
     let alive = true;
     const load = async () => {
       try {
@@ -1879,7 +1888,7 @@ function PermBanner({
       clearInterval(t);
       window.removeEventListener("focus", load);
     };
-  }, []);
+  }, [visible]);
 
   if (!perms) return null;
   const hasKind = (k: CaptureKind) => (sources.items ?? []).some((i) => i.kind === k);
@@ -2658,6 +2667,15 @@ export type RoomEntryAccess = {
   receivedAt?: number;
 };
 
+export type RoomRuntimeState = {
+  roomId: string;
+  outputsActive: boolean;
+  outputPortrait: boolean;
+  programReady: boolean;
+};
+
+const RoomAssistant = lazy(() => import('../features/assistant/RoomAssistant'));
+
 export function LiveView({
   room,
   entryAccess,
@@ -2666,6 +2684,10 @@ export function LiveView({
   onOpenAccess,
   onOpenRecording,
   seat,
+  visible = true,
+  outgoingSeat,
+  onLeaveAppearance,
+  onRuntimeState,
 }: {
   room?: RoomInfo;
   entryAccess?: RoomEntryAccess;
@@ -2681,7 +2703,15 @@ export function LiveView({
    * stage is the guest's own scene (their camera); the green-room strip
    * above it is the seat. Leaving the view leaves the seat. */
   seat?: GuestSeatSpec;
+  /** Collapsing the candidate conceals previews while preserving its room controller. */
+  visible?: boolean;
+  /** An outgoing appearance does not change this local room's host authority. */
+  outgoingSeat?: GuestSeatSpec;
+  onLeaveAppearance?: () => void;
+  onRuntimeState?: (state: RoomRuntimeState) => void;
 }) {
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
   const traceVisit = useRef(currentRoomVisit());
   // Windows float mode: popovers/toasts over the stage are punched out of
   // the native preview so they stay visible. No-op elsewhere.
@@ -2690,10 +2720,12 @@ export function LiveView({
   }, []);
   const [destinations, setDestinations] = useState<LiveDestination[]>([]);
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
+  const [outputsStarting, setOutputsStarting] = useState(0);
   const deferredMicIds = useRef<string[]>([]);
   const entryAccessRef = useRef(entryAccess);
   const [producerLocalAuthorized,setProducerLocalAuthorized]=useState(()=>!seat);
   const roomEngineRef = useRef<ReturnType<typeof roomSession> | null>(null);
+  const cameraBackgroundChanged = useRef<(source:string)=>void>(()=>{});
   useLayoutEffect(() => {
     const session = roomSession();
     roomEngineRef.current = session;
@@ -2784,6 +2816,7 @@ export function LiveView({
    * that cannot paint for seconds is a MAIN-THREAD stall, not engine work. */
   const stallMax = useRef(0);
   useEffect(() => {
+    if (!visible) return;
     let last = performance.now();
     const t = window.setInterval(() => {
       const now = performance.now();
@@ -2792,7 +2825,7 @@ export function LiveView({
       last = now;
     }, 100);
     return () => window.clearInterval(t);
-  }, []);
+  }, [visible]);
   const [statuses, setStatuses] = useState<Map<string, LiveDestStatus>>(new Map());
 
   // Header health. Derived every render, never stored: a health number that
@@ -3044,11 +3077,11 @@ export function LiveView({
   // while the guests panel is somewhere visible. 0 on hide and on unmount.
   const guestsDock = dockOf(layout, "guests");
   useEffect(() => {
-    ipc.liveSetThumbRate(guestsDock === "hidden" ? 0 : 15).catch(() => {});
+    ipc.liveSetThumbRate(!visible || guestsDock === "hidden" ? 0 : 15).catch(() => {});
     return () => {
       ipc.liveSetThumbRate(0).catch(() => {});
     };
-  }, [guestsDock]);
+  }, [guestsDock, visible]);
   const layoutSaveTimer = useRef<number | undefined>(undefined);
   const saveRoomConfig = (next: RoomConfig) => {
     if (room) void ipc.liveUpdateRoom(room.id, { config: serializeConfig(next) }).catch(() => {});
@@ -3095,6 +3128,7 @@ export function LiveView({
       if (room) await ipc.liveUpdateRoom(room.id, { config: serializeConfig(next) });
     });
     if (!chain) throw new Error("The room is closed. Reopen it to edit filters.");
+    if(op.op!=="list")cameraBackgroundChanged.current(source);
     return chain;
   }, [room?.id]);
   const setLayout = (l: Layout, deferSave = false) => writeCfg({ ...cfgRef.current, layout: l }, deferSave);
@@ -3398,6 +3432,7 @@ export function LiveView({
   const vcamAutoNextTry = useRef(0);
 
   useEffect(() => {
+    if (!visible) return;
     let alive = true;
     const poll = () =>
       vcamIpc
@@ -3410,7 +3445,7 @@ export function LiveView({
       alive = false;
       clearInterval(t);
     };
-  }, []);
+  }, [visible]);
 
   const setCameraOutput = async (target: boolean): Promise<boolean> => {
     if (vcamFlight.current) throw new Error("Wait for the camera operation to finish.");
@@ -3428,9 +3463,10 @@ export function LiveView({
     }
   };
   // Never publish the engine's previous room while this room is restoring.
-  const guestSeat = useGuestSeat(seat && (seat.videoSource==='webcam' ||
-    producerLocalAuthorized && snapshot?.engine_ready && docApplied && sceneSettled && framesReady) ? {
-      ...seat,
+  const appearance = outgoingSeat ?? seat;
+  const guestSeat = useGuestSeat(appearance ? {
+      ...appearance,
+      ...(appearance.nativeProgram ? {} : {
       prepareProgram:async()=>{
         const owner=roomEngineRef.current;if(!owner)throw Error('The local room is not ready.');
         producerProgramWantedRef.current=true;
@@ -3452,7 +3488,9 @@ export function LiveView({
           await setCameraOutput(false);vcamAutoRef.current=false;
         }).catch(()=>{});
       },
-    }:undefined, vcamState?.device_name);
+      }),
+    }:undefined, vcamState?.device_name, appearance?.videoSource==='webcam'||
+      !!((outgoingSeat||producerLocalAuthorized)&&snapshot?.engine_ready&&docApplied&&sceneSettled&&framesReady));
   const toggleVcam = async () => {
     if (vcamFlight.current) return;
     vcamAutoRef.current = false;
@@ -3511,19 +3549,28 @@ export function LiveView({
   const [recSince, setRecSince] = useState<number>(0);
   const [recTick, setRecTick] = useState(0);
   const [savedRecording, setSavedRecording] = useState<LocalRecording | null>(null);
+  const recordingFlight=useRef(false);
+  const [recordingBusy,setRecordingBusy]=useState(false);
+  const [recordReview,setRecordReview]=useState(0);
+  const streamingFlight=useRef(false);
+  const [streamingBusy,setStreamingBusy]=useState(false);
 
   useEffect(() => {
-    if (!recPath) return;
+    if (!recPath || !visible) return;
     const t = setInterval(() => setRecTick((n) => n + 1), 1000);
     return () => clearInterval(t);
-  }, [recPath]);
+  }, [recPath, visible]);
 
   const toggleRecord = async () => {
+    if(recordingFlight.current)return false;
+    recordingFlight.current=true;setRecordingBusy(true);
+    try {
     if (recPath) {
       const done = await recIpc.stop().catch((e) => {
         notifyError(e, { key: "banner" });
         return null;
       });
+      if(!done)return false;
       setRecPath(null);
       if (done) {
         const capture = await recIpc.byPath(done).catch(() => null);
@@ -3533,22 +3580,28 @@ export function LiveView({
         }
         notify(`Saved ${done.split("/").pop()}`, { key: "recording-saved", tone: "success", check: true });
       }
-      return;
+      return true;
     }
-    if (room && !roomApplied.current) return;
+    if (room && !roomApplied.current) return false;
     // The engine owns no clock, so the file name is stamped here.
     const d = new Date();
     const pad = (n: number) => String(n).padStart(2, "0");
     const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}.${pad(d.getMinutes())}.${pad(d.getSeconds())}`;
     try {
+      setOutputsStarting(count=>count+1);
       const path = await recIpc.start(stamp, room?.id,outputView==='both');
       setRecPath(path);
       if(outputView==='both')notify("Recording landscape and portrait to separate files",{key:"banner",tone:"info"});
       setRecSince(Date.now());
       setRecTick(0);
+      return true;
     } catch (e) {
       notifyError(e, { key: "banner" });
+      return false;
+    } finally {
+      setOutputsStarting(count=>Math.max(0,count-1));
     }
+    } finally {recordingFlight.current=false;setRecordingBusy(false);}
   };
 
   // recTick only exists to re-render once a second while recording.
@@ -4676,6 +4729,23 @@ export function LiveView({
   const setOutputEnabled=docApplied && !mountVeil && isHost && !(import.meta.env.DEV && import.meta.env.VITE_SCENE3D_PROOF);
   useDjSetFeeds(setRehearsal,roomId,setOutputEnabled);
   const setOutput=useSetOutput(setRehearsal,roomId,sources,setOutputEnabled,cfg.presentation?.bindings ?? {},bindings=>writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.preparedPackage(),bindings,framing:cfgRef.current.presentation?.framing}},true),cfg.presentation?.framing ?? {},framing=>writeCfg({...cfgRef.current,presentation:{...cfgRef.current.presentation,package:setRehearsal.preparedPackage(),bindings:cfgRef.current.presentation?.bindings ?? {},framing}},true));
+  const cameraBackgroundContext = useRef<CameraBackgroundContext & {set:RehearsalSession}>({room:roomId,owner:null,set:setRehearsal,enabled:false,bindings:{},sources:{}});
+  cameraBackgroundContext.current={room:roomId,owner:roomEngineRef.current,set:setRehearsal,enabled:setOutputEnabled&&setOutput.active,bindings:setOutput.bindings,sources};
+  const setCameraBackground = useMemo(()=>cameraBackgroundControls({
+    current:()=>{
+      const current=cameraBackgroundContext.current;
+      return {...current,owner:roomEngineRef.current,enabled:current.enabled&&current.set.snapshot().workspaceMode==='live'};
+    },
+    filters:filtersIpc,
+    persist:async(source,chain)=>{
+      const next=withSourceFilters(cfgRef.current,source,chain);
+      if(next===cfgRef.current)return;
+      cfgRef.current=next;setCfgState(next);
+      if(roomId)await ipc.liveUpdateRoom(roomId,{config:serializeConfig(next)});
+    },
+  }),[roomId]);
+  cameraBackgroundChanged.current=setCameraBackground.changed;
+  if(setOutput.renderer==='native')setOutput.cameraBackground=setCameraBackground;
   if(setOutput.renderer==='native')setOutput.createSource=async(slot,spec,label,assign=true)=>{
     const id='set-source-'+crypto.randomUUID();
     const next=await invoke<LiveSources>('live_set_source_create',{id,label,spec});
@@ -4892,7 +4962,7 @@ export function LiveView({
         overlay_window: saved.overlay_window ?? null,
         overlay_url: saved.overlay_url ?? null,
         changes: scenePlan(mount?.look ?? {}, catalog, opened.slot_bindings ?? {}, true),
-      });
+      }, room.id);
       deferredMicIds.current = restored.room_mic_starting_ids ?? [];
       setSnapshot(previous => previous && {
         ...previous,
@@ -5035,6 +5105,7 @@ export function LiveView({
         window.dispatchEvent(new Event("producer.video-changed"));
         setSnapshot((s) => (s ? { ...s, video_height: ev.height, video_fps: ev.fps } : s));
       } else if (ev.type === "levels") {
+        if (!visibleRef.current) return;
         // peak → dB → 0..1 over a 50dB window, with a falling ballistic.
         if (ev.extra_peaks?.length) {
           setExtraLevels((prev) => {
@@ -5063,7 +5134,7 @@ export function LiveView({
             }
             continue;
           }
-          next[t.id] = `data:image/jpeg;base64,${t.jpeg}`;
+          if (visibleRef.current) next[t.id] = `data:image/jpeg;base64,${t.jpeg}`;
         }
         if (Object.keys(next).length) setGuestThumbs((prev) => ({ ...prev, ...next }));
       } else if (ev.type === "engine_error") {
@@ -5089,6 +5160,12 @@ export function LiveView({
   snapRef.current = snapshot;
   const state = snapshot?.session_state ?? "idle";
   const streaming = state === "streaming" || state === "starting" || state === "stopping";
+  useEffect(() => {
+    if (!room?.id) return;
+    onRuntimeState?.({roomId:room.id,outputsActive:streaming||recPath!==null||outputsStarting>0,
+      outputPortrait:outputView==='portrait',
+      programReady:!!snapshot?.engine_ready&&docApplied&&sceneSettled&&framesReady&&isHost});
+  }, [room?.id,streaming,recPath,outputsStarting,outputView,snapshot?.engine_ready,docApplied,sceneSettled,framesReady,isHost,onRuntimeState]);
 
   // OBS's network-quality model, followed exactly (OBSBasicStatusBar.cpp):
   // congestion is smoothed toward the worse of the last two samples, then
@@ -5170,6 +5247,7 @@ export function LiveView({
 
 
   useEffect(() => {
+    if (!visible) return;
     const t = window.setInterval(() => {
       const now = snapRef.current;
       // A stopped engine has no renderer: no sample, the chart holds still
@@ -5181,7 +5259,7 @@ export function LiveView({
     }, 1000);
     return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [visible]);
   useEffect(() => {
     if (engineOk) mark("engine");
   }, [engineOk]);
@@ -5253,10 +5331,13 @@ export function LiveView({
   }
 
   async function goLive() {
-    if (room && !roomApplied.current) return;
+    const owner=roomEngineRef.current;
+    if (!owner||streamingFlight.current||room && !roomApplied.current) return false;
+    streamingFlight.current=true;setStreamingBusy(true);
     dismissKey("banner");
     try {
-      await roomEngineRef.current?.run(async () => {
+      setOutputsStarting(count=>count+1);
+      await owner.run(async () => {
         const ep = await resolveActiveEndpoint().catch(() => null);
         await ipc.liveGoLive(ep && isBoomin(ep) ? ep.id : undefined, cfgRef.current.server_room_id ?? undefined);
         if (roomId) {
@@ -5264,9 +5345,21 @@ export function LiveView({
           markLiveRoom(roomId);
         }
       });
+      return true;
     } catch (e) {
       notifyError(e, { key: "banner" });
+      return false;
+    } finally {
+      streamingFlight.current=false;setStreamingBusy(false);
+      setOutputsStarting(count=>Math.max(0,count-1));
     }
+  }
+  async function stopStream() {
+    if(streamingFlight.current)return false;
+    streamingFlight.current=true;setStreamingBusy(true);
+    try {await ipc.liveStop();return true;}
+    catch(error){notifyError(error,{key:'banner'});return false;}
+    finally{streamingFlight.current=false;setStreamingBusy(false);}
   }
 
   // ── WRITE-THROUGH (room state, mirror 1) ─────────────────────────────────
@@ -5725,6 +5818,7 @@ export function LiveView({
   // rename fields keep their own keys.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!visibleRef.current) return;
       if (!e.metaKey || e.altKey || e.ctrlKey) return;
       const el = document.activeElement as HTMLElement | null;
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
@@ -5865,11 +5959,12 @@ export function LiveView({
     // Open server: the host only (a mod runs views/ModSeat.tsx). Boomin: any
     // role — a mod's Producer lights the host's list off `scene.cut` frames
     // and takes the tally on `interactions:control` (the hub gates it).
-    if (roomRole !== "host" && !boominRoom) return;
     const sid = cfg.server_room_id;
     sceneOrderRef.current = { epoch: 0, sequence: 0 };
     controlHasSnapshot.current = false;
     let link: RoomControlLink | null = null;
+    const ownsCommand = (epoch: unknown) => !!link?.publisherReady &&
+      (link.publisherEpoch === null || link.publisherEpoch === epoch);
     let modulePublisher:ReturnType<typeof modulePushPublisher>|undefined;
     let alive = true;
     let votesRequest = 0;
@@ -5878,7 +5973,11 @@ export function LiveView({
     setSavedVotes([]);
     selectedVoteRef.current = null;
     let restoreAudienceOnSnapshot = false;
-    let publisherRejected = false;
+    let publisherNotice: number | null = null;
+    const clearPublisherNotice = () => {
+      if (publisherNotice !== null) dismiss(publisherNotice);
+      publisherNotice = null;
+    };
     let sourceLogEpoch = -1;
     const controlLogId = crypto.randomUUID().slice(0, 8);
     const logControl = (event: string, data: Record<string, unknown> = {}) => {
@@ -5889,6 +5988,7 @@ export function LiveView({
       const ep = await resolveActiveEndpoint().catch(() => null);
       if (!ep || !alive) return;
       const boomin = isBoomin(ep);
+      if (roomRoleRef.current !== "host" && !boomin) return;
       if(boomin)modulePublisher=modulePushPublisher(ep.id,sid);
       link = new RoomControlLink({
         origin: new URL(ep.base_url).origin,
@@ -5904,20 +6004,35 @@ export function LiveView({
         subscribe: boomin ? [...BOOMIN_ROOM_CHANNELS] : ["interaction:host", "stage"],
         parse: boomin ? parseBoominFrame : undefined,
         renewAfterMs: 105_000,
+        onPublisherState: (state) => {
+          if (!alive) return;
+          logControl("publisher", { phase: state.phase, code: state.code, confirmed: state.confirmed, retrying: state.retrying });
+          if (state.phase === "ready" && state.confirmed) {
+            clearPublisherNotice();
+            setAudienceError(null);
+          } else if (state.phase === "rejected") {
+            const message = state.retrying ? "Reconnecting room controls…"
+              : state.code === "publisher_busy"
+              ? "Another Producer session controls this room. Close that room session, then reopen this one."
+              : state.code === "stale_publisher"
+                ? "This connection no longer controls the room. Reopen the room on the host device."
+                : state.code === "publisher_ack_timeout"
+                  ? "The server did not confirm room control. Reopen the room to retry."
+                  : "Room control is unavailable. Reopen the room to retry.";
+            publisherNotice = state.retrying
+              ? notify(message, { key: "room-publisher", tone: "info", sticky: true })
+              : notifyError(message, { key: "room-publisher" });
+          }
+        },
         onFrame: (frame: ControlFrame) => {
+          if (!alive) return;
           modulePublisher?.frame(frame as unknown as Record<string,unknown>);
-          if(frame.type==="scene.published"&&roomRoleRef.current==="host")presentationRelay.flush(value=>link?.send(value)??false,presentedSession.current.moduleSnapshot(),true);
           if (["error", "audience.error", "scene.state", "scene.published", "room.sources"].includes(frame.type)) {
             const info = frame as Record<string, unknown>;
             if (frame.type !== "room.sources" || info.epoch !== sourceLogEpoch) {
               logControl(frame.type, { code: info.code, epoch: info.epoch, sequence: info.sequence });
             }
             if (frame.type === "room.sources" && typeof info.epoch === "number") sourceLogEpoch = info.epoch;
-          }
-          if (frame.type === "scene.published" && roomRoleRef.current === "host" && publisherRejected) {
-            publisherRejected = false;
-            dismissKey("room-publisher");
-            setAudienceError(null);
           }
           if (frame.type.startsWith("audience.")) {
             const f = frame as Record<string, unknown>;
@@ -5936,7 +6051,6 @@ export function LiveView({
             if (frame.type === "audience.hands" && Array.isArray(f.hands)) setAudienceHands(f.hands as AudienceHand[]);
             if (frame.type === "audience.chat") setAudienceState((previous) => ({ ...previous, chat: [...(previous.chat ?? []).slice(-99), f.message as NonNullable<AudienceSnapshot['chat']>[number]] }));
             if (frame.type === "audience.invite.request" && roomRoleRef.current === "host" && typeof f.id === "string") void inviteAudience(f.id);
-            if (frame.type === "audience.error" && f.code === "publisher_busy") publisherRejected = true;
             if (frame.type === "audience.error") setAudienceError(f.code === "publisher_busy"
               ? "Another Producer session controls this room. Close that room session, then reopen this one."
               : String(f.code));
@@ -5976,15 +6090,16 @@ export function LiveView({
             }
             return;
           }
-          if (frame.type === "room.action" && roomRoleRef.current === "host") {
+          if (frame.type === "room.action" && roomRoleRef.current === "host" && link?.publisherReady) {
             const command = frame as unknown as RoomAction & { server_now: number };
+            if (!ownsCommand(command.epoch)) return;
             const key = `${command.kind}:${command.target}`;
             if (command.epoch < actionEpoch.current || command.sequence <= (sourceOrder.current.get(key) ?? 0)) return;
             if (command.epoch > actionEpoch.current) sourceOrder.current.clear();
             actionEpoch.current = command.epoch; sourceOrder.current.set(key, command.sequence);
             const deadline = performance.now() + Math.max(0, command.expires_at - command.server_now);
             sceneExecutionRef.current = sceneExecutionRef.current.catch(() => {}).then(async () => {
-              if (!alive || performance.now() >= deadline || actionEpoch.current !== command.epoch || sourceOrder.current.get(key) !== command.sequence) return;
+              if (!alive || !ownsCommand(command.epoch) || performance.now() >= deadline || actionEpoch.current !== command.epoch || sourceOrder.current.get(key) !== command.sequence) return;
               let error: string | undefined;
               try {
                 if (command.kind === "participant.stage") {
@@ -6052,16 +6167,12 @@ export function LiveView({
           if (frame.type === "error" && !(frame as { channel?: string }).channel) {
             const code = (frame as { code?: string }).code;
             const ownershipError = code === "publisher_busy" || code === "stale_publisher" || code === "host_unavailable";
-            if (ownershipError) publisherRejected = true;
-            notifyError(code === "publisher_busy"
-              ? "Another Producer session controls this room. Close that room session, then reopen this one."
-              : code === "stale_publisher"
-                ? "This connection no longer controls the room. Reopen the room on the host device."
-              : code ?? "Room control unavailable", { key: ownershipError ? "room-publisher" : "guests" });
+            if (!ownershipError) notifyError(code ?? "Room control unavailable", { key: "guests" });
             return;
           }
-          if (frame.type !== "scene.cut" || roomRoleRef.current !== "host") return;
+          if (frame.type !== "scene.cut" || roomRoleRef.current !== "host" || !link?.publisherReady) return;
           const cut = frame as SceneCutFrame;
+          if (!ownsCommand(cut.epoch)) return;
           if (cut.command_id && typeof cut.sequence === "number" && typeof cut.epoch === "number") {
             const previous = sceneOrderRef.current;
             if (cut.epoch < previous.epoch || (cut.epoch === previous.epoch && cut.sequence <= previous.sequence)) return;
@@ -6071,7 +6182,7 @@ export function LiveView({
           // in our queue. Deadline uses the server's relative clock budget.
           const deadline = performance.now() + Math.max(0, (cut.expires_at ?? cut.server_now + 4000) - cut.server_now);
           sceneExecutionRef.current = sceneExecutionRef.current.catch(() => {}).then(async () => {
-            if (!alive || performance.now() >= deadline) return;
+            if (!alive || !ownsCommand(cut.epoch) || performance.now() >= deadline) return;
             const newest = sceneOrderRef.current;
             if (cut.command_id && (newest.epoch !== cut.epoch || newest.sequence !== cut.sequence)) return;
             const sc = scenesRef.current.find((x) => x.id === cut.scene_id);
@@ -6096,6 +6207,7 @@ export function LiveView({
           if (roomRoleRef.current === "host") {
             restoreAudienceOnSnapshot = true;
             link?.publishScenes(scenesRef.current, activeSceneRef.current);
+            presentationRelay.flush(value=>link?.send(value)??false,presentedSession.current.moduleSnapshot(),true);
             publishSourceTruth();
           }
         },
@@ -6106,12 +6218,13 @@ export function LiveView({
     return () => {
       alive = false;
       link?.stop();
+      clearPublisherNotice();
       modulePublisher?.close();
       for (const sender of audienceSenders.current.values()) sender.stop();
       audienceSenders.current.clear();
       if (controlRef.current === link) controlRef.current = null;
     };
-  }, [room?.id, cfg.server_room_id, roomRole, boominRoom,seat]);
+  }, [room?.id, cfg.server_room_id, roomRole,seat]);
   useEffect(() => { publishSourceTruth(); }, [sources, roomRole]);
 
   // Every change to the list or the active scene reaches the mods. Open
@@ -7207,6 +7320,16 @@ export function LiveView({
     // there would sit over the strip and eat every click.
     (sceneSettings !== null && dockOf(layout, "scenes") !== "bottom" && dockOf(layout, "scenes") !== "top") || panelMenu !== null || layoutMenu || addMenu !== null || adding || !!editing;
 
+  useEffect(() => {
+    if (visible) return;
+    closePops();
+    setSeatOpen(false);
+    setSrcSettings(null);
+    setFilterFor(null);
+    setRunReport(null);
+    setBugOpen(false);
+  }, [visible]);
+
 
 
   // ── Panels: everything that isn't the stage is a dockable panel ────────
@@ -7231,16 +7354,65 @@ export function LiveView({
     />
   );
 
+  const [assistantTarget,setAssistantTarget]=useState<HTMLDivElement|null>(null);
+  const assistantTargetRef=useCallback((element:HTMLDivElement|null)=>setAssistantTarget(element),[]);
+  const [assistantStarted,setAssistantStarted]=useState(false);
+  const [assistantRequest,setAssistantRequest]=useState<(AssistantSetRequest&{id:string})>();
+  const [assistantEditorRequest,setAssistantEditorRequest]=useState<AssistantEditorRequest>();
+  const assistantEditorOpened=useCallback((id:string)=>setAssistantEditorRequest(current=>current?.id===id?undefined:current),[]);
+  const assistantDock=dockOf(layout,'assistant');
+  const assistantScreenSharing=(sources.items??[]).some(item=>item.kind==='screen'&&item.visible);
+  const assistantGuestsConnected=roster.some(guest=>!!guest.render_url&&guest.state!=='left'&&!guest.monitor&&guest.seat!=='control');
+  const assistantRoomState=useMemo(()=>({setOnOutput:!!setOutput.currentPresented,screenSharing:assistantScreenSharing,guestsConnected:assistantGuestsConnected}),[setOutput.currentPresented,assistantScreenSharing,assistantGuestsConnected]);
+  const assistantDockOpen=assistantDock==='top'?topOpen:assistantDock==='bottom'?sheetOpen:assistantDock==='left'?leftOpen:assistantDock==='right'?rightOpen:false;
+  const assistantEnabled=visible&&isHost&&docApplied;
+  const assistantScope=JSON.stringify([endpointRef.current??'local',roomId??'local']);
+  const assistantOwner=useRef({enabled:assistantEnabled,scope:assistantScope});assistantOwner.current={enabled:assistantEnabled,scope:assistantScope};
+  const assistantMounted=useRef(true);
+  useEffect(()=>{assistantMounted.current=true;return()=>{assistantMounted.current=false;};},[]);
+  useEffect(()=>{if(assistantEnabled&&assistantDockOpen&&!layoutEdit)setAssistantStarted(true);},[assistantEnabled,assistantDockOpen,layoutEdit]);
+  const assistantBridge=useMemo(()=>({open:(request:AssistantSetRequest)=>{
+    if(!assistantOwner.current.enabled)return;
+    setAssistantRequest({...request,id:crypto.randomUUID()});setAssistantStarted(true);
+  }}),[]);
+  const reviewAssistantDraft=useCallback(async(document:import('../features/presentation/schema').PresentationPackage)=>{
+    const current=()=>assistantMounted.current&&assistantOwner.current.enabled&&assistantOwner.current.scope===assistantScope;
+    if(!current())throw Error('Return to this room as host to review your saved draft.');
+    await ipc.setLibrarySave(JSON.stringify(document));
+    if(!current())throw Error('The room changed. The candidate is saved in your Set library.');
+    // This installs only a PRIVATE editor draft. Existing Show on output owns
+    // native preparation, source assignments and the explicit live transition.
+    setAssistantEditorRequest({id:crypto.randomUUID(),document});
+    const existing=normalize(cfgRef.current.layout??DEFAULT_LAYOUT);
+    const where=dockOf(existing,'setControls');
+    if(where==='hidden')writeCfg({...cfgRef.current,layout:movePanel(existing,'setControls','right')});
+    if(where==='hidden'||where==='right')setRightOpen(true);
+    if(where==='left')setLeftOpen(true);
+    if(where==='top')setTopOpen(true);
+    if(where==='bottom')setSheetOpen(true);
+  },[assistantScope]);
+  const expandAssistant=useCallback(()=>{
+    const current=cfgRef.current,where=dockOf(normalize(current.layout??DEFAULT_LAYOUT),'assistant');
+    const next={...current.sizes};
+    if(where==='top'){next.top=TOP_MAX;setTopOpen(true);}
+    if(where==='bottom'){next.bottom=360;setSheetOpen(true);}
+    if(where==='left'){next.left=Math.max(320,next.left??0);setLeftOpen(true);}
+    if(where==='right'){next.right=Math.max(320,next.right??0);setRightOpen(true);}
+    writeCfg({...current,sizes:next});
+  },[roomId]);
+
   const panelBody = (id: PanelId) => {
     switch (id) {
+      case "assistant":
+        return isHost ? <div className="assistant-dock-mount" data-compact={formDockOf('assistant')==='top'} ref={assistantTargetRef}/> : <div className="rm-rows-empty">The host controls the Assistant.</div>;
       case "setControls":
-        return <SetControlsPanel preferenceRoomId={roomId??undefined} endpoint={endpointRef.current??activeEndpointId()??undefined} serverRoomId={cfg.server_room_id??undefined} moduleBindings={cfg.presentation?.moduleBindings} voting={roomAccess.can.interactions?<SetRoomVoting vote={vote} savedVotes={savedVotes} onSelectVote={selectSavedVote} onOpen={openVote} onTransition={(action,hold)=>void transitionVote(action,hold)}/>:undefined} sourceNames={setSourceNames} onFieldEdit={editSetField} session={setRehearsal} output={setOutput} blocked={!docApplied}
+        return visible?<SetControlsPanel assistantEditorRequest={assistantEditorRequest} onAssistantEditorOpened={assistantEditorOpened} preferenceRoomId={roomId??undefined} endpoint={endpointRef.current??activeEndpointId()??undefined} serverRoomId={cfg.server_room_id??undefined} moduleBindings={cfg.presentation?.moduleBindings} voting={roomAccess.can.interactions?<SetRoomVoting vote={vote} savedVotes={savedVotes} onSelectVote={selectSavedVote} onOpen={openVote} onTransition={(action,hold)=>void transitionVote(action,hold)}/>:undefined} sourceNames={setSourceNames} onFieldEdit={editSetField} session={setRehearsal} output={setOutput} blocked={!docApplied}
           blockedReason={!docApplied ? "Waiting for the room to finish loading." : undefined}
-          onChange={changeSet} />;
+          onChange={changeSet} />:null;
       case "sounds":
-        return isHost ? <SoundboardPanel key={roomId??"local"} roomId={roomId??"local"} enabled={docApplied} compact={formDockOf("sounds")==="top"}/> : <div className="rm-rows-empty">The host controls room sounds.</div>;
+        return isHost ? <SoundboardPanel key={roomId??"local"} roomId={roomId??"local"} enabled={docApplied} visible={visible} compact={formDockOf("sounds")==="top"}/> : <div className="rm-rows-empty">The host controls room sounds.</div>;
       case "dj":
-        return isHost ? <DJPanel key={roomId ?? "local"} roomId={roomId ?? "local"} enabled={docApplied} mini={formDockOf("dj") === "top"} /> : <div className="rm-rows-empty">The host controls the room’s DJ mix.</div>;
+        return isHost ? <DJPanel key={roomId ?? "local"} roomId={roomId ?? "local"} enabled={docApplied} visible={visible} mini={formDockOf("dj") === "top"} /> : <div className="rm-rows-empty">The host controls the room’s DJ mix.</div>;
       case "scenes":
         // A mod's Producer on Boomin: the HOST's scenes, read from the room's
         // directory, the active one lit by the server's `scene.cut` frames.
@@ -8505,16 +8677,17 @@ export function LiveView({
   };
   const panelsMenu = () => (
     <div className="rm-pop-anchor">
-      <button
-        className="rm-editbar-btn"
+      <ToolbarButton
+        label="Panels"
+        tooltip="Show or move room panels"
+        aria-expanded={addMenu==='hidden'}
         onClick={(e) => {
           setPopAnchor(e.currentTarget);
           setAddMenu((m) => (m === "hidden" ? null : "hidden"));
         }}
       >
-        Panels
-        {ic.chev}
-      </button>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16m0-10h12"/></svg>
+      </ToolbarButton>
       {addMenu === "hidden" && (
         <Pop anchor={popAnchor} align="right" className="rm-pop-add">
           <div className="rm-pop-title">PANELS</div>
@@ -8660,7 +8833,8 @@ export function LiveView({
   }
 
   return (
-    <div className={`room${layoutEdit ? " layout-edit" : ""}`}>
+    <RoomAssistantContext.Provider value={assistantBridge}><div hidden={!visible} style={visible?undefined:{display:'none'}} className={`room${layoutEdit ? " layout-edit" : ""}`}>
+      {assistantStarted&&assistantEnabled&&<Suspense fallback={null}><RoomAssistant key={JSON.stringify([endpointRef.current??'local',roomId??'local'])} session={setRehearsal} scope={JSON.stringify(['room',endpointRef.current??'local',roomId??'local'])} target={assistantTarget} compact={formDockOf('assistant')==='top'} roomState={assistantRoomState} onExpand={expandAssistant} request={assistantRequest} onReview={reviewAssistantDraft}/></Suspense>}
       {/* The first-room walkthrough. Renders over everything but the mount
         * veil — teaching a room that has not finished opening would point at
         * controls that are not there yet. */}
@@ -8702,35 +8876,38 @@ export function LiveView({
         <div className="rm-window-drag-handle" data-tauri-drag-region title="Drag to move Producer" aria-label="Drag to move Producer" />
         {/* The way DOWN and the way AROUND both live at the FAR LEFT, apart
           * from the transport cluster: collapse first, then edit. */}
-        <button
+        <ToolbarButton
           className="rm-leave"
+          label="Collapse room"
+          tooltip={streaming ? "Collapse room · The stream keeps running" : "Return to room cards"}
+          tooltipAlign="start"
           data-perf-action="room.collapse"
           onClick={() => onLeave?.()}
-          title={streaming ? "Collapse — the stream keeps running" : "Collapse room"}
         >
           {ic.collapseDown}
-        </button>
+        </ToolbarButton>
         {/* Layout editing is stage furniture for the person running the set;
           * a control seat gets the panels as they are. */}
         {isHost && (
-          <button
+          <ToolbarButton
             data-walk="edit"
             data-perf-action="layout.toggle"
-            className={`rm-icon-chip rm-edit-trigger${layoutEdit ? " on" : ""}`}
+            className="rm-edit-trigger"
+            label={layoutEdit?'Done editing layout':'Edit layout'}
+            tooltip={`${layoutEdit?'Done editing layout':'Edit layout'} · ${IS_MAC?'⌘E':'Ctrl+E'}`}
+            tooltipAlign="start"
             aria-pressed={layoutEdit}
             onClick={() => {
               traceLayoutToggle();
               setLayoutEdit((e) => !e);
               setLayoutMenu(false);
             }}
-            title={layoutEdit ? "Done editing layout (⌘E)" : "Edit layout (⌘E)"}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m15 4 5 5-10 10-6 1 1-6zM13 6l5 5"/></svg>
-            <span>{layoutEdit ? "Done" : "Edit layout"}</span>
-          </button>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">{layoutEdit?<path d="m5 12 4 4L19 6"/>:<path d="m15 4 5 5-10 10-6 1 1-6zM13 6l5 5"/>}</svg>
+          </ToolbarButton>
         )}
 
-        <NoticeHost hidden={layoutEdit} action={savedRecording && onOpenRecording ? {
+        <NoticeHost compact hidden={layoutEdit} action={savedRecording && onOpenRecording ? {
           label: "View in Manager",
           noticeKey: "recording-saved",
           onClick: () => onOpenRecording(savedRecording.id),
@@ -8740,16 +8917,17 @@ export function LiveView({
         <div className="rm-editbar">
           <span className="rm-editbar-dot" />
           <div className="rm-pop-anchor">
-            <button
-              className="rm-editbar-btn"
+            <ToolbarButton
+              label="Layout presets"
+              tooltip="Choose a room layout preset"
+              aria-expanded={layoutMenu}
               onClick={(e) => {
                 setPopAnchor(e.currentTarget);
                 setLayoutMenu((o) => !o);
               }}
             >
-              Presets
-              {ic.chev}
-            </button>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+            </ToolbarButton>
             {layoutMenu && (
               <Pop anchor={popAnchor} align="right" className="rm-pop-layout">
                 {LAYOUT_PRESETS.map((p) => (
@@ -8778,7 +8956,6 @@ export function LiveView({
           {/* Where the stage's quick controls float — an edge of the canvas.
             * One placement button: shows the edge, click opens the menu. */}
           <span className="rm-editbar-ctl" title="Quick controls position">
-            <span className="rm-editbar-ctl-label">Controls</span>
             <PlacementButton
               value={cfg.stage_bar ?? "bottom"}
               order={PLACEMENTS}
@@ -8802,25 +8979,25 @@ export function LiveView({
           <LiveCaptions key={roomId??'local'} maxLength={setRehearsal.package.set.values.liveCaption?.type==='text'?setRehearsal.package.set.values.liveCaption.maxLength:160} enabled={docApplied&&!!setRehearsal.package.set.values.liveCaption} onText={text=>{if(setRehearsal.package.set.values.liveCaption)setRehearsal.send({type:'field',key:'liveCaption',value:text});}} />
           {/* The guest link IS the guest feature: no flag, no door. */}
           <span className="hd-link-group" hidden={!canGuests}>
-            <button
-              className="hd-chip hd-link"
+            <ToolbarButton
+              label="Copy guest link"
+              tooltip="Copy this room’s guest link"
               data-perf-action="guest_link.copy"
-              title="Copy this room's guest link"
               onClick={copyRoomLink}
             >
-              {ic.link ?? "🔗"} Link
-            </button>
-            <button
-              className={`hd-chip hd-link-more${linkMenuOpen ? " on" : ""}`}
-              title="More"
-              aria-label="Link options"
+              {ic.link ?? "🔗"}
+            </ToolbarButton>
+            <ToolbarButton
+              className="rm-toolbar-link-more"
+              label="Link options"
+              aria-expanded={linkMenuOpen}
               onClick={(e) => {
                 setPopAnchor(e.currentTarget);
                 setLinkMenuOpen((o) => !o);
               }}
             >
-              ▾
-            </button>
+              {ic.chev}
+            </ToolbarButton>
           </span>
           {linkMenuOpen && (
             <Pop anchor={popAnchor} align="left" className="rm-pop-link">
@@ -8838,26 +9015,21 @@ export function LiveView({
               </button>
             </Pop>
           )}
-          <button
-            className="hd-chip hd-chans"
-            title="Channels this room goes out to"
+          <ToolbarButton
+            label="Channels"
+            className="rm-toolbar-channels"
+            tooltip={`Channels${enabledDests.length?` · ${enabledDests.map(d=>d.label).join(', ')}`:''}${audienceEnabled?` · ${boominRoom?'Boomin':'Audience'} access open`:''}`}
+            aria-expanded={destsOpen}
             onClick={(e) => {
               setPopAnchor(e.currentTarget);
               setDestsOpen((o) => !o);
             }}
           >
-            {audienceEnabled && <><span className="hd-chan-logo"><AudienceDestinationMark /></span><span>{boominRoom ? "Boomin" : "Audience"}</span></>}
-            {enabledDests.length > 0 ? (
-              enabledDests.map((d) => (
-                <span key={d.id} className="hd-chan-logo">
-                  {PLATFORM_LOGO[d.preset] ?? <span className="rm-row-dot" style={{ background: PLATFORM_TINT[d.preset] ?? "oklch(0.6 0.02 250)" }} />}
-                </span>
-              ))
-            ) : !audienceEnabled ? (
-              <span>Channels</span>
-            ) : null}
+            {audienceEnabled&&<span className="hd-chan-logo" aria-hidden="true"><AudienceDestinationMark/></span>}
+            {enabledDests.map(d=><span key={d.id} className="hd-chan-logo" aria-hidden="true">{PLATFORM_LOGO[d.preset]??<span className="rm-row-dot" style={{background:PLATFORM_TINT[d.preset]??'currentColor'}}/>}</span>)}
+            {!audienceEnabled&&!enabledDests.length&&<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="8" y="3" width="13" height="13" rx="2"/><path d="M16 20H5a2 2 0 0 1-2-2V8"/></svg>}
             {ic.chev}
-          </button>
+          </ToolbarButton>
           {destsOpen && (
             <Pop anchor={popAnchor} align="right" className="rm-pop-dests">
               <div className="rm-pop-title">CHANNELS</div>
@@ -8904,90 +9076,53 @@ export function LiveView({
             </Pop>
           )}
 
-          <button
-            className="hd-chip"
-            title="Output video settings"
+          <ToolbarButton
+            label="Output video settings"
+            tooltip={`Video quality · ${vh}p · ${vf} fps`}
+            aria-expanded={qualityOpen}
             onClick={(e) => {
               setPopAnchor(e.currentTarget);
               setQualityOpen((o) => !o);
             }}
           >
-            {vh}p · {vf}
-            {ic.chev}
-          </button>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 7h7m4 0h5M4 17h2m4 0h10"/><circle cx="13" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
+          </ToolbarButton>
 
-          <button
-            className={`hd-chip hd-studio${studioOn ? " on" : ""}`}
+          <ToolbarButton
+            label={studioOn?'Turn Studio output off':'Studio output'}
             onClick={toggleStudio}
             disabled={!engineOk || studioBusy}
             aria-pressed={studioOn}
-            title="Broadcast the studio — the whole Producer window goes out"
+            tooltip={studioOn?'Studio output is on · The whole Producer window goes out':'Studio output · Broadcast the whole Producer window'}
           >
             {ic.layout}
-            {studioOn ? "Studio on" : "Studio"}
-          </button>
+          </ToolbarButton>
 
 
 
-          <button
-            className={`hd-chip${vcamOn ? " on" : ""}`}
+          <ToolbarButton
+            label={vcamPending?`${vcamPending} virtual camera`:vcamOn?'Stop virtual camera':vcamState?.installed?'Virtual camera':'Install virtual camera'}
             onClick={toggleVcam}
             disabled={!engineOk || vcamPending !== null}
             aria-busy={vcamPending !== null}
-            title={
+            aria-pressed={vcamOn}
+            tooltip={
               vcamState?.installed
-                ? "Appear as a webcam in Zoom, Meet and Discord"
-                : vcamState?.error ?? "Install Producer's virtual camera"
+                ? "Take your camera and Set anywhere. Choose Producer Virtual Camera in your video app."
+                : vcamState?.error ?? "Take your camera and Set anywhere. Set up Producer Virtual Camera."
             }
           >
             {ic.cam}
-            {vcamPending
-              ? (vcamPending === "starting" ? "Starting…" : vcamPending === "stopping" ? "Stopping…" : "Installing…")
-              : vcamOn
-                ? "Cam on"
-                : vcamState?.installed
-                  ? "Virtual cam"
-                  : vcamState?.state === "needs_approval"
-                    ? "Approve"
-                    : vcamState?.state === "move_to_applications"
-                      ? "Locate app"
-                      : vcamState?.state === "requested"
-                        ? "Installing…"
-                        : vcamState?.error && vcamState.state !== "failed"
-                          ? "Virtual cam"
-                          : "Install cam"}
-          </button>
-
-          <button
-            className={`hd-chip${recPath ? " rec" : ""}`}
-            onClick={toggleRecord}
-            disabled={!engineOk || (!recPath && (micUnready || (!!room && !docApplied)))}
-            title={recPath ? `Recording to ${recPath.split("/").pop()}` : "Record locally"}
-          >
-            <span className="rm-rec-dot" />
-            {recPath
-              ? `${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`
-              : "Record"}
-          </button>
-
-          {streaming ? (
-            <button className="hd-golive stop" onClick={() => ipc.liveStop()} disabled={state === "stopping"}>
-              <span className="rm-big-icon">■</span>
-              {state === "stopping" ? "Stopping…" : "End"}
-            </button>
-          ) : (
-            <button
-              className="hd-golive"
-              onClick={goLive}
-              disabled={!engineOk || micUnready || (!!room && !docApplied) || enabledDests.length === 0}
-              title={audienceEnabled
-                ? "Boomin audience access is open. Select an external channel to stream there too."
-                : enabledDests.length === 0 ? "Select an external channel, or open audience access in Channels." : undefined}
-            >
-              {ic.onair}
-              GO LIVE
-            </button>
-          )}
+          </ToolbarButton>
+          <span className="rm-toolbar-separator" aria-hidden="true"/>
+          <RoomTransportControls visible={visible} onOpen={closePops} recordRequest={recordReview} recording={!!recPath} recordingPath={recPath} recordingElapsed={`${Math.floor(recElapsed/60)}:${String(recElapsed%60).padStart(2,'0')}`} recordingBusy={recordingBusy}
+            recordDisabled={!engineOk||(!recPath&&(micUnready||!!room&&!docApplied))} recordReason={!engineOk?'The room engine is starting':!recPath&&micUnready?'Waiting for the microphone':!recPath&&!!room&&!docApplied?'The room is still loading':undefined}
+            streaming={streaming} streamBusy={streamingBusy||state==='starting'||state==='stopping'} streamDisabled={!streaming&&(!engineOk||micUnready||!!room&&!docApplied||enabledDests.length===0)}
+            streamReason={!streaming?(!engineOk?'The room engine is starting':micUnready?'Waiting for the microphone':!!room&&!docApplied?'The room is still loading':!enabledDests.length?'Select a streaming destination in Channels':undefined):undefined}
+            destinations={enabledDests.map(d=>({id:d.id,label:d.label,icon:PLATFORM_LOGO[d.preset]??ic.onair}))} audienceLabel={audienceEnabled?(boominRoom?'Boomin':'Room'):undefined}
+            program={studioOn?'Studio · Entire Producer window':setOutput.currentPresented?setRehearsal.package.name:'Room scene'} streamFormat={`${vh}p · ${vf} fps · ${outputView==='portrait'?'Portrait':'Landscape'}`}
+            recordFormat={`${vh}p · ${vf} fps · ${outputView==='both'?'Landscape + portrait · Two MP4 files':outputView==='portrait'?'Portrait · MP4':'Landscape · MP4'}`} recordingFolder={IS_WINDOWS?'Videos / Producer':'Movies / Producer'}
+            onRecord={toggleRecord} onStream={goLive} onStopStream={stopStream}/>
 
           {qualityOpen && (
             <Pop anchor={popAnchor} align="right" className="rm-pop-quality">
@@ -9058,7 +9193,7 @@ export function LiveView({
           )}
         </div>
       </header>
-      {seat && <GreenRoomBar seat={guestSeat} spec={seat} onLeave={() => onLeave?.()} />}
+      {visible&&appearance && <GreenRoomBar seat={guestSeat} spec={appearance} onLeave={() => outgoingSeat ? onLeaveAppearance?.() : onLeave?.()} />}
 
       {/* THE MOD VIEW (views/ModBoard.tsx): a non-host seat gets a board of
         * its own — host output, scene pads, people, my feeds, switches —
@@ -9174,7 +9309,7 @@ export function LiveView({
               <span className="rm-veil-note">{veilNote}</span>
             </div>
           )}
-          <RoomOutputView view={engineOk&&isHost?outputView:'landscape'} portrait={portraitMonitor} portraitContent={<PortraitCanvas canvasWidth={vh} selected={portraitSelected} onSelect={id=>{setPortraitSelected(id);setStageSel(null);}} monitor={portraitMonitor} onSources={sources=>setPortraitMonitor(previous=>({...previous,sources}))}/>}>
+          <RoomOutputView view={engineOk&&isHost?outputView:'landscape'} portrait={portraitMonitor} portraitContent={visible?<PortraitCanvas canvasWidth={vh} selected={portraitSelected} onSelect={id=>{setPortraitSelected(id);setStageSel(null);}} monitor={portraitMonitor} onSources={sources=>setPortraitMonitor(previous=>({...previous,sources}))}/>:null}>
             {/* Off-host the stage is a PROGRAM MONITOR, not an editor: the
               * native preview is never attached (there is no local set to
               * show — see localSetDecision) and the picture is the host's,
@@ -9184,7 +9319,7 @@ export function LiveView({
             {engineOk && !isHost && (
               <ProgramMonitorStage seat={monitorSeat} pending={accessPending} boomin={boominRoom} />
             )}
-            {engineOk && isHost && outputView!=='portrait' && (
+            {visible && engineOk && isHost && outputView!=='portrait' && (
               <div className="rm-landscape-monitor"><PreviewPanel>
                 <StageEditor
                   // A mic has no picture: never a box on the stage.
@@ -9285,7 +9420,8 @@ export function LiveView({
               <button
                 className={`stg-btn${recPath ? " rec" : ""}`}
                 title={recPath ? "Stop recording" : "Record"}
-                onClick={toggleRecord}
+                disabled={recordingBusy||!engineOk||(!recPath&&(micUnready||!!room&&!docApplied))}
+                onClick={()=>setRecordReview(n=>n+1)}
               >
                 <span className="rm-rec-dot" />
               </button>
@@ -9301,6 +9437,7 @@ export function LiveView({
           )}
 
           <PermBanner
+            visible={visible}
             sources={sources}
             micStarting={missingMics.length > 0}
             onGranted={(kind) => {
@@ -9651,7 +9788,7 @@ export function LiveView({
         </span>
       </footer>
       <BugSheet
-        open={bugOpen}
+        open={visible&&bugOpen}
         onClose={() => setBugOpen(false)}
         version={appVersion}
         engine={snapshot?.graphics_backend}
@@ -9659,7 +9796,7 @@ export function LiveView({
         scenes={scenes.length}
         sources={sources.items?.length ?? 0}
       />
-    </div>
+    </div></RoomAssistantContext.Provider>
   );
 }
 

@@ -11,6 +11,12 @@ export function nativeNodeId(value: string): string {
   for (const c of value) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619);
   return "node-" + (hash >>> 0).toString(16);
 }
+/** Compiler placeholder: keeps native identity without content or large textures. */
+export function isUnboundSlotPlaceholder(node: RenderNode): boolean {
+  return node.kind === "group" && node.children.length === 0
+    && node.bounds.width === 1 && node.bounds.height === 1
+    && node.properties.opacity === 0 && !node.mask && !node.backdrop && !node.isolate;
+}
 /** Lower the room editor's resolved layout into one ordered native graph.
  * The browser resolves CSS layout only; OBS composites the resulting graphics,
  * media and source placements. This does not rasterize HTML into a canvas. */
@@ -80,6 +86,8 @@ export async function compileRoomScene(
     for (const { element } of entries.values())
       element.style.transform = "none";
     const resources = new Set<string>();
+    const retainedTargets = new Set((options.retainedTargets ?? []).map(nativeNodeId));
+    const unboundTargets = new Set<string>();
     const motionTargets = new Set(
       [...(projection.timeline?.tracks.map((t) => t.target) ?? []),...(options.retainedTargets??[])],
     );
@@ -128,7 +136,15 @@ export async function compileRoomScene(
       const wrap=(leaf:RenderNode):RenderNode=>node.mask||node.backdrop?{...common,kind:'group',...(node.mask?{mask:node.mask}:{}),...(node.backdrop?{backdrop:node.backdrop}:{}),isolate:true,children:[{...leaf,id:identity(node.id+'-content'),bounds:{...bounds,x:0,y:0},properties:{...leaf.properties,opacity:1}}]}:leaf;
       if (node.type === "slot") {
         const resource = options.bindings[node.slotId ?? ""];
-        if (!resource) return wrap({ ...common, kind: "group" });
+        if (!resource) {
+          // Native animations need the ID to exist. Keep a retained, transparent
+          // 1px group outside graphics batches; no source, effects or geometry
+          // tracks may grow this empty placeholder into a large texture.
+          retainedTargets.add(common.id);
+          unboundTargets.add(common.id);
+          return { ...common, kind: "group", bounds: { ...bounds, width: 1, height: 1 },
+            properties: { ...properties, opacity: 0 } };
+        }
         resources.add(resource);
         return wrap({
           ...common,
@@ -277,9 +293,9 @@ export async function compileRoomScene(
         shaders,
         scenes3d,
         clock: projection.timeline?.clock,
-        retainedTargets:(options.retainedTargets??[]).map(nativeNodeId),
+        retainedTargets:[...retainedTargets],
         motion:
-          projection.timeline?.tracks.map((track) => ({
+          projection.timeline?.tracks.filter(track => !unboundTargets.has(nativeNodeId(track.target))).map((track) => ({
             ...track,
             target: nativeNodeId(track.target),
           })) ?? [],

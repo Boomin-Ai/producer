@@ -42,7 +42,9 @@ struct WireSnapshot {
     observed_at_ms: u64,
     guests: Vec<WirePermission>,
 }
-fn default_on_stage() -> bool { true }
+fn default_on_stage() -> bool {
+    true
+}
 
 #[derive(Clone)]
 pub struct Permission {
@@ -53,7 +55,9 @@ pub struct Permission {
     on_stage: bool,
 }
 impl Permission {
-    pub fn on_stage(&self) -> bool { self.on_stage }
+    pub fn on_stage(&self) -> bool {
+        self.on_stage
+    }
     pub fn rtc_identity(&self) -> &str {
         &self.identity
     }
@@ -73,6 +77,55 @@ pub struct Snapshot {
     deadline: Instant,
 }
 impl Snapshot {
+    /// Project independently validated guest authority into receive permissions.
+    /// This never creates Producer credentials or changes the wire host path.
+    pub fn for_appearance(
+        a: &producer_guest_session::appearance::Authority,
+        wall_ms: u64,
+    ) -> Result<Self, &'static str> {
+        if !a.current(Instant::now()) {
+            return Err("Native appearance authority expired");
+        }
+        let e = &a.expected;
+        let mut permissions = Vec::new();
+        if e.can_subscribe {
+            permissions.push(Permission {
+                participant_id: a.producer_participant_id.clone(),
+                identity: a.producer_identity.clone(),
+                sources: vec![PublishSource::Camera, PublishSource::Microphone],
+                deadline: a.deadline(),
+                on_stage: true,
+            });
+            for peer in &a.stage_audio {
+                if a.peer_audio_allowed(peer) {
+                    permissions.push(Permission {
+                        participant_id: peer.participant_id.clone(),
+                        identity: peer.rtc_identity.clone(),
+                        sources: vec![PublishSource::Microphone],
+                        deadline: a.deadline(),
+                        on_stage: true,
+                    });
+                }
+            }
+        }
+        Ok(Self {
+            receipt: HostReceipt {
+                brand_id: e.brand_id.clone(),
+                room_id: e.room_id.clone(),
+                run_id: e.run_id.clone(),
+                host_process_id: a.producer_participant_id.clone(),
+                host_participant_id: a.producer_participant_id.clone(),
+                transport: "livekit".into(),
+                endpoint: e.endpoint.clone(),
+                state: "active".into(),
+                host_lease_epoch: e.host_lease_epoch,
+                control_revision: e.control_revision,
+                host_lease_expires_at_ms: wall_ms.saturating_add(3500),
+            },
+            permissions,
+            deadline: a.deadline(),
+        })
+    }
     /// Request start bounds freshness, including time spent in HTTP/SDK queues.
     /// A delayed response cannot buy a fresh 3.5 seconds after it arrives.
     pub fn parse(
@@ -170,12 +223,17 @@ impl Snapshot {
         })
     }
     pub fn supersedes(&self, previous: &Self) -> bool {
-        let a = &self.receipt; let b = &previous.receipt;
-        a.brand_id == b.brand_id && a.room_id == b.room_id && a.run_id == b.run_id
-            && a.host_process_id == b.host_process_id && a.host_participant_id == b.host_participant_id
-            && a.host_lease_epoch == b.host_lease_epoch && a.endpoint == b.endpoint
-            && (a.control_revision > b.control_revision ||
-                (a.control_revision == b.control_revision && self.deadline > previous.deadline))
+        let a = &self.receipt;
+        let b = &previous.receipt;
+        a.brand_id == b.brand_id
+            && a.room_id == b.room_id
+            && a.run_id == b.run_id
+            && a.host_process_id == b.host_process_id
+            && a.host_participant_id == b.host_participant_id
+            && a.host_lease_epoch == b.host_lease_epoch
+            && a.endpoint == b.endpoint
+            && (a.control_revision > b.control_revision
+                || (a.control_revision == b.control_revision && self.deadline > previous.deadline))
     }
     pub fn receipt(&self) -> &HostReceipt {
         &self.receipt
@@ -207,6 +265,65 @@ mod tests {
     use super::*;
     use serde_json::{json, Value};
     const WALL: u64 = 1791800000000;
+    #[test]
+    fn appearance_return_projection_never_authorizes_peer_video_or_backstage_peer_audio() {
+        use producer_guest_session::appearance::{Authority, FRESHNESS};
+        let host = "11111111-1111-4111-8111-111111111111";
+        let guest = "22222222-2222-4222-8222-222222222222";
+        let peer = "33333333-3333-4333-8333-333333333333";
+        let host_identity = format!("producer-{host}-e2-g1");
+        let peer_identity = format!("guest-{peer}-e2-g3");
+        let mut wire = json!({"expected":{"brand_id":host,"room_id":host,"run_id":host,"participant_id":guest,
+            "role":"guest","scope":"stage","private_participant_id":null,"host_lease_epoch":2,"control_revision":7,
+            "authorization_generation":3,"endpoint":"wss://fixture.livekit.cloud","publish_sources":["camera","microphone"],"can_subscribe":true},
+            "producer_identity":host_identity,"on_stage":false,"stage_audio":[{"participant_id":peer,"rtc_identity":peer_identity,
+                "authorization_generation":3,"can_publish_audio":true,"can_subscribe":true}]});
+        for staged in [false, true] {
+            let now = Instant::now();
+            wire["on_stage"] = json!(staged);
+            let authority = Authority::parse(
+                &serde_json::to_vec(&wire).unwrap(),
+                guest,
+                "wss://fixture.livekit.cloud",
+                now,
+                now,
+            )
+            .unwrap();
+            let snapshot = Snapshot::for_appearance(&authority, WALL).unwrap();
+            assert!(snapshot
+                .permission(&host_identity, PublishSource::Camera, now)
+                .is_some());
+            assert!(snapshot
+                .permission(&host_identity, PublishSource::Microphone, now)
+                .is_some());
+            assert!(snapshot
+                .permission(&peer_identity, PublishSource::Camera, now)
+                .is_none());
+            assert_eq!(
+                snapshot
+                    .permission(&peer_identity, PublishSource::Microphone, now)
+                    .is_some(),
+                staged
+            );
+            assert!(snapshot
+                .permission(&host_identity, PublishSource::Camera, now + FRESHNESS)
+                .is_none());
+        }
+        wire["expected"]["can_subscribe"] = json!(false);
+        let now = Instant::now();
+        let authority = Authority::parse(
+            &serde_json::to_vec(&wire).unwrap(),
+            guest,
+            "wss://fixture.livekit.cloud",
+            now,
+            now,
+        )
+        .unwrap();
+        assert!(Snapshot::for_appearance(&authority, WALL)
+            .unwrap()
+            .permission(&host_identity, PublishSource::Camera, now)
+            .is_none());
+    }
     fn fixture() -> (HostReceipt, Value, String) {
         let host = "11111111-1111-4111-8111-111111111111";
         let guest = "22222222-2222-4222-8222-222222222222";
@@ -229,11 +346,15 @@ mod tests {
         wire["guests"][0]["on_stage"] = json!(false);
         let start = Instant::now();
         let snapshot = parse(&expected, &wire, start, start).unwrap();
-        let permission = snapshot.permission(&identity, PublishSource::Camera, start).unwrap();
+        let permission = snapshot
+            .permission(&identity, PublishSource::Camera, start)
+            .unwrap();
         assert!(!permission.on_stage());
         wire["guests"][0]["on_stage"] = json!(true);
         let snapshot = parse(&expected, &wire, start, start).unwrap();
-        let permission = snapshot.permission(&identity, PublishSource::Microphone, start).unwrap();
+        let permission = snapshot
+            .permission(&identity, PublishSource::Microphone, start)
+            .unwrap();
         assert!(permission.on_stage());
         assert_eq!(permission.rtc_identity(), identity);
     }

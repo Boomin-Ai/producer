@@ -14,7 +14,7 @@ const bundle=await build({stdin:{contents:`
  const root=createRoot(document.getElementById('root'));
  function Harness({seat,stream}){const audio=useReturnAudio({seat,stream});window.hook=audio;return <><audio ref={audio.audioRef} autoPlay/><output data-testid="status">{audio.status}</output><p data-testid="message">{audio.message}</p><button onClick={()=>{window.calls.push({kind:'click'});void audio.enableAudio();window.calls.push({kind:'click-returned'});}}>Enable test audio</button></>;}
  window.renderHook=(seat,stream)=>root.render(<Harness seat={seat} stream={stream}/>);
- window.renderBar=(seat)=>root.render(<GreenRoomBar seat={seat} spec={{title:'Synthetic room',hostName:'Synthetic host',videoSource:'program'}} onLeave={()=>{}}/>);
+ window.renderBar=(seat)=>root.render(<GreenRoomBar seat={seat} spec={{title:'Synthetic room',hostName:'Synthetic host',videoSource:'program',nativeProgram:window.nativeProgram}} onLeave={()=>{}}/>);
  window.unmountHook=()=>root.unmount();
  `,resolveDir:root,loader:'tsx'},bundle:true,write:false,format:'iife',platform:'browser',define:{'import.meta.env':'{}'},
  plugins:[{name:'return-audio-fixtures',setup(b){b.onResolve({filter:/\.css$/},()=>({path:'css',namespace:'mock'}));b.onResolve({filter:/\/lib\/guestSeat$/},()=>({path:'seat',namespace:'mock'}));b.onLoad({filter:/.*/,namespace:'mock'},args=>({contents:args.path==='css'?'':seatMock,loader:'js'}));}}],
@@ -23,13 +23,13 @@ const module=process.env.PRODUCER_PLAYWRIGHT_MODULE;
 const {chromium}=await import(module?(module.startsWith('file:')?module:pathToFileURL(resolve(module)).href):new URL('../tools/producer-mcp/node_modules/playwright-core/index.mjs',import.meta.url).href);
 const browser=await chromium.launch({headless:true,...(process.env.PRODUCER_TEST_CHROME?{executablePath:process.env.PRODUCER_TEST_CHROME}:{channel:process.env.PRODUCER_BROWSER_CHANNEL??'chrome'})});
 const results=[];
-async function fixture({play='blocked',resume='resolve',stream=true,bar=false,clock=false}={}){
+async function fixture({play='blocked',resume='resolve',stream=true,bar=false,clock=false,native=false}={}){
  const page=await browser.newPage();page.setDefaultTimeout(5000);const errors=[],requests=[];page.on('pageerror',error=>errors.push(error.message));
  await page.route('**/*',route=>{requests.push(route.request().url());return route.request().url()==='https://producer-fixture.invalid/'?route.fulfill({contentType:'text/html',body:'<main id="root"></main>'}):route.abort();});
  await page.goto('https://producer-fixture.invalid/');
  if(clock)await page.clock.install();
  await page.evaluate(options=>{
-  window.calls=[];window.playMode=options.play;window.resumeMode=options.resume;window.pendingPlays=[];window.pendingResumes=[];window.elements=new WeakMap();window.allStreams=[];window.forbidden=[];
+  window.calls=[];window.nativeProgram=options.native;window.playMode=options.play;window.resumeMode=options.resume;window.pendingPlays=[];window.pendingResumes=[];window.elements=new WeakMap();window.allStreams=[];window.forbidden=[];
   window.fetch=()=>{window.forbidden.push('fetch');return Promise.reject(Error('network forbidden'));};window.WebSocket=class{constructor(){window.forbidden.push('socket');throw Error('socket forbidden');}};
   for(const method of ['getUserMedia','getDisplayMedia','enumerateDevices'])navigator.mediaDevices[method]=()=>{window.forbidden.push(method);return Promise.reject(Error('devices forbidden'));};
   const metadata=element=>{let value=window.elements.get(element);if(!value){value={stream:null,paused:true,readyState:0,ended:false,error:null};window.elements.set(element,value);}return value;};
@@ -51,14 +51,14 @@ async function fixture({play='blocked',resume='resolve',stream=true,bar=false,cl
   };
   window.makeStream=()=>{const track=new MediaStreamTrackGenerator({kind:'audio'}),stream=new MediaStream([track]);window.allStreams.push(stream);return stream;};
   window.makeSeat=()=>{
-   const state={phase:'live',mediaMode:'program',transport:'livekit',hasProgram:false,cameraOff:false,muted:false};
-   return {resumeAudio(){window.calls.push({kind:'resume',active:navigator.userActivation.isActive});queueMicrotask(()=>window.calls.push({kind:'resume-microtask'}));
+   let state={phase:'live',mediaMode:'program',transport:'livekit',hasProgram:false,cameraOff:false,muted:false,nativeProgram:options.native,nativePlayback:false,nativeAudioAvailable:false,programPreview:null};const listeners=new Set();
+   return {patch(patch){state={...state,...patch};for(const listener of listeners)listener();},resumeAudio(){window.calls.push({kind:'resume',active:navigator.userActivation.isActive});queueMicrotask(()=>window.calls.push({kind:'resume-microtask'}));
     if(window.resumeMode==='throw')throw Error('PRIVATE_RESUME_THROW');if(window.resumeMode==='error')return Promise.reject(Error('PRIVATE_RESUME_REJECT'));if(window.resumeMode==='blocked')return Promise.reject(new DOMException('PRIVATE_CONTEXT','NotAllowedError'));
     if(window.resumeMode==='pending')return new Promise((resolve,reject)=>window.pendingResumes.push({resolve,reject}));return Promise.resolve();},
-    snapshot:()=>state,subscribe:()=>()=>{},localStream:()=>null,programStream:()=>null,hostAudioStream:()=>window.currentStream,toggleMute(){},toggleCamera(){}};
+    snapshot:()=>state,subscribe:fn=>{listeners.add(fn);return()=>listeners.delete(fn);},localStream:()=>null,programStream:()=>null,hostAudioStream:()=>options.native?null:window.currentStream,toggleMute(){},toggleCamera(){}};
   };
   window.currentStream=options.stream?window.makeStream():null;window.currentSeat=window.makeSeat();
- },{play,resume,stream});
+ },{play,resume,stream,native});
  await page.addScriptTag({content:bundle.outputFiles[0].text});
  await page.evaluate(bar=>bar?window.renderBar(window.currentSeat):window.renderHook(window.currentSeat,window.currentStream),bar);
  if(!bar)await page.getByTestId('status').waitFor();else await page.locator('.rm-seat').waitFor();
@@ -124,6 +124,26 @@ try{
   await h.page.evaluate(()=>window.pendingPlays[0].reject(new DOMException('PRIVATE_OLD_AUTOPLAY','NotAllowedError')));await h.page.waitForTimeout(20);
   assert(await h.page.getByRole('button',{name:'Listening',exact:true}).isDisabled());assert.equal(await h.page.locator('audio').count(),1);
   assert(await h.page.evaluate(()=>window.firstAudio===document.querySelector('audio')));assert.equal(await h.page.evaluate(()=>window.calls.filter(c=>c.kind==='play').length),2);assert.equal(await h.page.evaluate(()=>window.calls.filter(c=>c.kind==='resume').length),1);await h.close();
+ });
+ await run('native GreenRoomBar uses a labelled return image and confirms monitoring only after control acknowledgement plus recent audio',async()=>{
+  const h=await fixture({native:true,bar:true,stream:false});assert.equal(await h.page.locator('video,audio').count(),0);
+  const enable=h.page.getByRole('button',{name:'Enable audio',exact:true});assert(await enable.isEnabled());
+  await h.page.evaluate(()=>window.currentSeat.patch({nativeAudioAvailable:true,hasProgram:true,programPreview:'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs='}));
+  await h.page.getByRole('img',{name:'Return preview',exact:true}).waitFor();assert(await enable.isEnabled());
+  await enable.click();assert.equal(await h.page.evaluate(()=>window.calls.filter(c=>c.kind==='resume').length),1);assert.equal(await h.page.evaluate(()=>window.calls.filter(c=>c.kind==='play').length),0);
+  assert.equal(await h.page.getByRole('button',{name:'Monitoring enabled',exact:true}).count(),0);
+  await h.page.evaluate(()=>window.currentSeat.patch({nativePlayback:true}));const enabled=h.page.getByRole('button',{name:'Monitoring enabled',exact:true});await enabled.waitFor();assert(await enabled.isDisabled());
+  assert.doesNotMatch(await h.page.locator('.rm-seat-audio-status').innerText(),/audible|hear|speaker|listening/i);
+  await h.page.evaluate(()=>window.currentSeat.patch({nativeAudioAvailable:false,hasProgram:false,programPreview:null}));await enable.waitFor();assert(await enable.isEnabled());assert.equal(await h.page.getByRole('img').count(),0);await h.close();
+ });
+ await run('native monitoring errors and hung requests remain bounded, retryable and fenced across seat replacement',async()=>{
+  const h=await fixture({native:true,bar:true,stream:false,resume:'error',clock:true});await h.page.getByRole('button',{name:'Enable audio',exact:true}).click();
+  const retry=h.page.getByRole('button',{name:'Retry audio',exact:true});await retry.waitFor();assert(await retry.isEnabled());assert.doesNotMatch(await h.page.locator('body').innerText(),/PRIVATE/);
+  await h.page.evaluate(()=>{window.resumeMode='pending';});await retry.click();await h.page.getByRole('button',{name:'Enabling audio…',exact:true}).waitFor();await h.page.clock.fastForward(5100);await retry.waitFor();
+  await h.page.evaluate(()=>{window.pendingResumes[0].resolve();window.currentSeat.patch({nativePlayback:true,nativeAudioAvailable:true});});await h.page.waitForTimeout(20);assert(await retry.isEnabled());
+  await h.page.evaluate(()=>{window.resumeMode='pending';});await retry.click();await h.page.getByRole('button',{name:'Enabling audio…',exact:true}).waitFor();
+  await h.page.evaluate(()=>{window.currentSeat=window.makeSeat();window.renderBar(window.currentSeat);});await h.page.getByRole('button',{name:'Enable audio',exact:true}).waitFor();
+  await h.page.evaluate(()=>window.pendingResumes[1].reject(Error('PRIVATE_OLD_NATIVE')));await h.page.waitForTimeout(20);assert.equal(await retry.count(),0);await h.close();
  });
  console.log(`PASS: ${results.length} return-audio browser cases with real React hook/GreenRoomBar and DOM; mocked playback and seat only, no network/devices/native/media output.`);
  for(const result of results)console.log('PASS '+result);

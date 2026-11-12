@@ -67,6 +67,16 @@ impl Endpoint {
     pub fn source_id(&self) -> &str {
         &self.id
     }
+    /// Clearing queued monitor PCM does not change the active video delivery.
+    pub fn clear_audio(&self) {
+        if let Ok(state) = self.state.lock() {
+            if let Some(source) = state.source {
+                unsafe {
+                    producer_guest_ingest_clear_audio(source as *mut ffi::obs_source_t);
+                }
+            }
+        }
+    }
     /// Engine thread only, after source creation and before exposing the item.
     pub unsafe fn attach(id: &str, source: *mut ffi::obs_source_t) -> Result<Arc<Self>, String> {
         if source.is_null() {

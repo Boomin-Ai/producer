@@ -289,7 +289,11 @@ try{
   }
   {
     const {page}=await pageFor();await page.getByRole('heading',{name:'Sign in to Producer'}).waitFor();await page.evaluate(()=>window.renderDirect({allowServerConnection:true}));await page.getByRole('button',{name:'Sign in with email',exact:true}).click();await page.getByRole('button',{name:'Advanced: custom API root',exact:true}).click();await page.getByLabel('API root (advanced)',{exact:true}).fill('https://custom.example.test');
-    await page.evaluate(()=>window.renderDirect({allowServerConnection:false}));await page.getByRole('heading',{name:'Sign in to Producer'}).waitFor();await noInitialServer(page);await codeStep(page);await page.getByRole('button',{name:'Verify & connect',exact:true}).click();await page.waitForFunction(()=>window.calls.some(c=>c.command==='boomin_connect'));assert.equal(await page.evaluate(()=>window.calls.filter(c=>['boomin_request_otp','boomin_connect'].includes(c.command)).every(c=>c.args.apiRoot===null)),true);results.push('beta entry ignores a retained custom API root after permission changes');await page.close();
+    await page.evaluate(()=>window.renderDirect({allowServerConnection:false}));
+    // The heading exists before and after this concurrent React render. Wait
+    // for the changed permission to commit, not the already-present heading.
+    await page.getByLabel('API root (advanced)',{exact:true}).waitFor({state:'detached'});
+    await noInitialServer(page);await codeStep(page);await page.getByRole('button',{name:'Verify & connect',exact:true}).click();await page.waitForFunction(()=>window.calls.some(c=>c.command==='boomin_connect'));assert.equal(await page.evaluate(()=>window.calls.filter(c=>['boomin_request_otp','boomin_connect'].includes(c.command)).every(c=>c.args.apiRoot===null)),true);results.push('beta entry ignores a retained custom API root after permission changes');await page.close();
   }
   {
     const {page}=await pageFor({noBrands:true});await page.getByRole('heading',{name:'Sign in to Producer'}).waitFor();await codeStep(page);await page.getByRole('button',{name:'Verify & connect',exact:true}).click();

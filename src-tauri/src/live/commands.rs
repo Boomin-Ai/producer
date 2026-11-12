@@ -702,9 +702,21 @@ pub async fn live_restore_room(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
     restore: serde_json::Value,
+    room_id: Option<String>,
 ) -> EngineResult<serde_json::Value> {
     let started = std::time::Instant::now();
     let trace = std::env::var_os("PRODUCER_TRACE_ROOM_OPEN").is_some();
+    // Serialize restore against candidate appearance acquisition. Checking only
+    // on the engine thread would be too late: stopping the local host below
+    // must not disturb a running appearance's retained-room controller.
+    #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
+    let appearance_guard = state.rtc_appearance.lock().await;
+    #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
+    if appearance_guard.is_some() {
+        return Err(EngineError::Other(
+            "Leave the appearance before restoring another room".into(),
+        ));
+    }
     if trace {
         eprintln!("[room-open] ipc_received");
     }
@@ -718,7 +730,7 @@ pub async fn live_restore_room(
     let result = tauri::async_runtime::spawn_blocking(move || {
         app.state::<AppState>()
             .live
-            .restore_room(restore)
+            .restore_room_bound(restore, room_id)
             .map_err(EngineError::Other)
     })
     .await

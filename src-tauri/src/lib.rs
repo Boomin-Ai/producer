@@ -1,3 +1,4 @@
+mod assistant;
 mod boomin;
 mod cache;
 mod chat;
@@ -12,6 +13,7 @@ mod outbox;
 mod performance_share;
 mod performance_trace;
 mod recordings;
+mod rtc_appearance;
 #[cfg(feature = "guest-rtc-pilot")]
 mod rtc_control;
 mod rtc_ipc;
@@ -33,6 +35,8 @@ use std::sync::Mutex;
 use tauri::Manager;
 
 pub struct AppState {
+    #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
+    pub rtc_appearance: std::sync::Arc<tokio::sync::Mutex<Option<rtc_appearance::AppearanceOwner>>>,
     #[cfg(feature = "guest-rtc-pilot")]
     pub rtc_host: std::sync::Arc<tokio::sync::Mutex<Option<rtc_owner::HostOwner>>>,
     #[cfg(feature = "guest-rtc-pilot")]
@@ -262,6 +266,8 @@ pub fn run() {
             };
 
             app.manage(AppState {
+                #[cfg(all(feature = "guest-rtc-pilot", have_engine))]
+                rtc_appearance: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
                 #[cfg(feature = "guest-rtc-pilot")]
                 rtc_host: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
                 #[cfg(feature = "guest-rtc-pilot")]
@@ -271,6 +277,9 @@ pub fn run() {
                 live,
                 chat: chat::ChatHub::new(app.handle().clone()),
             });
+            // Lazy provider initialization: no credential access, networking or
+            // inference is added to room startup or frame processing.
+            app.manage(assistant::AssistantState::default());
 
             #[cfg(all(have_engine, target_os = "macos", feature = "portrait-camera-dev"))]
             if let Some(report) = std::env::var_os("PRODUCER_PORTRAIT_CAMERA_PROBE") {
@@ -296,6 +305,15 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(observe_command_dispatch(tauri::generate_handler![
+            assistant::assistant_status,
+            assistant::assistant_authoring_capabilities,
+            assistant::assistant_sign_in,
+            assistant::assistant_cancel_sign_in,
+            assistant::assistant_select_account,
+            assistant::assistant_disconnect,
+            assistant::assistant_models,
+            assistant::assistant_turn,
+            assistant::assistant_cancel_turn,
             performance_trace::performance_trace_config,
             performance_trace::performance_trace_set_consent,
             performance_trace::performance_trace_write,
@@ -307,6 +325,12 @@ pub fn run() {
             rtc_ipc::live_rtc_start,
             rtc_ipc::live_rtc_enabled,
             rtc_ipc::live_rtc_stop,
+            rtc_appearance::live_appearance_enabled,
+            rtc_appearance::live_appearance_start,
+            rtc_appearance::live_appearance_status,
+            rtc_appearance::live_appearance_controls,
+            rtc_appearance::live_appearance_preview,
+            rtc_appearance::live_appearance_stop,
             set_media::set_media_import,
             set_media::set_media_resolve,
             set_library::set_library_list,
@@ -529,6 +553,7 @@ pub fn run() {
                             // thread before the existing engine shutdown path.
                             tauri::async_runtime::spawn(async move {
                                 let state = app.state::<AppState>();
+                                let _ = rtc_appearance::stop_all(&state).await;
                                 let _ = rtc_ipc::stop_host(&state).await;
                                 CLOSING.store(2, std::sync::atomic::Ordering::Release);
                                 app.exit(0);

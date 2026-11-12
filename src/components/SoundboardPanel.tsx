@@ -4,7 +4,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { sounds, soundHotkeysEnabled, type SoundBoard, type SoundLibrary, type SoundPad, type SoundStatus } from '../lib/soundboard';
 import './SoundboardPanel.css';
 
-export function SoundboardPanel({ roomId, enabled, compact = false }: { roomId: string; enabled: boolean; compact?: boolean }) {
+export function SoundboardPanel({ roomId, enabled, compact = false, visible = true }: { roomId: string; enabled: boolean; compact?: boolean; visible?: boolean }) {
   const [library, setLibrary] = useState<SoundLibrary | null>(null);
   const [status, setStatus] = useState<SoundStatus | null>(null);
   const [error, setError] = useState('');
@@ -45,7 +45,7 @@ export function SoundboardPanel({ roomId, enabled, compact = false }: { roomId: 
   }, [roomId]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !visible) return;
     let dead = false;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
@@ -66,10 +66,10 @@ export function SoundboardPanel({ roomId, enabled, compact = false }: { roomId: 
       dead = true;
       clearTimeout(timer);
     };
-  }, [roomId, enabled]);
+  }, [roomId, enabled, visible]);
 
   useEffect(() => {
-    if (!settingsOpen || !dialog.current) return;
+    if (!settingsOpen || !visible || !dialog.current) return;
     const element = dialog.current;
     element.showModal();
     return () => {
@@ -77,7 +77,7 @@ export function SoundboardPanel({ roomId, enabled, compact = false }: { roomId: 
       const trigger = returnFocus.current;
       (trigger?.isConnected ? trigger : settingsButton.current)?.focus();
     };
-  }, [settingsOpen]);
+  }, [settingsOpen, visible]);
 
   const openSettings = (event: MouseEvent<HTMLButtonElement>, soundId: string | null = null) => {
     returnFocus.current = event.currentTarget;

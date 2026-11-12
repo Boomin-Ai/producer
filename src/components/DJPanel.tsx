@@ -146,10 +146,12 @@ export function DJPanel({
   roomId,
   enabled,
   mini,
+  visible = true,
 }: {
   roomId: string;
   enabled: boolean;
   mini: boolean;
+  visible?: boolean;
 }) {
   const [mixing, setMixing] = useState(
     () => localStorage.getItem(`dj-mode:${roomId}`) === "mix",
@@ -172,7 +174,7 @@ export function DJPanel({
   const menuButton = useRef<HTMLButtonElement>(null);
   const menuPanel = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!libraryMenu) return;
+    if (!libraryMenu || !visible) return;
     menuPanel.current?.querySelector<HTMLSelectElement>("select")?.focus();
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -183,7 +185,7 @@ export function DJPanel({
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [libraryMenu]);
+  }, [libraryMenu, visible]);
   const [selectedDeck, setSelectedDeck] = useState<number | null>(null);
   const [name, setName] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -230,7 +232,7 @@ export function DJPanel({
       .catch(report);
   }, []);
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !visible) return;
     let dead = false,
       timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
@@ -248,7 +250,7 @@ export function DJPanel({
       dead = true;
       clearTimeout(timer);
     };
-  }, [enabled]);
+  }, [enabled, visible]);
   useEffect(() => {
     if (!library || !enabled) return;
     const list = library.playlists.some((p) => p.id === selected)

@@ -42,8 +42,9 @@ function PreviewDialog({ doc, state, onClose, returnFocus, editor, sources, outp
   </dialog>, document.body);
 }
 
-export function RehearsalPreview({ doc, state, editor, sources, outputActive, output, configuration, workspace, workspaceBusy, onEditorClose }: { onEditorClose?:()=>void; workspace?:EditorWorkspace; workspaceBusy?:boolean; configuration?:ReactNode; output?:SetOutputControls; editor?:ReactNode; sources?:ReactNode; outputActive?:boolean; doc: PresentationPackage; state: RehearsalState }) {
+export function RehearsalPreview({ openRequest, onOpenRequest, doc, state, editor, sources, outputActive, output, configuration, workspace, workspaceBusy, onEditorClose }: { openRequest?:string; onOpenRequest?:(id:string)=>void; onEditorClose?:()=>void; workspace?:EditorWorkspace; workspaceBusy?:boolean; configuration?:ReactNode; output?:SetOutputControls; editor?:ReactNode; sources?:ReactNode; outputActive?:boolean; doc: PresentationPackage; state: RehearsalState }) {
   const [expanded, setExpanded] = useState(false);
+  useEffect(()=>{if(openRequest){setExpanded(true);onOpenRequest?.(openRequest);}},[openRequest]);
   useEffect(()=>{const open=()=>setExpanded(true);window.addEventListener('producer:edit-set',open);return()=>window.removeEventListener('producer:edit-set',open);},[]);
   const expandButton = useRef<HTMLButtonElement>(null);
   return <div className="set-visual">

@@ -8,7 +8,7 @@ import {test} from 'node:test';
 const flush=async()=>{for(let i=0;i<40;i++)await Promise.resolve();};
 function harness({transport='legacy',status='accepted',programError=false,deferredLease=false,grants,traceEnabled=false,traceThrows=false}={}){
  const traceEvents=[];let traceEpoch=1;const ended=new WeakSet();
- let now=10000,nextTimer=1,activeStatus=status;const timers=new Map(),requests=[],captures=[],links=[],conversations=[],nativeOwners=[],leases=[];let releaseLease;
+ let now=10000,nextTimer=1,activeStatus=status;const timers=new Map(),requests=[],captures=[],links=[],conversations=[],nativeOwners=[],nativePrograms=[],leases=[];let releaseLease;
  class Track {
   constructor(kind){this.kind=kind;this.enabled=true;this.readyState='live';this.muted=false;this.stops=0;}
   clone(){return new Track(this.kind);}
@@ -40,6 +40,13 @@ function harness({transport='legacy',status='accepted',programError=false,deferr
   async resumeAudio(){this.resumed=true;}
   async mediaDiagnostics(options){this.diagnosticsOptions=options;return {status:'sampled',video:{decodeProgress:'unknown'}};}
  }
+ class NativeProgram {
+  constructor(spec,update,failed){this.spec=spec;this.update=update;this.failed=failed;this.closed=false;this.controlsSeen=[];nativePrograms.push(this);}
+  async start(muted,cameraOff){this.initial={muted,cameraOff};if(programError)throw Error('native unavailable');}
+  async controls(muted,cameraOff){this.controlsSeen.push({muted,cameraOff});}
+  async enableAudio(){this.playback=true;}
+  async close(){this.closed=true;}
+ }
  const program={video:new Track('video'),audio:new Track('audio'),releases:0,onVideo(fn){this.listener=fn;},release(){this.releases++;}};
  const traceBackend={
   snapshotTraceContext:()=>({roomVisit:7}),
@@ -55,6 +62,7 @@ function harness({transport='legacy',status='accepted',programError=false,deferr
   '../../server/guest/src/participants':{resolveGrants:g=>new Set(g.grants??['media.camera','media.mic','media.return_feed'])},
   './programCapture':{sharedProgramCapture:{async resumeAudio(){program.resumed=true;},async acquire(bus,label){leases.push({bus,label});if(programError)throw Error('no camera');if(deferredLease)return new Promise(resolve=>{releaseLease=()=>resolve(program);});return program;}}},
   './producerGuestRtc':{ProducerGuestRtc:Native},
+  './nativeAppearance':{NativeAppearance:NativeProgram},
  };
  const exports={};const source=readFileSync(new URL('../src/lib/guestSeat.ts',import.meta.url),'utf8');
  const compiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
@@ -63,13 +71,53 @@ function harness({transport='legacy',status='accepted',programError=false,deferr
   navigator:{mediaDevices:{async getUserMedia(constraints){captures.push(constraints);return new Stream([...(constraints.video?[new Track('video')]:[]),...(constraints.audio?[new Track('audio')]:[])]);}}},
   fetch:async(url,options)=>{requests.push({url,options});if(url.endsWith('/session'))return new Response(JSON.stringify({signaling_ticket:'secret',signaling_url:'/v1/connect/signal/ticket',ice_servers:[]}));if(url.endsWith('/accept')){activeStatus='accepted';return new Response('{}');}return new Response(JSON.stringify({transport,guest:{id:'guest-one',status:activeStatus,...(grants===undefined?{}:{grants})}}));}
  });
- return {GuestSeat:exports.GuestSeat,exports,traceEvents,setTraceConsent(enabled){traceEnabled=enabled;traceEpoch++;},program,links,conversations,nativeOwners,leases,captures,requests,timers,Stream,Track,
+ return {GuestSeat:exports.GuestSeat,exports,traceEvents,setTraceConsent(enabled){traceEnabled=enabled;traceEpoch++;},program,links,conversations,nativeOwners,nativePrograms,leases,captures,requests,timers,Stream,Track,
   resolveLease(){releaseLease();},status(value){activeStatus=value;},
   async advance(ms){await flush();const end=now+ms;for(;;){const due=[...timers].filter(([,t])=>t.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!due)break;timers.delete(due[0]);now=due[1].at;due[1].fn();await flush();}now=end;await flush();},
   seat(extra={}){return new exports.GuestSeat({joinUrl:'https://guest.example/connect/guest/gi_saved',apiBase:'https://api.example/prefix/v1/app/producer',hostName:'Host',title:'Set appearance',producerCam:false,endpointId:'local-engine',...extra});}
  };
 }
 
+test('native appearance waits for admission and preserves initial private mute choices without virtual capture',async()=>{
+ const h=harness({transport:'livekit',status:'waiting'}),s=h.seat({videoSource:'program',nativeProgram:true,localRoomId:'local-room',portrait:true,quality:720});
+ await s.start();s.toggleMute();s.toggleCamera();assert.equal(h.nativePrograms.length,0);assert.equal(h.leases.length,0);
+ h.status('accepted');await h.advance(2500);const owner=h.nativePrograms[0];assert.ok(owner);
+ assert.equal(owner.initial.muted,true);assert.equal(owner.initial.cameraOff,true);assert.equal(owner.spec.localRoomId,'local-room');assert.equal(owner.spec.portrait,true);
+ assert.equal(s.localStream(),null);assert.equal(h.captures.length,0);assert.equal(h.leases.length,0);assert.equal(h.nativeOwners.length,0);assert.equal(h.links.length,0);
+ owner.update({phase:'live',onStage:true,hasProgram:true,hasAudio:true},'blob:qualified-return',false);
+ assert.equal(s.snapshot().programPreview,'blob:qualified-return');assert.equal(s.snapshot().onStage,true);
+ await s.resumeAudio();assert.equal(owner.playback,true);assert.equal(s.snapshot().nativePlayback,true);
+ h.status('removed');await h.advance(2500);assert.equal(owner.closed,true);assert.equal(s.snapshot().phase,'gone');
+ owner.update({phase:'live',onStage:true,hasProgram:true,hasAudio:true},'blob:stale',true);assert.equal(s.snapshot().programPreview,null);s.leave();
+});
+test('native startup failure and unsupported transport never fall back to browser capture',async()=>{
+ for(const transport of ['livekit','legacy']){
+  const h=harness({transport,programError:true}),s=h.seat({videoSource:'program',nativeProgram:true,localRoomId:'local-room'});
+  await s.start();assert.equal(s.snapshot().phase,'error');assert.equal(h.captures.length,0);assert.equal(h.leases.length,0);assert.equal(h.links.length,0);assert.equal(h.nativeOwners.length,0);
+  assert.equal(h.timers.size,0);s.leave();
+ }
+});
+test('native leave retains the exact owner through pending and failed retirement and can retry safely',async()=>{
+ const h=harness({transport:'livekit'}),s=h.seat({videoSource:'program',nativeProgram:true,localRoomId:'local-room'});await s.start();const owner=h.nativePrograms[0];
+ let rejectStop,attempts=0;owner.close=()=>{attempts++;return new Promise((_,reject)=>{rejectStop=reject;});};
+ let settled=false;const first=s.leave().then(()=>{settled=true;}),second=s.leave();await flush();assert.equal(attempts,1);assert.equal(settled,false);
+ rejectStop(Error('stop failed'));await assert.rejects(first);await assert.rejects(second);assert.equal(settled,false);
+ owner.close=async()=>{attempts++;owner.closed=true;};await s.leave();assert.equal(attempts,2);assert.equal(owner.closed,true);
+ await s.leave();assert.equal(attempts,2);assert.equal(h.captures.length,0);assert.equal(h.leases.length,0);
+});
+test('terminal native status stays terminal while retirement is pending and exposes its stop receipt',async()=>{
+ const h=harness({transport:'livekit'}),s=h.seat({videoSource:'program',nativeProgram:true,localRoomId:'local-room'});await s.start();const owner=h.nativePrograms[0];
+ let resolveStop;owner.close=()=>new Promise(resolve=>{resolveStop=resolve;});owner.update({phase:'error',onStage:false,hasProgram:false,hasAudio:false},null,false);
+ assert.equal(s.snapshot().phase,'error');let retired=false;const stopping=s.leave().then(()=>{retired=true;});await flush();assert.equal(retired,false);
+ owner.update({phase:'live',onStage:true,hasProgram:true,hasAudio:true},'blob:stale',true);assert.equal(s.snapshot().phase,'error');assert.equal(s.snapshot().programPreview,null);
+ resolveStop();await stopping;assert.equal(retired,true);assert.equal(h.nativePrograms.length,1);
+});
+test('explicit retry can obtain an exact native stop receipt after an earlier stop acknowledgement hangs',async()=>{
+ const h=harness({transport:'livekit'}),s=h.seat({videoSource:'program',nativeProgram:true,localRoomId:'local-room'});await s.start();const owner=h.nativePrograms[0],retries=[];
+ owner.close=retry=>{retries.push(retry);return retry?Promise.resolve():new Promise(()=>{});};
+ void s.leave();await flush();await s.leave(true);assert.deepEqual(retries,[false,true]);await s.leave();assert.equal(retries.length,2);
+ assert.equal(h.nativePrograms.length,1);assert.equal(h.captures.length,0);
+});
 test('waiting seat opens neither camera, program capture nor media transport before admission',async()=>{
  const h=harness({status:'waiting'}),s=h.seat({videoSource:'program'});await s.start();assert.equal(s.snapshot().phase,'waiting');assert.equal(h.captures.length,0);assert.equal(h.leases.length,0);assert.equal(h.links.length,0);
  h.status('accepted');await h.advance(2500);assert.equal(h.leases.length,1);assert.equal(h.links.length,1);s.leave();

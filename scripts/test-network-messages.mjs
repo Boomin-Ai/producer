@@ -32,6 +32,17 @@ function fake(){const f={rows:[conversation('a')],messages:[message(1)],lists:0,
  const f=fake();f.client.read=async(id,cursor)=>cursor?.before?{messages:[message(1),message(2)],has_more:false}:{messages:[message(3),message(4)],has_more:true};const c=new NetworkMessagesController(f.client);
  try{c.start();await until(()=>c.snapshot().messages.length===2);assert.equal(f.acks.length,0);await c.older();assert.deepEqual(c.snapshot().messages.map(m=>m.sequence),[1,2,3,4]);assert.equal(c.snapshot().hasOlder,false);}finally{c.close();}
 }
+// Tauri serializes native failures as strings; retain their actionable reason
+// and let the same workspace recover without hiding it behind a generic error.
+{
+ const f=fake();f.client.list=async()=>{throw 'Reconnect this workspace to restore access.';};const c=new NetworkMessagesController(f.client);
+ try{c.start();await until(()=>c.snapshot().status==='error');assert.equal(c.snapshot().error,'Reconnect this workspace to restore access.');assert.equal(f.subscriptions,0);f.client.list=async()=>f.rows;await c.refresh();await until(()=>c.snapshot().status==='ready');assert.equal(c.snapshot().error,'');assert.equal(c.snapshot().selected,'a');}finally{c.close();}
+}
+// Arbitrary non-error objects are still not rendered as provider diagnostics.
+{
+ const f=fake();f.client.list=async()=>{throw {internal:'private fixture'};};const c=new NetworkMessagesController(f.client);
+ try{c.start();await until(()=>c.snapshot().status==='error');assert.equal(c.snapshot().error,'Messages could not load. Try again.');}finally{c.close();}
+}
 // An unavailable self-hosted server is not replaced with a Boomin account.
 {
  const f=fake();f.client.list=async()=>{throw new MessagesUnavailable('No local messages capability');};const c=new NetworkMessagesController(f.client);try{c.start();await until(()=>c.snapshot().status==='unavailable');assert.equal(f.subscriptions,0);assert.equal(c.snapshot().conversations.length,0);}finally{c.close();}

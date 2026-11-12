@@ -11,6 +11,7 @@ export function authoringRuntime() {
     stdin:{resolveDir:repository,contents:`
       export * from './src/features/presentation/authoring/catalog';
       export * from './src/features/presentation/authoring/compiler';
+      export * from './src/features/presentation/authoring/service';
       export * from './src/features/presentation/authoring/brief';
       export * from './src/features/presentation/authoring/visual';
       export * from './src/features/presentation/authoring/features';

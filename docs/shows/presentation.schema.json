@@ -312,15 +312,51 @@
             },
             "maxProperties": 41,
             "propertyNames": {
-              "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
-              "not": {
-                "enum": [
-                  "constructor",
-                  "prototype",
-                  "__proto__"
-                ]
-              }
-            }
+              "enum": [
+                "position",
+                "inset",
+                "left",
+                "top",
+                "right",
+                "bottom",
+                "width",
+                "height",
+                "display",
+                "gap",
+                "padding",
+                "background",
+                "color",
+                "border",
+                "borderRadius",
+                "boxShadow",
+                "fontSize",
+                "fontWeight",
+                "letterSpacing",
+                "textAlign",
+                "lineHeight",
+                "alignItems",
+                "justifyContent",
+                "gridTemplateColumns",
+                "opacity",
+                "overflow",
+                "transform",
+                "minHeight",
+                "maxWidth",
+                "fontFamily",
+                "fontStyle",
+                "textTransform",
+                "textShadow",
+                "whiteSpace",
+                "wordSpacing",
+                "backgroundSize",
+                "backgroundPosition",
+                "filter",
+                "mixBlendMode",
+                "clipPath",
+                "isolation"
+              ]
+            },
+            "description": "Only these native style keys are supported. Use gap, padding or explicit placement for spacing; arbitrary CSS properties are not accepted."
           },
           "maxProperties": 32,
           "propertyNames": {
@@ -1476,6 +1512,14 @@
                         "additionalProperties": false
                       }
                     ]
+                  },
+                  "presentation": {
+                    "const": "slider"
+                  },
+                  "step": {
+                    "type": "number",
+                    "minimum": 0.000001,
+                    "maximum": 1000000
                   }
                 },
                 "required": [
@@ -2264,6 +2308,30 @@
               "type": "object",
               "properties": {
                 "type": {
+                  "const": "social"
+                },
+                "integrationRole": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
+                  "not": {
+                    "enum": [
+                      "constructor",
+                      "prototype",
+                      "__proto__"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "type",
+                "integrationRole"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
                   "const": "agent"
                 },
                 "integrationRole": {
@@ -2613,15 +2681,51 @@
               },
               "maxProperties": 41,
               "propertyNames": {
-                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
-                "not": {
-                  "enum": [
-                    "constructor",
-                    "prototype",
-                    "__proto__"
-                  ]
-                }
-              }
+                "enum": [
+                  "position",
+                  "inset",
+                  "left",
+                  "top",
+                  "right",
+                  "bottom",
+                  "width",
+                  "height",
+                  "display",
+                  "gap",
+                  "padding",
+                  "background",
+                  "color",
+                  "border",
+                  "borderRadius",
+                  "boxShadow",
+                  "fontSize",
+                  "fontWeight",
+                  "letterSpacing",
+                  "textAlign",
+                  "lineHeight",
+                  "alignItems",
+                  "justifyContent",
+                  "gridTemplateColumns",
+                  "opacity",
+                  "overflow",
+                  "transform",
+                  "minHeight",
+                  "maxWidth",
+                  "fontFamily",
+                  "fontStyle",
+                  "textTransform",
+                  "textShadow",
+                  "whiteSpace",
+                  "wordSpacing",
+                  "backgroundSize",
+                  "backgroundPosition",
+                  "filter",
+                  "mixBlendMode",
+                  "clipPath",
+                  "isolation"
+                ]
+              },
+              "description": "Only these native style keys are supported. Use gap, padding or explicit placement for spacing; arbitrary CSS properties are not accepted."
             },
             "mask": {
               "type": "object",
@@ -3340,15 +3444,51 @@
               },
               "maxProperties": 41,
               "propertyNames": {
-                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
-                "not": {
-                  "enum": [
-                    "constructor",
-                    "prototype",
-                    "__proto__"
-                  ]
-                }
-              }
+                "enum": [
+                  "position",
+                  "inset",
+                  "left",
+                  "top",
+                  "right",
+                  "bottom",
+                  "width",
+                  "height",
+                  "display",
+                  "gap",
+                  "padding",
+                  "background",
+                  "color",
+                  "border",
+                  "borderRadius",
+                  "boxShadow",
+                  "fontSize",
+                  "fontWeight",
+                  "letterSpacing",
+                  "textAlign",
+                  "lineHeight",
+                  "alignItems",
+                  "justifyContent",
+                  "gridTemplateColumns",
+                  "opacity",
+                  "overflow",
+                  "transform",
+                  "minHeight",
+                  "maxWidth",
+                  "fontFamily",
+                  "fontStyle",
+                  "textTransform",
+                  "textShadow",
+                  "whiteSpace",
+                  "wordSpacing",
+                  "backgroundSize",
+                  "backgroundPosition",
+                  "filter",
+                  "mixBlendMode",
+                  "clipPath",
+                  "isolation"
+                ]
+              },
+              "description": "Only these native style keys are supported. Use gap, padding or explicit placement for spacing; arbitrary CSS properties are not accepted."
             },
             "mask": {
               "type": "object",
@@ -4124,15 +4264,51 @@
               },
               "maxProperties": 41,
               "propertyNames": {
-                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
-                "not": {
-                  "enum": [
-                    "constructor",
-                    "prototype",
-                    "__proto__"
-                  ]
-                }
-              }
+                "enum": [
+                  "position",
+                  "inset",
+                  "left",
+                  "top",
+                  "right",
+                  "bottom",
+                  "width",
+                  "height",
+                  "display",
+                  "gap",
+                  "padding",
+                  "background",
+                  "color",
+                  "border",
+                  "borderRadius",
+                  "boxShadow",
+                  "fontSize",
+                  "fontWeight",
+                  "letterSpacing",
+                  "textAlign",
+                  "lineHeight",
+                  "alignItems",
+                  "justifyContent",
+                  "gridTemplateColumns",
+                  "opacity",
+                  "overflow",
+                  "transform",
+                  "minHeight",
+                  "maxWidth",
+                  "fontFamily",
+                  "fontStyle",
+                  "textTransform",
+                  "textShadow",
+                  "whiteSpace",
+                  "wordSpacing",
+                  "backgroundSize",
+                  "backgroundPosition",
+                  "filter",
+                  "mixBlendMode",
+                  "clipPath",
+                  "isolation"
+                ]
+              },
+              "description": "Only these native style keys are supported. Use gap, padding or explicit placement for spacing; arbitrary CSS properties are not accepted."
             },
             "mask": {
               "type": "object",
@@ -5000,15 +5176,51 @@
               },
               "maxProperties": 41,
               "propertyNames": {
-                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
-                "not": {
-                  "enum": [
-                    "constructor",
-                    "prototype",
-                    "__proto__"
-                  ]
-                }
-              }
+                "enum": [
+                  "position",
+                  "inset",
+                  "left",
+                  "top",
+                  "right",
+                  "bottom",
+                  "width",
+                  "height",
+                  "display",
+                  "gap",
+                  "padding",
+                  "background",
+                  "color",
+                  "border",
+                  "borderRadius",
+                  "boxShadow",
+                  "fontSize",
+                  "fontWeight",
+                  "letterSpacing",
+                  "textAlign",
+                  "lineHeight",
+                  "alignItems",
+                  "justifyContent",
+                  "gridTemplateColumns",
+                  "opacity",
+                  "overflow",
+                  "transform",
+                  "minHeight",
+                  "maxWidth",
+                  "fontFamily",
+                  "fontStyle",
+                  "textTransform",
+                  "textShadow",
+                  "whiteSpace",
+                  "wordSpacing",
+                  "backgroundSize",
+                  "backgroundPosition",
+                  "filter",
+                  "mixBlendMode",
+                  "clipPath",
+                  "isolation"
+                ]
+              },
+              "description": "Only these native style keys are supported. Use gap, padding or explicit placement for spacing; arbitrary CSS properties are not accepted."
             },
             "mask": {
               "type": "object",
@@ -5990,15 +6202,51 @@
               },
               "maxProperties": 41,
               "propertyNames": {
-                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
-                "not": {
-                  "enum": [
-                    "constructor",
-                    "prototype",
-                    "__proto__"
-                  ]
-                }
-              }
+                "enum": [
+                  "position",
+                  "inset",
+                  "left",
+                  "top",
+                  "right",
+                  "bottom",
+                  "width",
+                  "height",
+                  "display",
+                  "gap",
+                  "padding",
+                  "background",
+                  "color",
+                  "border",
+                  "borderRadius",
+                  "boxShadow",
+                  "fontSize",
+                  "fontWeight",
+                  "letterSpacing",
+                  "textAlign",
+                  "lineHeight",
+                  "alignItems",
+                  "justifyContent",
+                  "gridTemplateColumns",
+                  "opacity",
+                  "overflow",
+                  "transform",
+                  "minHeight",
+                  "maxWidth",
+                  "fontFamily",
+                  "fontStyle",
+                  "textTransform",
+                  "textShadow",
+                  "whiteSpace",
+                  "wordSpacing",
+                  "backgroundSize",
+                  "backgroundPosition",
+                  "filter",
+                  "mixBlendMode",
+                  "clipPath",
+                  "isolation"
+                ]
+              },
+              "description": "Only these native style keys are supported. Use gap, padding or explicit placement for spacing; arbitrary CSS properties are not accepted."
             },
             "mask": {
               "type": "object",
@@ -7050,15 +7298,51 @@
               },
               "maxProperties": 41,
               "propertyNames": {
-                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
-                "not": {
-                  "enum": [
-                    "constructor",
-                    "prototype",
-                    "__proto__"
-                  ]
-                }
-              }
+                "enum": [
+                  "position",
+                  "inset",
+                  "left",
+                  "top",
+                  "right",
+                  "bottom",
+                  "width",
+                  "height",
+                  "display",
+                  "gap",
+                  "padding",
+                  "background",
+                  "color",
+                  "border",
+                  "borderRadius",
+                  "boxShadow",
+                  "fontSize",
+                  "fontWeight",
+                  "letterSpacing",
+                  "textAlign",
+                  "lineHeight",
+                  "alignItems",
+                  "justifyContent",
+                  "gridTemplateColumns",
+                  "opacity",
+                  "overflow",
+                  "transform",
+                  "minHeight",
+                  "maxWidth",
+                  "fontFamily",
+                  "fontStyle",
+                  "textTransform",
+                  "textShadow",
+                  "whiteSpace",
+                  "wordSpacing",
+                  "backgroundSize",
+                  "backgroundPosition",
+                  "filter",
+                  "mixBlendMode",
+                  "clipPath",
+                  "isolation"
+                ]
+              },
+              "description": "Only these native style keys are supported. Use gap, padding or explicit placement for spacing; arbitrary CSS properties are not accepted."
             },
             "mask": {
               "type": "object",
@@ -7690,20 +7974,9 @@
                     "sensitivity": {
                       "anyOf": [
                         {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "maxLength": 512
-                            },
-                            {
-                              "type": "number",
-                              "minimum": -1000000,
-                              "maximum": 1000000
-                            },
-                            {
-                              "type": "boolean"
-                            }
-                          ]
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 3
                         },
                         {
                           "type": "object",
@@ -7754,20 +8027,9 @@
                     "intensity": {
                       "anyOf": [
                         {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "maxLength": 512
-                            },
-                            {
-                              "type": "number",
-                              "minimum": -1000000,
-                              "maximum": 1000000
-                            },
-                            {
-                              "type": "boolean"
-                            }
-                          ]
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 2
                         },
                         {
                           "type": "object",
@@ -7820,16 +8082,13 @@
                         {
                           "anyOf": [
                             {
-                              "type": "string",
-                              "maxLength": 512
+                              "const": "bars"
                             },
                             {
-                              "type": "number",
-                              "minimum": -1000000,
-                              "maximum": 1000000
+                              "const": "line"
                             },
                             {
-                              "type": "boolean"
+                              "const": "off"
                             }
                           ]
                         },
@@ -7882,20 +8141,9 @@
                     "waveHeight": {
                       "anyOf": [
                         {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "maxLength": 512
-                            },
-                            {
-                              "type": "number",
-                              "minimum": -1000000,
-                              "maximum": 1000000
-                            },
-                            {
-                              "type": "boolean"
-                            }
-                          ]
+                          "type": "number",
+                          "minimum": 0.25,
+                          "maximum": 2
                         },
                         {
                           "type": "object",
@@ -7946,20 +8194,9 @@
                     "drop": {
                       "anyOf": [
                         {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "maxLength": 512
-                            },
-                            {
-                              "type": "number",
-                              "minimum": -1000000,
-                              "maximum": 1000000
-                            },
-                            {
-                              "type": "boolean"
-                            }
-                          ]
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 1000000
                         },
                         {
                           "type": "object",
@@ -8010,20 +8247,7 @@
                     "money": {
                       "anyOf": [
                         {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "maxLength": 512
-                            },
-                            {
-                              "type": "number",
-                              "minimum": -1000000,
-                              "maximum": 1000000
-                            },
-                            {
-                              "type": "boolean"
-                            }
-                          ]
+                          "type": "boolean"
                         },
                         {
                           "type": "object",
@@ -8074,20 +8298,9 @@
                     "color": {
                       "anyOf": [
                         {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "maxLength": 512
-                            },
-                            {
-                              "type": "number",
-                              "minimum": -1000000,
-                              "maximum": 1000000
-                            },
-                            {
-                              "type": "boolean"
-                            }
-                          ]
+                          "type": "string",
+                          "maxLength": 7,
+                          "pattern": "^#[0-9a-fA-F]{6}$"
                         },
                         {
                           "type": "object",
@@ -8138,20 +8351,9 @@
                     "motion": {
                       "anyOf": [
                         {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "maxLength": 512
-                            },
-                            {
-                              "type": "number",
-                              "minimum": -1000000,
-                              "maximum": 1000000
-                            },
-                            {
-                              "type": "boolean"
-                            }
-                          ]
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 2
                         },
                         {
                           "type": "object",
@@ -8202,20 +8404,7 @@
                     "soundPopups": {
                       "anyOf": [
                         {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "maxLength": 512
-                            },
-                            {
-                              "type": "number",
-                              "minimum": -1000000,
-                              "maximum": 1000000
-                            },
-                            {
-                              "type": "boolean"
-                            }
-                          ]
+                          "type": "boolean"
                         },
                         {
                           "type": "object",
@@ -9203,15 +9392,51 @@
               },
               "maxProperties": 41,
               "propertyNames": {
-                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
-                "not": {
-                  "enum": [
-                    "constructor",
-                    "prototype",
-                    "__proto__"
-                  ]
-                }
-              }
+                "enum": [
+                  "position",
+                  "inset",
+                  "left",
+                  "top",
+                  "right",
+                  "bottom",
+                  "width",
+                  "height",
+                  "display",
+                  "gap",
+                  "padding",
+                  "background",
+                  "color",
+                  "border",
+                  "borderRadius",
+                  "boxShadow",
+                  "fontSize",
+                  "fontWeight",
+                  "letterSpacing",
+                  "textAlign",
+                  "lineHeight",
+                  "alignItems",
+                  "justifyContent",
+                  "gridTemplateColumns",
+                  "opacity",
+                  "overflow",
+                  "transform",
+                  "minHeight",
+                  "maxWidth",
+                  "fontFamily",
+                  "fontStyle",
+                  "textTransform",
+                  "textShadow",
+                  "whiteSpace",
+                  "wordSpacing",
+                  "backgroundSize",
+                  "backgroundPosition",
+                  "filter",
+                  "mixBlendMode",
+                  "clipPath",
+                  "isolation"
+                ]
+              },
+              "description": "Only these native style keys are supported. Use gap, padding or explicit placement for spacing; arbitrary CSS properties are not accepted."
             },
             "mask": {
               "type": "object",
@@ -9944,15 +10169,51 @@
               },
               "maxProperties": 41,
               "propertyNames": {
-                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$",
-                "not": {
-                  "enum": [
-                    "constructor",
-                    "prototype",
-                    "__proto__"
-                  ]
-                }
-              }
+                "enum": [
+                  "position",
+                  "inset",
+                  "left",
+                  "top",
+                  "right",
+                  "bottom",
+                  "width",
+                  "height",
+                  "display",
+                  "gap",
+                  "padding",
+                  "background",
+                  "color",
+                  "border",
+                  "borderRadius",
+                  "boxShadow",
+                  "fontSize",
+                  "fontWeight",
+                  "letterSpacing",
+                  "textAlign",
+                  "lineHeight",
+                  "alignItems",
+                  "justifyContent",
+                  "gridTemplateColumns",
+                  "opacity",
+                  "overflow",
+                  "transform",
+                  "minHeight",
+                  "maxWidth",
+                  "fontFamily",
+                  "fontStyle",
+                  "textTransform",
+                  "textShadow",
+                  "whiteSpace",
+                  "wordSpacing",
+                  "backgroundSize",
+                  "backgroundPosition",
+                  "filter",
+                  "mixBlendMode",
+                  "clipPath",
+                  "isolation"
+                ]
+              },
+              "description": "Only these native style keys are supported. Use gap, padding or explicit placement for spacing; arbitrary CSS properties are not accepted."
             },
             "mask": {
               "type": "object",

@@ -1,3 +1,4 @@
+import type {AssistantEditorRequest} from '../assistant/roomBridge';
 import {useSocialRehearsal} from './useSocialRehearsal';
 import {SetIntegrationConnections} from './SetIntegrationConnections';
 import {integrationRequirements} from './integrationRequirements';
@@ -24,9 +25,13 @@ import type { PresentationPackage, SetControl, SlotFraming } from './schema';
 import type { SetOutputControls } from './useSetOutput';
 import './presentation.css';
 import {SetSourceCreator} from './SetSourceCreator';
+import {SetSourceRecovery} from './SetSourceRecovery';
+import {sourceRecoveries,unavailableSetSource} from './sourceRecovery';
 import {SetConfiguration} from './SetConfiguration';
 import {ControlArrangementEditor,useControlArrangement} from './ControlArrangementEditor';
 import {CommittedField} from './CommittedField';
+import {NumberSlider} from './NumberSlider';
+import {CameraBackgroundControls} from './CameraBackgroundControls';
 
 export type SetEditorTake = {
   phase: string;
@@ -36,6 +41,7 @@ export type SetEditorTake = {
 };
 
 type PanelProps={
+  assistantEditorRequest?:AssistantEditorRequest; onAssistantEditorOpened?:(id:string)=>void;
   endpoint?:string;serverRoomId?:string;preferenceRoomId?:string;moduleBindings?:ModuleBindings;
   voting?:ReactNode; sourceNames?: Record<string,string>; onFieldEdit?: (key:string)=>void; output?: SetOutputControls; session: RehearsalSession; blocked?: boolean; blockedReason?: string;
   onChange: (doc: PresentationPackage, moduleBindings?: ModuleBindings, take?: SetEditorTake) => void | RehearsalSession | Promise<void | RehearsalSession>;
@@ -55,7 +61,12 @@ function DraftPreparation({session,output,bindings,framing}:{session:RehearsalSe
   useEffect(()=>()=>output?.clearDraftPreparation?.(),[]);
   return null;
 }
+/** Same authored controls on a private session; no output or connection owner. */
+export function SetAuthoringControlSurface({session}:{session:RehearsalSession}) {
+  return <SetControlsPanelView session={session} preferenceRoomId={`assistant:${session.package.id}`} onChange={()=>{}}/>;
+}
 export function SetControlsPanel(props:PanelProps) {
+  const [assistantRequestReady,setAssistantRequestReady]=useState<string>();
   const [draft,setDraft]=useState(()=>new RehearsalSession(props.session.preparedPackage(),undefined,'prepare'));
   const [moduleBindings,setModuleBindings]=useState<ModuleBindings>(props.moduleBindings??{});
   const {connections,adapters,connectionError,retryConnections}=useDataConnections(props.endpoint);
@@ -80,6 +91,15 @@ export function SetControlsPanel(props:PanelProps) {
     setDraft(next);
     setModuleBindings(props.moduleBindings??{});setBindings({...props.output?.bindings});setFraming({...props.output?.framing});
   },[props.session]);
+  useEffect(()=>{
+    const request=props.assistantEditorRequest;
+    if(!request)return;
+    setDraft(new RehearsalSession(request.document,undefined,'prepare'));
+    // An Assistant return to this same private Set must retain the editor's
+    // local source/connection choices, including framing not yet on output.
+    if(request.document.id!==draft.package.id){setModuleBindings(props.moduleBindings??{});setBindings({...props.output?.bindings});setFraming({...props.output?.framing});}
+    setPublishError('');setAssistantRequestReady(request.id);
+  },[props.assistantEditorRequest?.id]);
   const finishPublish = (error?: unknown) => {
     publishingRef.current = false;
     setPublishing(false);
@@ -154,10 +174,10 @@ export function SetControlsPanel(props:PanelProps) {
       editorStatus={editorStatus} workspaceBusy={publishing} onWorkspaceClose={onClose} />
   </>;
   return <SetControlsPanelView {...props} connections={connections} adapters={adapters} connectionError={connectionError}
-    onRetryConnections={retryConnections} workspace={workspace} workspaceBusy={publishing}
+    onRetryConnections={retryConnections} editorOpenRequest={assistantRequestReady===props.assistantEditorRequest?.id?assistantRequestReady:undefined} onEditorRequestOpened={props.onAssistantEditorOpened} workspace={workspace} workspaceBusy={publishing}
     onWorkspaceClose={()=>draft.exitRehearsal()} />;
 }
-function SetControlsPanelView({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, voting, onFieldEdit, workspace, workspaceBusy=false, editorOnly=false,onPublish,publishError,onWorkspaceClose,editorStatus='changed',endpoint,serverRoomId,preferenceRoomId,moduleBindings={},connections=[],adapters=[],connectionError='',onRetryConnections,onModuleBinding }: PanelProps & {connections?:SavedConnection[];adapters?:import('../../../shared/set-runtime/dataAdapters').DataAdapterManifest[];connectionError?:string;onRetryConnections?:()=>void;onModuleBinding?:(role:string,binding:ModuleBindings[string])=>void;} & {editorStatus?:'changed'|'applying'|'applied'|'error';onWorkspaceClose?:()=>void;workspace?:(onClose:()=>void)=>ReactNode;workspaceBusy?:boolean;editorOnly?:boolean;onPublish?:()=>void;publishError?:string}) {
+function SetControlsPanelView({ session, blocked = false, blockedReason, onChange, output, sourceNames = {}, voting, onFieldEdit, workspace, workspaceBusy=false, editorOnly=false,onPublish,publishError,onWorkspaceClose,editorStatus='changed',editorOpenRequest,onEditorRequestOpened,endpoint,serverRoomId,preferenceRoomId,moduleBindings={},connections=[],adapters=[],connectionError='',onRetryConnections,onModuleBinding }: PanelProps & {connections?:SavedConnection[];adapters?:import('../../../shared/set-runtime/dataAdapters').DataAdapterManifest[];connectionError?:string;onRetryConnections?:()=>void;onModuleBinding?:(role:string,binding:ModuleBindings[string])=>void;} & {editorOpenRequest?:string;onEditorRequestOpened?:(id:string)=>void;editorStatus?:'changed'|'applying'|'applied'|'error';onWorkspaceClose?:()=>void;workspace?:(onClose:()=>void)=>ReactNode;workspaceBusy?:boolean;editorOnly?:boolean;onPublish?:()=>void;publishError?:string}) {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const arrangements=useControlArrangement(session.package,JSON.stringify([endpoint??'local',serverRoomId??preferenceRoomId??'preview']));
   const [player, setPlayer] = useState('player-1');
@@ -172,6 +192,8 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
   }, [staleSession, session, onChange]);
   if (staleSession) return <div className="set-controls"><p role="status">Updating rehearsal controls…</p></div>;
   const doc = session.package;
+  const missingSources=output?sourceRecoveries(doc.set.slots,output.bindings,output.sources):[];
+  const explainedSourceError=(message:string|undefined)=>!!message&&missingSources.some(issue=>issue.sourceId===unavailableSetSource(message));
   const missingConnections = useMemo(
     () => integrationRequirements(doc).filter(requirement => !requirement.optional && !moduleBindings[requirement.role]?.id),
     [doc, moduleBindings],
@@ -248,6 +270,8 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
         {c.label}</button>;
     }
     const def = doc.set.values[c.key];
+    if(c.type==='number'&&c.presentation==='slider'&&def.type==='number')return <NumberSlider key={c.id} owner={session} label={c.label} value={Number(state.values[c.key])} min={def.min} max={def.max} step={c.step} disabled={blocked} pending={!!state.controlPending} isPending={()=>!!session.snapshot().controlPending}
+      onCommit={value=>{onFieldEdit?.(c.key);return session.send({type:'field',key:c.key,value});}}/>;
     if(session.hasRoomControl())return <CommittedField key={c.id} label={c.label} field={def} value={state.values[c.key]} disabled={blocked} pending={!!state.controlPending} onApply={value=>{onFieldEdit?.(c.key);return session.send({type:'field',key:c.key,value});}}/>;
     return <label key={c.id}>{c.label}<input aria-label={c.label} type={c.type === 'number' ? 'number' : 'text'}
       disabled={blocked} value={String(state.values[c.key])} maxLength={def.type === 'text' ? def.maxLength : undefined}
@@ -272,7 +296,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
   const editorIndex=editorSegments.findIndex(p=>p.id===state.show.phase);
   const editSegment=(id:string)=>{session.send({type:'segment.select',phaseId:id});};
   const ready=(layout:string)=>output?.layoutReadiness?.[layout];
-  const readinessLabel=(layout:string)=>{const status=ready(layout);return !status?'':status.state==='ready'?'Ready':status.state==='error'?`Layout unavailable: ${status.error}`:'Loading layout';};
+  const readinessLabel=(layout:string)=>{const status=ready(layout);return !status?'':status.state==='ready'?'Ready':status.state==='error'?explainedSourceError(status.error)?'Reconnect the missing source below':`Layout unavailable: ${status.error}`:'Loading layout';};
   const segmentList = (compact = false) => <ol>{schedule.phases.map((step, index) =>
     <li key={step.id} aria-current={index === displayedStepIndex ? 'step' : undefined}
       data-readiness={ready(step.layoutId)?.state} title={readinessLabel(step.layoutId)}
@@ -424,7 +448,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
       </div>
       <div className="set-toolbar-tools">
         <ControlArrangementEditor value={arrangements} fixedLayout={!doc.show} redundantLayoutControls={redundantLayoutControls}/>
-        <RehearsalPreview doc={doc} state={state} output={output} outputActive={output?.active} workspace={workspace} workspaceBusy={workspaceBusy} onEditorClose={onWorkspaceClose} configuration={<SetConfiguration session={session} onChange={onChange} output={output}/>} editor={editor} sources={visibleSlots.size ? sourceEditor : undefined} />
+        <RehearsalPreview openRequest={editorOpenRequest} onOpenRequest={onEditorRequestOpened} doc={doc} state={state} output={output} outputActive={output?.active} workspace={workspace} workspaceBusy={workspaceBusy} onEditorClose={onWorkspaceClose} configuration={<SetConfiguration session={session} onChange={onChange} output={output}/>} editor={editor} sources={visibleSlots.size ? sourceEditor : undefined} />
       </div>
     </header>
     {session.hasRoomControl()&&<p role="status">{state.controlPending?"Sending room command…":"Shared room controls · changes require output confirmation"}</p>}
@@ -435,9 +459,15 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
       </p>
     )}
     {doc.runtime.instances.length>0&&state.workspaceMode==='live'&&state.moduleConnection!=='live'&&<p role="status" className={state.moduleError?'set-error':'set-section-note'}>{!endpoint||!serverRoomId?'Connect this room to a workspace to use live modules.':state.moduleError?`Modules disconnected — reconnecting. ${state.moduleError}`:'Connecting live controls…'}</p>}
-    {output?.layoutReadiness&&views.some(view=>viewReadiness(view)?.state==='error')&&<p className="set-error">Some layouts could not load. <button onClick={output.retryPreparation}>Retry loading</button></p>}
-    {output?.error && <div role="alert" className="set-error">{output.error} <button disabled={output.busy&&!output.active} onClick={()=>void output.apply()}>Retry update</button></div>}
+    {output&&<SetSourceRecovery slots={doc.set.slots} output={output} names={sourceNames} blocked={blocked}/>}
+    {output?.layoutReadiness&&views.some(view=>{const status=viewReadiness(view);return status?.state==='error'&&!explainedSourceError(status.error);})&&<p className="set-error">A layout needs attention. <button disabled={blocked||output.busy} onClick={output.retryPreparation}>Try loading again</button></p>}
+    {output?.error&&!explainedSourceError(output.error)&&<div role="alert" className="set-error">{output.error} <button disabled={blocked||output.busy} onClick={()=>void output.apply()}>Try update again</button></div>}
     {state.trace[state.trace.length - 1]?.message.startsWith('Rejected:') && <p role="status" className="set-error">{state.trace[state.trace.length - 1]!.message}</p>}
+    {!editorOnly && output?.cameraBackground && <section className="set-camera-backgrounds" aria-label="Camera backgrounds">
+      {doc.set.slots.filter((slot,index,slots) => visibleSlots.has(slot.id) && output.sources.items?.some(item => item.id === output.bindings[slot.id] && item.kind === 'camera') && !slots.slice(0,index).some(previous => visibleSlots.has(previous.id) && output.bindings[previous.id] === output.bindings[slot.id])).map(slot =>
+        <CameraBackgroundControls key={`${slot.id}:${output.bindings[slot.id]}`} slot={slot.id} source={output.bindings[slot.id]} label={slot.label}
+          controls={output.cameraBackground!} disabled={blocked || !output.active || state.workspaceMode !== 'live'} />)}
+    </section>}
     <div className={`set-sections ${rehearsing ? 'is-rehearsing' : 'is-prepared'}${doc.show ? ' has-show' : ' set-only'}${hasHostMedia ? ' has-media' : ''}`}>
       {!doc.show && <>
         <section className="set-manual-controls" aria-label="Set controls">

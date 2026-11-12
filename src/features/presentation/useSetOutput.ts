@@ -20,6 +20,7 @@ export function resolveRoomBindings(bindings:Record<string,string>,sources:LiveS
   return next;
 }
 export interface SetOutputControls {
+  cameraBackground?:import('../../lib/cameraBackground').CameraBackgroundControls;
   controlReadiness?:Record<string,import('../sets-v2/preparedScenes').SceneReadiness>;
   layoutReadiness?:Record<string,import('../sets-v2/preparedScenes').SceneReadiness>;
   retryPreparation?:()=>void;

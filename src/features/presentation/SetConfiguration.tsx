@@ -2,20 +2,24 @@ import {parsePackageText} from './validation';
 import {SetPicker} from './SetPicker';
 import {MediaAssetsDialog} from './MediaAssetsDialog';
 import {PublishSetDialog} from './PublishSetDialog';
+import {RoomAssistantContext} from '../assistant/roomBridge';
 import {activeEndpointId} from '../../lib/workspace';
 import {ipc} from '../../lib/ipc';
 import {PACKAGE_BYTES} from './assets';
-import { useEffect, useMemo, useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import {packageRevision} from './authoring/compiler';
+import {lazy, Suspense, useContext, useEffect, useMemo, useId, useRef, useState, useSyncExternalStore, type ReactNode} from 'react';
 import { BUILTIN_SETS } from './catalog';
 import { PackageAuthoringDialog, type AuthoringIntent } from './PackageAuthoringDialog';
 import { RehearsalSession } from './rehearsal';
 import type { PresentationPackage } from './schema';
 import type { SetOutputControls } from './useSetOutput';
 import './presentation.css';
+const SetAssistantDialog = lazy(() => import('../assistant/SetAssistantDialog'));
 
 export function SetConfiguration({ session, onChange, output, hideOutputAction=false, actions }: {
   actions?:ReactNode; hideOutputAction?:boolean; output?:SetOutputControls; session: RehearsalSession; onChange: (doc: PresentationPackage) => void;
 }) {
+  const roomAssistant=useContext(RoomAssistantContext);
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   const rehearsing = state.workspaceMode === 'rehearsal';
   const optionsId=useId(),filesId=useId();
@@ -30,10 +34,28 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
   const loadLibrary=async(file:string)=>{try{const next=new RehearsalSession(parsePackageText(await ipc.setLibraryRead(file)),undefined,'prepare');onChange(next.package);setSelectedFile(file);setError('');}catch(e){setError(String(e));}};
   const saveImported=async(doc:PresentationPackage)=>{await ipc.setLibrarySave(JSON.stringify(doc));await refreshLibrary();};
   const [media,setMedia]=useState(false);
-  const [publication,setPublication]=useState<{doc:PresentationPackage;endpointId:string}|null>(null);
+  const [publication,setPublication]=useState<{doc:PresentationPackage;endpointId:string;returnFocus:HTMLElement|null}|null>(null);
   const [help, setHelp] = useState(false);
   const [authoring, setAuthoring] = useState<{ intent: AuthoringIntent; doc: PresentationPackage } | null>(null);
+  const currentSession=useRef(session);currentSession.current=session;
+  const [assistant,setAssistant]=useState<{document:PresentationPackage;source:RehearsalSession}|null>(null);
+  const assistantRef=useRef(assistant);assistantRef.current=assistant;
+  const mounted=useRef(true);
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
+  const loadAssistant=async(doc:PresentationPackage, source=assistant)=>{
+    const current=()=>mounted.current&&!!source&&assistantRef.current===source&&currentSession.current===source.source;
+    if(!current()||await packageRevision(currentSession.current.exportPreparedPackage())!==await packageRevision(source!.document))throw Error('The prepared Set changed while this draft was open. Reopen the Assistant from the current Set. Your draft is saved.');
+    await saveImported(doc);
+    if(!current()||await packageRevision(currentSession.current.exportPreparedPackage())!==await packageRevision(source!.document))throw Error('The Set editor changed. The candidate is saved in your library.');
+    setSelectedFile('');onChange(doc);setAssistant(null);
+  };
   const edit = (intent: AuthoringIntent) => { setAuthoring({ intent, doc: session.exportPreparedPackage() }); };
+  const openPublication=(returnFocus:HTMLElement|null)=>{
+    document.getElementById(filesId)?.hidePopover();
+    const endpointId=activeEndpointId();
+    if(!endpointId){setError('Choose a Boomin workspace before publishing a Set.');returnFocus?.focus();return;}
+    setError('');setPublication({doc:session.exportPreparedPackage(),endpointId,returnFocus});
+  };
   async function importFile(input: File | undefined) {
     if (!input) return;
     try {
@@ -59,11 +81,13 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
 
       </div>
       <button ref={trigger} type="button" popoverTarget={filesId} onClick={e=>{const r=e.currentTarget.getBoundingClientRect();setPosition({left:Math.max(8,Math.min(r.left,innerWidth-228)),top:r.bottom+6});}}>Files ▾</button>
+      <button type="button" className="set-publish-library" aria-label="Publish to producer.dev" title="Publish to producer.dev" aria-haspopup="dialog" onClick={event=>openPublication(event.currentTarget)}>Publish</button>
+      <button type="button" aria-haspopup="dialog" onClick={()=>{const document=session.exportPreparedPackage();if(roomAssistant)roomAssistant.open({document});else setAssistant({document,source:session});}}>Assistant</button>
       <div id={filesId} popover="auto" className="set-configuration-popover set-files-popover" style={{left:position.left,top:position.top}}>
         <button onClick={()=>{document.getElementById(filesId)?.hidePopover();edit('edit-set');}}>Generate Set draft</button>
         <button onClick={()=>{document.getElementById(filesId)?.hidePopover();setError('');file.current?.click();}}>Import set</button>
         <button onClick={()=>{document.getElementById(filesId)?.hidePopover();edit('export');}}>Export set</button>
-        <button type="button" onClick={()=>{document.getElementById(filesId)?.hidePopover();const endpointId=activeEndpointId();if(!endpointId){setError('Choose a Boomin workspace before publishing a Set.');return;}setPublication({doc:session.exportPreparedPackage(),endpointId});}}>Publish to producer.dev</button>
+        <button type="button" onClick={()=>openPublication(trigger.current)}>Publish to producer.dev</button>
         <button onClick={()=>{document.getElementById(filesId)?.hidePopover();setMedia(true);}}>Media assets</button>
       </div>
       {output&&!hideOutputAction&&<button disabled={output.busy} onClick={()=>void(output.active||output.busy?output.returnToRoom():output.apply())}>{output.active||output.busy?'Show room scene':'Show set'}</button>}
@@ -97,7 +121,8 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
     </section>
     <input ref={file} className="set-file-input" type="file" accept=".json,application/json" aria-label="Import set package" onChange={e => void importFile(e.target.files?.[0])} />
     {media&&<MediaAssetsDialog doc={session.exportPreparedPackage()} layoutId={state.layoutId} onLoad={onChange} onClose={()=>setMedia(false)}/>}
-    {publication&&<PublishSetDialog {...publication} returnFocus={trigger.current} onClose={()=>setPublication(null)}/>}
+    {publication&&<PublishSetDialog {...publication} onClose={()=>setPublication(null)}/>}
+    {assistant&&!roomAssistant&&<Suspense fallback={<span role="status">Opening Assistant…</span>}><SetAssistantDialog document={assistant.document} onLoad={loadAssistant} onClose={()=>setAssistant(null)}/></Suspense>}
     {authoring && <PackageAuthoringDialog {...authoring} returnFocus={trigger.current} onLoad={doc => {void saveImported(doc).then(()=>{setSelectedFile('');onChange(doc);}).catch(e=>{setError(String(e));});}} onClose={() => setAuthoring(null)} />}
   </>;
 }

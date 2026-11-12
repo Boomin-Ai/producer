@@ -20,7 +20,12 @@ impl SceneOutputs {
         }
     }
     pub fn receiver() -> Result<Receiver, &'static str> {
-        Receiver::new(Arc::new(Self::new()))
+        let outputs = Arc::new(Self::new());
+        if std::env::var("PRODUCER_NATIVE_APPEARANCE").as_deref() == Ok("1") {
+            Receiver::new_shared(outputs)
+        } else {
+            Receiver::new(outputs)
+        }
     }
 }
 struct SceneOutput {

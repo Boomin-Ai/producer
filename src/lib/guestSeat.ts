@@ -12,6 +12,7 @@ import {sharedProgramCapture,type ProgramLease} from './programCapture';
 import type {ProducerGuestRtc} from './producerGuestRtc';
 import type {MediaDiagnosticsOptions,ProducerMediaSnapshot} from './producerMediaDiagnostics';
 import {GuestSeatTrace} from './guestSeatTrace';
+import type {NativeAppearance} from './nativeAppearance';
 
 export type SeatPhase='starting'|'waiting'|'connecting'|'live'|'gone'|'error';
 export type GuestVideoSource='program'|'webcam';
@@ -22,14 +23,20 @@ export interface GuestSeatSpec {
  localRoomId?:string;
  /** Existing callers retain their explicit Producer-camera selection. */
  videoSource?:GuestVideoSource;
+ /** Candidate native publication, enabled only by a matching native build. */
+ nativeProgram?:boolean;portrait?:boolean;quality?:720|1080;
  /** Runtime-only local output ownership; never sent to the remote server. */
  prepareProgram?:()=>Promise<void>;
  releaseProgram?:()=>void;
+ /** Local UI lifecycle only. The exact owner stays reachable until retirement
+  * is acknowledged, including a collapsed room or failed native stop. */
+ onRuntime?:(owner:GuestSeat|null,retiredOwner?:GuestSeat)=>boolean|void;
 }
 export interface SeatState {
  phase:SeatPhase;message:string;muted:boolean;cameraOff:boolean;hasProgram:boolean;
  producerCam:boolean;guestStatus:string|null;
  mediaMode:GuestVideoSource;transport:'legacy'|'livekit'|null;onStage:boolean;
+ nativeProgram?:boolean;programPreview?:string|null;nativeAudioAvailable?:boolean;nativePlayback?:boolean;
 }
 type Guest=ParticipantLike&{id:string;display_name?:string;status:string};
 type GuestReply={guest:Guest;transport?:unknown};
@@ -71,6 +78,9 @@ export class GuestSeat {
  private local:MediaStream|null=null;private program:MediaStream|null=null;private hostAudio:MediaStream|null=null;
  private lease:ProgramLease|null=null;private programPrepared=false;private link:HostLink|null=null;private conversation:GuestConversation|null=null;
  private rtc:ProducerGuestRtc|null=null;private peerId='';private mediaKey='';private downSince=0;
+ private native:NativeAppearance|null=null;
+ private retiringOwners=new Set<{close:(retry?:boolean)=>Promise<void>}>();
+ private retirementFlight:Promise<void>|null=null;
  private diagnosticSession:GuestSeatDiagnosticSession|null=null;
  constructor(spec:GuestSeatSpec){
   this.spec=spec;this.api=connectApiBase(spec.apiBase);this.code=inviteCodeFromJoinUrl(spec.joinUrl);
@@ -104,15 +114,17 @@ export class GuestSeat {
   if(!this.code){this.fail('The join link has no valid invite code.');return;}
   await this.poll();
  }
- leave():void{
-  if(!this.alive)return;this.alive=false;this.terminal=true;this.syncDiagnosticSession();this.request.abort();window.clearTimeout(this.timer);
-  this.trace.cancel();this.trace.begin('peer.leave');
-  const retiring=this.teardownCall();this.releaseMedia();this.listeners.clear();this.trace.leave(retiring);
+ leave(retry=false):Promise<void>{
+  const first=this.alive;
+  if(first){this.alive=false;this.terminal=true;this.syncDiagnosticSession();this.request.abort();window.clearTimeout(this.timer);
+   this.trace.cancel();this.trace.begin('peer.leave');}
+  const retiring=this.teardownCall(retry);this.releaseMedia();this.listeners.clear();if(first)this.trace.leave(retiring);
+  return retiring;
  }
- toggleMute():void{const muted=!this.state.muted;this.local?.getAudioTracks().forEach(t=>{t.enabled=!muted;});this.conversation?.setMicrophoneEnabled(!muted);this.set({muted});}
- toggleCamera():void{const cameraOff=!this.state.cameraOff;this.local?.getVideoTracks().forEach(t=>{t.enabled=!cameraOff;});this.set({cameraOff});}
+ toggleMute():void{const muted=!this.state.muted;this.local?.getAudioTracks().forEach(t=>{t.enabled=!muted;});this.conversation?.setMicrophoneEnabled(!muted);this.set({muted});const owner=this.native,gen=this.callGeneration;if(owner)void owner.controls(muted,this.state.cameraOff).catch(()=>{if(this.alive&&this.native===owner&&this.callGeneration===gen)this.fail('Appearance audio controls became unavailable. Join again.');});}
+ toggleCamera():void{const cameraOff=!this.state.cameraOff;this.local?.getVideoTracks().forEach(t=>{t.enabled=!cameraOff;});this.set({cameraOff});const owner=this.native,gen=this.callGeneration;if(owner)void owner.controls(this.state.muted,cameraOff).catch(()=>{if(this.alive&&this.native===owner&&this.callGeneration===gen)this.fail('Appearance video controls became unavailable. Join again.');});}
  /** Every audio owner is resumed within the same explicit user gesture. */
- async resumeAudio():Promise<void>{await Promise.all([
+ async resumeAudio():Promise<void>{if(this.native){const owner=this.native,gen=this.callGeneration;await owner.enableAudio();if(this.alive&&this.native===owner&&this.callGeneration===gen)this.set({nativePlayback:true});return;}await Promise.all([
   this.rtc?.resumeAudio(),this.conversation?.resumeAudio(),this.lease?sharedProgramCapture.resumeAudio():undefined,
  ]);}
  private fail(message:string){this.trace.cancel('error');this.teardownCall();this.releaseMedia();this.terminal=true;this.set({phase:'error',message,onStage:false,hasProgram:false});}
@@ -145,9 +157,14 @@ export class GuestSeat {
    }
    this.trace.admitted();
    const grants=resolveGrants(guest),key=[...grants].sort().join('|');
-   if(this.peerId!==guest.id||this.mediaKey!==key){this.teardownCall();this.releaseMedia();this.peerId=guest.id;this.mediaKey=key;}
-   const actual=this.rtc?'livekit':this.link?'legacy':null;
+   if(this.peerId!==guest.id||this.mediaKey!==key){await this.teardownCall();if(!this.alive)return;this.releaseMedia();this.peerId=guest.id;this.mediaKey=key;}
+   const actual=this.rtc||this.native?'livekit':this.link?'legacy':null;
    if(actual&&actual!==transport)this.teardownCall();
+   if(this.spec.nativeProgram&&this.state.mediaMode==='program'){
+    if(transport!=='livekit'){this.fail('Native Set sharing requires a Boomin LiveKit room. Choose the compatibility path when joining this server.');return;}
+    if(!this.native)await this.connectNativeProgram(guest.id);
+    return;
+   }
    if(!this.local){
     this.set({phase:'starting',message:''});
     try{await this.trace.measure(this.state.mediaMode==='program'?'peer.capture.program':'peer.capture.webcam',()=>this.openMedia(grants));}catch{if(this.alive)this.fail(this.state.mediaMode==='program'?'Your program output is unavailable. Start and authorize Producer Virtual Camera, or explicitly choose Webcam when joining.':'Camera or microphone access is unavailable. Check your selected devices and join again.');return;}
@@ -195,6 +212,23 @@ export class GuestSeat {
    onAudio:stream=>{if(current()){this.hostAudio=stream;this.set({});}}
   });this.rtc=rtc;rtc.start();
  }
+ private async connectNativeProgram(participantId:string):Promise<void>{
+  if(!this.spec.localRoomId){this.fail('Choose a local room for the appearance.');return;}
+  const gen=++this.callGeneration,current=()=>this.alive&&!this.terminal&&gen===this.callGeneration;
+  this.set({phase:'connecting',message:'',nativeProgram:true});
+  const {NativeAppearance}=await import('./nativeAppearance');if(!current())return;
+  const owner=new NativeAppearance({localRoomId:this.spec.localRoomId,api:this.api,invite:this.code!,participantId,
+   portrait:!!this.spec.portrait,quality:this.spec.quality??720},(status,preview,playback)=>{
+    if(!current())return;
+    if(status.phase==='gone'){this.gone(`${this.spec.hostName} ended your seat.`);return;}
+    if(status.phase==='error'){this.fail('Native appearance could not continue. Your local show has been retained.');return;}
+    this.set({phase:status.phase==='reconnecting'?'connecting':status.phase,message:status.phase==='reconnecting'?'Reconnecting…':'',
+     onStage:status.onStage,hasProgram:status.hasProgram,programPreview:preview,nativeAudioAvailable:status.hasAudio,nativePlayback:playback});
+   },()=>{if(current())this.fail('Native appearance became unavailable. Your local show has been retained.');});
+  this.native=owner;
+  try{await owner.start(this.state.muted,this.state.cameraOff);if(current())await owner.controls(this.state.muted,this.state.cameraOff);}
+  catch{if(current())this.fail('Native appearance could not start. Your local show has been retained.');}
+ }
  private async legacySession():Promise<Session>{
   const res=await this.trace.measure('peer.legacy.session',()=>this.json('/session','POST')),s=res.body as Session;
   if(res.status!==200||!s||typeof s.signaling_url!=='string'||!Array.isArray(s.ice_servers))throw Error('Guest session unavailable');
@@ -220,11 +254,21 @@ export class GuestSeat {
   const sync=()=>{if(this.alive&&gen===this.callGeneration&&this.program===stream)this.set({hasProgram:!!track&&track.readyState==='live'&&!track.muted});};
   track?.addEventListener('unmute',sync,{once:true});track?.addEventListener('ended',sync,{once:true});sync();
  }
- private teardownCall(){
-  this.callGeneration++;const rtc=this.rtc;this.rtc=null;const retiring=rtc?.close()??Promise.resolve();void retiring.catch(()=>{});
+ private teardownCall(retry=false){
+  this.callGeneration++;const rtc=this.rtc;this.rtc=null;const native=this.native;this.native=null;
+  if(rtc)this.retiringOwners.add(rtc);if(native)this.retiringOwners.add(native);
+  const retiring=this.retireOwners(retry);void retiring.catch(()=>{});
   const link=this.link;this.link=null;link?.close();this.conversation?.stop();this.conversation=null;
-  this.program=null;this.hostAudio=null;this.downSince=0;this.set({hasProgram:false,onStage:false});
+  this.program=null;this.hostAudio=null;this.downSince=0;this.set({hasProgram:false,onStage:false,programPreview:null,nativeAudioAvailable:false,nativePlayback:false});
   return retiring;
+ }
+ private async retireOwners(retry=false):Promise<void>{
+  if(this.retirementFlight&&!retry){await this.retirementFlight;if(this.retiringOwners.size)return this.retireOwners();return;}
+  const owners=[...this.retiringOwners];
+  const attempt=Promise.all(owners.map(async owner=>{await owner.close(retry);this.retiringOwners.delete(owner);})).then(()=>{});
+  this.retirementFlight=attempt;
+  try{await attempt;}finally{if(this.retirementFlight===attempt)this.retirementFlight=null;}
+  if(this.retiringOwners.size)await this.retireOwners();
  }
  private releaseMedia(){this.local?.getTracks().forEach(t=>t.stop());this.local=null;this.lease?.release();this.lease=null;if(this.programPrepared){this.programPrepared=false;this.spec.releaseProgram?.();}}
 }
