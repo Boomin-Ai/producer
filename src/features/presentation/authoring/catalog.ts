@@ -13,6 +13,8 @@ export const AUTHORING_CATALOG = {
   canonicalEdits: ['add','replace','remove'],
   canonicalNodes: ['box','text','slot','media','shader','scene3d','chart','component'],
   portableIntegrations: true,
+  operatorComponents:{music:{version:1,reference:'operator:<id>',fields:['id','type','label','when','defaultTrack'],defaultTracks:['waiting-in-case']}},
+  controlPresentations:{number:['slider'],text:['color'],sectionPurposes:['live','content','appearance']},
   nativeAdmission: 'separate-native-preparation-required',
   runtimeCapabilities: ['audience.vote@1','audience.text@1','data.weather@1','data.agent@1','data.social@1','room.chat@1'],
   limits: { layouts: 32, elementsPerLayout: 64, edits: 64, designBytes: 1024*1024 },

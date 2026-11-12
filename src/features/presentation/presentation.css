@@ -879,6 +879,24 @@
 .set-sections.set-only .set-arranged-module { min-width:0; max-width:100%; }
 .set-sections.set-only .set-arranged-module input { min-width:0; }
 
+/* Operator surfaces share Producer's compact controls, not browser form chrome. */
+.set-controls--standalone .set-arranged-sections{gap:12px}
+.set-controls--standalone .set-arranged-section{padding-top:8px}
+.set-controls--standalone .set-arranged-section h4>button{min-height:30px;padding:4px 0;border-radius:0;background:transparent;font-size:12px;font-weight:600;color:var(--fg-2,#a9b8c3)}
+.set-arranged-section[data-purpose] h4>button::after{content:'';margin-left:auto;width:4px;height:4px;border-radius:50%;background:var(--fg-3,#71828d);opacity:.55}
+.set-arranged-section[data-purpose=live] h4>button[aria-expanded=true]::after{background:var(--primary,#8bdfbd);opacity:1}
+.set-controls--standalone .set-arranged-section-controls{gap:6px;padding-top:7px}
+.set-controls--standalone .set-arranged-control>button{min-height:32px;padding:5px 10px;border-radius:7px;font-size:12px;background:var(--surface-0,#0e161e);border:1px solid var(--line-1,#293742)}
+.set-controls--standalone .set-arranged-control>button[aria-pressed=true]{color:var(--primary,#8bdfbd);border-color:var(--primary,#8bdfbd);background:color-mix(in srgb,var(--primary,#8bdfbd) 10%,transparent)}
+.set-arranged-control:has(>.set-number-slider){flex:1 1 100%;min-width:0;padding-top:4px}
+.set-arranged-control:has(>.set-color-control){flex:1 1 100%;min-width:0}
+.set-controls .set-color-control{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;font-size:12px;min-height:32px}
+.set-controls .set-color-control label{display:flex;flex:1;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.set-controls .set-color-control input[type=color]{flex:none;width:32px;height:26px;min-height:26px;padding:2px;border:1px solid var(--line-2,#344650);border-radius:6px;background:transparent}
+.set-controls--standalone .set-camera-backgrounds fieldset{border:0;padding:6px 0;margin:0}
+.set-controls--standalone .set-camera-backgrounds legend{font-size:11px;color:var(--fg-3,#8194a2)}
+.set-controls--standalone .set-camera-backgrounds small{font-size:10px;color:var(--fg-3,#8194a2)}
+
 @container panel (max-width:599px) {
   .set-controls--standalone .set-controls-toolbar { grid-template-columns:minmax(0,1fr) auto; gap:6px 8px; padding-bottom:7px; }
   .set-controls--standalone .set-header-main { flex-wrap:wrap; gap:4px 6px; }

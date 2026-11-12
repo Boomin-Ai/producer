@@ -9,6 +9,9 @@ const doc=parsePackage(JSON.parse(readFileSync('docs/shows/classic.json','utf8')
 assert.deepEqual(parsePackage({...plan.package,set:{...plan.package.set,assets:{}}}),doc,'gallery package is the MCP-compiled authoring source');
 assert.equal(doc.show,undefined);assert.equal(doc.runtime.instances.length,0);assert.equal(doc.set.slots.length,7);assert(doc.set.controls.length<=40);
 assert.equal(layoutViews(doc.set).length,8);assert.equal(doc.set.layouts.length,16);
+assert.equal(doc.set.operatorComponents[0].type,'music');
+for(const type of ['shopify','javascript']){const bad=structuredClone(doc);bad.set.operatorComponents[0].type=type;assert.throws(()=>parsePackage(bad));}
+{const bad=structuredClone(doc);bad.set.operatorComponents[0].when={get:'values.showTitle'};assert.throws(()=>parsePackage(bad),/boolean/);}
 for(const view of layoutViews(doc.set)){
  assert.deepEqual(Object.keys(view.variants).sort(),['landscape','portrait']);
  for(const [format,id] of Object.entries(view.variants)){
@@ -26,6 +29,10 @@ for(const theme of ['dark','light'])for(const l of doc.set.layouts){
   field('cue',cue);field('chatVisible',chat);field('guestCount',guests);
   const p=outputProjection(doc,session.snapshot());assert.equal(p.width,l.width);assert.equal(p.height,l.height);
   assert.equal(find(p.root,'cue-panel')!==undefined,cue!=='none');
+  const chrome=find(p.root,'classic-frame-'+(l.width>l.height?'landscape':'portrait'));
+  assert.equal(chrome.scene3d.world.dj.role,'frame');assert.equal(chrome.scene3d.world.objects.length,4);
+  assert.equal(chrome.scene3d.music.color,theme==='light'?'#147b61':'#9cdbc7');
+  assert.equal(evaluate(doc.set.operatorComponents[0].when,session.snapshot()),/^(opening|break)-/.test(l.id));
   for(const control of doc.set.controls)if(control.when!==undefined)assert.equal(typeof evaluate(control.when,session.snapshot()),'boolean');
   if(l.id.startsWith('roundtable-')){
    assert.equal(find(p.root,'guest2')!==undefined,guests>=2);assert.equal(find(p.root,'guest3')!==undefined,guests===3);

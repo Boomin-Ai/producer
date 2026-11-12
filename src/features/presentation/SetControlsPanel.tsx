@@ -31,6 +31,7 @@ import {SetConfiguration} from './SetConfiguration';
 import {ControlArrangementEditor,useControlArrangement} from './ControlArrangementEditor';
 import {CommittedField} from './CommittedField';
 import {NumberSlider} from './NumberSlider';
+import {SetMusicControls} from './SetMusicControls';
 import {CameraBackgroundControls} from './CameraBackgroundControls';
 
 export type SetEditorTake = {
@@ -272,8 +273,9 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
         {c.label}</button>;
     }
     const def = doc.set.values[c.key];
-    if(c.type==='number'&&c.presentation==='slider'&&def.type==='number')return <NumberSlider key={c.id} owner={session} label={c.label} value={Number(state.values[c.key])} min={def.min} max={def.max} step={c.step} disabled={blocked} pending={!!state.controlPending} isPending={()=>!!session.snapshot().controlPending}
+    if(c.type==='number'&&c.presentation==='slider'&&def.type==='number')return <NumberSlider key={c.id} owner={session} label={c.label} value={Number(state.values[c.key])} min={def.min} max={def.max} step={c.step} unit={c.unit} defaultValue={def.default} disabled={blocked} pending={!!state.controlPending} isPending={()=>!!session.snapshot().controlPending}
       onCommit={value=>{onFieldEdit?.(c.key);return session.send({type:'field',key:c.key,value});}}/>;
+    if(c.type==='text'&&c.presentation==='color')return <CommittedField key={c.id} label={c.label} presentation="color" field={session.package.set.values[c.key]} value={state.values[c.key]} disabled={blocked} pending={!!state.controlPending} onApply={value=>{onFieldEdit?.(c.key);return session.send({type:'field',key:c.key,value});}}/>;
     if(session.hasRoomControl())return <CommittedField key={c.id} label={c.label} field={def} value={state.values[c.key]} disabled={blocked} pending={!!state.controlPending} onApply={value=>{onFieldEdit?.(c.key);return session.send({type:'field',key:c.key,value});}}/>;
     return <label key={c.id}>{c.label}<input aria-label={c.label} type={c.type === 'number' ? 'number' : 'text'}
       disabled={blocked} value={String(state.values[c.key])} maxLength={def.type === 'text' ? def.maxLength : undefined}
@@ -322,6 +324,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
     if(ref==='builtin:layout')return true;
     const entry=arrangements.catalog.controls.find(c=>c.id===ref);
     if(!entry)return false;
+    if(entry.kind==='operator'){const item=doc.set.operatorComponents?.find(c=>c.id===entry.controlId);return !!item&&(item.when===undefined||!!evaluate(item.when,state,{},64,doc.set.tokens));}
     if(entry.kind==='module'){
       const instance=doc.runtime.instances.find(i=>i.id===entry.moduleId),snapshot=session.moduleSnapshot();
       if(!instance||(instance.owner!=='set'&&instance.segment!==state.show.phase)||!snapshot.modules[instance.id])return false;
@@ -349,6 +352,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
     </div>;
     const entry=arrangements.catalog.controls.find(c=>c.id===ref);
     if(!entry)return null;
+    if(entry.kind==='operator'){const item=doc.set.operatorComponents!.find(c=>c.id===entry.controlId)!;return <div key={ref} className="set-arranged-operator" data-control-ref={ref}><SetMusicControls definition={item} compact={compact} disabled={blocked||editorOnly||rehearsing||!output}/></div>;}
     if(entry.kind==='module')return <div key={ref} className="set-arranged-module" data-control-ref={ref}>{modulePanel([ref],compact)}</div>;
     const item=doc.set.controls.find(c=>c.id===entry.controlId);
     if(!item)return null;
@@ -361,7 +365,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
     item.type === 'button' && item.action.type === 'layout.select' && item.when === undefined && item.enabled === undefined &&
     visibleLayoutIds.has(item.action.layoutId) ? [`set:${item.id}`] : []));
   const expandedControlVisible = (ref: string) => (doc.show || ref !== 'builtin:layout') && !redundantLayoutControls.has(ref) && controlVisible(ref);
-  const arrangedExpanded=<div className="set-arranged-sections">{arrangements.arrangement.sections.filter(section=>section.controls.some(expandedControlVisible)).map(section=><section key={section.id} className="set-arranged-section" data-section-id={section.id}>
+  const arrangedExpanded=<div className="set-arranged-sections">{arrangements.arrangement.sections.filter(section=>section.controls.some(expandedControlVisible)).map(section=><section key={section.id} className="set-arranged-section" data-purpose={section.purpose} data-section-id={section.id}>
     <h4><button type="button" aria-expanded={!section.collapsed} aria-label={`${section.collapsed?'Expand':'Collapse'} ${section.label} section`} onClick={()=>arrangements.update({...arrangements.preferences,collapsed:{...arrangements.preferences.collapsed,[section.id]:!section.collapsed}})}><span>{section.collapsed?'▸':'▾'}</span>{section.label}</button></h4>
     <div className="set-arranged-section-controls" hidden={section.collapsed}>{section.controls.filter(expandedControlVisible).map(ref=>arrangedControl(ref))}</div>
   </section>)}</div>;

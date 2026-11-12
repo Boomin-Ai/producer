@@ -17,10 +17,14 @@ export function createDjVisuals(renderer,width,height,role,header=[0,0,1,1]){
  const barGeometry=new THREE.PlaneGeometry(1,1),barMaterial=new THREE.MeshBasicMaterial({color:'#dce3e8',transparent:true,depthTest:false,depthWrite:false});resources.push(barGeometry,barMaterial);
  const accentMaterial=new THREE.MeshBasicMaterial({color:'#dce3e8',transparent:true,depthTest:false,depthWrite:false});
  const streaks=new THREE.InstancedMesh(barGeometry,accentMaterial,12);streaks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);streaks.frustumCulled=false;scene.add(streaks);
+ // Soft falloff behind a bright core, without bloom passes or render targets.
+ const edgeGlowMaterial=role==='frame'?new THREE.MeshBasicMaterial({map:glow,transparent:true,depthTest:false,depthWrite:false}):null;
+ const edgeGlows=edgeGlowMaterial?new THREE.InstancedMesh(barGeometry,edgeGlowMaterial,12):null;
+ if(edgeGlows){resources.push(edgeGlowMaterial);edgeGlows.instanceMatrix.setUsage(THREE.DynamicDrawUsage);edgeGlows.frustumCulled=false;edgeGlows.renderOrder=-1;scene.add(edgeGlows);}
  const ringGeometry=new THREE.RingGeometry(.985,1,64),rings=new THREE.InstancedMesh(ringGeometry,accentMaterial,3);rings.instanceMatrix.setUsage(THREE.DynamicDrawUsage);rings.frustumCulled=false;scene.add(rings);resources.push(accentMaterial,ringGeometry);
  const bars=new THREE.InstancedMesh(barGeometry,barMaterial,32);bars.instanceMatrix.setUsage(THREE.DynamicDrawUsage);bars.frustumCulled=false;scene.add(bars);
  const lineGeometry=new THREE.BufferGeometry(),positions=new Float32Array(32*3);lineGeometry.setAttribute('position',new THREE.BufferAttribute(positions,3));
- const lineMaterial=new THREE.LineBasicMaterial({color:'#dce3e8',transparent:true,depthTest:false,depthWrite:false});resources.push(lineGeometry,lineMaterial);const line=new THREE.Line(lineGeometry,lineMaterial);line.frustumCulled=false;scene.add(line);
+ const lineMaterial=new THREE.LineBasicMaterial({color:'#dce3e8',transparent:true,depthTest:false,depthWrite:false});resources.push(lineGeometry,lineMaterial);const line=role==='ring'?new THREE.LineLoop(lineGeometry,lineMaterial):new THREE.Line(lineGeometry,lineMaterial);line.frustumCulled=false;scene.add(line);
  const plot={x:width*header[0],y:height*header[1],w:width*header[2],h:height*header[3]},transport=role==='spectrum'&&header[0]>0;
  const clockCanvas=document.createElement('canvas');clockCanvas.width=512;clockCanvas.height=64;
  const clockTexture=new THREE.CanvasTexture(clockCanvas);clockTexture.colorSpace=THREE.SRGBColorSpace;
@@ -30,7 +34,7 @@ export function createDjVisuals(renderer,width,height,role,header=[0,0,1,1]){
  const railMaterial=new THREE.MeshBasicMaterial({color:'#46505a',transparent:true,depthTest:false,depthWrite:false});resources.push(railMaterial);
  const rail=new THREE.Mesh(barGeometry,railMaterial),fill=new THREE.Mesh(barGeometry,barMaterial),cursor=new THREE.Mesh(barGeometry,barMaterial),mixCursor=new THREE.Mesh(barGeometry,barMaterial);
  const railY=height-plot.y-plot.h-9;rail.position.set(plot.x+plot.w/2,railY,0);rail.scale.set(plot.w,1.2,1);scene.add(rail,fill,cursor,mixCursor);
- let clockKey='';
+ let clockKey='',frameTime=0;
  const soundPopup=role==='stage'?createSoundPopup(scene,width,height):null;
 
 
@@ -56,12 +60,29 @@ export function createDjVisuals(renderer,width,height,role,header=[0,0,1,1]){
    }streaks.instanceMatrix.needsUpdate=true;
    for(let i=0;i<3;i++){const travel=(age*.35+i/3)%1,radius=Math.min(width*header[2]*.46,height*header[3]*(.3+travel*1.3));matrix.position.set(width*(header[0]+header[2]*.5),height*(1-header[1]-header[3]*.5),0);matrix.rotation.set(0,0,0);matrix.scale.set(radius,radius,1);matrix.updateMatrix();rings.setMatrixAt(i,matrix.matrix);}rings.instanceMatrix.needsUpdate=true;
   }
+  // Fixed instanced geometry: signature streaks move along the canvas edge.
+  const frameActive=role==='frame'&&c.motion>0;
+  if(role==='frame'){
+   frameTime+=dt*c.motion;streaks.visible=true;rings.visible=false;accentMaterial.color.copy(tint);accentMaterial.opacity=Math.min(1,.9*c.intensity);
+   edgeGlowMaterial.color.copy(tint);edgeGlowMaterial.opacity=Math.min(.5,.32*c.intensity);
+   for(let i=0;i<12;i++){const side=i%4,phase=(frameTime*.035+Math.floor(i/4)/3)%1,horizontal=side===0||side===2,span=horizontal?width:height,len=span*(.035+.025*(i%3)),at=phase*(span+len)-len/2;
+    matrix.position.set(horizontal?(side===0?at:width-at):(side===1?width-3:3),horizontal?(side===0?height-3:3):(side===1?height-at:at),0);matrix.rotation.set(0,0,0);matrix.scale.set(horizontal?len:2,horizontal?2:len,1);matrix.updateMatrix();streaks.setMatrixAt(i,matrix.matrix);
+    matrix.rotation.z=horizontal?0:Math.PI/2;matrix.scale.set(len*1.8,26,1);matrix.updateMatrix();edgeGlows.setMatrixAt(i,matrix.matrix);
+   }streaks.instanceMatrix.needsUpdate=true;edgeGlows.instanceMatrix.needsUpdate=true;
+  }
   halo.visible=role==='stage';spriteMaterial.opacity=Math.min(.75,(.05+pulse*.5)*c.intensity);
   const money=role==='stage'&&c.money&&c.motion>0;bills.visible=money;
   if(money){const t=now/1000;for(let i=0;i<36;i++){const seed=(i*.61803398875)%1;const cycle=(t*(.11+.04*(i%3))*Math.max(.2,c.motion)+seed)%1;matrix.position.set(width*(seed+.07*Math.sin(t*.8+i)),height*(1.2-cycle*1.5),i*.02);matrix.rotation.set(Math.sin(t+i)*.8,Math.sin(t*.7+i)*.6,t*(i%2?1:-1)*.55+i);const size=Math.min(width,height)*[.035,.055,.085,.13,.2,.26][i%6];matrix.scale.set(size,size*.5,1);matrix.updateMatrix();bills.setMatrixAt(i,matrix.matrix);}bills.instanceMatrix.needsUpdate=true;}
-  const spectrum=role==='spectrum';bars.visible=spectrum&&c.waveform==='bars';line.visible=spectrum&&c.waveform==='line';
+  const spectrum=role==='spectrum'||role==='ring';bars.visible=spectrum&&c.waveform==='bars';line.visible=spectrum&&c.waveform==='line';
   if(bars.visible){for(let i=0;i<32;i++){const band=live.bands[Math.min(7,Math.floor(i/4))];const h=Math.min(plot.h*.98,Math.max(2,band*c.sensitivity*plot.h*.85*c.waveHeight*movement.wave));matrix.position.set(plot.x+(i+.5)*plot.w/32,height-plot.y-plot.h*.5,0);matrix.rotation.set(0,0,0);matrix.scale.set(plot.w/32*.65,h,1);matrix.updateMatrix();bars.setMatrixAt(i,matrix.matrix);}bars.instanceMatrix.needsUpdate=true;}
   if(line.visible){for(let i=0;i<32;i++){positions[i*3]=plot.x+i*plot.w/31;positions[i*3+1]=height-plot.y-plot.h*.5+live.wave[i]*plot.h*.42*c.sensitivity*c.waveHeight*movement.wave;positions[i*3+2]=0;}lineGeometry.attributes.position.needsUpdate=true;}
+  if(role==='ring'){
+   const radius=Math.min(plot.w,plot.h)*.34,cx=plot.x+plot.w/2,cy=height-plot.y-plot.h/2;
+   for(let i=0;i<32;i++){const angle=i/32*Math.PI*2,amplitude=live.wave[i]*Math.min(plot.w,plot.h)*.13*c.sensitivity*c.waveHeight;
+    if(bars.visible){const length=Math.max(2,Math.abs(amplitude)+live.bands[Math.floor(i/4)]*Math.min(plot.w,plot.h)*.16*c.sensitivity*c.waveHeight);matrix.position.set(cx+Math.sin(angle)*(radius+length/2),cy+Math.cos(angle)*(radius+length/2),0);matrix.rotation.set(0,0,-angle);matrix.scale.set(Math.max(2,radius*.014),length,1);matrix.updateMatrix();bars.setMatrixAt(i,matrix.matrix);}
+    if(line.visible){positions[i*3]=cx+Math.sin(angle)*(radius+amplitude);positions[i*3+1]=cy+Math.cos(angle)*(radius+amplitude);positions[i*3+2]=0;}
+   }if(bars.visible)bars.instanceMatrix.needsUpdate=true;if(line.visible)lineGeometry.attributes.position.needsUpdate=true;
+  }
   clockMesh.visible=rail.visible=fill.visible=cursor.visible=transport;
   mixCursor.visible=transport&&frame.mixing===true;
   let transportChanged=false;
@@ -75,7 +96,7 @@ export function createDjVisuals(renderer,width,height,role,header=[0,0,1,1]){
    transportChanged=transportChanged||Math.abs(transportPosition-lastPosition)>.5;lastPosition=transportPosition;
   }
   const soundActive=soundPopup?.update(now,c.soundPopups===true,c.motion)??false;
-  return {pulse,...movement,dropActive:movement.active,active:energy>.005||bass>.005||money||movement.active||transportChanged||soundActive};
+  return {pulse,...movement,dropActive:movement.active,active:role==='frame'?frameActive:energy>.005||bass>.005||money||movement.active||transportChanged||soundActive};
  }
  return {audio,sound(value){soundPopup?.receive(value);},update,render(){renderer.clearDepth();renderer.render(scene,camera);draws++;},status:()=>({energy,bass,positionMs:transportPosition,transportLabel,dropActive:performance.now()-dropAt<DROP_DURATION_MS,dropStreaks:streaks.visible?12:0,moneyParticles:bills.visible?36:0,...soundPopup?.status(),draws}),dispose(){soundPopup?.dispose();for(const r of resources)r.dispose();}};
 }

@@ -1,8 +1,8 @@
 {
   "schema": "producer.reference-guide/1",
   "setId": "classic",
-  "version": "1.0.0",
-  "purpose": "A complete, neutral studio with eight independently composed landscape/portrait views.",
+  "version": "1.1.0",
+  "purpose": "Producer’s signature minimal studio: charcoal or porcelain surfaces, dimensional chrome and customizable perimeter light, with eight paired views.",
   "views": {
     "opening": "Opening",
     "solo": "Solo",
@@ -53,31 +53,9 @@
     "Optional chat reflows the camera.",
     "Current-layout controls use the existing show.layoutId binding; this Set has no Show.",
     "Device identity and account connections remain outside the package.",
-    "Motion animates only a graphics-only layer; native source ancestry stays static."
+    "Motion animates only a graphics-only layer; native source ancestry stays static.",
+    "Registered waiting music uses the native DJ mixer; no autoplay or effects imported as music.",
+    "Light and dark palettes are authored separately; adjustable edge color retains legible neutral typography."
   ],
-  "qualification": "Canonical MCP compilation and both-theme visual checks; real-camera native layout preparation, dock actions and dual-format recording tested locally on Apple Silicon. Synthetic guest/content signals do not qualify network guest audio/video.",
-  "controls": {
-    "layouts": "Eight logical views; independently composed landscape and portrait variants",
-    "liveCues": [
-      "Name card",
-      "Teaching card",
-      "Show CTA",
-      "Clear overlay"
-    ],
-    "thisView": [
-      "Host visibility",
-      "Chat reflow",
-      "Screen/example",
-      "Screen zoom",
-      "Media/teaching card",
-      "Guest count"
-    ],
-    "lookAndFeel": [
-      "Dark/light",
-      "Mint/silver accent",
-      "Quiet motion",
-      "Camera corner radius"
-    ],
-    "storage": "Set Edit saves configured defaults; live cues remain transient. Room bindings and personal dock arrangements remain outside the portable package."
-  }
+  "qualification": "Requires canonical/default-state checks, both-theme visual review, every dock size and separate native preparation/recording evidence."
 }

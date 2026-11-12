@@ -133,8 +133,10 @@ pub fn validate(s: &Spec) -> Result<(), String> {
     }
     if let Some(dj) = w.get("dj") {
         obj(dj, &["role", "headerRatio", "headerRect"])?;
-        if !matches!(dj["role"].as_str(), Some("stage" | "spectrum"))
-            || dj.get("headerRatio").is_some_and(|v| !number(v, 0.1, 1.))
+        if !matches!(
+            dj["role"].as_str(),
+            Some("stage" | "spectrum" | "ring" | "frame")
+        ) || dj.get("headerRatio").is_some_and(|v| !number(v, 0.1, 1.))
         {
             return Err("Invalid DJ visual surface".into());
         }

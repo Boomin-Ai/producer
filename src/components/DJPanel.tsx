@@ -225,11 +225,14 @@ export function DJPanel({
     return s;
   };
   useEffect(() => {
-    dj.library()
+    const refresh = () => { void dj.library()
       .then((l) => {
         if (mounted.current) setLibrary(l);
       })
-      .catch(report);
+      .catch(report); };
+    refresh();
+    window.addEventListener('producer:audio-library-ready', refresh);
+    return () => window.removeEventListener('producer:audio-library-ready', refresh);
   }, []);
   useEffect(() => {
     if (!enabled || !visible) return;

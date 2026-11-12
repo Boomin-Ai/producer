@@ -1,5 +1,6 @@
 mod assistant;
 mod boomin;
+mod builtin_audio;
 mod cache;
 mod chat;
 mod client;
@@ -493,6 +494,7 @@ pub fn run() {
             soundboard::soundboard_activate,
             soundboard::soundboard_control,
             soundboard::soundboard_library,
+            builtin_audio::starter_audio_install,
             soundboard::soundboard_import,
             soundboard::soundboard_save,
             soundboard::soundboard_pairing,
