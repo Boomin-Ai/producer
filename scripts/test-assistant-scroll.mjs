@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {build} from 'esbuild';
 const bundle=await build({stdin:{resolveDir:process.cwd(),loader:'tsx',contents:`
@@ -24,7 +26,7 @@ const bundle=await build({stdin:{resolveDir:process.cwd(),loader:'tsx',contents:
 const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??new URL('../tools/producer-mcp/node_modules/playwright-core/index.mjs',import.meta.url).href);
 const browser=await chromium.launch({executablePath:process.env.PRODUCER_CHROME??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
 const css=await readFile('src/features/assistant/assistant.css','utf8'),report=[];
-const folder=process.env.PRODUCER_SCROLL_REVIEW??'/private/tmp/producer-assistant-scroll';await mkdir(folder,{recursive:true});
+const folder=process.env.PRODUCER_SCROLL_REVIEW??join(tmpdir(),'producer-assistant-scroll');await mkdir(folder,{recursive:true});
 try{
  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  const url='http://127.0.0.1:17396/assistant-scroll';await page.route('**/*',r=>r.request().url()===url?r.fulfill({contentType:'text/html',body:`<!doctype html><style>${css}body{margin:20px;background:#080d14}#side{width:360px;height:760px}#mini{position:fixed;left:20px;bottom:20px;width:1000px;height:40px}.assistant-dock-mount{container:assistant-dock / size}</style><div id="root"></div><div id="parking" hidden></div><section id="side" class="assistant-dock-mount"></section><section id="mini" class="assistant-dock-mount"></section>`}):r.abort());

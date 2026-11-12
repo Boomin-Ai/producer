@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {mkdir,writeFile} from 'node:fs/promises';
 const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??new URL('../tools/producer-mcp/node_modules/playwright-core/index.mjs',import.meta.url).href);
-const folder=process.env.PRODUCER_CLASSIC_REVIEW??'/private/tmp/producer-classic-review';await mkdir(folder,{recursive:true});
+const folder=process.env.PRODUCER_CLASSIC_REVIEW??join(tmpdir(),'producer-classic-review');await mkdir(folder,{recursive:true});
 const browser=await chromium.launch({executablePath:process.env.PRODUCER_CHROME??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
 const origin=process.env.PRODUCER_TEST_URL??'http://127.0.0.1:1445/';
 try{

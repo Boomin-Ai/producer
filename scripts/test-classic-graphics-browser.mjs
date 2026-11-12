@@ -1,3 +1,5 @@
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import assert from 'node:assert/strict';
 import {readFileSync,mkdirSync,writeFileSync} from 'node:fs';
 import {build} from 'esbuild';
@@ -43,6 +45,6 @@ try{
   assert((await page.evaluate(()=>window.world.status().frames))>hidden,'Returning to a cached view must produce pixels for its current revision');
   const report=await page.evaluate(()=>window.world.status());assert(report.calls<=8);assert(report.triangles<30000);reports.push({role,...report});await page.evaluate(()=>window.world.dispose());
  }
- mkdirSync('/private/tmp/producer-classic-review',{recursive:true});writeFileSync('/private/tmp/producer-classic-review/graphics-proof.json',JSON.stringify(reports,null,2));
+ mkdirSync(join(tmpdir(),'producer-classic-review'),{recursive:true});writeFileSync(join(tmpdir(),'producer-classic-review','graphics-proof.json'),JSON.stringify(reports,null,2));
  console.log('PASS Classic GPU: real waveform pixels, stale-audio decay, paused lights, hidden-surface demand and bounded draw/geometry counts.');
 }finally{await browser.close();}
