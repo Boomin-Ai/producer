@@ -25,7 +25,12 @@ try{
   assert(geometry.fits&&geometry.height<=40&&new Set(geometry.tops).size===1&&geometry.wrap.every(v=>v==='nowrap'),`one compact row at ${width}px: `+JSON.stringify(geometry));
   if(width===150){
    const next=page.getByRole('button',{name:'Next suggestions',exact:true}),previous=page.getByRole('button',{name:'Previous suggestions',exact:true});
-   try{await next.waitFor({timeout:5000});}catch(error){console.error(await row.evaluate(el=>({html:el.outerHTML,rect:el.getBoundingClientRect().toJSON(),track:[el.firstChild.clientWidth,el.firstChild.scrollWidth],form:el.parentElement.getBoundingClientRect().toJSON()})));throw error;}assert(await previous.isDisabled());
+   await next.waitFor();assert(await previous.isDisabled());
+   const ends=await row.evaluate(el=>{const p=el.querySelector('[aria-label="Previous suggestions"]').getBoundingClientRect(),n=el.querySelector('[aria-label="Next suggestions"]').getBoundingClientRect(),t=el.querySelector('.assistant-suggestions-track').getBoundingClientRect(),r=el.getBoundingClientRect(),s=getComputedStyle(el);return {left:p.left-r.left,right:r.right-n.right,paddingLeft:parseFloat(s.paddingLeft),paddingRight:parseFloat(s.paddingRight),separate:p.right<=t.left&&n.left>=t.right};});
+   assert(ends.separate&&Math.abs(ends.left-ends.paddingLeft)<=1&&Math.abs(ends.right-ends.paddingRight)<=1,'arrows sit at opposite ends of the section: '+JSON.stringify(ends));
+   const hit=await next.boundingBox();assert.equal(await next.locator('svg').evaluate(el=>el.getBoundingClientRect().width),6,'resting arrow is very small');
+   await next.hover();assert.equal(await next.locator('svg').evaluate(el=>el.getBoundingClientRect().width),12,'hover restores the previous arrow size');assert.deepEqual(await next.boundingBox(),hit,'hover never changes the row layout or click area');
+   await page.mouse.move(0,0);
    await next.click();await page.waitForFunction(()=>document.querySelector('.assistant-suggestions-track').scrollLeft>0);assert(await previous.isEnabled());
    const last=track.getByRole('button',{name:'Plan a walkthrough'});await last.focus();
    assert(await last.evaluate(button=>{const b=button.getBoundingClientRect(),t=button.parentElement.getBoundingClientRect();return b.left>=t.left-1&&b.right<=t.right+1;}),'keyboard focus reveals the entire button');
@@ -42,5 +47,5 @@ try{
  assert(await track.getByRole('button',{name:'Unavailable action'}).isDisabled());
  assert.equal(await page.locator('.assistant-suggestion-popover').count(),0);assert.equal(await page.getByRole('button',{name:'Assistant suggestions',exact:true}).count(),0);
  await page.evaluate(()=>window.render({items:[]}));await row.waitFor({state:'detached'});
- assert.deepEqual(errors,[]);console.log('PASS Assistant suggestion carousel: 150/240/360/800px, overflow arrows, focus/keyboard navigation, resizing, refreshed contextual actions, disabled actions and no popup.');
+ assert.deepEqual(errors,[]);console.log('PASS Assistant suggestion carousel: 150/240/360/800px, opposite-end arrows, 6px → 12px hover without reflow, focus/keyboard navigation, resizing, contextual actions, disabled actions and no popup.');
 }finally{await browser.close();}

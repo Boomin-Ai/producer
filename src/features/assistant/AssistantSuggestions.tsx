@@ -7,10 +7,10 @@ export function AssistantSuggestions({items,disabled,onChoose}:{items:AssistantS
   const signature=JSON.stringify(items.map(({id,label})=>[id,label]));
   const measure=()=>{
     const el=track.current;if(!el)return;
-    const nav=el.parentElement?.querySelector<HTMLElement>('.assistant-suggestions-nav');
+    const arrows=Array.from(el.parentElement?.querySelectorAll<HTMLElement>('.assistant-suggestions-arrow')??[]);
     // Test the space available without arrows, so resizing back to a wide dock
     // removes navigation as soon as every suggestion fits.
-    const available=el.clientWidth+(nav?nav.offsetWidth+parseFloat(getComputedStyle(el.parentElement!).columnGap):0);
+    const available=el.clientWidth+arrows.reduce((sum,arrow)=>sum+arrow.offsetWidth,0)+arrows.length*parseFloat(getComputedStyle(el.parentElement!).columnGap);
     const next={overflow:el.scrollWidth>available+1,start:el.scrollLeft<=1,end:el.scrollLeft+el.clientWidth>=el.scrollWidth-1};
     setEdges(old=>old.overflow===next.overflow&&old.start===next.start&&old.end===next.end?old:next);
   };
@@ -30,8 +30,10 @@ export function AssistantSuggestions({items,disabled,onChoose}:{items:AssistantS
     const el=track.current;if(!el)return;
     el.scrollBy({left:direction*Math.max(80,el.clientWidth*.85),behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
   };
+  const arrow=(direction:-1|1)=>edges.overflow&&<button className="assistant-suggestions-arrow" type="button" aria-label={direction<0?'Previous suggestions':'Next suggestions'} title={direction<0?'Previous suggestions':'Next suggestions'} aria-controls={id} disabled={direction<0?edges.start:edges.end} onClick={()=>move(direction)}><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d={direction<0?'m10 3-5 5 5 5':'m6 3 5 5-5 5'}/></svg></button>;
   if(!items.length)return null;
   return <div className="assistant-suggestions" role="group" aria-label="Suggested actions">
+    {arrow(-1)}
     <div ref={track} id={id} className="assistant-suggestions-track" onScroll={measure}
       onFocusCapture={event=>{if(event.target instanceof HTMLButtonElement)reveal(event.target);}}
       onKeyDown={event=>{
@@ -42,9 +44,6 @@ export function AssistantSuggestions({items,disabled,onChoose}:{items:AssistantS
       }}>
       {items.map(item=><button type="button" key={item.id} title={item.label} disabled={disabled(item)} onClick={()=>onChoose(item)}>{item.label}</button>)}
     </div>
-    {edges.overflow&&<div className="assistant-suggestions-nav">
-      <button type="button" aria-label="Previous suggestions" title="Previous suggestions" aria-controls={id} disabled={edges.start} onClick={()=>move(-1)}><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m10 3-5 5 5 5"/></svg></button>
-      <button type="button" aria-label="Next suggestions" title="Next suggestions" aria-controls={id} disabled={edges.end} onClick={()=>move(1)}><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg></button>
-    </div>}
+    {arrow(1)}
   </div>;
 }
