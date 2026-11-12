@@ -928,6 +928,7 @@
                   "objects": [
                     {
                       "id": "chrome-0",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         15.510098983215945,
@@ -952,6 +953,7 @@
                     },
                     {
                       "id": "chrome-1",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         15.510098983215945,
@@ -976,6 +978,7 @@
                     },
                     {
                       "id": "chrome-2",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -1000,6 +1003,7 @@
                     },
                     {
                       "id": "chrome-3",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -1983,6 +1987,7 @@
                   "objects": [
                     {
                       "id": "chrome-0",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         15.510098983215945,
@@ -2007,6 +2012,7 @@
                     },
                     {
                       "id": "chrome-1",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         15.510098983215945,
@@ -2031,6 +2037,7 @@
                     },
                     {
                       "id": "chrome-2",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -2055,6 +2062,7 @@
                     },
                     {
                       "id": "chrome-3",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -3636,6 +3644,7 @@
                   "objects": [
                     {
                       "id": "chrome-0",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         15.510098983215945,
@@ -3660,6 +3669,7 @@
                     },
                     {
                       "id": "chrome-1",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         15.510098983215945,
@@ -3684,6 +3694,7 @@
                     },
                     {
                       "id": "chrome-2",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -3708,6 +3719,7 @@
                     },
                     {
                       "id": "chrome-3",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -4791,6 +4803,7 @@
                   "objects": [
                     {
                       "id": "chrome-0",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         15.510098983215945,
@@ -4815,6 +4828,7 @@
                     },
                     {
                       "id": "chrome-1",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         15.510098983215945,
@@ -4839,6 +4853,7 @@
                     },
                     {
                       "id": "chrome-2",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -4863,6 +4878,7 @@
                     },
                     {
                       "id": "chrome-3",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -6687,6 +6703,7 @@
                   "objects": [
                     {
                       "id": "chrome-0",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         15.510098983215945,
@@ -6711,6 +6728,7 @@
                     },
                     {
                       "id": "chrome-1",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         15.510098983215945,
@@ -6735,6 +6753,7 @@
                     },
                     {
                       "id": "chrome-2",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -6759,6 +6778,7 @@
                     },
                     {
                       "id": "chrome-3",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -8136,6 +8156,7 @@
                   "objects": [
                     {
                       "id": "chrome-0",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         15.510098983215945,
@@ -8160,6 +8181,7 @@
                     },
                     {
                       "id": "chrome-1",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         15.510098983215945,
@@ -8184,6 +8206,7 @@
                     },
                     {
                       "id": "chrome-2",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -8208,6 +8231,7 @@
                     },
                     {
                       "id": "chrome-3",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -9178,6 +9202,7 @@
                   "objects": [
                     {
                       "id": "chrome-0",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         15.510098983215945,
@@ -9202,6 +9227,7 @@
                     },
                     {
                       "id": "chrome-1",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         15.510098983215945,
@@ -9226,6 +9252,7 @@
                     },
                     {
                       "id": "chrome-2",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -9250,6 +9277,7 @@
                     },
                     {
                       "id": "chrome-3",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -10328,6 +10356,7 @@
                   "objects": [
                     {
                       "id": "chrome-0",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         15.510098983215945,
@@ -10352,6 +10381,7 @@
                     },
                     {
                       "id": "chrome-1",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         15.510098983215945,
@@ -10376,6 +10406,7 @@
                     },
                     {
                       "id": "chrome-2",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -10400,6 +10431,7 @@
                     },
                     {
                       "id": "chrome-3",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -11476,6 +11508,7 @@
                   "objects": [
                     {
                       "id": "chrome-0",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         4.82760783849417,
@@ -11500,6 +11533,7 @@
                     },
                     {
                       "id": "chrome-1",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         4.82760783849417,
@@ -11524,6 +11558,7 @@
                     },
                     {
                       "id": "chrome-2",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -11548,6 +11583,7 @@
                     },
                     {
                       "id": "chrome-3",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -12549,6 +12585,7 @@
                   "objects": [
                     {
                       "id": "chrome-0",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         4.82760783849417,
@@ -12573,6 +12610,7 @@
                     },
                     {
                       "id": "chrome-1",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         4.82760783849417,
@@ -12597,6 +12635,7 @@
                     },
                     {
                       "id": "chrome-2",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -12621,6 +12660,7 @@
                     },
                     {
                       "id": "chrome-3",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -14211,6 +14251,7 @@
                   "objects": [
                     {
                       "id": "chrome-0",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         4.82760783849417,
@@ -14235,6 +14276,7 @@
                     },
                     {
                       "id": "chrome-1",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         4.82760783849417,
@@ -14259,6 +14301,7 @@
                     },
                     {
                       "id": "chrome-2",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -14283,6 +14326,7 @@
                     },
                     {
                       "id": "chrome-3",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -15430,6 +15474,7 @@
                   "objects": [
                     {
                       "id": "chrome-0",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         4.82760783849417,
@@ -15454,6 +15499,7 @@
                     },
                     {
                       "id": "chrome-1",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         4.82760783849417,
@@ -15478,6 +15524,7 @@
                     },
                     {
                       "id": "chrome-2",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -15502,6 +15549,7 @@
                     },
                     {
                       "id": "chrome-3",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -17371,6 +17419,7 @@
                   "objects": [
                     {
                       "id": "chrome-0",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         4.82760783849417,
@@ -17395,6 +17444,7 @@
                     },
                     {
                       "id": "chrome-1",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         4.82760783849417,
@@ -17419,6 +17469,7 @@
                     },
                     {
                       "id": "chrome-2",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -17443,6 +17494,7 @@
                     },
                     {
                       "id": "chrome-3",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -18820,6 +18872,7 @@
                   "objects": [
                     {
                       "id": "chrome-0",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         4.82760783849417,
@@ -18844,6 +18897,7 @@
                     },
                     {
                       "id": "chrome-1",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         4.82760783849417,
@@ -18868,6 +18922,7 @@
                     },
                     {
                       "id": "chrome-2",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -18892,6 +18947,7 @@
                     },
                     {
                       "id": "chrome-3",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -19862,6 +19918,7 @@
                   "objects": [
                     {
                       "id": "chrome-0",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         4.82760783849417,
@@ -19886,6 +19943,7 @@
                     },
                     {
                       "id": "chrome-1",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         4.82760783849417,
@@ -19910,6 +19968,7 @@
                     },
                     {
                       "id": "chrome-2",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -19934,6 +19993,7 @@
                     },
                     {
                       "id": "chrome-3",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -21012,6 +21072,7 @@
                   "objects": [
                     {
                       "id": "chrome-0",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         4.82760783849417,
@@ -21036,6 +21097,7 @@
                     },
                     {
                       "id": "chrome-1",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         4.82760783849417,
@@ -21060,6 +21122,7 @@
                     },
                     {
                       "id": "chrome-2",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -21084,6 +21147,7 @@
                     },
                     {
                       "id": "chrome-3",
+                      "pass": "foreground",
                       "kind": "roundedBox",
                       "args": [
                         0.022,
@@ -23391,12 +23455,72 @@
               "op": "if",
               "args": [
                 {
-                  "op": "eq",
+                  "op": "if",
                   "args": [
                     {
-                      "get": "show.layoutId"
+                      "op": "if",
+                      "args": [
+                        {
+                          "op": "if",
+                          "args": [
+                            {
+                              "op": "eq",
+                              "args": [
+                                {
+                                  "get": "show.layoutId"
+                                },
+                                "opening-landscape"
+                              ]
+                            },
+                            true,
+                            {
+                              "op": "eq",
+                              "args": [
+                                {
+                                  "get": "show.layoutId"
+                                },
+                                "opening-portrait"
+                              ]
+                            }
+                          ]
+                        },
+                        true,
+                        {
+                          "op": "if",
+                          "args": [
+                            {
+                              "op": "eq",
+                              "args": [
+                                {
+                                  "get": "show.layoutId"
+                                },
+                                "break-landscape"
+                              ]
+                            },
+                            true,
+                            {
+                              "op": "eq",
+                              "args": [
+                                {
+                                  "get": "show.layoutId"
+                                },
+                                "break-portrait"
+                              ]
+                            }
+                          ]
+                        }
+                      ]
                     },
-                    "opening-landscape"
+                    true,
+                    {
+                      "op": "eq",
+                      "args": [
+                        {
+                          "get": "feeds.dj_phase"
+                        },
+                        "playing"
+                      ]
+                    }
                   ]
                 },
                 true,
@@ -23404,9 +23528,9 @@
                   "op": "eq",
                   "args": [
                     {
-                      "get": "show.layoutId"
+                      "get": "feeds.dj_phase"
                     },
-                    "opening-portrait"
+                    "paused"
                   ]
                 }
               ]
@@ -23419,9 +23543,9 @@
                   "op": "eq",
                   "args": [
                     {
-                      "get": "show.layoutId"
+                      "get": "feeds.dj_phase"
                     },
-                    "break-landscape"
+                    "crossfade"
                   ]
                 },
                 true,
@@ -23429,9 +23553,9 @@
                   "op": "eq",
                   "args": [
                     {
-                      "get": "show.layoutId"
+                      "get": "feeds.dj_phase"
                     },
-                    "break-portrait"
+                    "manual"
                   ]
                 }
               ]

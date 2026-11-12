@@ -7442,6 +7442,7 @@ export function LiveView({
     'set.show':async()=>{await (setOutput.applyConfirmed??setOutput.apply)();if(setOutput.error)throw Error(setOutput.error);return {requested:true};},
     'set.hide':async()=>({hidden:await setOutput.returnToRoom()}),
     'sets.list':()=>ipc.setLibraryList(),
+    'sets.save':async({document})=>{const {parsePackage}=await import('../features/presentation/schema');const doc=parsePackage(document);await ipc.setLibrarySave(JSON.stringify(doc));window.dispatchEvent(new Event('producer:set-library-changed'));return {id:doc.id,name:doc.name,version:doc.version,outputChanged:false};},
     'set.load':async({id})=>{if(typeof id!=='string')throw Error('Expected library Set id.');const item=(await ipc.setLibraryList()).find(item=>item.id===id);if(!item)throw Error('Unknown library Set.');const raw=await ipc.setLibraryRead(item.file);const {parsePackage}=await import('../features/presentation/schema');const next=await changeSet(parsePackage(JSON.parse(raw)));return {id:next?.package.id,name:next?.package.name};},
     'set.layout':({id})=>{if(!setRehearsal.package.set.layouts.some(item=>item.id===id))throw Error('Unknown layout.');setRehearsal.send({type:'control',action:{type:'layout.select',layoutId:id}});return {id};},
     'set.value':({key,value})=>{if(!Object.prototype.hasOwnProperty.call(setRehearsal.package.set.values,key))throw Error('Unknown field.');setRehearsal.send({type:'control',action:{type:'value.set',key,value}});return {key};},

@@ -6,9 +6,17 @@ const If=(a,b,c)=>({op:'if',args:[a,b,c]});
 const cat=(...args)=>({op:'concat',args});
 const light=eq(V('theme'),'light');
 const color=(dark,day)=>If(light,day,dark);
-const ink=color('#f2f4f5','#16232c'),muted=color('#9baebc','#536775');
-const line=color('#36434e','#bcc9ca'),surface=color('#17222c','#ffffff');
-const accent=If(eq(V('accent'),'silver'),color('#d8e4ed','#435a6b'),color('#9cdbc7','#1e6a58'));
+const ink=color('#f1f4f5','#17232b'),muted=color('#9daab2','#4b5c68');
+const line=color('#343b42','#b8c5ce'),surface=color('#151a20','#ffffff');
+const accent=If(light,'#275d4e',V('glowColor'));
+const edge=If(light,If(eq(V('glowColor'),'#9cdbc7'),'#147b61',If(eq(V('glowColor'),'#d8e4ed'),'#506a80',V('glowColor'))),V('glowColor'));
+const music=(waveform='off')=>({sensitivity:1.2,intensity:1,waveform,waveHeight:1,drop:0,money:false,color:edge,motion:If(V('motion'),.7,0)});
+function studioWorld(role,width,height){
+ const vh=2*12*Math.tan(20*Math.PI/180),vw=vh*width/height;
+ const rails=role==='frame'?[[0,vh/2-.035,vw-.07,.022],[0,-vh/2+.035,vw-.07,.022],[-vw/2+.035,0,.022,vh-.07],[vw/2-.035,0,.022,vh-.07]].map(([x,y,w,h],i)=>({id:'chrome-'+i,pass:'foreground',kind:'roundedBox',args:[w,h,.07,3,.009],position:[x,y,0],rotation:[0,0,0],color:'#c3cbd1',metalness:.9,roughness:.24})):[];
+ return {schema:'producer.scene3d/1',fps:30,clearColor:'#0b0e12',fog:{color:'#0b0e12',near:25,far:100},camera:{position:[0,0,12],target:[0,0,0],fov:40},objects:rails,slots:[],dj:{role}};
+}
+function studioLayer(id,bounds,role,wave='off'){return {id,type:'scene3d',styles:rect(...bounds),scene3d:{id,pass:'foreground',world:studioWorld(role,bounds[2],bounds[3]),music:music(wave)}};}
 const any=items=>items.length===1?items[0]:If(any(items.slice(0,Math.ceil(items.length/2))),true,any(items.slice(Math.ceil(items.length/2))));
 const viewWhen=(...names)=>any(names.flatMap(name=>['landscape','portrait'].map(format=>eq({get:'show.layoutId'},name+'-'+format))));
 const rect=(x,y,w,h)=>({position:'absolute',left:x,top:y,width:w,height:h});
@@ -18,8 +26,9 @@ const caps=(id,copy,bounds,size=17,styles={},when)=>text(id,copy,bounds,size,{fo
 const names={opening:'Opening',solo:'Solo',demo:'Demo',conversation:'Conversation',roundtable:'Roundtable',spotlight:'Spotlight',break:'Break',closing:'Closing'};
 const values={
  theme:{type:'text',default:'dark',maxLength:5},accent:{type:'text',default:'mint',maxLength:6},motion:{type:'boolean',default:true},
- showTitle:{type:'text',default:'THE CLASSIC STUDIO',maxLength:36},hostName:{type:'text',default:'Your name',maxLength:28},hostRole:{type:'text',default:'Host / Creator',maxLength:36},
- headline:{type:'text',default:'A good conversation\nstarts here.',maxLength:52},tagline:{type:'text',default:'One idea. A fresh perspective. A show that feels like you.',maxLength:112},
+ glowColor:{type:'text',default:'#9cdbc7',maxLength:7},waveform:{type:'text',default:'line',maxLength:4},
+ showTitle:{type:'text',default:'YOUR STUDIO',maxLength:36},hostName:{type:'text',default:'Your name',maxLength:28},hostRole:{type:'text',default:'Host / Creator',maxLength:36},
+ headline:{type:'text',default:'Your studio.\nYour signal.',maxLength:52},tagline:{type:'text',default:'One idea. A fresh perspective. A show that feels like you.',maxLength:112},
  topic:{type:'text',default:'MAKE SOMETHING WORTH SHARING',maxLength:48},noteTitle:{type:'text',default:'Make one thing\nworth sharing.',maxLength:58},noteBody:{type:'text',default:'Start with one clear idea.\nShow how it works.\nGive people a reason to come back.',maxLength:160},
  ctaTitle:{type:'text',default:'Keep the conversation going.',maxLength:56},ctaAddress:{type:'text',default:'your-site.com',maxLength:44},
  breakTitle:{type:'text',default:'Back in\na moment.',maxLength:42},breakBody:{type:'text',default:'A short pause. Stay curious.',maxLength:90},
@@ -27,11 +36,12 @@ const values={
  guestCount:{type:'number',default:3,min:1,max:3},screenZoom:{type:'number',default:1,min:1,max:2},corners:{type:'number',default:12,min:0,max:24},
  hostVisible:{type:'boolean',default:true},chatVisible:{type:'boolean',default:false},demoLive:{type:'boolean',default:false},mediaLive:{type:'boolean',default:false},cue:{type:'text',default:'none',maxLength:5},
 };
-const doc={schema:'producer.presentation/2',id:'classic',version:'1.0.0',name:'Classic',set:{
+const doc={schema:'producer.presentation/2',id:'classic',version:'1.1.0',name:'Classic',set:{
  initialView:'solo',initialLayout:'solo-landscape',views:{},
- tokens:{design:'Classic / editorial studio',spacing:24,landscapeSafe:64,portraitSafe:64},values,feeds:{},
+ tokens:{design:'Classic / Producer signature studio',spacing:24,landscapeSafe:64,portraitSafe:64},values,feeds:{dj_now:{type:'text',default:'',maxLength:160},dj_phase:{type:'text',default:'idle',maxLength:16}},
+ operatorComponents:[{id:'waiting-music',type:'music',label:'Waiting music',defaultTrack:'waiting-in-case',when:any([viewWhen('opening','break'),...['playing','paused','crossfade','manual'].map(phase=>eq({get:'feeds.dj_phase'},phase))])}],
  slots:[['host','Host camera'],['screen','Screen share'],['guest1','Guest one'],['guest2','Guest two'],['guest3','Guest three'],['media','Featured image or clip'],['chat','Room chat']].map(([id,label])=>({id,label})),
- components:{},layouts:[],controls:[],controlArrangement:{sections:[],minimized:['set:cta','set:clear-cue','set:light','set:dark']},
+ components:{},layouts:[],controls:[],controlArrangement:{sections:[],minimized:['set:cta','set:clear-cue','set:light','set:dark','operator:waiting-music']},
 }};
 
 function frame(id,slot,bounds,label,{when=true,fit='fill',sample='CAMERA',name=true}={}){
@@ -75,18 +85,18 @@ function cues(p){
   caps('cue-label',If(eq(V('cue'),'name'),'INTRODUCING',If(eq(V('cue'),'cta'),'NEXT / TAKE ACTION','TAKEAWAY')),[32,25,w-64,28],16,{color:accent}),
   text('cue-headline',If(eq(V('cue'),'name'),V('hostName'),If(eq(V('cue'),'cta'),V('ctaTitle'),V('noteTitle'))),[32,78,w-64,p?150:95],p?52:50,{fontWeight:700,letterSpacing:-1}),
   text('cue-detail',If(eq(V('cue'),'name'),V('hostRole'),If(eq(V('cue'),'cta'),V('ctaAddress'),V('noteBody'))),[32,p?242:192,w-64,p?150:150],p?23:25,{color:muted,lineHeight:1.35}),
- ],{background:color('#14212b','#ffffff'),border:cat('1px solid ',accent),borderRadius:14,boxShadow:color('0 16px 64px #0008','0 12px 45px #112a3524')},If(eq(V('cue'),'none'),false,true))];
+ ],{background:color('#182026','#ffffff'),border:cat('1px solid ',accent),borderRadius:14,boxShadow:color('0 16px 64px #0008','0 12px 45px #112a3524')},If(eq(V('cue'),'none'),false,true))];
 }
 
 for(const orientation of ['landscape','portrait'])for(const [index,[view,label]]of Object.entries(names).entries()){
  const p=orientation==='portrait',w=p?1080:1920,h=p?1920:1080;
  const children=[
-  box('stage-light',[0,0,w,h],[],{background:color('radial-gradient(ellipse at 80% 0%,#26323c 0%,#10171e 48%,#0b1117 100%)','radial-gradient(ellipse at 80% 0%,#ffffff 0%,#f1f3ef 52%,#e5ebe8 100%)')}),
+  box('stage-light',[0,0,w,h],[],{background:color('radial-gradient(ellipse at 70% 0%,#222a31 0%,#101418 50%,#0b0e12 100%)','radial-gradient(ellipse at 70% 0%,#ffffff 0%,#f1f4f6 56%,#e4ebf0 100%)')}),
   box('brand-line',[64,50,5,26],[],{background:accent}),
   caps('series',V('showTitle'),[84,50,p?690:1300,30],19,{color:ink}),
   caps('edition',String(index+1).padStart(2,'0')+' / '+label.toUpperCase(),[64,p?110:103,p?952:1792,28],16),
   box('footer-rule',[64,h-(p?116:71),w-128,1],[],{background:line}),
-  caps('footer','CLASSIC / PRODUCER',[64,h-(p?82:46),w-128,23],p?14:13,{letterSpacing:2.5}),
+  caps('footer','PRODUCER / CLASSIC',[64,h-(p?82:46),w-128,23],p?14:13,{letterSpacing:2.5}),
  ];
  if(view==='opening'){
   children.push(caps('intro','WELCOME TO YOUR NEXT CHAPTER',[72,p?216:211,p?936:1036,40],20,{color:accent}),
@@ -139,7 +149,8 @@ for(const orientation of ['landscape','portrait'])for(const [index,[view,label]]
   children.push(caps('break-kicker','A LITTLE BREATHING ROOM',[72,p?270:232,p?936:1150,36],21,{color:accent}),
    text('break-title',V('breakTitle'),[72,p?382:341,p?936:1250,p?540:400],p?148:160,{fontWeight:700,letterSpacing:-6,lineHeight:1.02}),
    text('break-body',V('breakBody'),[80,p?1000:815,p?920:1120,130],p?34:30,{color:muted}),
-   ...[0,1,2].map((i)=>box('orbit-'+i,p?[290+i*52,1230+i*52,500-i*104,500-i*104]:[1430+i*36,375+i*36,360-i*72,360-i*72],[],{border:cat(i===1?'2px solid ':'1px solid ',i===1?accent:line),borderRadius:500})),
+   studioLayer('classic-waiting-ring-'+orientation,p?[240,1170,600,600]:[1320,315,500,500],'ring',V('waveform')),
+   caps('waiting-track',{get:'feeds.dj_now'},p?[80,1735,920,32]:[1310,850,520,32],16,{textAlign:'center'}),
   );
  }else if(view==='closing'){
   children.push(...frame('host','host',p?[230,190,620,620]:[80,195,650,720],V('hostName'),{when:V('hostVisible')}),
@@ -150,9 +161,10 @@ for(const orientation of ['landscape','portrait'])for(const [index,[view,label]]
    text('closing-role',V('hostRole'),p?[64,1620,952,55]:[834,880,960,50],26,{color:muted}));
  }
  // Quiet motion runs on a graphics-only layer. Source parents remain stationary.
+ children.push(studioLayer('classic-frame-'+orientation,[4,4,w-8,h-8],'frame'));
  children.push(box('light-travel',[64,p?1765:971,p?180:260,2],[],{background:accent,opacity:.45},V('motion')),...cues(p));
  const layout={id:view+'-'+orientation,label:label+' · '+(p?'Portrait':'Landscape'),width:w,height:h,
-  root:box('stage',[0,0,w,h],children,{position:'relative',background:color('#0b1117','#f1f3ef'),overflow:'hidden'}),
+  root:box('stage',[0,0,w,h],children,{position:'relative',background:color('#0b0e12','#f1f4f6'),overflow:'hidden'}),
   animation:{transition:{type:'morph',durationMs:420,contentDurationMs:180},tracks:[{target:'light-travel',property:'x',keyframes:[{atMs:0,value:64},{atMs:16000,value:p?836:1596}],easing:'easeInOut',clock:'show',loop:'pingpong'}]},
  };
  doc.set.layouts.push(layout);(doc.set.views[view]??={})[orientation]=layout.id;
@@ -162,7 +174,9 @@ function button(id,label,key,value,when){doc.set.controls.push({id,type:'button'
 function toggle(id,label,key,when){button(id+'-on','Show '+label,key,true,If(when??true,If(V(key),false,true),false));button(id+'-off','Hide '+label,key,false,If(when??true,V(key),false));}
 for(const [id,label,value]of [['name','Name card','name'],['note','Teaching card','note'],['cta','Show CTA','cta'],['clear-cue','Clear overlay','none']])button(id,label,'cue',value,If(eq(V('cue'),value),false,value==='none'?If(eq(V('cue'),'none'),false,true):true));
 button('light','Light mode','theme','light',eq(V('theme'),'dark'));button('dark','Dark mode','theme','dark',eq(V('theme'),'light'));
-button('mint','Mint accent','accent','mint');button('silver','Silver accent','accent','silver');
+button('mint','Mint accent','glowColor','#9cdbc7');button('silver','Silver accent','glowColor','#d8e4ed');
+button('wave-line','Waveform','waveform','line',viewWhen('break'));button('wave-bars','Spectrum','waveform','bars',viewWhen('break'));
+doc.set.controls.push({id:'glow-color',type:'text',label:'Light streak color',key:'glowColor',presentation:'color'});
 button('motion-on','Enable motion','motion',true,If(V('motion'),false,true));button('motion-off','Pause motion','motion',false,V('motion'));
 toggle('host','host','hostVisible',viewWhen('opening','demo','spotlight','closing'));
 toggle('chat','chat','chatVisible',viewWhen('solo','demo','conversation','roundtable'));
@@ -173,19 +187,20 @@ const labels={showTitle:'Show name',hostName:'Host name',hostRole:'Host descript
 const either=(a,b)=>If(a,true,b);
 const fieldWhen={hostName:either(viewWhen('opening','solo','demo','conversation','roundtable','spotlight','closing'),eq(V('cue'),'name')),hostRole:either(viewWhen('closing'),eq(V('cue'),'name')),headline:viewWhen('opening'),tagline:viewWhen('opening'),topic:viewWhen('demo'),noteTitle:either(viewWhen('demo','spotlight'),eq(V('cue'),'note')),noteBody:either(viewWhen('demo','spotlight'),eq(V('cue'),'note')),ctaTitle:either(viewWhen('closing'),eq(V('cue'),'cta')),ctaAddress:either(viewWhen('closing'),eq(V('cue'),'cta')),breakTitle:viewWhen('break'),breakBody:viewWhen('break'),guest1Name:viewWhen('conversation','roundtable'),guest2Name:If(viewWhen('roundtable'),If(eq(V('guestCount'),1),false,true),false),guest3Name:If(viewWhen('roundtable'),eq(V('guestCount'),3),false)};
 for(const [key,label]of Object.entries(labels))doc.set.controls.push({id:key,type:'text',label,key,...(fieldWhen[key]?{when:fieldWhen[key]}:{})});
-for(const [key,label,step,when]of [['guestCount','Guests',1,viewWhen('roundtable')],['screenZoom','Screen zoom',.05,If(viewWhen('demo'),V('demoLive'),false)],['corners','Camera corners',1]])doc.set.controls.push({id:key,type:'number',label,key,presentation:'slider',step,...(when?{when}:{})});
-const section=(id,label,ids,collapsed=false)=>({id,label,controls:ids.map(id=>id==='builtin:layout'?id:'set:'+id),collapsed});
+for(const [key,label,step,when]of [['guestCount','Guests',1,viewWhen('roundtable')],['screenZoom','Screen zoom',.05,If(viewWhen('demo'),V('demoLive'),false)],['corners','Camera corners',1]])doc.set.controls.push({id:key,type:'number',label,key,presentation:'slider',step,unit:key==='corners'?'px':key==='screenZoom'?'×':'',...(when?{when}:{})});
+const section=(id,label,ids,collapsed=false,purpose='live')=>({id,label,purpose,controls:ids.map(id=>id.includes(':')?id:'set:'+id),collapsed});
 doc.set.controlArrangement.sections=[
  section('views','Layouts',['builtin:layout']),
  section('cues','Live cues',['name','note','cta','clear-cue']),
+ section('music','Music',['operator:waiting-music','wave-line','wave-bars']),
  section('view','This view',['host-on','host-off','chat-on','chat-off','demo-live','demo-example','media-live','media-example','guestCount','screenZoom','reset-zoom']),
- section('copy','Your content',Object.keys(labels)),
- section('look','Look & feel',['light','dark','mint','silver','motion-on','motion-off','corners'],true),
+ section('copy','Content',Object.keys(labels),false,'content'),
+ section('look','Look & feel',['light','dark','mint','silver','glow-color','motion-on','motion-off','corners'],true,'appearance'),
 ];
 export const classicGuide={
- schema:'producer.reference-guide/1',setId:'classic',version:'1.0.0',purpose:'A complete, neutral studio with eight independently composed landscape/portrait views.',
+ schema:'producer.reference-guide/1',setId:'classic',version:'1.1.0',purpose:'Producer’s signature minimal studio: charcoal or porcelain surfaces, dimensional chrome and customizable perimeter light, with eight paired views.',
  views:names,sourceRoles:doc.set.slots,defaultView:'solo',themes:['dark','light'],
- principles:['Large source regions, restrained chrome and deliberate type hierarchy.','Optional chat reflows the camera.','Current-layout controls use the existing show.layoutId binding; this Set has no Show.','Device identity and account connections remain outside the package.','Motion animates only a graphics-only layer; native source ancestry stays static.'],
+ principles:['Large source regions, restrained chrome and deliberate type hierarchy.','Optional chat reflows the camera.','Current-layout controls use the existing show.layoutId binding; this Set has no Show.','Device identity and account connections remain outside the package.','Motion animates only a graphics-only layer; native source ancestry stays static.','Registered waiting music uses the native DJ mixer; no autoplay or effects imported as music.','Light and dark palettes are authored separately; adjustable edge color retains legible neutral typography.'],
  qualification:'Requires canonical/default-state checks, both-theme visual review, every dock size and separate native preparation/recording evidence.',
 };
 export default {schema:'producer.design-plan/2',package:doc,assetRefs:[]};

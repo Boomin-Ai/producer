@@ -160,6 +160,9 @@ mod tests {
     fn bundled_metadata_and_bytes_are_checked() {
         let root = std::env::temp_dir().join(format!("producer-audio-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&root).unwrap();
+        // The installer canonicalizes its resource root. Mirror that on macOS,
+        // whose temporary directory may be a /var -> /private/var symlink.
+        let root = root.canonicalize().unwrap();
         std::fs::write(root.join("test.mp3"), b"test").unwrap();
         let mut asset = Asset {
             id: "effect-one".into(),
