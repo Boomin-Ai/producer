@@ -1,5 +1,6 @@
 import {useRoomControl} from '../features/room-control/useRoomControl';
 import {HIDDEN_ROOM_SOURCE_KINDS} from '../features/room-control/sourceKinds';
+import {preparationDebug} from '../features/sets-v2/preparedScenes';
 import {RoomAssistantContext, type AssistantSetRequest, type AssistantEditorRequest} from '../features/assistant/roomBridge';
 import {RoomTransportControls,ToolbarButton} from '../components/RoomToolbar';
 import {IS_MAC,IS_WINDOWS} from '../lib/platform';
@@ -7410,6 +7411,7 @@ export function LiveView({
     presentation:{document:setRehearsal.package,state:setRehearsal.snapshot(),bindings:setOutput.bindings,framing:setOutput.framing,renderer:setOutput.renderer,busy:setOutput.busy,error:setOutput.error,readiness:setOutput.layoutReadiness,active:!!setOutput.active,currentPresented:!!setOutput.currentPresented},
     output:{streaming,recording:!!recPath,outputView,engine:snapshot},
     assistant:{started:assistantStarted,enabled:assistantEnabled,dock:assistantDock,scope:assistantScope},
+    ...(import.meta.env.DEV?{preparation:preparationDebug()}:{}),
   }),{
     'panel.move':({panel,dock})=>{if(!PANEL_ORDER.includes(panel)||!['top','bottom','left','right','hidden'].includes(dock))throw Error('Unknown panel or dock.');setLayout(movePanel(normalize(cfgRef.current.layout??DEFAULT_LAYOUT),panel,dock));if(panel==='assistant')setAssistantStarted(true);return {panel,dock};},
     'dock.set':({dock,open,size})=>{if(!['top','bottom','left','right'].includes(dock)||typeof open!=='boolean')throw Error('Expected dock and open boolean.');if(size!==undefined&&(!Number.isFinite(size)||size<56||size>560))throw Error('Dock size must be 56–560 pixels.');({top:setTopOpen,bottom:setSheetOpen,left:setLeftOpen,right:setRightOpen}[dock as 'top'|'bottom'|'left'|'right'])(open);if(size!==undefined){writeCfg({...cfgRef.current,sizes:{...cfgRef.current.sizes,[dock]:size}});}return {dock,open,size};},

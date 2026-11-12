@@ -75,7 +75,10 @@ export async function mountWorld(canvas, input, options) {
    const t=time(),duration=(world.cues?.[control.cue]?.durationMs??world.cueDurationMs??0)/1000,progress=duration?Math.min(1,Math.max(0,(t-cueStart)/duration)):1,eased=progress*progress*(3-2*progress);
    for(const {mesh,node}of meshes)mesh.visible=world.cues?.[control.cue]?.visibility?.[node.id]??node.visible??true;
    const moving=animated.some(({mesh,node})=>mesh.visible&&(node.motion.kind!=='moveY'||(t-(node.motion.clock==='cue'?cueStart:0)-node.motion.phase)*Math.abs(node.motion.speed)<1));
-   if(['frame','ring'].includes(world.dj?.role)&&control.rendering===false&&warmFrames>=3&&renderedRevision===control.revision){lastDraw=0;return;}
+   if(['frame','ring'].includes(world.dj?.role)&&control.rendering===false&&warmFrames>=3&&renderedRevision===control.revision){
+    // Native readiness requires a fresh receipt even when no GPU work is needed.
+    lastDraw=0;if(now-lastReport>1000){lastReport=now;notify();}return;
+   }
    const music=djVisuals?.update(now,control.music);
    const shine=world.dj?.role==='stage'&&(control.music?.motion??1)>0&&(t%8)<2;
    const changing=progress<1&&!control.paused||!!music?.active||shine;

@@ -17,7 +17,8 @@ try{
   await page.evaluate(async({node,role})=>{
    document.body.replaceChildren();const canvas=document.createElement('canvas');document.body.append(canvas);
    window.control={revision:1,anchor:Date.now(),elapsed:0,paused:false,cue:'neutral',rendering:true,music:{...node.scene3d.music,motion:role==='frame'?.7:0}};
-   window.world=await ProducerScene3d.mountWorld(canvas,node.scene3d.world,{pass:'foreground',width:role==='frame'?960:500,height:role==='frame'?540:500,control:window.control});
+   window.receipts=[];
+   window.world=await ProducerScene3d.mountWorld(canvas,node.scene3d.world,{pass:'foreground',width:role==='frame'?960:500,height:role==='frame'?540:500,control:window.control,onStatus:s=>window.receipts.push({at:performance.now(),revision:s.revision,ready:s.ready})});
   },{node,role});
   await page.waitForFunction(()=>window.world.status().frames>=3);
   if(role==='frame'){
@@ -32,6 +33,14 @@ try{
   }
   await page.evaluate(()=>{window.control={...window.control,revision:3,rendering:false};window.world.update(window.control);});
   await page.waitForTimeout(150);const hidden=await page.evaluate(()=>window.world.status().frames);await page.waitForTimeout(200);assert.equal(await page.evaluate(()=>window.world.status().frames),hidden,'Cached invisible surface must stop drawing');
+  // Native first-pixel readiness expires receipts after four seconds. A hidden
+  // cached surface must remain provably alive without submitting GPU work.
+  await page.waitForTimeout(4300);
+  assert(await page.evaluate(()=>performance.now()-window.receipts.at(-1).at<1800),'Hidden renderer must keep native readiness receipts fresh');
+  assert.equal(await page.evaluate(()=>window.world.status().frames),hidden,'Readiness heartbeats must not redraw cached surfaces');
+  await page.evaluate(()=>{window.control={...window.control,revision:4,rendering:true};window.world.update(window.control);});
+  await page.waitForFunction(()=>window.receipts.at(-1).ready&&window.receipts.at(-1).revision===4);
+  assert((await page.evaluate(()=>window.world.status().frames))>hidden,'Returning to a cached view must produce pixels for its current revision');
   const report=await page.evaluate(()=>window.world.status());assert(report.calls<=8);assert(report.triangles<30000);reports.push({role,...report});await page.evaluate(()=>window.world.dispose());
  }
  mkdirSync('/private/tmp/producer-classic-review',{recursive:true});writeFileSync('/private/tmp/producer-classic-review/graphics-proof.json',JSON.stringify(reports,null,2));
