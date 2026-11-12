@@ -28,6 +28,19 @@ try{
   window.configure=(dock,width,height,slim=false)=>{const el=document.getElementById('dock');el.className='rm-dock-'+dock+(slim?' slim':dock==='top'?' expanded':'');el.style.cssText=`width:${width}px;height:${height}px`;el.firstElementChild.setAttribute('data-in',dock);};window.configure('right',360,1000);window.render();
  });
  await page.getByRole('button',{name:'Solo',exact:true}).waitFor();
+ const cues=page.locator('[data-section-id="authored:cues"]');
+ for(const label of ['Name card','Teaching card','Show CTA']){
+  await cues.getByRole('button',{name:label,exact:true}).click();
+  const clear=cues.getByRole('button',{name:'Clear overlay',exact:true}),position=await clear.boundingBox();
+  await clear.dblclick();
+  assert.equal(await page.evaluate(()=>window.session.snapshot().values.cue),'none','Repeated Clear must never hit a newly substituted CTA button');
+  assert(await clear.isDisabled(),'Clear remains visible but unavailable when no overlay is active');
+  assert.deepEqual(await clear.boundingBox(),position,'Clear keeps its position instead of being replaced by another cue');
+  await page.mouse.click(position.x+position.width/2,position.y+position.height/2);assert.equal(await page.evaluate(()=>window.session.snapshot().values.cue),'none');
+ }
+ await page.getByRole('button',{name:'Opening',exact:true}).click();
+ assert.equal(await page.locator('.set-arranged-section h4>button').first().getAttribute('aria-label'),'Collapse Layout controls section');
+ await page.getByRole('button',{name:'Solo',exact:true}).click();
  assert.equal(await page.getByRole('group',{name:'Host camera background',exact:true}).count(),0,'Classic omits camera background controls');
  await page.evaluate(()=>{const doc=structuredClone(window.doc);delete doc.set.controlArrangement.cameraBackground;window.session=new window.session.constructor(doc,undefined,'prepare');window.render();});
  await page.getByRole('button',{name:'Host camera Framed',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Host camera Cutout',exact:true}).count(),1,'other Sets keep their existing camera controls by default');
@@ -76,7 +89,7 @@ try{
  for(const dock of ['top','bottom'])for(const width of [300,450,800,1400]){
   await page.setViewportSize({width:Math.max(width+20,960),height:1100});await page.evaluate(args=>window.configure(...args),[dock,width,56,true]);await page.waitForTimeout(80);
   const fit=await page.locator('.set-controls-toolbar').evaluate(el=>{const lane=el.querySelector('.set-compact-run');return {width:el.clientWidth,scroll:el.scrollWidth,lane:{width:lane.clientWidth,scroll:lane.scrollWidth,display:getComputedStyle(lane).display}};});assert(fit.scroll<=fit.width+1,JSON.stringify({dock,width,...fit}));assert(fit.lane.width>=70,JSON.stringify({dock,width,...fit}));
-  const mini=page.locator('.set-compact-run');await mini.getByRole('button',{name:'Show CTA',exact:true}).click();assert.equal(await page.evaluate(()=>window.session.snapshot().values.cue),'cta');await mini.getByRole('button',{name:'Clear overlay',exact:true}).click();
+  const mini=page.locator('.set-compact-run');await mini.getByRole('button',{name:'Show CTA',exact:true}).click();assert.equal(await page.evaluate(()=>window.session.snapshot().values.cue),'cta');const clear=mini.getByRole('button',{name:'Clear overlay',exact:true});await clear.dblclick();assert.equal(await page.evaluate(()=>window.session.snapshot().values.cue),'none');assert(await clear.isDisabled());
   await mini.getByRole('button',{name:'Light mode',exact:true}).click();assert.equal(await page.evaluate(()=>window.session.snapshot().values.theme),'light');await mini.getByRole('button',{name:'Dark mode',exact:true}).click();
   await page.getByRole('button',{name:'Choose layout',exact:true}).click();const menu=page.getByRole('dialog',{name:'Choose Set layout'});assert.equal(await menu.getByRole('button').count(),8);await menu.getByRole('button',{name:'Opening',exact:true}).click();assert.equal(await page.evaluate(()=>window.session.snapshot().layoutId),'opening-landscape');
   await page.getByRole('button',{name:'Open waiting music',exact:true}).click();const music=page.locator('.set-music-popover:popover-open');await music.waitFor();assert(await music.getByRole('button',{name:'Play music',exact:true}).isEnabled());const rect=await music.boundingBox();assert(rect.x>=0&&rect.x+rect.width<=Math.max(width+20,960));await page.keyboard.press('Escape');

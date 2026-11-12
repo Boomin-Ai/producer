@@ -6,7 +6,7 @@
     "instances": []
   },
   "id": "classic",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "name": "Classic",
   "set": {
     "views": {
@@ -28838,22 +28838,6 @@
           "type": "value.set",
           "key": "cue",
           "value": "name"
-        },
-        "when": {
-          "op": "if",
-          "args": [
-            {
-              "op": "eq",
-              "args": [
-                {
-                  "get": "values.cue"
-                },
-                "name"
-              ]
-            },
-            false,
-            true
-          ]
         }
       },
       {
@@ -28864,22 +28848,6 @@
           "type": "value.set",
           "key": "cue",
           "value": "note"
-        },
-        "when": {
-          "op": "if",
-          "args": [
-            {
-              "op": "eq",
-              "args": [
-                {
-                  "get": "values.cue"
-                },
-                "note"
-              ]
-            },
-            false,
-            true
-          ]
         }
       },
       {
@@ -28890,22 +28858,6 @@
           "type": "value.set",
           "key": "cue",
           "value": "cta"
-        },
-        "when": {
-          "op": "if",
-          "args": [
-            {
-              "op": "eq",
-              "args": [
-                {
-                  "get": "values.cue"
-                },
-                "cta"
-              ]
-            },
-            false,
-            true
-          ]
         }
       },
       {
@@ -28917,7 +28869,7 @@
           "key": "cue",
           "value": "none"
         },
-        "when": {
+        "enabled": {
           "op": "if",
           "args": [
             {
@@ -28930,22 +28882,7 @@
               ]
             },
             false,
-            {
-              "op": "if",
-              "args": [
-                {
-                  "op": "eq",
-                  "args": [
-                    {
-                      "get": "values.cue"
-                    },
-                    "none"
-                  ]
-                },
-                false,
-                true
-              ]
-            }
+            true
           ]
         }
       },
@@ -30873,6 +30810,25 @@
           "collapsed": false
         },
         {
+          "id": "view",
+          "label": "Layout controls",
+          "purpose": "live",
+          "controls": [
+            "set:host-on",
+            "set:host-off",
+            "set:chat-on",
+            "set:chat-off",
+            "set:demo-live",
+            "set:demo-example",
+            "set:media-live",
+            "set:media-example",
+            "set:guestCount",
+            "set:screenZoom",
+            "set:reset-zoom"
+          ],
+          "collapsed": false
+        },
+        {
           "id": "cues",
           "label": "Live cues",
           "purpose": "live",
@@ -30892,25 +30848,6 @@
             "operator:waiting-music",
             "set:wave-line",
             "set:wave-bars"
-          ],
-          "collapsed": false
-        },
-        {
-          "id": "view",
-          "label": "This view",
-          "purpose": "live",
-          "controls": [
-            "set:host-on",
-            "set:host-off",
-            "set:chat-on",
-            "set:chat-off",
-            "set:demo-live",
-            "set:demo-example",
-            "set:media-live",
-            "set:media-example",
-            "set:guestCount",
-            "set:screenZoom",
-            "set:reset-zoom"
           ],
           "collapsed": false
         },

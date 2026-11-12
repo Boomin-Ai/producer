@@ -11,6 +11,8 @@ assert.equal(doc.show,undefined);assert.equal(doc.runtime.instances.length,0);as
 assert.equal(layoutViews(doc.set).length,8);assert.equal(doc.set.layouts.length,16);
 assert.equal(doc.set.operatorComponents[0].type,'music');
 assert.equal(doc.set.controlArrangement.cameraBackground,false);
+assert.equal(doc.set.controlArrangement.sections[1].label,'Layout controls');
+assert.equal(doc.set.controlArrangement.sections[1].id,'view');
 for(const type of ['shopify','javascript']){const bad=structuredClone(doc);bad.set.operatorComponents[0].type=type;assert.throws(()=>parsePackage(bad));}
 {const bad=structuredClone(doc);bad.set.operatorComponents[0].when={get:'values.showTitle'};assert.throws(()=>parsePackage(bad),/boolean/);}
 for(const view of layoutViews(doc.set)){
@@ -30,6 +32,8 @@ for(const theme of ['dark','light'])for(const l of doc.set.layouts){
   field('cue',cue);field('chatVisible',chat);field('guestCount',guests);
   const p=outputProjection(doc,session.snapshot());assert.equal(p.width,l.width);assert.equal(p.height,l.height);
   assert.equal(find(p.root,'cue-panel')!==undefined,cue!=='none');
+  for(const id of ['name','note','cta','clear-cue'])assert.equal(doc.set.controls.find(c=>c.id===id).when,undefined,'cue buttons never replace each other');
+  assert.equal(evaluate(doc.set.controls.find(c=>c.id==='clear-cue').enabled,session.snapshot()),cue!=='none');
   const backdrop=find(p.root,'cue-backdrop');assert.equal(!!backdrop,cue!=='none');
   if(backdrop){assert.equal(backdrop.styles.width,l.width);assert.equal(backdrop.styles.height,l.height);const card=find(p.root,'cue-panel');assert.equal(card.styles.left*2+card.styles.width,l.width);assert.equal(card.styles.top*2+card.styles.height,l.height);}
   const chrome=find(p.root,'classic-frame-'+(l.width>l.height?'landscape':'portrait'));

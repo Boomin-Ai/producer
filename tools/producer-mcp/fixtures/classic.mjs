@@ -36,7 +36,7 @@ const values={
  guestCount:{type:'number',default:3,min:1,max:3},screenZoom:{type:'number',default:1,min:1,max:2},corners:{type:'number',default:12,min:0,max:24},
  hostVisible:{type:'boolean',default:true},chatVisible:{type:'boolean',default:false},demoLive:{type:'boolean',default:false},mediaLive:{type:'boolean',default:false},cue:{type:'text',default:'none',maxLength:5},
 };
-const doc={schema:'producer.presentation/2',id:'classic',version:'1.2.0',name:'Classic',set:{
+const doc={schema:'producer.presentation/2',id:'classic',version:'1.2.1',name:'Classic',set:{
  initialView:'solo',initialLayout:'solo-landscape',views:{},
  tokens:{design:'Classic / Producer signature studio',spacing:24,landscapeSafe:64,portraitSafe:64},values,feeds:{dj_now:{type:'text',default:'',maxLength:160},dj_phase:{type:'text',default:'idle',maxLength:16}},
  operatorComponents:[{id:'waiting-music',type:'music',label:'Waiting music',defaultTrack:'waiting-in-case',when:any([viewWhen('opening','break'),...['playing','paused','crossfade','manual'].map(phase=>eq({get:'feeds.dj_phase'},phase))])}],
@@ -188,7 +188,12 @@ for(const orientation of ['landscape','portrait'])for(const [index,[view,label]]
 
 function button(id,label,key,value,when){doc.set.controls.push({id,type:'button',label,action:{type:'value.set',key,value},...(when===undefined?{}:{when})});}
 function toggle(id,label,key,when){button(id+'-on','Show '+label,key,true,If(when??true,If(V(key),false,true),false));button(id+'-off','Hide '+label,key,false,If(when??true,V(key),false));}
-for(const [id,label,value]of [['name','Name card','name'],['note','Teaching card','note'],['cta','Show CTA','cta'],['clear-cue','Clear overlay','none']])button(id,label,'cue',value,If(eq(V('cue'),value),false,value==='none'?If(eq(V('cue'),'none'),false,true):true));
+// Keep cue targets in fixed positions. Hiding the active cue made Clear
+// replace it under the pointer; a second click could reopen the CTA.
+for(const [id,label,value]of [['name','Name card','name'],['note','Teaching card','note'],['cta','Show CTA','cta'],['clear-cue','Clear overlay','none']]){
+ button(id,label,'cue',value);
+ if(value==='none')doc.set.controls.at(-1).enabled=If(eq(V('cue'),'none'),false,true);
+}
 button('light','Light mode','theme','light',eq(V('theme'),'dark'));button('dark','Dark mode','theme','dark',eq(V('theme'),'light'));
 button('mint','Mint accent','glowColor','#9cdbc7');button('silver','Silver accent','glowColor','#d8e4ed');
 button('wave-line','Waveform','waveform','line',viewWhen('break'));button('wave-bars','Spectrum','waveform','bars',viewWhen('break'));
@@ -207,14 +212,14 @@ for(const [key,label,step,when]of [['guestCount','Guests',1,viewWhen('roundtable
 const section=(id,label,ids,collapsed=false,purpose='live')=>({id,label,purpose,controls:ids.map(id=>id.includes(':')?id:'set:'+id),collapsed});
 doc.set.controlArrangement.sections=[
  section('views','Layouts',['builtin:layout']),
+ section('view','Layout controls',['host-on','host-off','chat-on','chat-off','demo-live','demo-example','media-live','media-example','guestCount','screenZoom','reset-zoom']),
  section('cues','Live cues',['name','note','cta','clear-cue']),
  section('music','Music',['operator:waiting-music','wave-line','wave-bars']),
- section('view','This view',['host-on','host-off','chat-on','chat-off','demo-live','demo-example','media-live','media-example','guestCount','screenZoom','reset-zoom']),
  section('copy','Content',Object.keys(labels),false,'content'),
  section('look','Look & feel',['light','dark','mint','silver','glow-color','motion-on','motion-off','corners'],true,'appearance'),
 ];
 export const classicGuide={
- schema:'producer.reference-guide/1',setId:'classic',version:'1.2.0',purpose:'Producer’s signature minimal studio: charcoal or porcelain surfaces, dimensional chrome and customizable perimeter light, with eight paired views and full-canvas cue overlays.',
+ schema:'producer.reference-guide/1',setId:'classic',version:'1.2.1',purpose:'Producer’s signature minimal studio: charcoal or porcelain surfaces, dimensional chrome and customizable perimeter light, with eight paired views and full-canvas cue overlays.',
  views:names,sourceRoles:doc.set.slots,defaultView:'solo',themes:['dark','light'],
  principles:['Large source regions, restrained chrome and deliberate type hierarchy.','Optional chat reflows the camera.','Current-layout controls use the existing show.layoutId binding; this Set has no Show.','Device identity and account connections remain outside the package.','Motion animates only a graphics-only layer; native source ancestry stays static.','Registered waiting music uses the native DJ mixer; no autoplay or effects imported as music.','Light and dark palettes are authored separately; adjustable edge color retains legible neutral typography.'],
  qualification:'Requires canonical/default-state checks, both-theme visual review, every dock size and separate native preparation/recording evidence.',
