@@ -264,13 +264,21 @@ pub async fn clips_save(state: State<'_, AppState>, room_id: String) -> EngineRe
             if let Err(error) = registered {
                 db.execute(
                     "UPDATE local_clips SET status='failed',files_json=?2,error=?3 WHERE id=?1",
-                    params![id, serde_json::to_string(&files)?, error.to_string()],
+                    params![
+                        id,
+                        serde_json::to_string(&files)
+                            .map_err(|e| EngineError::Other(e.to_string()))?,
+                        error.to_string()
+                    ],
                 )?;
                 return Err(error);
             }
             db.execute(
                 "UPDATE local_clips SET status='ready',files_json=?2 WHERE id=?1",
-                params![id, serde_json::to_string(&files)?],
+                params![
+                    id,
+                    serde_json::to_string(&files).map_err(|e| EngineError::Other(e.to_string()))?
+                ],
             )?;
             Ok(json!({"id":id,"files":files}))
         }
