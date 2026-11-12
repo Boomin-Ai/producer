@@ -1697,6 +1697,9 @@
                 "pattern": "^(builtin:layout|operator:[a-zA-Z][a-zA-Z0-9_-]{0,63}|set:[a-zA-Z][a-zA-Z0-9_-]{0,63}|module:[a-zA-Z][a-zA-Z0-9_-]{0,63}:([a-zA-Z][a-zA-Z0-9_-]{0,63}|\\$(lifecycle|weather-location|behavior-tools)))$"
               },
               "maxItems": 64
+            },
+            "cameraBackground": {
+              "type": "boolean"
             }
           },
           "required": [

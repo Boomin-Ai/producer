@@ -479,7 +479,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
     {output?.layoutReadiness&&views.some(view=>{const status=viewReadiness(view);return status?.state==='error'&&!explainedSourceError(status.error);})&&<p className="set-error">A layout needs attention. <button disabled={blocked||output.busy} onClick={output.retryPreparation}>Try loading again</button></p>}
     {output?.error&&!explainedSourceError(output.error)&&<div role="alert" className="set-error">{output.error} <button disabled={blocked||output.busy} onClick={()=>void output.apply()}>Try update again</button></div>}
     {state.trace[state.trace.length - 1]?.message.startsWith('Rejected:') && <p role="status" className="set-error">{state.trace[state.trace.length - 1]!.message}</p>}
-    {!editorOnly && output?.cameraBackground && <section className="set-camera-backgrounds" aria-label="Camera backgrounds">
+    {!editorOnly && doc.set.controlArrangement?.cameraBackground !== false && output?.cameraBackground && <section className="set-camera-backgrounds" aria-label="Camera backgrounds">
       {doc.set.slots.filter((slot,index,slots) => visibleSlots.has(slot.id) && output.sources.items?.some(item => item.id === output.bindings[slot.id] && item.kind === 'camera') && !slots.slice(0,index).some(previous => visibleSlots.has(previous.id) && output.bindings[previous.id] === output.bindings[slot.id])).map(slot =>
         <CameraBackgroundControls key={`${slot.id}:${output.bindings[slot.id]}`} slot={slot.id} source={output.bindings[slot.id]} label={slot.label}
           controls={output.cameraBackground!} disabled={blocked || !output.active || state.workspaceMode !== 'live'} />)}

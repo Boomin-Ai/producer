@@ -215,7 +215,7 @@ export type SetControl = Type<typeof control>;
 const operatorComponent=object({id,type:literal('music'),label:string(80),when:optional(binding),defaultTrack:optional(id)});
 export type OperatorComponent=Type<typeof operatorComponent>;
 const controlReference=string(210,'^(builtin:layout|operator:[a-zA-Z][a-zA-Z0-9_-]{0,63}|set:[a-zA-Z][a-zA-Z0-9_-]{0,63}|module:[a-zA-Z][a-zA-Z0-9_-]{0,63}:([a-zA-Z][a-zA-Z0-9_-]{0,63}|\\$(lifecycle|weather-location|behavior-tools)))$');
-const controlArrangement=object({sections:array(object({id,label:string(80),purpose:optional(union(literal('live'),literal('content'),literal('appearance'))),controls:array(controlReference,256),collapsed:optional(boolean)}),64),minimized:array(controlReference,64)});
+const controlArrangement=object({sections:array(object({id,label:string(80),purpose:optional(union(literal('live'),literal('content'),literal('appearance'))),controls:array(controlReference,256),collapsed:optional(boolean)}),64),minimized:array(controlReference,64),cameraBackground:optional(boolean)});
 const show = object({ id, version: string(32), initialPhase: id,
   phases: array(object({ id, label: string(80), layoutId: id, next: optional(id), collectMs: optional(number(1000, 3_600_000)) }), 16),
   choices: defaulted(array(object({ id, label: string(80) }), 6), []),

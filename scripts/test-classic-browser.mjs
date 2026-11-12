@@ -22,12 +22,17 @@ try{
   window.doc=await(await fetch('/docs/shows/classic.json')).json();window.doc.set.controls.push({id:'pink',type:'button',label:'Pink accent',action:{type:'value.set',key:'glowColor',value:'#F4A6CD'}});window.doc.set.controlArrangement.sections.find(s=>s.id==='look').controls.push('set:pink');window.session=new RehearsalSession(window.doc,undefined,'prepare');window.testChanges=[];
   const shell=document.createElement('main');shell.innerHTML='<div id="dock" class="rm-dock-right"><section class="rm-panel rm-panel-setControls" data-in="right" style="height:100%;width:100%;container:panel / inline-size"><div class="rm-panel-body" style="height:100%;display:flex;flex-direction:column"></div></section></div><div id="visual" style="width:960px;position:relative"></div>';document.body.append(shell);
   window.panelRoot=(D.createRoot??D.default.createRoot)(shell.querySelector('.rm-panel-body'));window.visualRoot=(D.createRoot??D.default.createRoot)(document.getElementById('visual'));
-  window.output={renderer:'native',requiredOrientations:['landscape','portrait'],layoutReadiness:Object.fromEntries(window.doc.set.layouts.map(l=>[l.id,{state:'ready'}])),active:true,busy:false,error:'',bindings:{},framing:{},sources:{items:[]},bind:()=>{},frame:()=>{},apply:async()=>{},returnToRoom:async()=>true};
+  window.output={renderer:'native',requiredOrientations:['landscape','portrait'],layoutReadiness:Object.fromEntries(window.doc.set.layouts.map(l=>[l.id,{state:'ready'}])),active:true,busy:false,error:'',bindings:{host:'camera-test'},framing:{},sources:{items:[{id:'camera-test',kind:'camera'}]},cameraBackground:{read:async()=> 'framed',set:async(_slot,_source,mode)=>mode,subscribe:()=>()=>{}},bind:()=>{},frame:()=>{},apply:async()=>{},returnToRoom:async()=>true};
   window.render=()=>window.panelRoot.render((R.createElement??R.default.createElement)(SetControlsPanel,{session:window.session,onChange:d=>window.testChanges.push(d),output:window.output,preferenceRoomId:'classic-browser'}));
   window.draw=()=>window.visualRoot.render((R.createElement??R.default.createElement)(SetPreview,{doc:window.doc,state:window.session.snapshot()}));
   window.configure=(dock,width,height,slim=false)=>{const el=document.getElementById('dock');el.className='rm-dock-'+dock+(slim?' slim':dock==='top'?' expanded':'');el.style.cssText=`width:${width}px;height:${height}px`;el.firstElementChild.setAttribute('data-in',dock);};window.configure('right',360,1000);window.render();
  });
  await page.getByRole('button',{name:'Solo',exact:true}).waitFor();
+ assert.equal(await page.getByRole('group',{name:'Host camera background',exact:true}).count(),0,'Classic omits camera background controls');
+ await page.evaluate(()=>{const doc=structuredClone(window.doc);delete doc.set.controlArrangement.cameraBackground;window.session=new window.session.constructor(doc,undefined,'prepare');window.render();});
+ await page.getByRole('button',{name:'Host camera Framed',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Host camera Cutout',exact:true}).count(),1,'other Sets keep their existing camera controls by default');
+ await page.evaluate(()=>{window.session=new window.session.constructor(window.doc,undefined,'prepare');window.render();});
+ await page.getByRole('button',{name:'Host camera Framed',exact:true}).waitFor({state:'detached'});
  await page.getByRole('button',{name:'Expand Look & feel section',exact:true}).click();
  await page.getByRole('button',{name:'Pink accent',exact:true}).click();
  assert.equal(await page.evaluate(()=>window.session.snapshot().values.glowColor),'#F4A6CD');
@@ -97,5 +102,15 @@ try{
   await page.evaluate(({theme,layout})=>{window.session.send({type:'field',key:'theme',value:theme});window.session.send({type:'field',key:'cue',value:'none'});window.session.send({type:'control',action:{type:'layout.select',layoutId:layout.id}});document.getElementById('visual').style.width=(layout.width>layout.height?960:540)+'px';window.draw();},{theme,layout});
   await page.locator('.set-preview iframe').waitFor();await page.waitForTimeout(650);assert.equal(await page.locator('.set-preview [role=alert]').count(),0,`Renderer failed for ${theme} ${layout.id}`);await page.locator('.set-preview').screenshot({path:`${folder}/${theme}-${layout.id}.png`});
  }
+ // Cue cards are centered, full-canvas overlays in both formats and palettes.
+ for(const theme of ['dark','light'])for(const cue of ['name','note','cta']){
+  const visual=await page.evaluate(async({theme,cue})=>{const {auditVisuals}=await import('/src/features/presentation/authoring/visualBrowser.ts');const doc=structuredClone(window.doc);doc.set.layouts=doc.set.layouts.filter(l=>l.id.startsWith('solo-'));doc.set.views={solo:doc.set.views.solo};doc.set.values.theme.default=theme;doc.set.values.cue.default=cue;return auditVisuals(doc);},{theme,cue});
+  assert.equal(visual.issues.filter(i=>i.code==='text_fit'||i.code==='native_budget_estimate').length,0,JSON.stringify({theme,cue,issues:visual.issues}));
+  for(const format of ['landscape','portrait']){
+   await page.evaluate(({theme,cue,format})=>{window.session.send({type:'field',key:'theme',value:theme});window.session.send({type:'field',key:'cue',value:cue});window.session.send({type:'control',action:{type:'layout.select',layoutId:'solo-'+format}});document.getElementById('visual').style.width=(format==='landscape'?960:540)+'px';window.draw();},{theme,cue,format});
+   await page.waitForTimeout(500);assert.equal(await page.locator('.set-preview [role=alert]').count(),0);await page.locator('.set-preview').screenshot({path:`${folder}/${theme}-cue-${cue}-${format}.png`});
+  }
+ }
+ console.log('PASS Classic cues: 12 modal previews; measured typography and native batching estimates in both formats/themes; camera background opt-out preserves other Sets.');
  assert.deepEqual(errors,[]);await writeFile(`${folder}/report.json`,JSON.stringify(report,null,2));console.log(`PASS Classic browser: ${report.length} dock sizes, 8 view choices, screen controls, 32 renderer previews, no page errors.`);
 }finally{await browser.close();}
