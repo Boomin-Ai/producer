@@ -1,5 +1,5 @@
-mod boomin;
 mod assistant;
+mod boomin;
 mod cache;
 mod chat;
 mod client;

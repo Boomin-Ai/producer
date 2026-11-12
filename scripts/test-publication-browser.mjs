@@ -1,5 +1,6 @@
-/** Real publisher dialog/editor entry and canonical validation. Only endpoint
- * IPC responses are fake. No accounts, network, native engine or devices. */
+/** Real publisher dialog/editor entry and canonical validation. Endpoint IPC
+ * and unrelated editor dialogs are isolated. No accounts, network, native
+ * engine or devices. Assistant's Worker/preview has its own browser suite. */
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
@@ -22,8 +23,9 @@ const bundle=await build({stdin:{resolveDir:root,loader:'tsx',contents:`
  b.onResolve({filter:/\.css$/},()=>({path:'css',namespace:'fixture'}));
  b.onResolve({filter:/^@tauri-apps\/plugin-opener$/},()=>({path:'opener',namespace:'fixture'}));
  b.onResolve({filter:/\/lib\/ipc$/},()=>({path:'ipc',namespace:'fixture'}));
- b.onResolve({filter:/^\.\/(catalog|MediaAssetsDialog|PackageAuthoringDialog)$/},args=>({path:args.path.slice(2),namespace:'fixture'}));
- b.onLoad({filter:/.*/,namespace:'fixture'},args=>({contents:args.path==='ipc'?fakeIpc:args.path==='opener'?'export async function openUrl(url){window.openedUrls.push(url);}':args.path==='catalog'?'export const BUILTIN_SETS=[];':args.path==='css'?'':`export function ${args.path}(){return null;}`,loader:'js'}));
+ b.onResolve({filter:/\/assistant\/SetAssistantDialog$/},()=>({path:'assistant',namespace:'fixture'}));
+ b.onResolve({filter:/^\.\/(catalog|MediaAssetsDialog|PackageAuthoringDialog)$/},args=>args.importer===resolve(root,'src/features/presentation/SetConfiguration.tsx')?({path:args.path.slice(2),namespace:'fixture'}):undefined);
+ b.onLoad({filter:/.*/,namespace:'fixture'},args=>({contents:args.path==='ipc'?fakeIpc:args.path==='opener'?'export async function openUrl(url){window.openedUrls.push(url);}':args.path==='assistant'?'export default function SetAssistantDialog(){window.forbidden.push("assistant");return null;}':args.path==='catalog'?'export const BUILTIN_SETS=[];':args.path==='css'?'':`export function ${args.path}(){return null;}`,loader:'js'}));
  }}]});
 const playwright=process.env.PRODUCER_PLAYWRIGHT_MODULE;
 const {chromium}=await import(playwright?(playwright.startsWith('file:')?playwright:pathToFileURL(resolve(playwright)).href):new URL('../tools/producer-mcp/node_modules/playwright-core/index.mjs',import.meta.url).href);
