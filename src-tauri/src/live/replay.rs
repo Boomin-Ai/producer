@@ -1,7 +1,7 @@
 //! Opt-in encoded replay buffers. All lifecycle calls stay on the engine owner.
 //! OBS writes saves asynchronously; callbacks only publish atomic receipts.
 use super::{encoders, ffi};
-use crate::clips::{ClipFile, ClipOutput, ClipSettings, ClipStatus};
+use crate::clips::{ClipFile, ClipOutput, ClipSettings, ClipStatus, ClipTrackStatus};
 use serde_json::{json, Value};
 use std::{
     ffi::{c_void, CStr, CString},
@@ -170,6 +170,17 @@ impl Buffer {
     fn frames(&self) -> u64 {
         unsafe { ffi::obs_output_get_total_frames(self.output).max(0) as u64 }
     }
+    fn status(&self) -> ClipTrackStatus {
+        unsafe {
+            ClipTrackStatus {
+                output: self.kind,
+                captured_frames: self.frames(),
+                encoded_frames: ffi::obs_encoder_get_encoded_frames(self.video),
+                video_active: ffi::obs_encoder_active(self.video),
+                audio_active: ffi::obs_encoder_active(self.audio),
+            }
+        }
+    }
     fn failed(&self) -> bool {
         self.signals.stop.load(Ordering::Acquire) != i64::MIN
     }
@@ -304,6 +315,7 @@ impl Replay {
             settings: self.settings.clone(),
             elapsed_seconds: self.started.elapsed().as_secs(),
             video_frames: self.buffers.iter().map(Buffer::frames).min().unwrap_or(0),
+            tracks: self.buffers.iter().map(Buffer::status).collect(),
             error: self.error.clone(),
         }
     }
@@ -364,6 +376,21 @@ impl Replay {
             if let Some(b) = self.buffers.iter().find(|b| b.failed()) {
                 self.fail(b.error("Rolling capture stopped unexpectedly"));
                 return;
+            }
+            if self.started.elapsed() >= Duration::from_secs(10) {
+                if let Some(b) = self.buffers.iter().find(|b| b.frames() == 0) {
+                    let track = b.status();
+                    eprintln!("[clips] startup stalled output={:?} encoded={} video_active={} audio_active={}", track.output, track.encoded_frames, track.video_active, track.audio_active);
+                    self.fail(format!(
+                        "{} capture did not receive frames. Stop and try rolling capture again.",
+                        if b.kind == ClipOutput::Portrait {
+                            "Vertical"
+                        } else {
+                            "Landscape"
+                        }
+                    ));
+                    return;
+                }
             }
         }
         let Some(p) = self.pending.as_ref() else {

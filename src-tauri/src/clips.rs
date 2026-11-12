@@ -50,6 +50,14 @@ impl ClipSettings {
     }
 }
 #[derive(Debug, Clone, Serialize, Default)]
+pub struct ClipTrackStatus {
+    pub output: ClipOutput,
+    pub captured_frames: u64,
+    pub encoded_frames: u32,
+    pub video_active: bool,
+    pub audio_active: bool,
+}
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct ClipStatus {
     pub enabled: bool,
     pub saving: bool,
@@ -57,6 +65,7 @@ pub struct ClipStatus {
     pub settings: ClipSettings,
     pub elapsed_seconds: u64,
     pub video_frames: u64,
+    pub tracks: Vec<ClipTrackStatus>,
     pub error: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]

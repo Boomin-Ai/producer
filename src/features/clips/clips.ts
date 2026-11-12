@@ -1,7 +1,8 @@
 import {invoke} from '../../lib/nativeInvoke';
 export type ClipOutput='landscape'|'portrait'|'both';
 export interface ClipSettings {seconds:number;memory_mb:number;output:ClipOutput}
-export interface ClipStatus {enabled:boolean;saving:boolean;room_id:string|null;settings:ClipSettings;elapsed_seconds:number;video_frames:number;error:string|null}
+export interface ClipTrackStatus {output:ClipOutput;captured_frames:number;encoded_frames:number;video_active:boolean;audio_active:boolean}
+export interface ClipStatus {enabled:boolean;saving:boolean;room_id:string|null;settings:ClipSettings;elapsed_seconds:number;video_frames:number;tracks?:ClipTrackStatus[];error:string|null}
 export interface ClipFile {path:string;output:ClipOutput;duration_ms:number}
 export interface SavedClip {id:string;created_ms:number;status:'saving'|'ready'|'failed';requested_seconds:number;files:ClipFile[];error:string|null}
 export const DEFAULT_CLIPS:ClipSettings={seconds:60,memory_mb:256,output:'landscape'};

@@ -38,8 +38,9 @@ export function useClips(roomId:string,ready:boolean,visible:boolean,observed:bo
  };
  const setEnabled=(on:boolean)=>act('capture',async()=>{if(on&&state.current.capture.error)await clips.disable(roomId);const status=on?await clips.enable(roomId,state.current.settings):await clips.disable(roomId);if(current()){if(!state.current.visible&&status.enabled){await clips.disable(roomId);setCapture(OFF_CLIPS);}else setCapture(status);}return status;});
  const toggle=()=>setEnabled(!state.current.capture.enabled);
+ const restart=()=>act('capture',async()=>{await clips.disable(roomId);const status=await clips.enable(roomId,state.current.settings);if(current())setCapture(status);return status;});
  const save=()=>act('save',async()=>{const result=await clips.save(roomId);await refresh();return result;});
  const chooseFolder=()=>act('folder',async()=>{const path=await clips.pickDirectory();if(path&&current())setDirectory(path);return path;});
- return {capture,settings,recent,directory,error,pending,ready,refresh,configure,setEnabled,toggle,save,chooseFolder};
+ return {capture,settings,recent,directory,error,pending,ready,refresh,configure,setEnabled,toggle,restart,save,chooseFolder};
 }
 export type ClipsController=ReturnType<typeof useClips>;

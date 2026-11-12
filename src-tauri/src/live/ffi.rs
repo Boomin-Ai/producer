@@ -736,6 +736,8 @@ extern "C" {
     pub fn obs_output_stop(output: *mut obs_output_t);
     pub fn obs_output_active(output: *const obs_output_t) -> bool;
     pub fn obs_output_get_total_frames(output: *const obs_output_t) -> c_int;
+    pub fn obs_encoder_get_encoded_frames(encoder: *const obs_encoder_t) -> u32;
+    pub fn obs_encoder_active(encoder: *const obs_encoder_t) -> bool;
     pub fn obs_output_get_frames_dropped(output: *const obs_output_t) -> c_int;
     pub fn obs_output_get_last_error(output: *mut obs_output_t) -> *const c_char;
     pub fn obs_output_get_signal_handler(output: *const obs_output_t) -> *mut signal_handler_t;

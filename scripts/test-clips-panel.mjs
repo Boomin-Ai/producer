@@ -18,7 +18,7 @@ try{
    if(command==='pref_get')return null;if(command==='pref_set')return;
    if(command==='clips_status')return {capture:window.capture,directory:'/Volumes/CanonA002/Producer Recordings'};
    if(command==='clips_list')return window.saved;
-   if(command==='clips_enable'){if(window.failEnable)throw Error('The recording folder is unavailable.');window.capture={...window.capture,enabled:true,room_id:args.roomId,settings:args.settings,elapsed_seconds:5,video_frames:150};return window.capture;}
+   if(command==='clips_enable'){if(window.failEnable)throw Error('The recording folder is unavailable.');window.capture={...window.capture,enabled:true,room_id:args.roomId,settings:args.settings,elapsed_seconds:window.startEmpty?0:5,video_frames:window.startEmpty?0:150};return window.capture;}
    if(command==='clips_disable'){window.capture={...window.capture,enabled:false,saving:false,room_id:null};return window.capture;}
    if(command==='clips_save'){if(window.failSave)throw Error('The recording folder is unavailable.');window.capture={...window.capture,saving:true};await new Promise(resolve=>setTimeout(resolve,400));window.capture={...window.capture,saving:false};const files=[{path:'/Volumes/CanonA002/Producer Recordings/clip.mp4',output:'landscape',duration_ms:12450}];window.saved=[{id:'clip1',created_ms:Date.now(),status:'ready',requested_seconds:window.capture.settings.seconds,files,error:null}];return {id:'clip1',files};}
    if(command==='clips_pick_directory')return null;
@@ -62,6 +62,18 @@ try{
  await page.evaluate(()=>window.failEnable=false);await page.getByRole('button',{name:'Try capture again',exact:true}).click();await page.waitForFunction(()=>window.capture.enabled);
  await page.evaluate(()=>window.failSave=true);await page.getByRole('button',{name:'Save last 30s',exact:true}).click();await page.getByRole('button',{name:'Try saving again',exact:true}).waitFor();assert.equal(await page.evaluate(()=>window.capture.enabled),true,'a destination error does not silently stop an otherwise healthy buffer');
  await page.evaluate(()=>window.failSave=false);await page.getByRole('button',{name:'Try saving again',exact:true}).click();await page.waitForFunction(()=>window.controller.pending===null&&window.controller.error==='');
+ await page.getByRole('switch').click();await page.waitForFunction(()=>!window.capture.enabled);
+ await page.evaluate(()=>window.startEmpty=true);await page.getByRole('switch').click();
+ await page.getByText('Starting capture · waiting for video',{exact:true}).waitFor();assert(await page.getByRole('button',{name:'Starting capture…',exact:true}).isDisabled());
+ assert.equal(await page.locator('.clips-status i').getAttribute('data-on'),'false','no green ready light before encoded frames');
+ await page.evaluate(async()=>{window.capture={...window.capture,elapsed_seconds:48,video_frames:0};await window.controller.refresh();});
+ await page.getByRole('button',{name:'Restart capture',exact:true}).waitFor();
+ assert(await page.locator('.clips-error').evaluate(el=>el.getBoundingClientRect().top<document.querySelector('.clips-options').getBoundingClientRect().top),'startup problem is above settings');
+ await page.evaluate(()=>window.startEmpty=false);await page.getByRole('button',{name:'Restart capture',exact:true}).click();
+ await page.waitForFunction(()=>window.controller.pending===null&&window.controller.capture.video_frames>0);assert(await page.getByRole('button',{name:'Save last 30s',exact:true}).isEnabled());
+ await page.evaluate(async()=>{window.capture={...window.capture,enabled:false,error:'Vertical capture did not receive frames.'};await window.controller.refresh();});
+ await page.getByRole('button',{name:'Try capture again',exact:true}).waitFor();assert(await page.getByRole('alert').isVisible(),'native startup failure stays visible');
+ await page.getByRole('button',{name:'Try capture again',exact:true}).click();await page.waitForFunction(()=>window.controller.pending===null&&window.controller.capture.enabled);
  await page.getByRole('switch').click();await page.waitForFunction(()=>!window.capture.enabled);
  assert.deepEqual(errors,[]);console.log('Clips panel: explicit capture, save receipts, local duration, dock lifecycle, compact/expanded sizes, settings dialog and real retry actions passed.');
 }finally{await browser.close();}

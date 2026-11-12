@@ -22,3 +22,5 @@
 @media(prefers-reduced-motion:reduce){.clips-switch>span:first-child,.clips-switch>span:first-child:after{transition:none}}
 
 .rm-foot-clips{border:0;background:none;padding:0;color:#79d6b6;font:inherit;cursor:pointer;white-space:nowrap}.rm-foot-clips:hover{text-decoration:underline}
+
+.clips-status i[data-waiting=true],.clips-arm[data-waiting=true] i{background:#e4bf7b;box-shadow:none}.clips-console .clips-console-error{color:#efa89a}
