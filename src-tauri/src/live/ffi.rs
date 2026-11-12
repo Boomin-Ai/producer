@@ -745,6 +745,7 @@ extern "C" {
     pub fn proc_handler_call(handler: *mut proc_handler_t, name: *const c_char, data: *mut calldata_t) -> bool;
     pub fn calldata_get_string(data: *const calldata_t, name: *const c_char, value: *mut *const c_char) -> bool;
     pub fn obs_output_force_stop(output: *mut obs_output_t);
+    pub fn obs_output_signal_stop(output: *mut obs_output_t, code: c_int);
 
     pub fn signal_handler_connect(
         handler: *mut signal_handler_t,

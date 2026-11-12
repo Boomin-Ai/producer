@@ -80,6 +80,12 @@ impl Buffer {
         let name = format!("Producer Clips {kind:?}");
         let vs = ffi::obs_data_create();
         encoders::apply_video_defaults(vs, &encoders::chosen().id, bitrate);
+        // Replay capture needs packets promptly, rather than a look-ahead
+        // queue. Scope this to Clips; streaming/recording keep their profiles.
+        #[cfg(target_os = "macos")]
+        if encoders::family(&encoders::chosen().id) == encoders::Family::VideoToolbox {
+            ffi::obs_data_set_bool(vs, c("bframes").as_ptr(), false);
+        }
         let a = ffi::obs_data_create();
         ffi::obs_data_set_int(a, c("bitrate").as_ptr(), 192);
         let (venc, _) = encoders::create_video(&format!("{name} H264"), vs);
@@ -184,6 +190,16 @@ impl Buffer {
     fn failed(&self) -> bool {
         self.signals.stop.load(Ordering::Acquire) != i64::MIN
     }
+    unsafe fn abort(&self) {
+        if ffi::obs_output_active(self.output) && !self.failed() {
+            // replay_buffer's stop hook only marks a stop timestamp: even
+            // force_stop waits for its NEXT encoded packet to end capture.
+            // A startup failure has no such packet. Signal terminal stop so
+            // libobs disconnects encoders and joins its normal teardown worker
+            // before callback data/encoder refs are released.
+            ffi::obs_output_signal_stop(self.output, 0);
+        }
+    }
     unsafe fn save(&self, job: &str, directory: &str) -> Result<(), String> {
         self.signals.saved.store(false, Ordering::Release);
         let settings = ffi::obs_data_create();
@@ -232,15 +248,13 @@ impl Buffer {
 impl Drop for Buffer {
     fn drop(&mut self) {
         unsafe {
-            // Force-stop disconnects the encoded packet callback before memory is freed.
-            // OBS release joins its save writer; the atomic callback box outlives release.
+            // Release joins data-capture teardown and the save writer. The
+            // callback box remains alive until both joins complete.
+            self.abort();
             let handler = ffi::obs_output_get_signal_handler(self.output);
             let data = (&*self.signals as *const Signals).cast_mut().cast();
             ffi::signal_handler_disconnect(handler, c("saved").as_ptr(), saved, data);
             ffi::signal_handler_disconnect(handler, c("stop").as_ptr(), stopped, data);
-            if ffi::obs_output_active(self.output) {
-                ffi::obs_output_force_stop(self.output);
-            }
             ffi::obs_output_release(self.output);
             ffi::obs_encoder_release(self.video);
             ffi::obs_encoder_release(self.audio);
@@ -361,9 +375,7 @@ impl Replay {
         // until OBS's asynchronous file writer has drained or the room exits.
         for buffer in &self.buffers {
             unsafe {
-                if ffi::obs_output_active(buffer.output) {
-                    ffi::obs_output_force_stop(buffer.output);
-                }
+                buffer.abort();
             }
         }
         self.error = Some(error.clone());
