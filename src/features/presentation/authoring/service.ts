@@ -6,6 +6,7 @@ import {validateAuthoredDefaults} from './validateDefaults';
 import {layoutOrientation,layoutViews} from '../layoutViews';
 import {validateAsset,type MediaAsset} from '../assets';
 import {parsePackage} from '../schema';
+import {setControlBudget} from '../controlBudget';
 export {validateAuthoredDefaults} from './validateDefaults';
 
 /** New multi-format designs must describe how their canvases belong to views.
@@ -104,7 +105,7 @@ export function setDocumentAdapter(target: AuthoringTarget): DocumentAdapter<Pre
 }
 export const createSetAuthoringSession = (base: PresentationPackage, target: AuthoringTarget) => AuthoringSession.create(setDocumentAdapter(target), base);
 export function inspectAuthoredSet(doc: PresentationPackage) {
-  return {context: designContext(doc), canvasViews:layoutViews(doc.set), explicitViewMapping:!!Object.keys(doc.set.views??{}).length, layouts: doc.set.layouts.map(layout => {
+  return {context: designContext(doc), controlBudget:setControlBudget(doc), canvasViews:layoutViews(doc.set), explicitViewMapping:!!Object.keys(doc.set.views??{}).length, layouts: doc.set.layouts.map(layout => {
     const nodes: Array<{id: string; type: string; parent?: string}> = [];
     const visit = (node: PresentationNode, parent?: string) => {nodes.push({id: node.id, type: node.type, ...(parent ? {parent} : {})}); node.children?.forEach(n => visit(n, node.id));};
     visit(layout.root);

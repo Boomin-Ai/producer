@@ -1539,7 +1539,7 @@
               }
             ]
           },
-          "maxItems": 40
+          "maxItems": 128
         },
         "operatorComponents": {
           "type": "array",

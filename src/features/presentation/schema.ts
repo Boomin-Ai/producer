@@ -2,6 +2,7 @@ import {validateMask,validateBackdrop} from './visualEffects';
 import {arrangementCatalog} from './controlArrangements';
 import {parseWorld,WORLD_SCHEMA,type Scene3dWorld} from './scene3d/contract.mjs';
 import {parseRuntimeDefinition,type RuntimeDefinition} from '../../../shared/set-runtime/contract';
+import {MAX_SET_CONTROLS} from './controlBudget';
 import {runtimeSchemaBody,runtimeSchemaDefs} from '../../../shared/set-runtime/jsonSchema';
 import {outputTypes} from '../../../shared/set-runtime/projection';
 import {validateAsset,ASSET_BYTES,PACKAGE_BYTES} from './assets';
@@ -51,11 +52,12 @@ const defaulted = <T>(codec:Codec<T>,value:T):Codec<T>&{defaulted:true}=>({
   ...codec,defaulted:true,json:{...codec.json,default:value},
   read:(input,path,depth)=>input===undefined?structuredClone(value):codec.read(input,path,depth),
 });
-const array = <T>(codec: Codec<T>, maxItems = 64): Codec<T[]> => ({
+const array = <T>(codec: Codec<T>, maxItems = 64, limitMessage?: (count: number) => string): Codec<T[]> => ({
   json: { type: 'array', items: codec.json, maxItems },
   read(v, p, d) {
     bounded(d, p);
-    if (!Array.isArray(v) || v.length > maxItems) fail(p, 'Invalid or oversized list.');
+    if (!Array.isArray(v)) fail(p, 'Invalid or oversized list.');
+    if (v.length > maxItems) fail(p, limitMessage?.(v.length) ?? 'Invalid or oversized list.');
     return v.map((item, i) => codec.read(item, `${p}[${i}]`, d + 1));
   },
 });
@@ -232,7 +234,7 @@ const codec = object({
     feeds: dictionary(valueDefinition), slots: array(object({ id, label: string(80) }), 8),
     components: dictionary(object({ props: dictionary(scalar), root: ref('node', () => node) }), 16),
     layouts: array(object({ id, label: string(80), width: number(320, 1920), height: number(320, 1920), root: ref('node', () => node),animation:optional(animation) }), 32),
-    controls: array(control, 40),operatorComponents:optional(array(operatorComponent,16)),controlArrangement:optional(controlArrangement),
+    controls: array(control, MAX_SET_CONTROLS, count => `Set control budget exceeded: ${count}/${MAX_SET_CONTROLS}. Buttons, text fields and numeric controls share this limit. Keep existing controls unless the user approves replacing them.`),operatorComponents:optional(array(operatorComponent,16)),controlArrangement:optional(controlArrangement),
   }), show: optional(show),
 });
 export type PresentationPackage = Type<typeof codec>;

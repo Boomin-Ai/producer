@@ -2,10 +2,11 @@ import type {DraftSnapshot, SetAuthoringWorker} from '../presentation/authoring/
 import type {SetAuthoringCommand} from '../presentation/authoring/service';
 import type {ResponseItem} from './provider';
 import {CANVAS_VIEW_INSTRUCTIONS} from '../presentation/authoring/instructions';
+import {setControlBudget} from '../presentation/controlBudget';
 
 const tool = (name: string, description: string, properties: Record<string, unknown>, required: string[] = Object.keys(properties)) => ({type: 'function', name, description, strict: false, parameters: {type: 'object', properties, required, additionalProperties: false}});
 export const setAssistantTools = [{type: 'namespace', name: 'producer', description: 'Inspect and author an isolated Producer Set draft. No device, room-output or provider-credential access.', tools: [
-  tool('inspect_set', 'Read the current draft, stable object IDs and exact revision. Embedded asset bytes are excluded.', {}),
+  tool('inspect_set', 'Read the current draft, stable object IDs, exact revision and controlBudget (used, limit, remaining and counts by type). Embedded asset bytes are excluded.', {}),
   tool('read_schema', 'Read the actual canonical contract before authoring. Read show for runnable rundowns, package for new designs, node/animation for focused edits and controls for custom per-layout host surfaces.', {section: {type: 'string', enum: ['package', 'show', 'node', 'animation', 'controls', 'runtime', 'scene3d']}}),
   tool('edit_set', 'Apply one atomic revision-fenced edit to the private draft. command_json is a JSON string: {type:"node.properties",layoutId,nodeId,properties:{styles:{...},...}}, {type:"animation.track",layoutId,track:<canonical track>}, or {type:"canonical",edit:{schema:"producer.set-edit/2",baseRevision,operations:[{op:"add"|"replace"|"remove",path,value?}]}}. Canonical patches expose every supported field, control arrangement, module and 3D world. Preserve unrelated design, fields, controls and source roles.', {baseRevision: {type: 'string'}, label: {type: 'string'}, command_json: {type: 'string'}}),
   tool('create_set', 'Create a complete new Set in the private draft. plan_json is {schema:"producer.design-plan/2",package:<complete producer.presentation/2 without set.assets>,assetRefs:[authorized existing asset IDs]}. Use the actual canonical schema. Include beautiful portrait and landscape variants and design the configurable control surface for the content. Validation errors are actionable repair feedback.', {baseRevision: {type: 'string'}, label: {type: 'string'}, plan_json: {type: 'string'}}),
@@ -20,6 +21,7 @@ export const setAssistantInstructions = [
   CANVAS_VIEW_INSTRUCTIONS,
   'Inspect canvasViews to verify that both outputs resolve to the correct authored canvases.',
   'Choose precise stable-ID node/track operations for small edits and atomic canonical patches for structural or control edits. Create a full design only when the user asks for a new Set. Use the returned revision for each subsequent edit. Repair a rejected candidate against the unchanged current draft.',
+  'Before adding controls, inspect controlBudget or read_schema(controls) for the current used, limit and remaining capacity. Buttons, text fields and numeric controls share one authored-control budget; it is not a button-only limit or a native graphics limit. Preserve existing presets and controls when adding a new one. Do not replace another control to make space without the user\'s approval. Keep per-layout visibility and meaningful sections so larger Sets remain usable.',
   'Producer Set tools affect only the private draft. They cannot place output live, publish, record or stream. Separate room tools, when granted, have their own explicit authority and host confirmations. The host reviews Set/Show preparation. Briefly explain completed changes and validation limits; never claim native readiness from schema validation or a browser preview.',
 ].join('\n\n');
 function object(value: unknown): Record<string, unknown> {if (!value || typeof value !== 'object' || Array.isArray(value)) throw Error('Expected tool arguments.'); return value as Record<string, unknown>;}
@@ -44,5 +46,5 @@ export async function executeSetTool(worker: SetAuthoringWorker, call: ResponseI
   const operationId=identity?`tool_${Array.from(identity,b=>b.toString(16).padStart(2,'0')).join('')}`:`tool_${crypto.randomUUID()}`;
   const snapshot = await worker.edit(revision, command, label, operationId);
   if (authorized()) update(snapshot);
-  return {ok: true, revision: snapshot.revision, name: snapshot.document.name, layouts: snapshot.document.set.layouts.map(l => ({id: l.id, name: l.label})), validation: 'canonical-schema-references-and-default-projection', nativeReadiness: 'not-tested'};
+  return {ok: true, revision: snapshot.revision, name: snapshot.document.name, controlBudget:setControlBudget(snapshot.document), layouts: snapshot.document.set.layouts.map(l => ({id: l.id, name: l.label})), validation: 'canonical-schema-references-and-default-projection', nativeReadiness: 'not-tested'};
 }

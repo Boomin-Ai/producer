@@ -2,6 +2,7 @@ import {AuthoringSession, type AuthoringJournal} from '../../../../shared/author
 import {setDocumentAdapter, inspectAuthoredSet, type SetAuthoringCommand} from './service';
 import type {AuthoringTarget} from './catalog';
 import {parsePackage, presentationJsonSchema, type PresentationPackage} from '../schema';
+import {setControlBudget} from '../controlBudget';
 type Journal = AuthoringJournal<PresentationPackage, SetAuthoringCommand>;
 const host = globalThis as unknown as {onmessage: ((event: MessageEvent) => void) | null; postMessage(value: unknown): void};
 let session: AuthoringSession<PresentationPackage, SetAuthoringCommand> | undefined;
@@ -73,7 +74,7 @@ host.onmessage = async ({data}: MessageEvent<{id: number; method: string; value:
         const schema = presentationJsonSchema as any;
         const sections: Record<string, unknown> = {package: schema,show:{show:schema.properties.show,actions:schema.properties.set.properties.controls.items,semantics:{collectMs:'Voting collection timer; requires at least two choices. Does not automatically advance segments.',sequence:'Phases follow next links; untimed phases advance through host cues.'}}, node: {node: schema.$defs.node, defs: schema.$defs}, animation: {animation: schema.properties.set.properties.layouts.items.properties.animation, defs: schema.$defs}, controls: {controls: schema.properties.set.properties.controls, arrangement: schema.properties.set.properties.controlArrangement, defs: schema.$defs}, runtime: {runtime: schema.properties.runtime, defs: schema.$defs}, scene3d: schema.$defs};
         if (!Object.prototype.hasOwnProperty.call(sections, value.section)) throw Error('Unknown schema section.');
-        result = sections[value.section];
+        result = value.section==='controls'?{...(sections.controls as object),budget:setControlBudget(session.snapshot().document)}:sections[value.section];
       } else throw Error('Unknown authoring operation.');
     }
     if(result&&typeof result==='object'&&'document' in result)result={...result,branch,recoverable};

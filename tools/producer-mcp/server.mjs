@@ -53,7 +53,7 @@ export async function createAuthoringServer(directory) {
     api.parsePackageText(text);
     const file=`${doc.id}-${randomUUID()}.set.json`;
     const path=await writeNew(file,text);
-    return {file,path,revision:await api.packageRevision(doc),features:api.packageFeatures(doc),integrations:api.integrationRequirements(doc),views:doc.set.views??{},layouts:doc.set.layouts.map(l=>({id:l.id,name:l.label,width:l.width,height:l.height})),...scope};
+    return {file,path,revision:await api.packageRevision(doc),controlBudget:api.setControlBudget(doc),features:api.packageFeatures(doc),integrations:api.integrationRequirements(doc),views:doc.set.views??{},layouts:doc.set.layouts.map(l=>({id:l.id,name:l.label,width:l.width,height:l.height})),...scope};
   }
   function tool(name,description,inputSchema,readOnly,fn,external=false) {
     server.registerTool(name,{description,inputSchema,annotations:{readOnlyHint:readOnly,destructiveHint:false,idempotentHint:readOnly,openWorldHint:external}},async input=>{
@@ -75,7 +75,7 @@ export async function createAuthoringServer(directory) {
   });
   tool('producer_requirements','Discover portable integration roles/contracts and required visual features. Import is allowed without a provider; connections remain local.',{file:fileName},true,async({file})=>{const doc=await read(file);return {integrations:api.integrationRequirements(doc),features:api.packageFeatures(doc),credentialsIncluded:false,...scope};});
   tool('producer_list_sets','List Set packages in the configured authoring directory.',{},true,async()=>({files:(await readdir(root,{withFileTypes:true})).filter(f=>f.isFile()&&fileName.safeParse(f.name).success).map(f=>f.name).sort().slice(0,200)}));
-  tool('producer_inspect_set','Read an existing Set tree and revision with asset bytes removed. Use its stable IDs for edits.',{file:fileName},true,async({file})=>{const doc=await read(file);const context=api.designContext(doc);if(Buffer.byteLength(JSON.stringify(context))>1024*1024)throw Error('Set context exceeds 1 MB; use the local file workflow.');return {revision:await api.packageRevision(doc),context,...scope};});
+  tool('producer_inspect_set','Read an existing Set tree, revision and control budget with asset bytes removed. Use its stable IDs and remaining capacity for edits.',{file:fileName},true,async({file})=>{const doc=await read(file);const context=api.designContext(doc);if(Buffer.byteLength(JSON.stringify(context))>1024*1024)throw Error('Set context exceeds 1 MB; use the local file workflow.');return {revision:await api.packageRevision(doc),controlBudget:api.setControlBudget(doc),context,...scope};});
   tool('producer_compile_set','Compile a compact or full canonical design plan to a new validated .set.json file. Optional assetsFrom supplies existing authorized asset IDs; embedded assets never enter the tool response.',{plan:document,assetsFrom:fileName.optional()},false,async({plan,assetsFrom})=>{checkDesign(plan);const assets=assetsFrom?(await read(assetsFrom)).set.assets:{};const doc=api.compileDesignPlan(plan,target,assets);if(plan.schema==='producer.design-plan/2')api.validateNewSetViews(doc);api.validateAuthoredDefaults(doc);return save(doc);});
   tool('producer_edit_set','Apply atomic revision-fenced edits and save a new draft. The original file stays intact. Inspect the current revision first.',{file:fileName,edit:document},false,async({file,edit})=>{
     checkDesign(edit);const base=await read(file),revision=await api.packageRevision(base);

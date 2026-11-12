@@ -19,7 +19,7 @@ try{
   },transformCallback:()=>1,convertFileSrc:p=>p};
   const R=await import('/node_modules/.vite/deps/react.js'),D=await import('/node_modules/.vite/deps/react-dom_client.js');
   const {SetControlsPanel}=await import('/src/features/presentation/SetControlsPanel.tsx'),panelSource=await(await fetch('/src/features/presentation/SetControlsPanel.tsx')).text(),{RehearsalSession}=await import(panelSource.match(/from "([^"]*rehearsal\.ts[^"]*)"/)[1]),{SetPreview}=await import('/src/features/presentation/SetPreview.tsx');
-  window.doc=await(await fetch('/docs/shows/classic.json')).json();window.session=new RehearsalSession(window.doc,undefined,'prepare');window.testChanges=[];
+  window.doc=await(await fetch('/docs/shows/classic.json')).json();window.doc.set.controls.push({id:'pink',type:'button',label:'Pink accent',action:{type:'value.set',key:'glowColor',value:'#F4A6CD'}});window.doc.set.controlArrangement.sections.find(s=>s.id==='look').controls.push('set:pink');window.session=new RehearsalSession(window.doc,undefined,'prepare');window.testChanges=[];
   const shell=document.createElement('main');shell.innerHTML='<div id="dock" class="rm-dock-right"><section class="rm-panel rm-panel-setControls" data-in="right" style="height:100%;width:100%;container:panel / inline-size"><div class="rm-panel-body" style="height:100%;display:flex;flex-direction:column"></div></section></div><div id="visual" style="width:960px;position:relative"></div>';document.body.append(shell);
   window.panelRoot=(D.createRoot??D.default.createRoot)(shell.querySelector('.rm-panel-body'));window.visualRoot=(D.createRoot??D.default.createRoot)(document.getElementById('visual'));
   window.output={renderer:'native',requiredOrientations:['landscape','portrait'],layoutReadiness:Object.fromEntries(window.doc.set.layouts.map(l=>[l.id,{state:'ready'}])),active:true,busy:false,error:'',bindings:{},framing:{},sources:{items:[]},bind:()=>{},frame:()=>{},apply:async()=>{},returnToRoom:async()=>true};
@@ -28,6 +28,12 @@ try{
   window.configure=(dock,width,height,slim=false)=>{const el=document.getElementById('dock');el.className='rm-dock-'+dock+(slim?' slim':dock==='top'?' expanded':'');el.style.cssText=`width:${width}px;height:${height}px`;el.firstElementChild.setAttribute('data-in',dock);};window.configure('right',360,1000);window.render();
  });
  await page.getByRole('button',{name:'Solo',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Expand Look & feel section',exact:true}).click();
+ await page.getByRole('button',{name:'Pink accent',exact:true}).click();
+ assert.equal(await page.evaluate(()=>window.session.snapshot().values.glowColor),'#F4A6CD');
+ assert.equal(await page.getByRole('button',{name:'Mint accent',exact:true}).count(),1);assert.equal(await page.getByRole('button',{name:'Silver accent',exact:true}).count(),1);
+ await page.getByRole('button',{name:'Mint accent',exact:true}).click();
+ await page.getByRole('button',{name:'Collapse Look & feel section',exact:true}).click();
  // Registered music is explicit, shared with DJ and never starts on layout selection.
  await page.getByRole('button',{name:'Opening',exact:true}).click();
  await page.getByRole('button',{name:'Play music',exact:true}).waitFor();
