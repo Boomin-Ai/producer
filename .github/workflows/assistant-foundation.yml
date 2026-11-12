@@ -33,6 +33,7 @@ jobs:
       - name: Verify isolated Assistant authoring and preview recovery
         env:
           PRODUCER_TEST_URL: http://127.0.0.1:1445/
+          PRODUCER_CLASSIC_REVIEW: ${{ runner.temp }}/producer-classic-review
           PRODUCER_PLAYWRIGHT_MODULE: ${{ github.workspace }}/tools/producer-mcp/node_modules/playwright-core/index.mjs
         run: |
           if command -v google-chrome >/dev/null; then
@@ -70,6 +71,12 @@ jobs:
           node scripts/test-classic-browser.mjs
           node scripts/test-classic-graphics-browser.mjs
           node scripts/test-clips-panel.mjs
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: classic-browser-failure-${{ github.sha }}
+          path: ${{ runner.temp }}/producer-classic-review
+          retention-days: 3
   provider-runtime:
     runs-on: ubuntu-latest
     steps:
