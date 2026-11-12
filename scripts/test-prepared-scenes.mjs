@@ -210,5 +210,16 @@ try {
    assert.ok(stages.find(s=>s.stage==='ready').fields.polls>=2);
   }finally{bank.dispose();}
  });
+ await test('retrying failed layouts preserves healthy cache and unrelated failures',async()=>{
+  const selected=spec('selected'),other=spec('other'),healthy=spec('healthy'),keys=new Set();let compiles=0,uploads=0;
+  const bank=new PreparedScenes(async r=>{if(r.op==='preload'){keys.add(r.key);uploads++;}return status([...keys]);},()=>{},async p=>{compiles++;if(p.root.id!=='healthy')throw Error('Capture not ready');return plan(p);});
+  try{
+   await bank.ensure(healthy);await assert.rejects(bank.ensure(selected),/Capture not ready/);await assert.rejects(bank.ensure(other),/Capture not ready/);
+   bank.retry(['selected']);
+   assert.equal(bank.readiness(selected).state,'queued');assert.equal(bank.readiness(other).state,'error');assert.equal(bank.readiness(healthy).state,'ready');
+   const before=compiles;await bank.ensure(healthy);assert.equal(compiles,before);assert.equal(uploads,1,'Retry must not re-upload healthy scenes');
+   bank.retry();assert.equal(bank.readiness(other).state,'queued','legacy no-argument Retry still retries all failures');
+  }finally{bank.dispose();}
+ });
  console.log(`PASS ${passed} preparation/cache/generation regression cases`);
 } finally {await rm(temp,{recursive:true,force:true});}

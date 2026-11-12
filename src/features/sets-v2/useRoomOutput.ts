@@ -12,6 +12,7 @@ import { AssetTransport } from "../presentation/assetTransport";
 import {authoredCrossfadeMs} from '../presentation/animation';
 import {PreparedScenes,sceneTransport,layoutProjections,moduleViewProjections,valueControlProjections,warmInventory,preparationInventory,morphTargets,runtimePlan,type SceneSpec,type NativeSceneStatus} from './preparedScenes';
 import {RehearsalSession} from '../presentation/rehearsal';
+import {failedCaptureIds} from '../presentation/sourceRecovery';
 type NativeStatus = NativeSceneStatus & {
   generation: number;
   preparedRevision: number;
@@ -23,17 +24,6 @@ type NativeStatus = NativeSceneStatus & {
   renderSerial: number;
 };
 const chartSeries=(projection:import('../presentation/projection').OutputProjection)=>{const data:unknown[]=[];const visit=(n:typeof projection.root)=>{if(n.chart)data.push([n.chart.id,n.chart.data]);n.children.forEach(visit);};visit(projection.root);return data.length?JSON.stringify(data):'';};
-/** Only native capture absence/readiness can recover automatically. Other
- * first-frame failures (media, shaders, warming) retain their explicit Retry. */
-function missingCaptureIds(error: unknown): string[] {
-  const message = String(error).replace(/^Error: /, "");
-  const missing = /^Room source ([A-Za-z0-9_-]+) is unavailable for Set output$/.exec(message);
-  if (missing) return [missing[1]];
-  const timeout = /^Set first-frame timeout \((.+)\); current output retained$/.exec(message);
-  if (!timeout) return [];
-  const reasons = timeout[1].split("; ").map(reason => /^capture ([A-Za-z0-9_-]+): waiting for source dimensions$/.exec(reason));
-  return reasons.every(Boolean) ? [...new Set(reasons.map(reason => reason![1]))] : [];
-}
 function captureReadiness(ids: readonly string[], sources: LiveSources): string {
   return JSON.stringify(ids.map(id => {
     const source = sources.items?.find(item => item.id === id);
@@ -374,7 +364,7 @@ export function useRoomOutput(
       }
       timing('error',{error:String(e)});
       if (stillTaking()){
-        const ids = missingCaptureIds(e);
+        const ids = failedCaptureIds(e);
         // Native IDs must belong to an actually rendered slot in the selected
         // landscape/portrait variants, not an old or unused layout binding.
         missingCapture.current = null;
@@ -600,7 +590,7 @@ export function useRoomOutput(
     configurePortrait,
     requiredOrientations:portraitLayout===null?['landscape']:['landscape','portrait'],
     layoutReadiness,controlReadiness,
-    retryPreparation:()=>{bank.current?.retry();setRetryVersion(v=>v+1);},
+    retryPreparation:layouts=>{bank.current?.retry(layouts);setRetryVersion(v=>v+1);},
     prepareDraft:(doc,bindings,framing,phase)=>setDraftCandidate({doc,bindings,framing,phase}),
     clearDraftPreparation:()=>setDraftCandidate(undefined),
     applyPortrait,

@@ -247,7 +247,7 @@ export class PreparedScenes {
  reset(){this.roomEpoch++;this.warmingBlocked.clear();this.active.clear();this.sentAssets.clear();this.retained.clear();this.retentionEpoch++;this.abort=true;for(const e of this.entries.values())e.state={state:'queued'};this.changed();}
  invalidate(spec:SceneSpec){const entry=this.get(spec);entry.state={state:'queued'};entry.plan=undefined;this.changed();}
  invalidateOutput(outputId:string){this.warmingBlocked.delete(outputId);this.sentAssets.delete(outputId);this.retained.delete(outputId);this.retentionEpoch++;for(const e of this.entries.values())if(e.spec.target.id===outputId)e.state={state:'queued'};this.changed();}
- retry(){for(const e of this.entries.values())if(e.state.state==='error')e.state={state:'queued'};this.changed();}
+ retry(layouts?:readonly string[]){const selected=layouts?new Set(layouts):undefined;for(const e of this.entries.values())if(e.state.state==='error'&&(!selected||selected.has(e.spec.layout)))e.state={state:'queued'};this.changed();}
  dispose(){debugSessions.delete(this);this.disposed=true;this.abort=true;clearTimeout(this.trimTimer);for(const job of this.jobs)job.reject(Error('Room preparation closed'));this.jobs=[];this.entries.clear();this.active.clear();this.inventory=undefined;}
 }
 

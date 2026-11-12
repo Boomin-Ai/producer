@@ -26,7 +26,7 @@ import type { SetOutputControls } from './useSetOutput';
 import './presentation.css';
 import {SetSourceCreator} from './SetSourceCreator';
 import {SetSourceRecovery} from './SetSourceRecovery';
-import {sourceRecoveries,unavailableSetSource} from './sourceRecovery';
+import {SetRecoveryNotice} from './SetRecoveryNotice';
 import {SetConfiguration} from './SetConfiguration';
 import {ControlArrangementEditor,useControlArrangement} from './ControlArrangementEditor';
 import {CommittedField} from './CommittedField';
@@ -195,8 +195,6 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
   }, [staleSession, session, onChange]);
   if (staleSession) return <div className="set-controls"><p role="status">Updating rehearsal controls…</p></div>;
   const doc = session.package;
-  const missingSources=output?sourceRecoveries(doc.set.slots,output.bindings,output.sources):[];
-  const explainedSourceError=(message:string|undefined)=>!!message&&missingSources.some(issue=>issue.sourceId===unavailableSetSource(message));
   const missingConnections = useMemo(
     () => integrationRequirements(doc).filter(requirement => !requirement.optional && !moduleBindings[requirement.role]?.id),
     [doc, moduleBindings],
@@ -300,7 +298,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
   const editorIndex=editorSegments.findIndex(p=>p.id===state.show.phase);
   const editSegment=(id:string)=>{session.send({type:'segment.select',phaseId:id});};
   const ready=(layout:string)=>output?.layoutReadiness?.[layout];
-  const readinessLabel=(layout:string)=>{const status=ready(layout);return !status?'':status.state==='ready'?'Ready':status.state==='error'?explainedSourceError(status.error)?'Reconnect the missing source below':`Layout unavailable: ${status.error}`:'Loading layout';};
+  const readinessLabel=(layout:string)=>{const status=ready(layout);return !status?'':status.state==='ready'?'Ready':status.state==='error'?'Layout needs attention — see recovery details':'Loading layout';};
   const segmentList = (compact = false) => <ol>{schedule.phases.map((step, index) =>
     <li key={step.id} aria-current={index === displayedStepIndex ? 'step' : undefined}
       data-readiness={ready(step.layoutId)?.state} title={readinessLabel(step.layoutId)}
@@ -346,7 +344,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
         const layoutId = preferredViewLayout(view);
         return <button key={view.id} type="button" aria-pressed={selectedView?.id === view.id}
           data-layout-id={layoutId} data-readiness={readiness?.state} disabled={blocked || !!state.controlPending}
-          title={readiness?.state === 'error' ? `${view.label} · ${readiness.error}` : readiness?.state === 'loading' ? `${view.label} · Loading…` : view.label}
+          title={readiness?.state === 'error' ? `${view.label} · Needs attention` : readiness?.state === 'loading' ? `${view.label} · Loading…` : view.label}
           onClick={() => session.send({type:'control',action:{type:'layout.select',layoutId}})}>{view.label}</button>;
       })}
     </div>;
@@ -476,8 +474,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
     )}
     {doc.runtime.instances.length>0&&state.workspaceMode==='live'&&state.moduleConnection!=='live'&&<p role="status" className={state.moduleError?'set-error':'set-section-note'}>{!endpoint||!serverRoomId?'Connect this room to a workspace to use live modules.':state.moduleError?`Modules disconnected — reconnecting. ${state.moduleError}`:'Connecting live controls…'}</p>}
     {output&&<SetSourceRecovery slots={doc.set.slots} output={output} names={sourceNames} blocked={blocked}/>}
-    {output?.layoutReadiness&&views.some(view=>{const status=viewReadiness(view);return status?.state==='error'&&!explainedSourceError(status.error);})&&<p className="set-error">A layout needs attention. <button disabled={blocked||output.busy} onClick={output.retryPreparation}>Try loading again</button></p>}
-    {output?.error&&!explainedSourceError(output.error)&&<div role="alert" className="set-error">{output.error} <button disabled={blocked||output.busy} onClick={()=>void output.apply()}>Try update again</button></div>}
+    {output&&<SetRecoveryNotice key={state.sandboxId} doc={doc} layout={state.layoutId} output={output} names={sourceNames} blocked={blocked}/>}
     {state.trace[state.trace.length - 1]?.message.startsWith('Rejected:') && <p role="status" className="set-error">{state.trace[state.trace.length - 1]!.message}</p>}
     {!editorOnly && doc.set.controlArrangement?.cameraBackground !== false && output?.cameraBackground && <section className="set-camera-backgrounds" aria-label="Camera backgrounds">
       {doc.set.slots.filter((slot,index,slots) => visibleSlots.has(slot.id) && output.sources.items?.some(item => item.id === output.bindings[slot.id] && item.kind === 'camera') && !slots.slice(0,index).some(previous => visibleSlots.has(previous.id) && output.bindings[previous.id] === output.bindings[slot.id])).map(slot =>

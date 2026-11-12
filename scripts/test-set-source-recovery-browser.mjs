@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'playwright-core');
+const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'../tools/producer-mcp/node_modules/playwright-core/index.mjs');
 const origin=process.env.PRODUCER_TEST_URL??'http://127.0.0.1:1436/';
 const browser=await chromium.launch({executablePath:process.env.PRODUCER_CHROME??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
 try {
@@ -14,7 +14,8 @@ try {
     await import('/src/App.css');
     const R=await import('/node_modules/.vite/deps/react.js'),D=await import('/node_modules/.vite/deps/react-dom_client.js');
     const {SetControlsPanel}=await import('/src/features/presentation/SetControlsPanel.tsx');
-    const {RehearsalSession}=await import('/src/features/presentation/rehearsal.ts');
+    const panelSource=await(await fetch('/src/features/presentation/SetControlsPanel.tsx')).text();
+    const {RehearsalSession}=await import(panelSource.match(/from "([^"]*rehearsal\.ts[^"]*)"/)[1]);
     const doc=await(await fetch('/src/features/presentation/fixtures/after-hours.json')).json();
     window.slot=doc.set.slots[0].id;doc.set.slots.push({id:'shared-screen',label:'Screen share · portrait'});
     const session=new RehearsalSession(doc,undefined,'prepare');
