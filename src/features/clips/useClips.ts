@@ -19,7 +19,7 @@ export function useClips(roomId:string,ready:boolean,visible:boolean,observed:bo
   if(!alive.current||state.current.roomId!==roomId||epoch!==generation.current)return;
   setCapture(status.capture);setDirectory(status.directory);setRecent(list);
   if(status.capture.enabled||status.capture.saving)setSettings(status.capture.settings);
-  setError(status.capture.error??'');return {capture:status.capture,recent:list};
+  if(status.capture.error)setError(status.capture.error);return {capture:status.capture,recent:list};
  },[roomId]);
  useEffect(()=>{alive.current=true;++generation.current;return()=>{alive.current=false;++generation.current;if(state.current.capture.enabled||state.current.capture.saving)void clips.disable(roomId).catch(()=>{});};},[roomId]);
  useEffect(()=>{let dead=false;void ipc.prefGet(`clips.settings.${roomId}`).then(value=>{if(!dead&&value&&!state.current.capture.enabled){try{setSettings(validateClipSettings(JSON.parse(value)))}catch{/* Ignore invalid old preferences. */}}}).catch(()=>{});return()=>{dead=true;};},[roomId]);

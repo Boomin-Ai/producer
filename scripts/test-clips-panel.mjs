@@ -18,9 +18,9 @@ try{
    if(command==='pref_get')return null;if(command==='pref_set')return;
    if(command==='clips_status')return {capture:window.capture,directory:'/Volumes/CanonA002/Producer Recordings'};
    if(command==='clips_list')return window.saved;
-   if(command==='clips_enable'){window.capture={...window.capture,enabled:true,room_id:args.roomId,settings:args.settings,elapsed_seconds:5,video_frames:150};return window.capture;}
+   if(command==='clips_enable'){if(window.failEnable)throw Error('The recording folder is unavailable.');window.capture={...window.capture,enabled:true,room_id:args.roomId,settings:args.settings,elapsed_seconds:5,video_frames:150};return window.capture;}
    if(command==='clips_disable'){window.capture={...window.capture,enabled:false,saving:false,room_id:null};return window.capture;}
-   if(command==='clips_save'){window.capture={...window.capture,saving:true};await new Promise(resolve=>setTimeout(resolve,400));window.capture={...window.capture,saving:false};const files=[{path:'/Volumes/CanonA002/Producer Recordings/clip.mp4',output:'landscape',duration_ms:12450}];window.saved=[{id:'clip1',created_ms:Date.now(),status:'ready',requested_seconds:window.capture.settings.seconds,files,error:null}];return {id:'clip1',files};}
+   if(command==='clips_save'){if(window.failSave)throw Error('The recording folder is unavailable.');window.capture={...window.capture,saving:true};await new Promise(resolve=>setTimeout(resolve,400));window.capture={...window.capture,saving:false};const files=[{path:'/Volumes/CanonA002/Producer Recordings/clip.mp4',output:'landscape',duration_ms:12450}];window.saved=[{id:'clip1',created_ms:Date.now(),status:'ready',requested_seconds:window.capture.settings.seconds,files,error:null}];return {id:'clip1',files};}
    if(command==='clips_pick_directory')return null;
    if(command==='plugin:opener|reveal_item_in_dir')return;
    throw Error('Unexpected command: '+command);
@@ -57,5 +57,11 @@ try{
  assert.equal(await page.evaluate(()=>window.capture.enabled),true,'closing expanded settings preserves buffer');
  await page.evaluate(()=>window.render({visible:false}));await page.waitForFunction(()=>!window.capture.enabled);assert.equal(await page.evaluate(()=>window.calls.filter(c=>c.command==='clips_disable').length),1,'leaving room stops capture');
  await page.evaluate(()=>window.render({visible:true,compact:false,width:360,height:780}));await page.getByRole('switch').waitFor();assert.equal(await page.getByRole('switch').getAttribute('aria-checked'),'false');assert.equal(await page.evaluate(()=>window.calls.filter(c=>c.command==='clips_enable').length),1,'reopen never silently restarts');
- assert.deepEqual(errors,[]);console.log('Clips panel: explicit capture, save receipts, local duration, dock lifecycle, compact/expanded sizes and settings dialog passed.');
+ await page.evaluate(()=>window.failEnable=true);await page.getByRole('switch').click();await page.getByRole('button',{name:'Try capture again',exact:true}).waitFor();
+ await page.evaluate(()=>window.controller.refresh());assert(await page.getByRole('button',{name:'Try capture again',exact:true}).isVisible(),'status polling preserves a failed action until retry');
+ await page.evaluate(()=>window.failEnable=false);await page.getByRole('button',{name:'Try capture again',exact:true}).click();await page.waitForFunction(()=>window.capture.enabled);
+ await page.evaluate(()=>window.failSave=true);await page.getByRole('button',{name:'Save last 30s',exact:true}).click();await page.getByRole('button',{name:'Try saving again',exact:true}).waitFor();assert.equal(await page.evaluate(()=>window.capture.enabled),true,'a destination error does not silently stop an otherwise healthy buffer');
+ await page.evaluate(()=>window.failSave=false);await page.getByRole('button',{name:'Try saving again',exact:true}).click();await page.waitForFunction(()=>window.controller.pending===null&&window.controller.error==='');
+ await page.getByRole('switch').click();await page.waitForFunction(()=>!window.capture.enabled);
+ assert.deepEqual(errors,[]);console.log('Clips panel: explicit capture, save receipts, local duration, dock lifecycle, compact/expanded sizes, settings dialog and real retry actions passed.');
 }finally{await browser.close();}
