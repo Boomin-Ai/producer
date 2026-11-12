@@ -40,6 +40,8 @@ try {
   };window.render({});
  });
  await page.getByText('Test model',{exact:true}).waitFor();
+ const composerBounds=await page.locator('.assistant-composer').evaluate(form=>{const panel=form.parentElement.getBoundingClientRect(),box=form.getBoundingClientRect();return {tag:form.tagName,direct:form.parentElement.classList.contains('assistant-panel'),left:box.left-panel.left,right:panel.right-box.right,bottom:panel.bottom-box.bottom,radius:getComputedStyle(form).borderRadius};});
+ assert(composerBounds.tag==='FORM'&&composerBounds.direct&&Math.abs(composerBounds.left)<=1&&Math.abs(composerBounds.right)<=1&&Math.abs(composerBounds.bottom)<=1&&composerBounds.radius==='0px','the composer is the panel’s full-width bottom section, without an inset wrapper: '+JSON.stringify(composerBounds));
  assert.deepEqual(await page.locator('.assistant-suggestions button').allTextContents(),['Create a Set','Plan a show','Help me get started']);
  assert.equal(await page.locator('.assistant-context-trigger').count(),0,'an empty room does not present a Set-specific header');
  await page.evaluate(()=>document.getElementById('right').style.width='150px');
@@ -186,12 +188,12 @@ try {
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Keep the retry action reachable in every dock.');await page.getByRole('button',{name:'Send ↗',exact:true}).click();await page.getByRole('button',{name:'Retry request',exact:true}).waitFor();
  for(const [name,width,height] of [['side',360,780],['narrow',240,780],['bottom',1100,360],['top',1100,240]]){
   await page.evaluate(({width,height})=>{const target=document.getElementById('right');target.style.width=width+'px';target.style.height=height+'px';document.getElementById('bottom').style.display='none';window.render({target,compact:false});},{width,height});
-  await page.waitForFunction(()=>{const element=document.querySelector('.assistant-docked textarea');return element&&element.getBoundingClientRect().height>=30});
+  await page.waitForFunction(()=>{const target=document.getElementById('right'),element=target.querySelector('.assistant-docked textarea');return element&&element.getBoundingClientRect().height>=30&&(target.clientHeight>=320||!!target.querySelector('.assistant-tight'));});
   const geometry=await page.evaluate(()=>{
    const box=document.querySelector('.assistant-docked').getBoundingClientRect();
-   return [...document.querySelectorAll('.assistant-docked .assistant-compose textarea,.assistant-docked .assistant-compose button,.assistant-docked .assistant-error button')].map(element=>{const r=element.getBoundingClientRect();return {inside:r.left>=box.left-1&&r.right<=box.right+1&&r.top>=box.top-1&&r.bottom<=box.bottom+1,width:r.width,height:r.height};});
+   return [...document.querySelectorAll('.assistant-docked .assistant-compose textarea,.assistant-docked .assistant-compose .assistant-send,.assistant-docked .assistant-error button')].map(element=>{const r=element.getBoundingClientRect();return {inside:r.left>=box.left-1&&r.right<=box.right+1&&r.top>=box.top-1&&r.bottom<=box.bottom+1,width:r.width,height:r.height};});
   });
-  assert(geometry.every(r=>r.inside&&r.width>25&&r.height>25),name+' keeps the composer and send control visible');
+  assert(geometry.every(r=>r.inside&&r.width>25&&r.height>25),name+' keeps the composer and send control visible: '+JSON.stringify(geometry));
   if(process.env.PRODUCER_PANEL_SCREENSHOTS)await page.locator('.assistant-docked').screenshot({path:process.env.PRODUCER_PANEL_SCREENSHOTS+'/'+name+'.png'});
  }
  await page.locator('.assistant-tight').waitFor();
@@ -206,7 +208,7 @@ try {
  await page.getByRole('button',{name:'Assistant suggestions',exact:true}).waitFor();
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Send with Enter from the narrow sidebar.');
  assert.equal(await page.getByRole('button',{name:'Send ↗',exact:true}).isVisible(),false,'super-narrow composers use a keyboard cue');
- const keyFits=await page.locator('.assistant-composer').evaluate(element=>{const input=element.querySelector('textarea').getBoundingClientRect(),key=element.querySelector('.assistant-send-key').getBoundingClientRect();return {fits:input.right<=key.left+1,input:input.toJSON(),key:key.toJSON(),form:getComputedStyle(element.querySelector('form')).display,keyPosition:getComputedStyle(element.querySelector('.assistant-send-key')).position};});assert(keyFits.fits,'the Enter cue never paints over input text: '+JSON.stringify(keyFits));
+ const keyFits=await page.locator('.assistant-composer').evaluate(element=>{const input=element.querySelector('textarea').getBoundingClientRect(),key=element.querySelector('.assistant-send-key').getBoundingClientRect();return {fits:input.right<=key.left+1,input:input.toJSON(),key:key.toJSON(),form:getComputedStyle(element).display,keyPosition:getComputedStyle(element.querySelector('.assistant-send-key')).position};});assert(keyFits.fits,'the Enter cue never paints over input text: '+JSON.stringify(keyFits));
  await page.getByRole('textbox',{name:'Assistant prompt'}).press('Enter');
  await page.getByText('Send with Enter from the narrow sidebar.',{exact:true}).waitFor();
  assert.equal(await page.getByRole('textbox',{name:'Assistant prompt'}).inputValue(),'');

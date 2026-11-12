@@ -8,7 +8,7 @@ const previewText=(text:string)=>text.replace(/\[([^\]]+)\]\([^)]*\)/g,'$1').rep
 /** Views only: the parent retains the request, prompt and private draft owner. */
 export function AssistantDockSurface({dock,parking,reviewOpen,busy,connected,connecting,onConnect,status,summary,conversation,composer,completion,onRead,dismissKey}: {
   dock:Dock;parking:HTMLElement;reviewOpen:boolean;busy:boolean;connected:boolean;status:string;summary:string;
-  conversation:ReactNode;composer:ReactNode;completion?:AssistantCompletion;onRead():void;dismissKey?:string;connecting:boolean;onConnect():void;
+  conversation:(docked?:boolean)=>ReactNode;composer:ReactNode;completion?:AssistantCompletion;onRead():void;dismissKey?:string;connecting:boolean;onConnect():void;
 }) {
   const [shallow,setShallow]=useState(false),[open,setOpen]=useState(false);
   const [dismissedNotification,setDismissedNotification]=useState<string>();
@@ -73,9 +73,9 @@ export function AssistantDockSurface({dock,parking,reviewOpen,busy,connected,con
     <button className="assistant-mini-expand" type="button" aria-label="Expand Assistant" aria-haspopup="dialog" aria-expanded={open} title={open?'Close conversation':'Open full conversation'} onClick={toggleConversation}>{expand}</button>
   </div>;
   return <>
-    {createPortal(<section className={`assistant-workspace assistant-docked${compact?' assistant-docked-mini':''}`} aria-label="Room Assistant">{compact?mini:conversation}</section>,dock.target??parking)}
+    {createPortal(compact?<section className="assistant-workspace assistant-docked assistant-docked-mini" aria-label="Room Assistant">{mini}</section>:conversation(true),dock.target??parking)}
     {open&&compact&&!reviewOpen&&createPortal(<div ref={panel} role="dialog" aria-modal="false" aria-label="Assistant conversation panel" className="assistant-workspace assistant-floating" data-over-stage style={{left:position?.left??0,top:position?.top??0,visibility:position?'visible':'hidden'}}>
-      <div className="assistant-floating-tools"><button type="button" onClick={()=>{setOpen(false);dock.onExpand();}}>Expand dock</button><button type="button" aria-label="Close Assistant conversation" onClick={close}>×</button></div>{conversation}
+      <div className="assistant-floating-tools"><button type="button" onClick={()=>{setOpen(false);dock.onExpand();}}>Expand dock</button><button type="button" aria-label="Close Assistant conversation" onClick={close}>×</button></div>{conversation()}
     </div>,document.body)}
     {showToast&&createPortal(<div ref={toast} className="assistant-task-toast" role={completion.kind==='error'?'alert':'status'} data-over-stage style={{left:toastPosition?.left??0,top:toastPosition?.top??0,width:toastPosition?.width,visibility:toastPosition?'visible':'hidden'}}>
       <div><strong>{completion.kind==='error'?'Needs attention':'Reply ready'}</strong><button type="button" aria-label="Dismiss Assistant notification" onClick={()=>setDismissedNotification(completion.id)}>×</button></div><p>{previewText(completion.text)}</p><button type="button" onClick={openConversation}>View reply ↗</button>
