@@ -740,6 +740,26 @@ mod capture_tests {
     #[test]
     #[ignore = "requires a native graphics engine; run alone"]
     fn native_portrait_jpeg_capture_is_demand_driven() {
+        fn sync_until(portrait: &mut Portrait, wanted: bool) {
+            let deadline = Instant::now() + Duration::from_secs(2);
+            loop {
+                unsafe {
+                    // The production owner retries on its next tick when a
+                    // JPEG callback holds the frame lock; OBS stop also has
+                    // asynchronous teardown. A single tick is not completion.
+                    portrait.sync_jpeg_capture();
+                    assert!(ffi::obs_output_active(portrait.keepalive));
+                    if ffi::obs_output_active(portrait.output) == wanted {
+                        break;
+                    }
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "JPEG capture did not reach requested active state: {wanted}"
+                );
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
         let config =
             std::env::temp_dir().join(format!("producer-portrait-demand-{}", std::process::id()));
         std::fs::create_dir_all(&config).unwrap();
@@ -769,26 +789,15 @@ mod capture_tests {
             std::thread::sleep(Duration::from_millis(20));
         }
         portrait.frames.lock().unwrap().diagnostic_until = None;
-        unsafe {
-            portrait.sync_jpeg_capture();
-            assert!(!ffi::obs_output_active(portrait.output));
-            assert!(ffi::obs_output_active(portrait.keepalive));
-        }
+        sync_until(&mut portrait, false);
         // Program JPEG consumers retain their full-resolution feed until they
         // release demand; diagnostic expiry must not interrupt that feed.
         select_program(true);
         want_program(true);
-        unsafe {
-            portrait.sync_jpeg_capture();
-            assert!(ffi::obs_output_active(portrait.output));
-        }
+        sync_until(&mut portrait, true);
         want_program(false);
         select_program(false);
-        unsafe {
-            portrait.sync_jpeg_capture();
-            assert!(!ffi::obs_output_active(portrait.output));
-            assert!(ffi::obs_output_active(portrait.keepalive));
-        }
+        sync_until(&mut portrait, false);
         drop(portrait);
         unsafe {
             ffi::obs_shutdown();
