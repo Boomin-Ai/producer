@@ -33,14 +33,8 @@ Push-Location $repo
 try {
   $metadata = cargo metadata --manifest-path src-tauri/Cargo.toml --no-deps --format-version 1 | ConvertFrom-Json
   if ($LASTEXITCODE -ne 0) { throw 'Could not resolve Cargo target directory' }
-  $testBin = Join-Path $metadata.target_directory 'debug\deps'
-  New-Item -ItemType Directory -Path $testBin -Force | Out-Null
   . "$PSScriptRoot\windows-cutout.ps1"
-  Sync-WindowsCutout $testBin
-  # OBS launches hardware probes and the mux helper beside the host executable.
-  Get-ChildItem -LiteralPath $engineBin -File -Filter 'obs-*.exe' | ForEach-Object {
-    Copy-Item -LiteralPath $_.FullName -Destination $testBin -Force
-  }
+  . "$PSScriptRoot\windows-dev-helpers.ps1"
   $source = (& git rev-parse HEAD).Trim()
   if ($LASTEXITCODE -ne 0 -or -not $source) { throw 'Could not identify qualification source' }
   $engineHash = (Get-FileHash -LiteralPath "$engineBin\obs.dll" -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -64,6 +58,17 @@ try {
   $testExe = (Resolve-Path -LiteralPath $prepared.executable).Path
   if ($prepared.source -ne $source -or $prepared.features -ne $features -or $prepared.engineSha256 -ne $engineHash -or $prepared.executableSha256 -ne (Get-FileHash -LiteralPath $testExe -Algorithm SHA256).Hash.ToLowerInvariant()) {
     throw 'Prepared test binary, source or native engine changed'
+  }
+  # OBS resolves subprocesses beside the running executable. Cargo's artifact
+  # receipt can point into debug/build/.../out rather than debug/deps; stage
+  # against that exact receipt, including on the separate RunOnly invocation.
+  $runtimeDir = Split-Path -Parent $testExe
+  Sync-WindowsCutout $runtimeDir
+  $helpers = @(Sync-WindowsDevHelpers -EngineDir $EngineDir -OutputDir $runtimeDir)
+  foreach ($helper in $helpers) {
+    if ((Get-FileHash -LiteralPath (Join-Path $runtimeDir $helper) -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath (Join-Path $engineBin $helper) -Algorithm SHA256).Hash) {
+      throw "Native test runtime helper differs from the pinned engine: $helper"
+    }
   }
   if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) { throw 'ffprobe is required for dual-recording qualification' }
   $receipt = [ordered]@{ schema='producer.windows-runtime-proof/1'; source=$source; features=$features; engineSha256=$engineHash; status='failed'; tests=@() }

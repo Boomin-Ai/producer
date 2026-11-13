@@ -865,7 +865,7 @@ jobs:
       # Preserve the exact installer for diagnosis if the hosted qualification
       # environment fails. It is not staged on the public release draft here.
       - name: Preserve Windows installer before runtime checks
-        if: ${{ inputs.resume_windows_run == '' && (github.event_name == 'push' || inputs.publish) }}
+        if: ${{ inputs.resume_windows_run == '' && (github.event_name == 'push' || inputs.publish || inputs.qualify_windows) }}
         uses: actions/upload-artifact@v4
         with:
           name: Producer-windows-x64-unqualified-${{ github.sha }}
