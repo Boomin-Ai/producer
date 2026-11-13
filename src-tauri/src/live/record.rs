@@ -49,7 +49,9 @@ pub struct Recorder {
 /// Where recordings land. ~/Movies/Producer on a Mac, %USERPROFILE%\Videos\
 /// Producer on Windows — created on demand, the place each OS's user looks
 /// for anything they recorded.
-pub fn recordings_dir() -> PathBuf { crate::clips::directory() }
+pub fn recordings_dir() -> PathBuf {
+    crate::clips::directory()
+}
 
 fn filename(stamp: &str) -> String {
     format!("Producer {stamp}.mp4")

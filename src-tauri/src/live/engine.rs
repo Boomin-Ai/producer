@@ -1086,7 +1086,10 @@ pub enum Command {
         dual: bool,
         reply: std::sync::mpsc::Sender<Result<String, String>>,
     },
-    Clips { request:crate::clips::ClipRequest, reply:mpsc::Sender<Result<serde_json::Value,String>> },
+    Clips {
+        request: crate::clips::ClipRequest,
+        reply: mpsc::Sender<Result<serde_json::Value, String>>,
+    },
     StopRecording {
         reply: std::sync::mpsc::Sender<Option<String>>,
     },
@@ -1839,8 +1842,21 @@ impl LiveHandle {
             .map_err(|e| e.to_string())
     }
 
-    pub fn clips_dispatch(&self)->Result<Box<dyn FnOnce(crate::clips::ClipRequest)->Result<serde_json::Value,String>+Send>,String>{
-        let sender=self.cmd.clone();Ok(Box::new(move|request|{let(tx,rx)=mpsc::channel();sender.send(Command::Clips{request,reply:tx}).map_err(|e|e.to_string())?;rx.recv_timeout(Duration::from_secs(75)).map_err(|_|"Clips engine did not answer".to_string())?}))
+    pub fn clips_dispatch(
+        &self,
+    ) -> Result<
+        Box<dyn FnOnce(crate::clips::ClipRequest) -> Result<serde_json::Value, String> + Send>,
+        String,
+    > {
+        let sender = self.cmd.clone();
+        Ok(Box::new(move |request| {
+            let (tx, rx) = mpsc::channel();
+            sender
+                .send(Command::Clips { request, reply: tx })
+                .map_err(|e| e.to_string())?;
+            rx.recv_timeout(Duration::from_secs(75))
+                .map_err(|_| "Clips engine did not answer".to_string())?
+        }))
     }
     pub fn soundboard_dispatch(
         &self,

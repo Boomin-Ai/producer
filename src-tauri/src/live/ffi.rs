@@ -742,8 +742,16 @@ extern "C" {
     pub fn obs_output_get_last_error(output: *mut obs_output_t) -> *const c_char;
     pub fn obs_output_get_signal_handler(output: *const obs_output_t) -> *mut signal_handler_t;
     pub fn obs_output_get_proc_handler(output: *const obs_output_t) -> *mut proc_handler_t;
-    pub fn proc_handler_call(handler: *mut proc_handler_t, name: *const c_char, data: *mut calldata_t) -> bool;
-    pub fn calldata_get_string(data: *const calldata_t, name: *const c_char, value: *mut *const c_char) -> bool;
+    pub fn proc_handler_call(
+        handler: *mut proc_handler_t,
+        name: *const c_char,
+        data: *mut calldata_t,
+    ) -> bool;
+    pub fn calldata_get_string(
+        data: *const calldata_t,
+        name: *const c_char,
+        value: *mut *const c_char,
+    ) -> bool;
     pub fn obs_output_force_stop(output: *mut obs_output_t);
     pub fn obs_output_signal_stop(output: *mut obs_output_t, code: c_int);
 
@@ -753,7 +761,12 @@ extern "C" {
         callback: signal_callback_t,
         data: *mut c_void,
     );
-    pub fn signal_handler_disconnect(handler:*mut signal_handler_t, signal:*const c_char, callback:signal_callback_t, data:*mut c_void);
+    pub fn signal_handler_disconnect(
+        handler: *mut signal_handler_t,
+        signal: *const c_char,
+        callback: signal_callback_t,
+        data: *mut c_void,
+    );
     pub fn calldata_get_data(
         data: *const calldata_t,
         name: *const c_char,
