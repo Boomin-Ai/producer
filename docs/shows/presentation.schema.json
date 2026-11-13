@@ -1419,6 +1419,9 @@
                         "additionalProperties": false
                       }
                     ]
+                  },
+                  "presentation": {
+                    "const": "color"
                   }
                 },
                 "required": [
@@ -1520,6 +1523,10 @@
                     "type": "number",
                     "minimum": 0.000001,
                     "maximum": 1000000
+                  },
+                  "unit": {
+                    "type": "string",
+                    "maxLength": 12
                   }
                 },
                 "required": [
@@ -1532,7 +1539,103 @@
               }
             ]
           },
-          "maxItems": 40
+          "maxItems": 128
+        },
+        "operatorComponents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+              },
+              "type": {
+                "const": "music"
+              },
+              "label": {
+                "type": "string",
+                "maxLength": 80
+              },
+              "when": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      {
+                        "type": "number",
+                        "minimum": -1000000,
+                        "maximum": 1000000
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "get": {
+                        "type": "string",
+                        "maxLength": 128,
+                        "pattern": "^(values|feeds|props|show|tokens|modules)(\\.[a-zA-Z][a-zA-Z0-9_-]{0,63})+$"
+                      }
+                    },
+                    "required": [
+                      "get"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "op": {
+                        "anyOf": [
+                          {
+                            "const": "eq"
+                          },
+                          {
+                            "const": "if"
+                          },
+                          {
+                            "const": "concat"
+                          }
+                        ]
+                      },
+                      "args": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/$defs/binding"
+                        },
+                        "maxItems": 8
+                      }
+                    },
+                    "required": [
+                      "op",
+                      "args"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "defaultTrack": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$"
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "label"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 16
         },
         "controlArrangement": {
           "type": "object",
@@ -1551,12 +1654,25 @@
                     "type": "string",
                     "maxLength": 80
                   },
+                  "purpose": {
+                    "anyOf": [
+                      {
+                        "const": "live"
+                      },
+                      {
+                        "const": "content"
+                      },
+                      {
+                        "const": "appearance"
+                      }
+                    ]
+                  },
                   "controls": {
                     "type": "array",
                     "items": {
                       "type": "string",
                       "maxLength": 210,
-                      "pattern": "^(builtin:layout|set:[a-zA-Z][a-zA-Z0-9_-]{0,63}|module:[a-zA-Z][a-zA-Z0-9_-]{0,63}:([a-zA-Z][a-zA-Z0-9_-]{0,63}|\\$(lifecycle|weather-location|behavior-tools)))$"
+                      "pattern": "^(builtin:layout|operator:[a-zA-Z][a-zA-Z0-9_-]{0,63}|set:[a-zA-Z][a-zA-Z0-9_-]{0,63}|module:[a-zA-Z][a-zA-Z0-9_-]{0,63}:([a-zA-Z][a-zA-Z0-9_-]{0,63}|\\$(lifecycle|weather-location|behavior-tools)))$"
                     },
                     "maxItems": 256
                   },
@@ -1578,9 +1694,12 @@
               "items": {
                 "type": "string",
                 "maxLength": 210,
-                "pattern": "^(builtin:layout|set:[a-zA-Z][a-zA-Z0-9_-]{0,63}|module:[a-zA-Z][a-zA-Z0-9_-]{0,63}:([a-zA-Z][a-zA-Z0-9_-]{0,63}|\\$(lifecycle|weather-location|behavior-tools)))$"
+                "pattern": "^(builtin:layout|operator:[a-zA-Z][a-zA-Z0-9_-]{0,63}|set:[a-zA-Z][a-zA-Z0-9_-]{0,63}|module:[a-zA-Z][a-zA-Z0-9_-]{0,63}:([a-zA-Z][a-zA-Z0-9_-]{0,63}|\\$(lifecycle|weather-location|behavior-tools)))$"
               },
               "maxItems": 64
+            },
+            "cameraBackground": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -8494,7 +8613,9 @@
                         "role": {
                           "enum": [
                             "stage",
-                            "spectrum"
+                            "spectrum",
+                            "ring",
+                            "frame"
                           ]
                         },
                         "headerRatio": {

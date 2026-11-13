@@ -14,6 +14,55 @@ use std::{
 use tauri::{Manager, State};
 
 static LIBRARY_LOCK: Mutex<()> = Mutex::new(());
+pub fn install_bundled(
+    app: &tauri::AppHandle,
+    assets: &mut [crate::builtin_audio::InstalledAudio],
+) -> Result<(), String> {
+    let _lock = LIBRARY_LOCK.lock().map_err(|e| e.to_string())?;
+    let root = root(app)?;
+    let mut library = read(&root)?;
+    let mut ids = Vec::new();
+    for a in assets.iter_mut().filter(|a| a.kind == "music") {
+        let id = key(a.path.as_bytes());
+        // Reuse the user's exact file if this music was already imported.
+        // This runs once on the installer worker, never the audio/render thread.
+        let size = std::fs::metadata(&a.path).map_err(|e| e.to_string())?.len();
+        if let Some(existing) = library.tracks.iter().find(|t| {
+            t.id == id
+                || std::fs::metadata(&t.path).is_ok_and(|m| m.len() == size)
+                    && std::fs::read(&t.path).is_ok_and(|bytes| key(&bytes) == a.sha256)
+        }) {
+            a.path = existing.path.clone();
+            ids.push(existing.id.clone());
+            continue;
+        }
+        ids.push(id.clone());
+        let meta = std::fs::metadata(&a.path).map_err(|e| e.to_string())?;
+        library.tracks.push(Track {
+            id,
+            path: a.path.clone(),
+            title: a.name.clone(),
+            artist: "Producer".into(),
+            duration_ms: a.duration_ms,
+            cover: None,
+            bpm: None,
+            analyzed: false,
+            fingerprint: format!("{}:{:?}", meta.len(), meta.modified()),
+        });
+    }
+    if !library
+        .playlists
+        .iter()
+        .any(|p| p.id == "producer-starter-music")
+    {
+        library.playlists.push(Playlist {
+            id: "producer-starter-music".into(),
+            name: "Producer music".into(),
+            tracks: ids,
+        });
+    }
+    save(&root, &library)
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Track {
     pub id: String,

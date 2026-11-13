@@ -4,6 +4,9 @@ import type {AuthoringTarget} from './catalog';
 import type {PresentationNode, PresentationPackage} from '../schema';
 import {validateAuthoredDefaults} from './validateDefaults';
 import {layoutOrientation,layoutViews} from '../layoutViews';
+import {validateAsset,type MediaAsset} from '../assets';
+import {parsePackage} from '../schema';
+import {setControlBudget} from '../controlBudget';
 export {validateAuthoredDefaults} from './validateDefaults';
 
 /** New multi-format designs must describe how their canvases belong to views.
@@ -24,6 +27,8 @@ export function validateNewSetViews(document:PresentationPackage) {
 }
 
 export type SetAuthoringCommand =
+  | {type:'asset.import';id:string;asset:MediaAsset}
+  | {type:'show.author';show:unknown}
   | {type: 'canonical'; edit: unknown}
   | {type: 'design'; plan: unknown}
   | {type: 'node.properties'; layoutId: string; nodeId: string; properties: Record<string, unknown>}
@@ -46,8 +51,24 @@ function mergeProperties(before:unknown,after:unknown):unknown {
 export function setDocumentAdapter(target: AuthoringTarget): DocumentAdapter<PresentationPackage, SetAuthoringCommand> {
   return {kind: 'producer.presentation/2', revision: packageRevision, validateForCommit(document) {validateAuthoredDefaults(document);}, async apply(base, command) {
     if (!command || typeof command !== 'object') throw Error('Expected an authoring command.');
-    const fields:Record<string,string[]>={canonical:['type','edit'],design:['type','plan'],'node.properties':['type','layoutId','nodeId','properties'],'animation.track':['type','layoutId','track']};
+    const fields:Record<string,string[]>={'show.author':['type','show'],'asset.import':['type','id','asset'],canonical:['type','edit'],design:['type','plan'],'node.properties':['type','layoutId','nodeId','properties'],'animation.track':['type','layoutId','track']};
     if(!fields[command.type]||Object.keys(command).some(key=>!fields[command.type].includes(key)))throw Error('Unknown authoring command fields.');
+    if(command.type==='show.author'){
+      const controls=structuredClone(base.set.controls),added:string[]=[];
+      for(const [suffix,label,type]of [['start','Start Show','show.start'],['previous','Previous segment','show.previous'],['next','Next segment','show.next']] as const){
+        if(controls.some(control=>control.type==='button'&&control.action.type===type))continue;
+        let id='show-'+suffix;while(controls.some(control=>control.id===id))id+='-new';
+        controls.push({id,type:'button',label,action:{type}});added.push('set:'+id);
+      }
+      const arrangement=structuredClone(base.set.controlArrangement??{sections:[{id:'controls',label:'Set controls',controls:['builtin:layout',...base.set.controls.map(control=>'set:'+control.id)]}],minimized:['builtin:layout']});
+      if(added.length){let id='show-run';while(arrangement.sections.some(section=>section.id===id))id+='-new';arrangement.sections.push({id,label:'Show rundown',controls:added});}
+      return parsePackage({...base,show:command.show,set:{...base.set,controls,controlArrangement:arrangement}});
+    }
+    if(command.type==='asset.import'){
+      if(!/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(command.id)||Object.prototype.hasOwnProperty.call(base.set.assets??{},command.id))throw Error('Choose a new asset ID.');
+      validateAsset(command.asset);
+      return parsePackage({...base,set:{...base.set,assets:{...base.set.assets,[command.id]:command.asset}}});
+    }
     if (command.type === 'canonical') return applyDesignEdits(base, command.edit, target);
     if (command.type === 'design') {
       const document=compileDesignPlan(command.plan, target, base.set.assets);
@@ -84,7 +105,7 @@ export function setDocumentAdapter(target: AuthoringTarget): DocumentAdapter<Pre
 }
 export const createSetAuthoringSession = (base: PresentationPackage, target: AuthoringTarget) => AuthoringSession.create(setDocumentAdapter(target), base);
 export function inspectAuthoredSet(doc: PresentationPackage) {
-  return {context: designContext(doc), canvasViews:layoutViews(doc.set), explicitViewMapping:!!Object.keys(doc.set.views??{}).length, layouts: doc.set.layouts.map(layout => {
+  return {context: designContext(doc), controlBudget:setControlBudget(doc), canvasViews:layoutViews(doc.set), explicitViewMapping:!!Object.keys(doc.set.views??{}).length, layouts: doc.set.layouts.map(layout => {
     const nodes: Array<{id: string; type: string; parent?: string}> = [];
     const visit = (node: PresentationNode, parent?: string) => {nodes.push({id: node.id, type: node.type, ...(parent ? {parent} : {})}); node.children?.forEach(n => visit(n, node.id));};
     visit(layout.root);

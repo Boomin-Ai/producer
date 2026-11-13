@@ -10,7 +10,7 @@ use std::{
     collections::HashMap,
     ffi::{c_void, CString},
     sync::{Arc, Mutex},
-    time::Instant,
+    time::{Duration, Instant},
 };
 static PROGRAM_SELECTED: AtomicBool = AtomicBool::new(false);
 static PROGRAM_WANTED: AtomicBool = AtomicBool::new(false);
@@ -129,7 +129,7 @@ struct Frames {
     last: Instant,
     jpeg: String,
     calls: u64,
-    diagnostic: bool,
+    diagnostic_until: Option<Instant>,
     width: u32,
     height: u32,
 }
@@ -144,7 +144,11 @@ extern "C" fn frame(param: *mut c_void, data: *mut ffi::video_data) {
         };
         let program =
             PROGRAM_SELECTED.load(Ordering::Relaxed) && PROGRAM_WANTED.load(Ordering::Relaxed);
-        if !store.diagnostic && !program {
+        if !store
+            .diagnostic_until
+            .is_some_and(|until| Instant::now() < until)
+            && !program
+        {
             return;
         }
         store.calls += 1;
@@ -194,6 +198,7 @@ pub struct Portrait {
     room_fingerprint: String,
     room_states: Vec<super::graph::ItemState>,
     output: *mut ffi::obs_output_t,
+    keepalive: *mut ffi::obs_output_t,
     frames: Box<Mutex<Frames>>,
     pub pending: Option<Composition>,
     pub spare: Option<Composition>,
@@ -241,11 +246,12 @@ impl Portrait {
             room_fingerprint: String::new(),
             room_states: Vec::new(),
             output: std::ptr::null_mut(),
+            keepalive: std::ptr::null_mut(),
             frames: Box::new(Mutex::new(Frames {
                 last: Instant::now(),
                 jpeg: String::new(),
                 calls: 0,
-                diagnostic: false,
+                diagnostic_until: None,
                 width: preview_width,
                 height: preview_height,
             })),
@@ -291,10 +297,43 @@ impl Portrait {
             colorspace: 2,
         };
         obs_output_set_video_conversion(result.output, &scale);
-        if !ffi::obs_output_start(result.output) {
-            return Err("Portrait preview capture could not start".into());
+        // Keep the native canvas producing NV12 frames without converting a
+        // full 1080x1920 image to BGRA on every video-io tick. The native display
+        // and encoders use the canvas directly; only JPEG consumers need BGRA.
+        result.keepalive = ffi::obs_output_create(
+            b"producer_portrait_preview\0".as_ptr().cast(),
+            b"Portrait native keepalive\0".as_ptr().cast(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+        if result.keepalive.is_null() {
+            return Err("Portrait canvas capture unavailable".into());
+        }
+        ffi::obs_output_set_media(result.keepalive, video, std::ptr::null_mut());
+        if !ffi::obs_output_start(result.keepalive) {
+            return Err("Portrait canvas capture could not start".into());
         }
         Ok(result)
+    }
+    unsafe fn sync_jpeg_capture(&mut self) {
+        let diagnostic = match self.frames.try_lock() {
+            Ok(frames) => frames
+                .diagnostic_until
+                .is_some_and(|until| Instant::now() < until),
+            // A JPEG already in progress is not the end of a consumer lease.
+            Err(_) => return,
+        };
+        let wanted = PROGRAM_SELECTED.load(Ordering::Relaxed)
+            && PROGRAM_WANTED.load(Ordering::Relaxed)
+            || diagnostic;
+        let active = ffi::obs_output_active(self.output);
+        if wanted && !active {
+            if !ffi::obs_output_start(self.output) {
+                eprintln!("[portrait] JPEG capture could not start");
+            }
+        } else if !wanted && active {
+            ffi::obs_output_stop(self.output);
+        }
     }
     pub unsafe fn room(&mut self) {
         self.finish_transition(true);
@@ -315,6 +354,7 @@ impl Portrait {
         height: f32,
         set_item: Option<*mut ffi::obs_sceneitem_t>,
     ) {
+        self.sync_jpeg_capture();
         if self.room_scene.is_null() || self.active.is_some() {
             return;
         }
@@ -684,10 +724,84 @@ impl Portrait {
         self.frames
             .lock()
             .map(|mut f| {
-                f.diagnostic = true;
+                // A one-off inspection must not leave full-size RGB conversion
+                // running for the rest of the room's lifetime.
+                f.diagnostic_until = Some(Instant::now() + Duration::from_secs(2));
                 f.jpeg.clone()
             })
             .unwrap_or_default()
+    }
+}
+
+#[cfg(all(test, any(target_os = "macos", target_os = "windows")))]
+mod capture_tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "requires a native graphics engine; run alone"]
+    fn native_portrait_jpeg_capture_is_demand_driven() {
+        fn sync_until(portrait: &mut Portrait, wanted: bool) {
+            let deadline = Instant::now() + Duration::from_secs(2);
+            loop {
+                unsafe {
+                    // The production owner retries on its next tick when a
+                    // JPEG callback holds the frame lock; OBS stop also has
+                    // asynchronous teardown. A single tick is not completion.
+                    portrait.sync_jpeg_capture();
+                    assert!(ffi::obs_output_active(portrait.keepalive));
+                    if ffi::obs_output_active(portrait.output) == wanted {
+                        break;
+                    }
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "JPEG capture did not reach requested active state: {wanted}"
+                );
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+        let config =
+            std::env::temp_dir().join(format!("producer-portrait-demand-{}", std::process::id()));
+        std::fs::create_dir_all(&config).unwrap();
+        super::super::engine::persist_video(&config, 720, 30);
+        assert!(super::super::engine::bootstrap_with_config(&config).ok);
+        let mut portrait = unsafe { Portrait::create().unwrap() };
+        unsafe {
+            portrait.room();
+            portrait.sync_jpeg_capture();
+            assert!(ffi::obs_output_active(portrait.keepalive));
+            assert!(!ffi::obs_output_active(portrait.output));
+        }
+        // An actual diagnostic request starts BGRA capture and yields a JPEG.
+        assert!(portrait.jpeg().is_empty());
+        let deadline = Instant::now() + Duration::from_secs(8);
+        loop {
+            unsafe {
+                portrait.sync_jpeg_capture();
+            }
+            if !portrait.frames.lock().unwrap().jpeg.is_empty() {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "JPEG request did not receive a frame"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        portrait.frames.lock().unwrap().diagnostic_until = None;
+        sync_until(&mut portrait, false);
+        // Program JPEG consumers retain their full-resolution feed until they
+        // release demand; diagnostic expiry must not interrupt that feed.
+        select_program(true);
+        want_program(true);
+        sync_until(&mut portrait, true);
+        want_program(false);
+        select_program(false);
+        sync_until(&mut portrait, false);
+        drop(portrait);
+        unsafe {
+            ffi::obs_shutdown();
+        }
     }
 }
 impl Drop for Portrait {
@@ -696,6 +810,10 @@ impl Drop for Portrait {
             if !self.output.is_null() {
                 ffi::obs_output_stop(self.output);
                 ffi::obs_output_release(self.output);
+            }
+            if !self.keepalive.is_null() {
+                ffi::obs_output_stop(self.keepalive);
+                ffi::obs_output_release(self.keepalive);
             }
             obs_canvas_set_channel(self.canvas, 0, std::ptr::null_mut());
             if !self.blend_scene.is_null() {

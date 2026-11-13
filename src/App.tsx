@@ -9,6 +9,7 @@ import { FirstLight, firstLightDone } from "./views/FirstLight";
 import { Home } from "./views/Home";
 import {invoke} from "./lib/nativeInvoke";
 import {SetsDevelopmentRoom} from "./views/SetsDevelopmentRoom";
+import {ensureStarterAudio} from './lib/starterAudio';
 
 type View = "loading" | "onboarding" | "onboarding-server" | "signin" | "home" | { kind: "modseat"; link: ModLink; from: "onboarding" | "signin" };
 
@@ -37,6 +38,7 @@ function App() {
   const [view, setView] = useState<View>("loading");
   const [firstLight, setFirstLight] = useState(() => !firstLightDone());
   const [endpoints, setEndpoints] = useState<EndpointInfo[]>([]);
+  useEffect(()=>{if(!hasTauri()||view!== 'home')return;const timer=setTimeout(()=>{void ensureStarterAudio().catch(error=>uiLog(`[starter-audio] ${String(error)}`));},500);return()=>clearTimeout(timer);},[view]);
 
   const refresh = useCallback(async () => {
     // Browser preview has no Tauri bridge; render onboarding statically.

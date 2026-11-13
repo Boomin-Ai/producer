@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { dj, type DJStatus } from '../../lib/dj';
+import { type DJStatus } from '../../lib/dj';
+import {observeDjStatus,djSnapshot} from '../../lib/djObserver';
 import type { RehearsalSession } from './rehearsal';
 import type { PresentationPackage, Scalar } from './schema';
 
@@ -79,28 +80,14 @@ export function useDjSetFeeds(session: RehearsalSession, roomId: string | null, 
   const requested = hasDjSetFeeds(session.package.set.feeds);
   useEffect(() => {
     if (!enabled || !requested) return;
-    let stopped = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const poll = async () => {
-      let delay = 350;
-      try {
-        const status = await dj.control({ kind: 'status' });
-        if (stopped) return;
-        if(status.audio)window.dispatchEvent(new CustomEvent('producer:dj-audio',{detail:status.audio}));
-        session.setRoomFeeds(djSetFeeds(status, session.package.set.feeds));
-        if (!status.program) return;
-      } catch {
-        if (stopped) return;
-        session.setRoomFeeds({});
-        delay = 1000;
-      }
-      timer = setTimeout(poll, delay);
+    const update=()=>{
+      const {status,error}=djSnapshot();
+      if(error){session.setRoomFeeds({});return;}
+      if(!status)return;
+      if(status.audio)window.dispatchEvent(new CustomEvent('producer:dj-audio',{detail:status.audio}));
+      session.setRoomFeeds(djSetFeeds(status,session.package.set.feeds));
     };
-    void poll();
-    return () => {
-      stopped = true;
-      clearTimeout(timer);
-      session.setRoomFeeds({});
-    };
+    const stop=observeDjStatus(update);update();
+    return()=>{stop();session.setRoomFeeds({});};
   }, [session, roomId, enabled, requested]);
 }

@@ -10,7 +10,8 @@ async function mount({room='arrangement-test',weather=false}={}) {
   document.body.style.background='#0a0d13';
   const R=await import('/node_modules/.vite/deps/react.js'),D=await import('/node_modules/.vite/deps/react-dom_client.js');
   const {SetControlsPanel}=await import('/src/features/presentation/SetControlsPanel.tsx');
-  const {RehearsalSession}=await import('/src/features/presentation/rehearsal.ts');
+  const panelSource=await(await fetch('/src/features/presentation/SetControlsPanel.tsx')).text();
+  const {RehearsalSession}=await import(panelSource.match(/from "([^"]*rehearsal\.ts[^"]*)"/)[1]);
   const {parsePackage}=await import('/src/features/presentation/schema.ts');
   const raw=await(await fetch(weather?'/docs/shows/atmosphere.json':'/src/features/presentation/fixtures/after-hours.json')).json();
   if(!weather){

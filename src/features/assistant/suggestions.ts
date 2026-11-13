@@ -1,6 +1,7 @@
 import {conversationSuggestions,type ConversationMessage} from './conversationSuggestions';
 /** Local UI context only. No media, transcripts, guest identities or room chat. */
 export interface AssistantRoomState {
+  roomId?: string;
   setOnOutput: boolean;
   screenSharing: boolean;
   guestsConnected: boolean;

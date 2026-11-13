@@ -1,0 +1,9 @@
+/* Shared mixer/Set vocabulary. The native range keeps its keyboard semantics. */
+.producer-range{--slider-color:var(--primary,#8bdfbd);appearance:none;-webkit-appearance:none;box-sizing:border-box;width:100%;min-width:0;height:28px;margin:0;padding:0 6px;border:0;border-radius:5px;background:transparent;cursor:ew-resize;touch-action:pan-y}
+.producer-range::-webkit-slider-runnable-track{height:4px;border-radius:4px;background:linear-gradient(to right,var(--slider-color) var(--slider-fill,0%),var(--line-2,#ffffff20) var(--slider-fill,0%))}
+.producer-range::-moz-range-track{height:4px;border-radius:4px;background:var(--line-2,#ffffff20)}
+.producer-range::-moz-range-progress{height:4px;border-radius:4px;background:var(--slider-color)}
+.producer-range::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:12px;height:18px;margin-top:-7px;border:0;border-radius:5px;background:var(--fg-1,#e5f3ed);box-shadow:0 1px 4px #0005}
+.producer-range::-moz-range-thumb{width:12px;height:18px;border:0;border-radius:5px;background:var(--fg-1,#e5f3ed);box-shadow:0 1px 4px #0005}
+.producer-range:focus-visible{outline:2px solid var(--slider-color);outline-offset:2px}
+.producer-range:disabled{opacity:.4;cursor:default}

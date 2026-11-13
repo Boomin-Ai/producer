@@ -1,7 +1,7 @@
 {
   "name": "producer",
   "private": true,
-  "version": "0.4.91",
+  "version": "0.4.92",
   "description": "Producer by Boomin \u2014 the open-source studio for creators: post everywhere, stream everywhere.",
   "license": "AGPL-3.0-only",
   "repository": {
@@ -10,7 +10,10 @@
   },
   "type": "module",
   "scripts": {
+    "test:classic": "node scripts/test-classic.mjs",
+    "test:classic-browser": "node scripts/test-classic-browser.mjs",
     "test:authoring-foundation": "node scripts/test-authoring-foundation.mjs",
+    "test:control-budget": "node scripts/test-control-budget.mjs",
     "test:camera-background": "node scripts/test-camera-background.mjs",
     "test:camera-background-browser": "node scripts/test-camera-background-browser.mjs",
     "test:performance-trace": "node scripts/test-performance-trace.mjs",
@@ -23,6 +26,7 @@
     "test:room-compiler-unbound-slot-browser": "node scripts/test-room-compiler-unbound-slot-browser.mjs",
     "test:number-slider-browser": "node scripts/test-number-slider-browser.mjs",
     "test:set-capture-recovery-browser": "node scripts/test-set-capture-recovery-browser.mjs",
+    "test:set-recovery-browser": "node scripts/test-set-source-recovery-browser.mjs && node scripts/test-set-recovery-notice-browser.mjs",
     "dev": "vite",
     "dev:room": "bash scripts/dev-room.sh",
     "build": "tsc && vite build",
@@ -98,7 +102,11 @@
     "test:threads-browser": "node scripts/test-threads-browser.mjs",
     "export:set-publication": "node scripts/export-set-publication.mjs",
     "publish:set": "node scripts/publish-set.mjs",
-    "test:set-publication": "node scripts/test-set-publication.mjs && node scripts/test-publication-client.mjs && node scripts/test-site-public-routes.mjs"
+    "test:set-publication": "node scripts/test-set-publication.mjs && node scripts/test-publication-client.mjs && node scripts/test-site-public-routes.mjs",
+    "room:cli": "node scripts/room-cli.mjs",
+    "test:room-cli": "node scripts/test-room-cli.mjs",
+    "test:assistant-reliability": "node scripts/test-assistant-reliability.mjs",
+    "test:assistant-carousel": "node scripts/test-assistant-carousel.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.0",

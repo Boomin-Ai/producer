@@ -10,16 +10,16 @@ const directory=await mkdtemp(join(tmpdir(),'producer-mcp-'));
 const transport=new StdioClientTransport({command:process.execPath,args:[fileURLToPath(new URL('./server.mjs',import.meta.url))],env:{...process.env,PRODUCER_SETS_DIR:directory},stderr:'pipe'});
 const client=new Client({name:'producer-acceptance',version:'1.0.0'});
 let diagnostics='';transport.stderr?.on('data',data=>diagnostics+=data);
-async function call(name,args={}){const result=await client.callTool({name,arguments:args});assert(!result.isError,result.content[0]?.text);return JSON.parse(result.content[0].text);}
+async function call(name,args={}){let result;try{result=await client.callTool({name,arguments:args});}catch(error){throw Error(`${name}: ${error.message}`);}assert(!result.isError,`${name}: ${result.content[0]?.text}`);return JSON.parse(result.content[0].text);}
 async function rejected(name,args){const result=await client.callTool({name,arguments:args});assert.equal(result.isError,true);}
 try {
  await client.connect(transport);
  assert.equal((await client.listTools()).tools.length,12);
- const capabilities=await call('producer_capabilities');assert.equal(capabilities.nativeReadiness,'not-tested');
+ const capabilities=await call('producer_capabilities');assert.equal(capabilities.nativeReadiness,'not-tested');assert.equal(capabilities.catalog.limits.controls,128);
  const guide=await client.readResource({uri:'producer://authoring/guide'});assert.match(guide.contents[0].text,/producer.design-plan/);
  const schema=await client.readResource({uri:'producer://authoring/schema'});assert.equal(JSON.parse(schema.contents[0].text).type,'object');
  const plan={schema:'producer.design-plan/1',id:'magazine',name:'Magazine',background:'#fff5db',layouts:['landscape','portrait'].map(orientation=>({id:orientation,name:orientation,orientation,elements:[{id:'title',kind:'text',bounds:[40,30,950,110],text:'ATTN IS CURRENCY',color:'#000000',size:64},{id:'host',kind:'camera',bounds:[90,220,760,760],slot:'host',radius:380},{id:'voice',kind:'effect',bounds:[40,170,860,860],effect:'voiceRing',radius:380}]}))};
- const saved=await call('producer_compile_set',{plan});assert.equal(saved.layouts.length,2);
+ const saved=await call('producer_compile_set',{plan});assert.equal(saved.layouts.length,2);assert.equal(saved.controlBudget.limit,128);
  const original=await readFile(saved.path,'utf8');
  const unpaired=JSON.parse(original);delete unpaired.set.assets;
  const beforeUnpaired=(await readdir(directory)).length;
@@ -53,7 +53,7 @@ try {
  await symlink(saved.path,join(directory,'link.set.json'));await rejected('producer_validate_set',{file:'link.set.json'});
  await writeFile(join(directory,'invalid.set.json'),'{}');await rejected('producer_validate_set',{file:'invalid.set.json'});
  const road=await readFile(new URL('../../docs/shows/road-to-v1.json',import.meta.url),'utf8');await writeFile(join(directory,'road.set.json'),road);
- const roadContext=await call('producer_inspect_set',{file:'road.set.json'});assert(!JSON.stringify(roadContext).includes('base64,'));
+ const roadContext=await call('producer_inspect_set',{file:'road.set.json'});assert(!JSON.stringify(roadContext).includes('base64,'));assert.equal(roadContext.controlBudget.used,roadContext.context.set.controls.length);assert.equal(roadContext.controlBudget.remaining,128-roadContext.controlBudget.used);
  const roadDraft=await call('producer_edit_set',{file:'road.set.json',edit:{schema:'producer.set-edit/1',baseRevision:roadContext.revision,operations:[{op:'duplicate-layout',layout:'sea-landscape',id:'mcp-variant',name:'MCP variant'}]}});
  assert.deepEqual(JSON.parse(await readFile(roadDraft.path,'utf8')).set.assets,JSON.parse(road).set.assets);
  const canonical=structuredClone(roadContext.context),assetRefs=Object.keys(canonical.set.assets??{});delete canonical.set.assets;

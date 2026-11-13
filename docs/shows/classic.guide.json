@@ -1,0 +1,61 @@
+{
+  "schema": "producer.reference-guide/1",
+  "setId": "classic",
+  "version": "1.2.1",
+  "purpose": "Producer’s signature minimal studio: charcoal or porcelain surfaces, dimensional chrome and customizable perimeter light, with eight paired views and full-canvas cue overlays.",
+  "views": {
+    "opening": "Opening",
+    "solo": "Solo",
+    "demo": "Demo",
+    "conversation": "Conversation",
+    "roundtable": "Roundtable",
+    "spotlight": "Spotlight",
+    "break": "Break",
+    "closing": "Closing"
+  },
+  "sourceRoles": [
+    {
+      "id": "host",
+      "label": "Host camera"
+    },
+    {
+      "id": "screen",
+      "label": "Screen share"
+    },
+    {
+      "id": "guest1",
+      "label": "Guest one"
+    },
+    {
+      "id": "guest2",
+      "label": "Guest two"
+    },
+    {
+      "id": "guest3",
+      "label": "Guest three"
+    },
+    {
+      "id": "media",
+      "label": "Featured image or clip"
+    },
+    {
+      "id": "chat",
+      "label": "Room chat"
+    }
+  ],
+  "defaultView": "solo",
+  "themes": [
+    "dark",
+    "light"
+  ],
+  "principles": [
+    "Large source regions, restrained chrome and deliberate type hierarchy.",
+    "Optional chat reflows the camera.",
+    "Current-layout controls use the existing show.layoutId binding; this Set has no Show.",
+    "Device identity and account connections remain outside the package.",
+    "Motion animates only a graphics-only layer; native source ancestry stays static.",
+    "Registered waiting music uses the native DJ mixer; no autoplay or effects imported as music.",
+    "Light and dark palettes are authored separately; adjustable edge color retains legible neutral typography."
+  ],
+  "qualification": "Requires canonical/default-state checks, both-theme visual review, every dock size and separate native preparation/recording evidence."
+}

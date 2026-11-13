@@ -6970,6 +6970,13 @@ textarea::placeholder {
   padding: 8px var(--pad-card) var(--pad-card);
 }
 
+/* The Assistant owns its internal spacing. The room card is its only frame. */
+.room:not(.layout-edit) .rm-panel-assistant > .rm-panel-body {
+  padding: 0;
+  gap: 0;
+}
+
+
 /* ── Dock-owned backgrounds (dock_bg) ─────────────────────────────────────
    The DOCK is one card; its components render flat inside it. Configured at
    the dock level (edit mode), never per component — turning it on turns the

@@ -10,6 +10,7 @@ export function authoringRuntime() {
     absWorkingDir:repository,
     stdin:{resolveDir:repository,contents:`
       export * from './src/features/presentation/authoring/catalog';
+      export * from './src/features/presentation/controlBudget';
       export * from './src/features/presentation/authoring/compiler';
       export * from './src/features/presentation/authoring/service';
       export * from './src/features/presentation/authoring/brief';

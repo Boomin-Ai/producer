@@ -17,6 +17,10 @@ on:
         description: "Publish a Windows manual-download patch without changing the shared latest release"
         type: boolean
         default: false
+      qualify_windows:
+        description: "Run installed/native Windows media tests in a private dry run (does not publish)"
+        type: boolean
+        default: false
       resume_windows_run:
         description: "Resume only after a prior public build passed Windows install and failed the FFmpeg prerequisite"
         type: string
@@ -773,7 +777,7 @@ jobs:
           sparse-checkout: scripts
 
       - name: Parse Windows qualification scripts before building
-        if: ${{ github.event_name == 'push' || inputs.publish }}
+        if: ${{ github.event_name == 'push' || inputs.publish || inputs.qualify_windows }}
         run: |
           foreach ($script in @('scripts/build-windows.ps1','scripts/test-windows-installed.ps1','scripts/test-windows-engine.ps1')) {
             $tokens = $null
@@ -861,7 +865,7 @@ jobs:
       # Preserve the exact installer for diagnosis if the hosted qualification
       # environment fails. It is not staged on the public release draft here.
       - name: Preserve Windows installer before runtime checks
-        if: ${{ inputs.resume_windows_run == '' && (github.event_name == 'push' || inputs.publish) }}
+        if: ${{ inputs.resume_windows_run == '' && (github.event_name == 'push' || inputs.publish || inputs.qualify_windows) }}
         uses: actions/upload-artifact@v4
         with:
           name: Producer-windows-x64-unqualified-${{ github.sha }}
@@ -872,7 +876,7 @@ jobs:
           retention-days: 7
 
       - name: Qualify installed Windows engine
-        if: ${{ inputs.resume_windows_run == '' && (github.event_name == 'push' || inputs.publish) }}
+        if: ${{ inputs.resume_windows_run == '' && (github.event_name == 'push' || inputs.publish || inputs.qualify_windows) }}
         timeout-minutes: 6
         run: |
           $version = (Get-Content src-tauri\tauri.conf.json -Raw | ConvertFrom-Json).version
@@ -889,7 +893,7 @@ jobs:
       # test then owns its own libobs/CEF process; an absent/zero-test match
       # or unavailable D3D11 adapter cannot be reported as a runtime pass.
       - name: Ensure recording inspection prerequisite
-        if: ${{ github.event_name == 'push' || inputs.publish }}
+        if: ${{ github.event_name == 'push' || inputs.publish || inputs.qualify_windows }}
         timeout-minutes: 6
         run: |
           if (-not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
@@ -900,12 +904,12 @@ jobs:
           Write-Host 'ffprobe is available for the recording tests'
 
       - name: Prepare Windows native runtime qualification
-        if: ${{ github.event_name == 'push' || inputs.publish }}
+        if: ${{ github.event_name == 'push' || inputs.publish || inputs.qualify_windows }}
         timeout-minutes: 30
         run: .\scripts\test-windows-engine.ps1 -EngineDir $env:PRODUCER_ENGINE_DIR -OutputDir "$env:RUNNER_TEMP\producer-windows-runtime-proof" -PrepareOnly
 
       - name: Qualify Windows native runtime
-        if: ${{ github.event_name == 'push' || inputs.publish }}
+        if: ${{ github.event_name == 'push' || inputs.publish || inputs.qualify_windows }}
         timeout-minutes: 25
         run: .\scripts\test-windows-engine.ps1 -EngineDir $env:PRODUCER_ENGINE_DIR -OutputDir "$env:RUNNER_TEMP\producer-windows-runtime-proof" -RunOnly -MaxRuntimeSeconds 1200
 
@@ -921,7 +925,7 @@ jobs:
           .\release-control\scripts\test-windows-installed.ps1 -Installer $installer -ExpectedPackagedSha256 $proof.expectedPackagedExecutableSha256 -Headless -OutputDir "$env:RUNNER_TEMP\producer-windows-installed-proof"
 
       - name: Preserve Windows installed and runtime evidence
-        if: ${{ always() && (github.event_name == 'push' || inputs.publish) }}
+        if: ${{ always() && (github.event_name == 'push' || inputs.publish || inputs.qualify_windows) }}
         uses: actions/upload-artifact@v4
         with:
           name: producer-windows-qualification-${{ github.sha }}

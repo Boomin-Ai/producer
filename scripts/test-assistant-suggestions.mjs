@@ -17,7 +17,7 @@ assert.equal(safe[0].action,undefined,'model metadata can only fill editable pro
 assert(isSuggestionCall({type:'function_call',namespace:'producer_assistant',name:'suggest_replies'}));
 assert(!isSuggestionCall({type:'function_call',namespace:'other',name:'suggest_replies'}));
 
-const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'playwright-core');
+const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'../tools/producer-mcp/node_modules/playwright-core/index.mjs');
 const browser=await chromium.launch({executablePath:process.env.PRODUCER_CHROME??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
 const origin=process.env.PRODUCER_TEST_URL??'http://127.0.0.1:1436/';
 try{
@@ -60,7 +60,7 @@ try{
  await page.evaluate(()=>{window.omitMetadata=true;window.answer='Choose the next screen:\n- **Say hello**\n- **Show a favorite toy**\n- **Say bye-bye**';});
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Can we keep it much simpler? No edits.');await page.getByRole('button',{name:'Send ↗',exact:true}).click();
  await page.getByRole('button',{name:'Show a favorite toy',exact:true}).waitFor();
- assert.deepEqual(await page.locator('.assistant-suggestions button').allTextContents(),['Say hello','Show a favorite toy','Say bye-bye'],'the local fallback uses the newest reply when metadata is omitted');
+ assert.deepEqual(await page.locator('.assistant-suggestions-track>button').allTextContents(),['Say hello','Show a favorite toy','Say bye-bye'],'the local fallback uses the newest reply when metadata is omitted');
  assert.equal(await page.evaluate(()=>new Set(window.drafts).size),1,'planning and suggestion metadata never edit the private Set');
  assert.equal(await page.evaluate(()=>window.loads),0,'no suggestion can load or place a Set on output');
  const beforeMetadataOnly=await page.evaluate(()=>window.turns.length);

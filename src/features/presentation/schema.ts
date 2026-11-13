@@ -2,6 +2,7 @@ import {validateMask,validateBackdrop} from './visualEffects';
 import {arrangementCatalog} from './controlArrangements';
 import {parseWorld,WORLD_SCHEMA,type Scene3dWorld} from './scene3d/contract.mjs';
 import {parseRuntimeDefinition,type RuntimeDefinition} from '../../../shared/set-runtime/contract';
+import {MAX_SET_CONTROLS} from './controlBudget';
 import {runtimeSchemaBody,runtimeSchemaDefs} from '../../../shared/set-runtime/jsonSchema';
 import {outputTypes} from '../../../shared/set-runtime/projection';
 import {validateAsset,ASSET_BYTES,PACKAGE_BYTES} from './assets';
@@ -51,11 +52,12 @@ const defaulted = <T>(codec:Codec<T>,value:T):Codec<T>&{defaulted:true}=>({
   ...codec,defaulted:true,json:{...codec.json,default:value},
   read:(input,path,depth)=>input===undefined?structuredClone(value):codec.read(input,path,depth),
 });
-const array = <T>(codec: Codec<T>, maxItems = 64): Codec<T[]> => ({
+const array = <T>(codec: Codec<T>, maxItems = 64, limitMessage?: (count: number) => string): Codec<T[]> => ({
   json: { type: 'array', items: codec.json, maxItems },
   read(v, p, d) {
     bounded(d, p);
-    if (!Array.isArray(v) || v.length > maxItems) fail(p, 'Invalid or oversized list.');
+    if (!Array.isArray(v)) fail(p, 'Invalid or oversized list.');
+    if (v.length > maxItems) fail(p, limitMessage?.(v.length) ?? 'Invalid or oversized list.');
     return v.map((item, i) => codec.read(item, `${p}[${i}]`, d + 1));
   },
 });
@@ -205,13 +207,15 @@ const action = union(object({ type: literal('layout.select'), layoutId: id }),
 export type RehearsalAction = Type<typeof action>;
 const control = union(
   object({ id, type: literal('button'), label: string(80), action, when: optional(binding), enabled: optional(binding) }),
-  object({ id, type: literal('text'), label: string(80), key: id, when: optional(binding) }),
+  object({ id, type: literal('text'), label: string(80), key: id, when: optional(binding), presentation:optional(literal('color')) }),
   object({ id, type: literal('number'), label: string(80), key: id, when: optional(binding),
-    presentation: optional(literal('slider')), step: optional(number(.000001, 1e6)) }),
+    presentation: optional(literal('slider')), step: optional(number(.000001, 1e6)),unit:optional(string(12)) }),
 );
 export type SetControl = Type<typeof control>;
-const controlReference=string(210,'^(builtin:layout|set:[a-zA-Z][a-zA-Z0-9_-]{0,63}|module:[a-zA-Z][a-zA-Z0-9_-]{0,63}:([a-zA-Z][a-zA-Z0-9_-]{0,63}|\\$(lifecycle|weather-location|behavior-tools)))$');
-const controlArrangement=object({sections:array(object({id,label:string(80),controls:array(controlReference,256),collapsed:optional(boolean)}),64),minimized:array(controlReference,64)});
+const operatorComponent=object({id,type:literal('music'),label:string(80),when:optional(binding),defaultTrack:optional(id)});
+export type OperatorComponent=Type<typeof operatorComponent>;
+const controlReference=string(210,'^(builtin:layout|operator:[a-zA-Z][a-zA-Z0-9_-]{0,63}|set:[a-zA-Z][a-zA-Z0-9_-]{0,63}|module:[a-zA-Z][a-zA-Z0-9_-]{0,63}:([a-zA-Z][a-zA-Z0-9_-]{0,63}|\\$(lifecycle|weather-location|behavior-tools)))$');
+const controlArrangement=object({sections:array(object({id,label:string(80),purpose:optional(union(literal('live'),literal('content'),literal('appearance'))),controls:array(controlReference,256),collapsed:optional(boolean)}),64),minimized:array(controlReference,64),cameraBackground:optional(boolean)});
 const show = object({ id, version: string(32), initialPhase: id,
   phases: array(object({ id, label: string(80), layoutId: id, next: optional(id), collectMs: optional(number(1000, 3_600_000)) }), 16),
   choices: defaulted(array(object({ id, label: string(80) }), 6), []),
@@ -230,7 +234,7 @@ const codec = object({
     feeds: dictionary(valueDefinition), slots: array(object({ id, label: string(80) }), 8),
     components: dictionary(object({ props: dictionary(scalar), root: ref('node', () => node) }), 16),
     layouts: array(object({ id, label: string(80), width: number(320, 1920), height: number(320, 1920), root: ref('node', () => node),animation:optional(animation) }), 32),
-    controls: array(control, 40),controlArrangement:optional(controlArrangement),
+    controls: array(control, MAX_SET_CONTROLS, count => `Set control budget exceeded: ${count}/${MAX_SET_CONTROLS}. Buttons, text fields and numeric controls share this limit. Keep existing controls unless the user approves replacing them.`),operatorComponents:optional(array(operatorComponent,16)),controlArrangement:optional(controlArrangement),
   }), show: optional(show),
 });
 export type PresentationPackage = Type<typeof codec>;
@@ -273,7 +277,10 @@ export function parsePackage(value: unknown): PresentationPackage {
         return;
       }
       if (rest.length || unsafeKey(key) || (root === 'props' ? !scope.has(key) : root === 'values' ? !hasOwn(doc.set.values, key)
-        : root === 'feeds' ? !hasOwn(doc.set.feeds, key) : root === 'tokens' ? !hasOwn(doc.set.tokens??{},key) : !doc.show || !['layoutId', 'phase', 'collecting', 'revealed', 'winner', 'result', 'ballot', 'heat', 'remainingMs', 'total'].includes(key))) fail('$', `Unknown binding ${b.get}.`);
+        : root === 'feeds' ? !hasOwn(doc.set.feeds, key) : root === 'tokens' ? !hasOwn(doc.set.tokens??{},key)
+        // The active layout exists for standalone Sets too. Other Show fields
+        // still require an actual rundown; evaluate() already shares this ID.
+        : key !== 'layoutId' && (!doc.show || !['phase', 'collecting', 'revealed', 'winner', 'result', 'ballot', 'heat', 'remainingMs', 'total'].includes(key)))) fail('$', `Unknown binding ${b.get}.`);
     } else {
       if (b.op === 'eq' && b.args.length !== 2 || b.op === 'if' && b.args.length !== 3) fail('$', 'Wrong binding argument count.');
       b.args.forEach(x => checkBinding(x, scope));
@@ -420,6 +427,8 @@ export function parsePackage(value: unknown): PresentationPackage {
   for(const instance of doc.runtime.instances)if(instance.owner==='segment'&&!doc.show?.phases.some(p=>p.id===instance.segment))fail('$.runtime.instances','Module owns an unknown show segment.');
   for (const [key, def] of [...Object.entries(doc.set.values), ...Object.entries(doc.set.feeds)]) validateValue(def, def.default, key);
   const controls = new Set<string>();
+  const operators=new Set<string>();
+  for(const c of doc.set.operatorComponents??[]){if(operators.has(c.id))fail('$.set.operatorComponents','Duplicate operator component ID.');operators.add(c.id);if(c.when!==undefined){checkBinding(c.when,new Set());booleanBinding(c.when);}}
   doc.set.controls.forEach(c => {
     if (controls.has(c.id)) fail('$.set.controls', 'Duplicate control ID.'); controls.add(c.id);
     if (c.when !== undefined) { checkBinding(c.when, new Set()); booleanBinding(c.when); }
@@ -427,6 +436,7 @@ export function parsePackage(value: unknown): PresentationPackage {
     if (c.type !== 'button') {
       const def = doc.set.values[c.key];
       if (!def || def.type !== c.type) fail('$.set.controls', 'Control value/type does not match declared field.');
+      if(c.type==='text'&&c.presentation==='color'&&(def.type!=='text'||def.maxLength!==7||!/^#[0-9a-fA-F]{6}$/.test(def.default)))fail('$.set.controls','Color controls require a seven-character hex color field.');
       if(c.type==='number'&&c.presentation==='slider'&&def.type==='number'&&(def.min>=def.max||c.step!==undefined&&c.step>def.max-def.min))fail('$.set.controls','Slider needs increasing bounds and a step within its range.');
     } else if (c.action.type === 'layout.select' && !layouts.has(c.action.layoutId)) fail('$.set.controls', 'Unknown layout action.');
     else if (c.action.type === 'value.set') {

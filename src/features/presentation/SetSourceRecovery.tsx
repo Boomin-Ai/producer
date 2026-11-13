@@ -4,8 +4,8 @@ import {SetSourceCreator} from './SetSourceCreator';
 import {sourceRecoveries, type SourceRecovery} from './sourceRecovery';
 import type {PresentationPackage} from './schema';
 
-export function SetSourceRecovery({slots,output,names,blocked=false}: {slots:PresentationPackage['set']['slots'];output:SetOutputControls;names:Record<string,string>;blocked?:boolean}) {
-  const issues = sourceRecoveries(slots,output.bindings,output.sources);
+export function SetSourceRecovery({slots,output,names,blocked=false,issues:provided,compact=false,retryLayouts}: {slots:PresentationPackage['set']['slots'];output:SetOutputControls;names:Record<string,string>;blocked?:boolean;issues?:SourceRecovery[];compact?:boolean;retryLayouts?:readonly string[]}) {
+  const issues = provided??sourceRecoveries(slots,output.bindings,output.sources);
   const [choices,setChoices] = useState<Record<string,string>>({});
   const [busy,setBusy] = useState(false), [error,setError] = useState('');
   const working = useRef(false);
@@ -15,7 +15,7 @@ export function SetSourceRecovery({slots,output,names,blocked=false}: {slots:Pre
     try {
       // One removed source may be shared by several orientations or slot roles.
       for (const slot of issue.slots) output.bind(slot.id,source);
-      output.retryPreparation?.();
+      output.retryPreparation?.(retryLayouts);
       // Respect an intentional room-scene selection. Retry only an existing
       // on-air Set or a failed explicit Show set attempt.
       if (output.active || output.error) await output.apply();
@@ -23,8 +23,8 @@ export function SetSourceRecovery({slots,output,names,blocked=false}: {slots:Pre
     finally {working.current=false;setBusy(false);}
   };
   if (!issues.length) return null;
-  return <section className="set-source-recovery" aria-label="Reconnect Set sources">
-    <div><strong>Reconnect {issues.length === 1 ? 'a source' : 'sources'}</strong><p>This Set uses {issues.length === 1 ? 'a source that was' : 'sources that were'} removed. Choose {issues.length === 1 ? 'its replacement' : 'their replacements'} to restore the affected layouts.</p></div>
+  return <section className={`set-source-recovery${compact?' is-compact':''}`} aria-label={compact?'Choose Set sources':'Reconnect Set sources'}>
+    {!compact&&<div><strong>Reconnect {issues.length === 1 ? 'a source' : 'sources'}</strong><p>This Set uses {issues.length === 1 ? 'a source that was' : 'sources that were'} removed. Choose {issues.length === 1 ? 'its replacement' : 'their replacements'} to restore the affected layouts.</p></div>}
     {issues.map(issue => {
       const selected = issue.candidates.some(item=>item.id === choices[issue.sourceId]) ? choices[issue.sourceId] : issue.suggested?.id ?? '';
       const label = issue.slots.map(slot=>slot.label).join(' / ');

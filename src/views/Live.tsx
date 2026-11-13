@@ -1,3 +1,6 @@
+import {useRoomControl} from '../features/room-control/useRoomControl';
+import {HIDDEN_ROOM_SOURCE_KINDS} from '../features/room-control/sourceKinds';
+import {preparationDebug} from '../features/sets-v2/preparedScenes';
 import {RoomAssistantContext, type AssistantSetRequest, type AssistantEditorRequest} from '../features/assistant/roomBridge';
 import {RoomTransportControls,ToolbarButton} from '../components/RoomToolbar';
 import {IS_MAC,IS_WINDOWS} from '../lib/platform';
@@ -28,6 +31,9 @@ import { openingScene, scenePlan } from "../lib/scenePlan";
 import { SoundboardPanel } from "../components/SoundboardPanel";
 import { sounds } from "../lib/soundboard";
 import { DJPanel } from "../components/DJPanel";
+import {ClipsPanel} from "../features/clips/ClipsPanel";
+import {useClips} from "../features/clips/useClips";
+import {validateClipSettings} from "../features/clips/clips";
 import { DJSlider } from "../components/DJSlider";
 import { AudienceDestination, AudienceDestinationMark } from "../components/AudienceDestination";
 import type { LocalRecording } from "../lib/ipc";
@@ -4721,6 +4727,8 @@ export function LiveView({
    * NOT applied and the engine cleared, once per room open. */
   const localSetSkipped = useRef(false);
   const roomId = room?.id ?? null;
+  const clipsController=useClips(roomId??"local",isHost&&docApplied,visible,dockOf(layout,"clips")!=="hidden");
+
   useEffect(() => {
     if (!docApplied || !isHost) return;
     void roomEngineRef.current?.run(async () => { await sounds.activate(roomId ?? "local"); }).catch(error => notifyError(error, {key:"soundboard"}));
@@ -4749,7 +4757,7 @@ export function LiveView({
   if(setOutput.renderer==='native')setOutput.createSource=async(slot,spec,label,assign=true)=>{
     const id='set-source-'+crypto.randomUUID();
     const next=await invoke<LiveSources>('live_set_source_create',{id,label,spec});
-    setSources(next);
+    sourcesRef.current=next;setSources(next);
     const c=cfgRef.current;
     const scenes=c.scenes.map(scene=>scene.id===c.active_scene?{...scene,look:{...scene.look,[id]:{visible:false}}}:scene);
     writeCfg({...c,scenes,sources:{...c.sources,extras:[...(c.sources.extras??[]),{id,label,spec}]}});
@@ -7363,7 +7371,7 @@ export function LiveView({
   const assistantDock=dockOf(layout,'assistant');
   const assistantScreenSharing=(sources.items??[]).some(item=>item.kind==='screen'&&item.visible);
   const assistantGuestsConnected=roster.some(guest=>!!guest.render_url&&guest.state!=='left'&&!guest.monitor&&guest.seat!=='control');
-  const assistantRoomState=useMemo(()=>({setOnOutput:!!setOutput.currentPresented,screenSharing:assistantScreenSharing,guestsConnected:assistantGuestsConnected}),[setOutput.currentPresented,assistantScreenSharing,assistantGuestsConnected]);
+  const assistantRoomState=useMemo(()=>({roomId:roomId??'local',setOnOutput:!!setOutput.currentPresented,screenSharing:assistantScreenSharing,guestsConnected:assistantGuestsConnected}),[roomId,setOutput.currentPresented,assistantScreenSharing,assistantGuestsConnected]);
   const assistantDockOpen=assistantDock==='top'?topOpen:assistantDock==='bottom'?sheetOpen:assistantDock==='left'?leftOpen:assistantDock==='right'?rightOpen:false;
   const assistantEnabled=visible&&isHost&&docApplied;
   const assistantScope=JSON.stringify([endpointRef.current??'local',roomId??'local']);
@@ -7401,6 +7409,68 @@ export function LiveView({
     writeCfg({...current,sizes:next});
   },[roomId]);
 
+  useRoomControl('room',roomId??'local',visible&&isHost&&docApplied,()=>({
+    id:roomId,name:room?.name,ready:docApplied,host:isHost,layoutEdit,
+    config:cfgRef.current, docks:{top:{open:topOpen},bottom:{open:sheetOpen},left:{open:leftOpen},right:{open:rightOpen}},
+    sources,scenes,activeScene,meters:extraLevels,access:roomAccess,interactions:{vote,savedVotes},chat:{messages:chatMsgs,filters:chatFilters,connections:chatConns,error:chatError},guests:roster.map(({id,display_name,state,seat})=>({id,display_name,state,seat})),
+    presentation:{document:setRehearsal.package,state:setRehearsal.snapshot(),bindings:setOutput.bindings,framing:setOutput.framing,renderer:setOutput.renderer,busy:setOutput.busy,error:setOutput.error,readiness:setOutput.layoutReadiness,active:!!setOutput.active,currentPresented:!!setOutput.currentPresented},
+    output:{streaming,recording:!!recPath,outputView,engine:snapshot},
+    clips:{capture:clipsController.capture,settings:clipsController.settings,recent:clipsController.recent},
+    assistant:{started:assistantStarted,enabled:assistantEnabled,dock:assistantDock,scope:assistantScope},
+    ...(import.meta.env.DEV?{preparation:preparationDebug()}:{}),
+  }),{
+    'panel.move':({panel,dock})=>{if(!PANEL_ORDER.includes(panel)||!['top','bottom','left','right','hidden'].includes(dock))throw Error('Unknown panel or dock.');setLayout(movePanel(normalize(cfgRef.current.layout??DEFAULT_LAYOUT),panel,dock));if(panel==='assistant')setAssistantStarted(true);return {panel,dock};},
+    'dock.set':({dock,open,size})=>{if(!['top','bottom','left','right'].includes(dock)||typeof open!=='boolean')throw Error('Expected dock and open boolean.');if(size!==undefined&&(!Number.isFinite(size)||size<56||size>560))throw Error('Dock size must be 56–560 pixels.');({top:setTopOpen,bottom:setSheetOpen,left:setLeftOpen,right:setRightOpen}[dock as 'top'|'bottom'|'left'|'right'])(open);if(size!==undefined){writeCfg({...cfgRef.current,sizes:{...cfgRef.current.sizes,[dock]:size}});}return {dock,open,size};},
+    'layout.edit':({enabled})=>{if(typeof enabled!=='boolean')throw Error('Expected enabled boolean.');setLayoutEdit(enabled);return {enabled};},
+    'scene.select':async({id})=>{const scene=cfgRef.current.scenes.find(item=>item.id===id),owner=roomEngineRef.current;if(!scene||!owner)throw Error('Choose a scene in the open room.');let applied=false;await owner.run(async()=>{applied=await applyScene(scene,{cut:true})===true;});if(!applied)throw Error('The scene could not be selected. Check room readiness.');return {id};},
+    'clips.status':async()=>({...await clipsController.refresh(),settings:clipsController.settings,error:clipsController.error}),
+    'clips.configure':args=>clipsController.configure(validateClipSettings(args)),
+    'clips.enable':async()=>{if(clipsController.capture.enabled)return clipsController.capture;return clipsController.setEnabled(true);},
+    'clips.disable':async()=>{if(!clipsController.capture.enabled&&!clipsController.capture.error)return clipsController.capture;return clipsController.setEnabled(false);},
+    'clips.save':()=>clipsController.save(),
+    'clips.list':async()=>({recent:(await clipsController.refresh())?.recent??[]}),
+    'scene.add':()=>{addScene();return {requested:true};},
+    'scene.create':({name})=>{if(typeof name!=='string'||!name.trim()||name.length>80)throw Error('Expected a scene name up to 80 characters.');const next:RoomScene={id:'scene-'+crypto.randomUUID(),name:name.trim(),look:{}};const current=cfgRef.current;writeCfg({...current,scenes:[...current.scenes,next]});return next;},
+    'scene.source':async({sceneId,sourceId,visible,x,y,w,h,z})=>{
+      const current=cfgRef.current,scene=current.scenes.find(item=>item.id===sceneId);
+      if(!scene||!sourcesRef.current.items?.some(item=>item.id===sourceId))throw Error('Choose an existing scene and room source.');
+      if(typeof visible!=='boolean')throw Error('Expected source visibility.');
+      const patch:SceneItemLook={visible};for(const [key,value]of Object.entries({x,y,w,h,z})){if(value===undefined)continue;if(typeof value!=='number'||!Number.isFinite(value)||value<0||value>16384||(['w','h'].includes(key)&&value<1))throw Error('Invalid scene geometry.');(patch as any)[key]=value;}
+      const look:Record<string,SceneItemLook>={...scene.look,[sourceId]:{...scene.look?.[sourceId],...patch}};
+      if(sceneId===current.active_scene){const owner=roomEngineRef.current;if(!owner)throw Error('This room is closed.');let applied=false;await owner.run(async()=>{if(cfgRef.current.active_scene!==sceneId||!sourcesRef.current.items?.some(item=>item.id===sourceId))throw Error('The scene or source changed before applying this edit.');const next=await ipc.liveApplyScene([{id:sourceId,patch}]);sourcesRef.current=next;setSources(next);applied=true;});if(!applied)throw Error('The room closed before applying the source change.');}
+      writeCfg({...cfgRef.current,scenes:cfgRef.current.scenes.map(item=>item.id===sceneId?{...item,look}:item)});return {sceneId,sourceId,look:look[sourceId]};
+    },
+    'source.devices':({kind})=>{if(!['camera','screen','mic'].includes(kind))throw Error('Choose camera, screen or mic.');return deviceIpc.list(kind);},
+    'source.add':async({kind,label,color,device})=>{
+      if(!setOutput.createSource)throw Error('Native source creation is unavailable in this room.');
+      if(typeof label!=='string'||!label.trim()||label.length>100)throw Error('Expected a source label up to 100 characters.');
+      if(!(HIDDEN_ROOM_SOURCE_KINDS as readonly string[]).includes(kind))throw Error('This engine supports hidden camera, screen and color sources. Author text and media in the Set.');
+      if(device!==undefined&&(typeof device!=='string'||device.length>512))throw Error('Invalid device.');
+      if(kind==='color'&&(typeof color!=='string'||!/^#[0-9a-f]{6}$/i.test(color)))throw Error('Expected a six-digit color.');
+      const spec:ExtraSpec=kind==='color'?{kind,color}:kind==='screen'?{kind,...(device?{display:device}:{})}:{kind:'camera',...(device?{device}:{})};
+      const owner=roomEngineRef.current;if(!owner)throw Error('This room is closed.');const created:{id?:string}={};
+      await owner.run(async()=>{created.id=(await setOutput.createSource!('',spec,label,false))||undefined;});if(!created.id)throw Error('The room closed before creating the source.');return {id:created.id,label,kind,visible:false};
+    },
+    'source.create':async({slot,kind,label,color,device})=>{if(!setOutput.createSource||!setRehearsal.package.set.slots.some(item=>item.id===slot))throw Error('Choose an existing Set source role.');if(typeof label!=='string'||!label.trim()||label.length>100)throw Error('Expected a source label up to 100 characters.');if(kind!=='camera'&&kind!=='color')throw Error('This development command supports camera or color sources.');if(kind==='color'&&(typeof color!=='string'||!/^#[0-9a-f]{6}$/i.test(color)))throw Error('Expected a six-digit color.');if(device!==undefined&&typeof device!=='string')throw Error('Invalid camera device.');const id=await setOutput.createSource(slot,kind==='color'?{kind,color}:{kind:'camera',...(device?{device}:{})},label);return {id};},
+    'set.bind':({slot,source})=>{if(!setRehearsal.package.set.slots.some(item=>item.id===slot)||!sourcesRef.current.items?.some(item=>item.id===source&&item.kind!=='mic'))throw Error('Choose an existing source and role.');setOutput.bind(slot,source);return {slot,source};},
+    'set.show':async()=>{await (setOutput.applyConfirmed??setOutput.apply)();if(setOutput.error)throw Error(setOutput.error);return {requested:true};},
+    'set.hide':async()=>({hidden:await setOutput.returnToRoom()}),
+    'sets.list':()=>ipc.setLibraryList(),
+    'sets.save':async({document})=>{const {parsePackage}=await import('../features/presentation/schema');const doc=parsePackage(document);await ipc.setLibrarySave(JSON.stringify(doc));window.dispatchEvent(new Event('producer:set-library-changed'));return {id:doc.id,name:doc.name,version:doc.version,outputChanged:false};},
+    ...(import.meta.env.DEV?{'set.inspect':async()=>{
+      if(setOutput.renderer!=='native')throw Error('Native Set output is unavailable.');
+      const {generation}=await ipc.liveSetStatus();
+      const read=(outputId:string)=>invoke('live_set_v2',{request:{op:'status',generation,outputId}});
+      const [program,portrait,engine,music]=await Promise.all([read('program'),outputView==='landscape'?null:read('portrait'),ipc.liveEngineStatus(),invoke('dj_control',{action:{kind:'status'}})]);
+      return {program,portrait,engine,music};
+    }}:{}),
+    'set.load':async({id})=>{if(typeof id!=='string')throw Error('Expected library Set id.');const item=(await ipc.setLibraryList()).find(item=>item.id===id);if(!item)throw Error('Unknown library Set.');const raw=await ipc.setLibraryRead(item.file);const {parsePackage}=await import('../features/presentation/schema');const next=await changeSet(parsePackage(JSON.parse(raw)));return {id:next?.package.id,name:next?.package.name};},
+    'set.layout':({id})=>{if(!setRehearsal.package.set.layouts.some(item=>item.id===id))throw Error('Unknown layout.');setRehearsal.send({type:'control',action:{type:'layout.select',layoutId:id}});return {id};},
+    'set.value':({key,value})=>{if(!Object.prototype.hasOwnProperty.call(setRehearsal.package.set.values,key))throw Error('Unknown field.');setRehearsal.send({type:'control',action:{type:'value.set',key,value}});return {key};},
+    'assistant.open':()=>{setAssistantStarted(true);const existing=normalize(cfgRef.current.layout??DEFAULT_LAYOUT);if(dockOf(existing,'assistant')==='hidden')setLayout(movePanel(existing,'assistant','left'));setLeftOpen(true);setRightOpen(true);return {opened:true};},
+    leave:()=>{if(streaming||recPath)throw Error('Stop output in the UI before navigating away in a test.');onLeave?.();return {leaving:true};},
+  },true);
+
   const panelBody = (id: PanelId) => {
     switch (id) {
       case "assistant":
@@ -7409,6 +7479,8 @@ export function LiveView({
         return visible?<SetControlsPanel assistantEditorRequest={assistantEditorRequest} onAssistantEditorOpened={assistantEditorOpened} preferenceRoomId={roomId??undefined} endpoint={endpointRef.current??activeEndpointId()??undefined} serverRoomId={cfg.server_room_id??undefined} moduleBindings={cfg.presentation?.moduleBindings} voting={roomAccess.can.interactions?<SetRoomVoting vote={vote} savedVotes={savedVotes} onSelectVote={selectSavedVote} onOpen={openVote} onTransition={(action,hold)=>void transitionVote(action,hold)}/>:undefined} sourceNames={setSourceNames} onFieldEdit={editSetField} session={setRehearsal} output={setOutput} blocked={!docApplied}
           blockedReason={!docApplied ? "Waiting for the room to finish loading." : undefined}
           onChange={changeSet} />:null;
+      case "clips":
+        return isHost?<ClipsPanel controller={clipsController} compact={formDockOf("clips")==="top"}/>:<div className="rm-rows-empty">The host controls Clips.</div>;
       case "sounds":
         return isHost ? <SoundboardPanel key={roomId??"local"} roomId={roomId??"local"} enabled={docApplied} visible={visible} compact={formDockOf("sounds")==="top"}/> : <div className="rm-rows-empty">The host controls room sounds.</div>;
       case "dj":
@@ -9121,7 +9193,7 @@ export function LiveView({
             streamReason={!streaming?(!engineOk?'The room engine is starting':micUnready?'Waiting for the microphone':!!room&&!docApplied?'The room is still loading':!enabledDests.length?'Select a streaming destination in Channels':undefined):undefined}
             destinations={enabledDests.map(d=>({id:d.id,label:d.label,icon:PLATFORM_LOGO[d.preset]??ic.onair}))} audienceLabel={audienceEnabled?(boominRoom?'Boomin':'Room'):undefined}
             program={studioOn?'Studio · Entire Producer window':setOutput.currentPresented?setRehearsal.package.name:'Room scene'} streamFormat={`${vh}p · ${vf} fps · ${outputView==='portrait'?'Portrait':'Landscape'}`}
-            recordFormat={`${vh}p · ${vf} fps · ${outputView==='both'?'Landscape + portrait · Two MP4 files':outputView==='portrait'?'Portrait · MP4':'Landscape · MP4'}`} recordingFolder={IS_WINDOWS?'Videos / Producer':'Movies / Producer'}
+            recordFormat={`${vh}p · ${vf} fps · ${outputView==='both'?'Landscape + portrait · Two MP4 files':outputView==='portrait'?'Portrait · MP4':'Landscape · MP4'}`} recordingFolder={clipsController.directory||(IS_WINDOWS?'Videos / Producer':'Movies / Producer')}
             onRecord={toggleRecord} onStream={goLive} onStopStream={stopStream}/>
 
           {qualityOpen && (
@@ -9765,6 +9837,7 @@ export function LiveView({
             Studio
           </span>
         )}
+        {(clipsController.capture.enabled||clipsController.capture.saving||clipsController.pending==='save')&&<button className="rm-foot-clips" title="Rolling capture is on · Open Clips" onClick={()=>{const dock=dockOf(layout,'clips');if(dock==='hidden'){setLayout(movePanel(layout,'clips','bottom'));setSheetOpen(true);}else({top:setTopOpen,bottom:setSheetOpen,left:setLeftOpen,right:setRightOpen}[dock])(true);}}>Clips · {clipsController.capture.saving||clipsController.pending==='save'?'Saving…':'Buffering'}</button>}
         {recPath && (
           <span className="rm-foot-item rec">
             <span className="rm-rec-dot" /> Recording {`${Math.floor(recElapsed / 60)}:${String(recElapsed % 60).padStart(2, "0")}`}

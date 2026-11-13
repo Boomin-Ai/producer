@@ -1,7 +1,7 @@
 import type {PresentationPackage} from './schema';
 
-export type ArrangementControl = {id:string;label:string;type:string;sectionId:string;kind:'set'|'module'|'builtin';moduleId?:string;controlId:string;signature:string};
-export type ArrangementSection = {id:string;label:string;controls:string[];collapsed:boolean};
+export type ArrangementControl = {id:string;label:string;type:string;sectionId:string;kind:'set'|'module'|'builtin'|'operator';moduleId?:string;controlId:string;signature:string};
+export type ArrangementSection = {id:string;label:string;purpose?:'live'|'content'|'appearance';controls:string[];collapsed:boolean};
 export type ArrangementCatalog = {controls:ArrangementControl[];sections:ArrangementSection[];minimized:string[]};
 export type ArrangementPreferences = {version:1;signatures:Record<string,string>;minimized:Record<string,boolean>;minimizedOrder:string[];sectionOrder:string[];controlOrder:Record<string,string[]>;collapsed:Record<string,boolean>};
 export type ResolvedArrangement = {sections:ArrangementSection[];minimized:string[]};
@@ -15,6 +15,7 @@ export function arrangementCatalog(doc:PresentationPackage):ArrangementCatalog {
   add(navigation,{id:'builtin:layout',label:'Layout',type:'layout',kind:'builtin',controlId:'layout',signature:'builtin:layout/1'});
   const fields=section('set:controls','Set controls');
   for(const c of doc.set.controls)add(fields,{id:`set:${c.id}`,label:c.label,type:c.type,kind:'set',controlId:c.id,signature:JSON.stringify(c.type==='button'?{type:c.type,action:c.action}:{type:c.type,key:c.key})});
+  for(const c of doc.set.operatorComponents??[])add(fields,{id:`operator:${c.id}`,label:c.label,type:c.type,kind:'operator',controlId:c.id,signature:`operator:${c.type}/1`});
   for(const instance of doc.runtime.instances){
     const definition=doc.runtime.definitions[instance.definition];
     for(const group of definition.controls.filter(g=>g.audience==='operator')){
@@ -28,7 +29,7 @@ export function arrangementCatalog(doc:PresentationPackage):ArrangementCatalog {
   }
   const authored=doc.set.controlArrangement;
   const placed=new Set(authored?.sections.flatMap(s=>s.controls)??[]);
-  const sections:ArrangementSection[]=(authored?.sections??[]).map(s=>({id:`authored:${s.id}`,label:s.label,controls:[...s.controls],collapsed:s.collapsed??false}));
+  const sections:ArrangementSection[]=(authored?.sections??[]).map(s=>({id:`authored:${s.id}`,label:s.label,purpose:s.purpose,controls:[...s.controls],collapsed:s.collapsed??false}));
   for(const s of defaults){const rest=s.controls.filter(id=>!placed.has(id));if(rest.length)sections.push({...s,controls:rest});}
   for(const s of sections)for(const id of s.controls){const c=controls.find(c=>c.id===id);if(c)c.sectionId=s.id;}
   return {controls,sections,minimized:[...(authored?.minimized??[])]};

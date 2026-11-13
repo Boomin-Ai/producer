@@ -23,7 +23,7 @@ export interface SetOutputControls {
   cameraBackground?:import('../../lib/cameraBackground').CameraBackgroundControls;
   controlReadiness?:Record<string,import('../sets-v2/preparedScenes').SceneReadiness>;
   layoutReadiness?:Record<string,import('../sets-v2/preparedScenes').SceneReadiness>;
-  retryPreparation?:()=>void;
+  retryPreparation?:(layouts?:readonly string[])=>void;
   prepareDraft?:(doc:import('./schema').PresentationPackage,bindings:Record<string,string>,framing:Record<string,import('./schema').SlotFraming>,phase?:string)=>void;
   clearDraftPreparation?:()=>void;
 

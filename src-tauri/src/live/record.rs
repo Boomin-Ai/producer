@@ -50,17 +50,7 @@ pub struct Recorder {
 /// Producer on Windows — created on demand, the place each OS's user looks
 /// for anything they recorded.
 pub fn recordings_dir() -> PathBuf {
-    let dir = if cfg!(target_os = "windows") {
-        let home = std::env::var("USERPROFILE")
-            .or_else(|_| std::env::var("HOME"))
-            .unwrap_or_else(|_| ".".into());
-        PathBuf::from(home).join("Videos").join("Producer")
-    } else {
-        let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-        PathBuf::from(home).join("Movies").join("Producer")
-    };
-    let _ = std::fs::create_dir_all(&dir);
-    dir
+    crate::clips::directory()
 }
 
 fn filename(stamp: &str) -> String {
@@ -78,7 +68,7 @@ impl Recorder {
         bitrate: i64,
         video: *mut ffi::video_t,
     ) -> Result<Recorder, String> {
-        let path = recordings_dir().join(filename(stamp));
+        let path = crate::clips::writable_directory()?.join(filename(stamp));
         Self::start_video_to_path(path, bitrate, video)
     }
 

@@ -28,6 +28,7 @@ const bundle=await build({stdin:{contents:`
  import {createRoot} from 'react-dom/client';
  import {previewExit,previewSession} from './src/lib/previewSession';
  import {useGuestSeat} from './src/views/GuestSeat';
+ import {useRoomControl} from './src/features/room-control/useRoomControl';
  const counters=window.counts={mounts:0,closes:0,attaches:0,detaches:0,appearanceStarts:0,appearanceStops:0};
  const endpoint={id:'local',kind:'connected',base_url:'https://local.example'};
  const room={id:'selected',name:'Active room',endpoint_id:'local',config:'{}'};
@@ -66,7 +67,7 @@ const bundle=await build({stdin:{contents:`
   return withExitCover(view.kind==='room'?null:<div id="home">Home</div>);
  }
  createRoot(document.getElementById('root')).render(window.strictProbe?<React.StrictMode><Harness/></React.StrictMode>:<Harness/>);
- `,loader:'tsx',resolveDir:process.cwd()},bundle:true,write:false,platform:'browser',format:'iife',plugins:[{name:'owned-seat-fixture',setup(b){
+ `,loader:'tsx',resolveDir:process.cwd()},bundle:true,write:false,platform:'browser',format:'iife',define:{'import.meta.env.DEV':'false'},plugins:[{name:'owned-seat-fixture',setup(b){
  b.onResolve({filter:/\/lib\/guestSeat$/},()=>({path:'seat',namespace:'fixture'}));
  b.onResolve({filter:/\.css$/},()=>({path:'css',namespace:'fixture'}));
  b.onLoad({filter:/.*/,namespace:'fixture'},args=>({contents:args.path==='seat'?seatFixture:'',loader:'js'}));

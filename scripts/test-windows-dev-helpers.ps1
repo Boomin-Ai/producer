@@ -5,7 +5,7 @@ $fixture = Join-Path $tempRoot ('producer-dev-helpers-test-' + [guid]::NewGuid()
 try {
   $engine = Join-Path $fixture 'engine with spaces'
   $bin = Join-Path $engine 'bin'
-  $output = Join-Path $fixture 'custom cargo target\debug'
+  $output = Join-Path $fixture 'custom cargo target\debug\build\producer\receipt-hash\out'
   New-Item -ItemType Directory -Force -Path $bin, $output | Out-Null
   $names = @('obs-ffmpeg-mux.exe','obs-nvenc-test.exe','obs-qsv-test.exe','obs-amf-test.exe')
   foreach ($name in $names) { Set-Content -LiteralPath (Join-Path $bin $name) -Value "copy-only fixture $name" }

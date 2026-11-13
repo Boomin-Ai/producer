@@ -26,11 +26,12 @@ import type { SetOutputControls } from './useSetOutput';
 import './presentation.css';
 import {SetSourceCreator} from './SetSourceCreator';
 import {SetSourceRecovery} from './SetSourceRecovery';
-import {sourceRecoveries,unavailableSetSource} from './sourceRecovery';
+import {SetRecoveryNotice} from './SetRecoveryNotice';
 import {SetConfiguration} from './SetConfiguration';
 import {ControlArrangementEditor,useControlArrangement} from './ControlArrangementEditor';
 import {CommittedField} from './CommittedField';
 import {NumberSlider} from './NumberSlider';
+import {SetMusicControls} from './SetMusicControls';
 import {CameraBackgroundControls} from './CameraBackgroundControls';
 
 export type SetEditorTake = {
@@ -182,6 +183,8 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
   const arrangements=useControlArrangement(session.package,JSON.stringify([endpoint??'local',serverRoomId??preferenceRoomId??'preview']));
   const [player, setPlayer] = useState('player-1');
   const rundownId = useId();
+  const layoutMenuId = useId();
+  const [layoutMenuPosition,setLayoutMenuPosition]=useState({left:12,top:64});
   useShowClock(session);
   useSocialRehearsal(session,endpoint,moduleBindings,connections,state.workspaceMode);
   // Fast Refresh can retain a session built by the previous runtime module.
@@ -192,8 +195,6 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
   }, [staleSession, session, onChange]);
   if (staleSession) return <div className="set-controls"><p role="status">Updating rehearsal controls…</p></div>;
   const doc = session.package;
-  const missingSources=output?sourceRecoveries(doc.set.slots,output.bindings,output.sources):[];
-  const explainedSourceError=(message:string|undefined)=>!!message&&missingSources.some(issue=>issue.sourceId===unavailableSetSource(message));
   const missingConnections = useMemo(
     () => integrationRequirements(doc).filter(requirement => !requirement.optional && !moduleBindings[requirement.role]?.id),
     [doc, moduleBindings],
@@ -270,8 +271,9 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
         {c.label}</button>;
     }
     const def = doc.set.values[c.key];
-    if(c.type==='number'&&c.presentation==='slider'&&def.type==='number')return <NumberSlider key={c.id} owner={session} label={c.label} value={Number(state.values[c.key])} min={def.min} max={def.max} step={c.step} disabled={blocked} pending={!!state.controlPending} isPending={()=>!!session.snapshot().controlPending}
+    if(c.type==='number'&&c.presentation==='slider'&&def.type==='number')return <NumberSlider key={c.id} owner={session} label={c.label} value={Number(state.values[c.key])} min={def.min} max={def.max} step={c.step} unit={c.unit} defaultValue={def.default} disabled={blocked} pending={!!state.controlPending} isPending={()=>!!session.snapshot().controlPending}
       onCommit={value=>{onFieldEdit?.(c.key);return session.send({type:'field',key:c.key,value});}}/>;
+    if(c.type==='text'&&c.presentation==='color')return <CommittedField key={c.id} label={c.label} presentation="color" field={session.package.set.values[c.key]} value={state.values[c.key]} disabled={blocked} pending={!!state.controlPending} onApply={value=>{onFieldEdit?.(c.key);return session.send({type:'field',key:c.key,value});}}/>;
     if(session.hasRoomControl())return <CommittedField key={c.id} label={c.label} field={def} value={state.values[c.key]} disabled={blocked} pending={!!state.controlPending} onApply={value=>{onFieldEdit?.(c.key);return session.send({type:'field',key:c.key,value});}}/>;
     return <label key={c.id}>{c.label}<input aria-label={c.label} type={c.type === 'number' ? 'number' : 'text'}
       disabled={blocked} value={String(state.values[c.key])} maxLength={def.type === 'text' ? def.maxLength : undefined}
@@ -296,7 +298,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
   const editorIndex=editorSegments.findIndex(p=>p.id===state.show.phase);
   const editSegment=(id:string)=>{session.send({type:'segment.select',phaseId:id});};
   const ready=(layout:string)=>output?.layoutReadiness?.[layout];
-  const readinessLabel=(layout:string)=>{const status=ready(layout);return !status?'':status.state==='ready'?'Ready':status.state==='error'?explainedSourceError(status.error)?'Reconnect the missing source below':`Layout unavailable: ${status.error}`:'Loading layout';};
+  const readinessLabel=(layout:string)=>{const status=ready(layout);return !status?'':status.state==='ready'?'Ready':status.state==='error'?'Layout needs attention — see recovery details':'Loading layout';};
   const segmentList = (compact = false) => <ol>{schedule.phases.map((step, index) =>
     <li key={step.id} aria-current={index === displayedStepIndex ? 'step' : undefined}
       data-readiness={ready(step.layoutId)?.state} title={readinessLabel(step.layoutId)}
@@ -320,6 +322,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
     if(ref==='builtin:layout')return true;
     const entry=arrangements.catalog.controls.find(c=>c.id===ref);
     if(!entry)return false;
+    if(entry.kind==='operator'){const item=doc.set.operatorComponents?.find(c=>c.id===entry.controlId);return !!item&&(item.when===undefined||!!evaluate(item.when,state,{},64,doc.set.tokens));}
     if(entry.kind==='module'){
       const instance=doc.runtime.instances.find(i=>i.id===entry.moduleId),snapshot=session.moduleSnapshot();
       if(!instance||(instance.owner!=='set'&&instance.segment!==state.show.phase)||!snapshot.modules[instance.id])return false;
@@ -341,12 +344,13 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
         const layoutId = preferredViewLayout(view);
         return <button key={view.id} type="button" aria-pressed={selectedView?.id === view.id}
           data-layout-id={layoutId} data-readiness={readiness?.state} disabled={blocked || !!state.controlPending}
-          title={readiness?.state === 'error' ? `${view.label} · ${readiness.error}` : readiness?.state === 'loading' ? `${view.label} · Loading…` : view.label}
+          title={readiness?.state === 'error' ? `${view.label} · Needs attention` : readiness?.state === 'loading' ? `${view.label} · Loading…` : view.label}
           onClick={() => session.send({type:'control',action:{type:'layout.select',layoutId}})}>{view.label}</button>;
       })}
     </div>;
     const entry=arrangements.catalog.controls.find(c=>c.id===ref);
     if(!entry)return null;
+    if(entry.kind==='operator'){const item=doc.set.operatorComponents!.find(c=>c.id===entry.controlId)!;return <div key={ref} className="set-arranged-operator" data-control-ref={ref}><SetMusicControls definition={item} compact={compact} disabled={blocked||editorOnly||rehearsing||!output}/></div>;}
     if(entry.kind==='module')return <div key={ref} className="set-arranged-module" data-control-ref={ref}>{modulePanel([ref],compact)}</div>;
     const item=doc.set.controls.find(c=>c.id===entry.controlId);
     if(!item)return null;
@@ -359,7 +363,7 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
     item.type === 'button' && item.action.type === 'layout.select' && item.when === undefined && item.enabled === undefined &&
     visibleLayoutIds.has(item.action.layoutId) ? [`set:${item.id}`] : []));
   const expandedControlVisible = (ref: string) => (doc.show || ref !== 'builtin:layout') && !redundantLayoutControls.has(ref) && controlVisible(ref);
-  const arrangedExpanded=<div className="set-arranged-sections">{arrangements.arrangement.sections.filter(section=>section.controls.some(expandedControlVisible)).map(section=><section key={section.id} className="set-arranged-section" data-section-id={section.id}>
+  const arrangedExpanded=<div className="set-arranged-sections">{arrangements.arrangement.sections.filter(section=>section.controls.some(expandedControlVisible)).map(section=><section key={section.id} className="set-arranged-section" data-purpose={section.purpose} data-section-id={section.id}>
     <h4><button type="button" aria-expanded={!section.collapsed} aria-label={`${section.collapsed?'Expand':'Collapse'} ${section.label} section`} onClick={()=>arrangements.update({...arrangements.preferences,collapsed:{...arrangements.preferences.collapsed,[section.id]:!section.collapsed}})}><span>{section.collapsed?'▸':'▾'}</span>{section.label}</button></h4>
     <div className="set-arranged-section-controls" hidden={section.collapsed}>{section.controls.filter(expandedControlVisible).map(ref=>arrangedControl(ref))}</div>
   </section>)}</div>;
@@ -435,7 +439,17 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
         </button>
         <span className="set-output-announcement" role="status">{outputStatus}</span>
       </div>}
-      {!doc.show && views.length > 1 && <div className="set-primary-layout">{arrangedControl('builtin:layout')}</div>}
+      {!doc.show && views.length > 1 && <div className="set-primary-layout">
+        {arrangedControl('builtin:layout')}
+        <button type="button" className="set-layout-menu-trigger" aria-label="Choose layout" title={`Layout · ${selectedView?.label??'Choose layout'}`} popoverTarget={layoutMenuId}
+          onClick={event=>{const rect=event.currentTarget.getBoundingClientRect();setLayoutMenuPosition({left:Math.max(8,Math.min(rect.left,window.innerWidth-296)),top:Math.max(8,Math.min(rect.bottom+8,window.innerHeight-240))});}}>
+          <span>{selectedView?.label??'Layout'}</span><svg className="set-layout-menu-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true"><rect x="1.5" y="2" width="13" height="12" rx="1.5"/><path d="M1.5 6h13M7 6v8"/></svg><span aria-hidden="true">⌄</span>
+        </button>
+        <div id={layoutMenuId} popover="auto" className="set-layout-menu" role="dialog" aria-label="Choose Set layout" style={layoutMenuPosition}
+          onClick={event=>{if((event.target as HTMLElement).closest('button[data-layout-id]'))event.currentTarget.hidePopover();}}>
+          <strong>Layouts</strong>{arrangedControl('builtin:layout')}
+        </div>
+      </div>}
       {doc.show && <div className="set-fixed-playback">{transport}</div>}
       {doc.show && <button type="button" className="set-rundown-trigger" popoverTarget={rundownId} aria-label="Show rundown" title={phase?.label}>
         <span>{String(displayedStepIndex + 1).padStart(2, '0')}/{schedule.phases.length}</span>
@@ -460,10 +474,9 @@ function SetControlsPanelView({ session, blocked = false, blockedReason, onChang
     )}
     {doc.runtime.instances.length>0&&state.workspaceMode==='live'&&state.moduleConnection!=='live'&&<p role="status" className={state.moduleError?'set-error':'set-section-note'}>{!endpoint||!serverRoomId?'Connect this room to a workspace to use live modules.':state.moduleError?`Modules disconnected — reconnecting. ${state.moduleError}`:'Connecting live controls…'}</p>}
     {output&&<SetSourceRecovery slots={doc.set.slots} output={output} names={sourceNames} blocked={blocked}/>}
-    {output?.layoutReadiness&&views.some(view=>{const status=viewReadiness(view);return status?.state==='error'&&!explainedSourceError(status.error);})&&<p className="set-error">A layout needs attention. <button disabled={blocked||output.busy} onClick={output.retryPreparation}>Try loading again</button></p>}
-    {output?.error&&!explainedSourceError(output.error)&&<div role="alert" className="set-error">{output.error} <button disabled={blocked||output.busy} onClick={()=>void output.apply()}>Try update again</button></div>}
+    {output&&<SetRecoveryNotice key={state.sandboxId} doc={doc} layout={state.layoutId} output={output} names={sourceNames} blocked={blocked}/>}
     {state.trace[state.trace.length - 1]?.message.startsWith('Rejected:') && <p role="status" className="set-error">{state.trace[state.trace.length - 1]!.message}</p>}
-    {!editorOnly && output?.cameraBackground && <section className="set-camera-backgrounds" aria-label="Camera backgrounds">
+    {!editorOnly && doc.set.controlArrangement?.cameraBackground !== false && output?.cameraBackground && <section className="set-camera-backgrounds" aria-label="Camera backgrounds">
       {doc.set.slots.filter((slot,index,slots) => visibleSlots.has(slot.id) && output.sources.items?.some(item => item.id === output.bindings[slot.id] && item.kind === 'camera') && !slots.slice(0,index).some(previous => visibleSlots.has(previous.id) && output.bindings[previous.id] === output.bindings[slot.id])).map(slot =>
         <CameraBackgroundControls key={`${slot.id}:${output.bindings[slot.id]}`} slot={slot.id} source={output.bindings[slot.id]} label={slot.label}
           controls={output.cameraBackground!} disabled={blocked || !output.active || state.workspaceMode !== 'live'} />)}

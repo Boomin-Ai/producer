@@ -41,6 +41,8 @@ jobs:
       - run: bun run build
       - run: bun run test:performance-trace
       - run: python3 scripts/profile-production.py --self-test
+      - run: node scripts/test-classic.mjs
+      - run: node scripts/test-starter-audio.mjs
       - run: bun run test:presentation
       - run: bun run test:camera-background
       - run: node scripts/test-dj-set-feed.mjs
@@ -50,6 +52,7 @@ jobs:
       - run: bun run test:control-arrangements
       - run: bun run test:module-arrangements
       - run: bun run test:package-validation
+      - run: bun run test:control-budget
       - run: bun run test:set-publication
       - run: bun run test:set-authoring
       - run: bun run test:voice-bars
@@ -121,6 +124,7 @@ jobs:
           bun-version: latest
       - run: bun install --frozen-lockfile
       - run: npm ci --prefix tools/producer-mcp
+      - run: node tools/producer-mcp/test-control-budget.mjs
       - run: node tools/producer-mcp/node_modules/playwright-core/cli.js install --with-deps chromium
       - name: Verify room publisher recovery and scoped Activity errors
         env:

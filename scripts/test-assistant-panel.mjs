@@ -11,7 +11,7 @@ const {roomSuggestions}=await import('data:text/javascript;base64,'+Buffer.from(
 const room={setOnOutput:true,screenSharing:true,guestsConnected:true};
 assert.deepEqual(roomSuggestions(room,{edited:false,started:true,design:false,canEdit:true,messages:[{role:'user',text:'Plan a teaching show; no edits.'},{role:'assistant',text:'Choose a direction:\n- **Code lab** — hands-on demos\n- **Field notes** — lessons from projects\n- **Office hours** — questions'}]}).map(chip=>chip.label),['Code lab','Field notes','Office hours'],'an active content conversation gets its actual choices rather than onboarding');
 assert(roomSuggestions(room,{edited:true,started:true,design:true,canEdit:false}).every(chip=>!chip.action&&chip.label!=='Refine controls'),'sharing off never exposes a private edit or review shortcut');
-const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'playwright-core');
+const {chromium}=await import(process.env.PRODUCER_PLAYWRIGHT_MODULE??'../tools/producer-mcp/node_modules/playwright-core/index.mjs');
 const browser=await chromium.launch({executablePath:process.env.PRODUCER_CHROME??'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
 const origin=process.env.PRODUCER_TEST_URL??'http://127.0.0.1:1445/';
 try {
@@ -40,19 +40,18 @@ try {
   };window.render({});
  });
  await page.getByText('Test model',{exact:true}).waitFor();
- assert.deepEqual(await page.locator('.assistant-suggestions button').allTextContents(),['Create a Set','Plan a show','Help me get started']);
+ const composerBounds=await page.locator('.assistant-composer').evaluate(form=>{const panel=form.parentElement.getBoundingClientRect(),box=form.getBoundingClientRect();return {tag:form.tagName,direct:form.parentElement.classList.contains('assistant-panel'),left:box.left-panel.left,right:panel.right-box.right,bottom:panel.bottom-box.bottom,radius:getComputedStyle(form).borderRadius};});
+ assert(composerBounds.tag==='FORM'&&composerBounds.direct&&Math.abs(composerBounds.left)<=1&&Math.abs(composerBounds.right)<=1&&Math.abs(composerBounds.bottom)<=1&&composerBounds.radius==='0px','the composer is the panel’s full-width bottom section, without an inset wrapper: '+JSON.stringify(composerBounds));
+ assert.deepEqual(await page.locator('.assistant-suggestions-track>button').allTextContents(),['Create a Set','Plan a show','Help me get started']);
  assert.equal(await page.locator('.assistant-context-trigger').count(),0,'an empty room does not present a Set-specific header');
  await page.evaluate(()=>document.getElementById('right').style.width='150px');
- const ideas=page.getByRole('button',{name:'Assistant suggestions',exact:true});await ideas.waitFor();
- assert.equal(await page.locator('.assistant-suggestions').isVisible(),false,'a narrow sidebar uses one ideas menu instead of crushed chips');
- await ideas.click();const suggestionMenu=page.locator('.assistant-suggestion-popover:popover-open');await suggestionMenu.waitFor();
- const menuBounds=await suggestionMenu.boundingBox();assert(menuBounds.x>=0&&menuBounds.y>=0&&menuBounds.x+menuBounds.width<=1440&&menuBounds.y+menuBounds.height<=1050,'ideas menu stays inside the viewport');
- assert.equal(await suggestionMenu.getByRole('button').count(),3);
- if(process.env.PRODUCER_PANEL_SCREENSHOTS)await suggestionMenu.screenshot({path:process.env.PRODUCER_PANEL_SCREENSHOTS+'/narrow-ideas.png'});
- await suggestionMenu.getByRole('button',{name:'Plan a show'}).click();
- assert.equal(await page.locator('.assistant-suggestion-popover:popover-open').count(),0);
+ const suggestions=page.getByRole('group',{name:'Suggested actions',exact:true});await suggestions.waitFor();
+ assert.equal(await page.getByRole('button',{name:'Assistant suggestions',exact:true}).count(),0,'suggestions are visible buttons, not an Ideas menu');
+ assert.equal(await page.locator('.assistant-suggestion-popover').count(),0,'the carousel never opens an overlay');
+ await page.getByRole('button',{name:'Plan a show',exact:true}).focus();
+ await page.getByRole('button',{name:'Plan a show',exact:true}).click();
  assert.match(await page.getByRole('textbox',{name:'Assistant prompt'}).inputValue(),/Help me plan a show/);
- assert.equal(await page.evaluate(()=>window.turns.length),0,'ideas menu only prepares the prompt');
+ assert.equal(await page.evaluate(()=>window.turns.length),0,'a carousel button only prepares the prompt');
  await page.evaluate(()=>document.getElementById('right').style.width='360px');
  await page.getByRole('button',{name:'Plan a show',exact:true}).click();
  assert.match(await page.getByRole('textbox',{name:'Assistant prompt'}).inputValue(),/Help me plan a show/);
@@ -60,12 +59,12 @@ try {
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('');
  await page.evaluate(()=>window.render({roomState:{setOnOutput:true,screenSharing:false,guestsConnected:false}}));
  await page.getByRole('button',{name:'Refine this Set',exact:true}).waitFor();
- assert.deepEqual(await page.locator('.assistant-suggestions button').allTextContents(),['Refine this Set','Add a layout','Design live controls']);
+ assert.deepEqual(await page.locator('.assistant-suggestions-track>button').allTextContents(),['Refine this Set','Add a layout','Design live controls']);
  await page.evaluate(()=>window.render({roomState:{setOnOutput:true,screenSharing:true,guestsConnected:false}}));
  await page.getByRole('button',{name:'Frame my screen',exact:true}).waitFor();
  await page.evaluate(()=>window.render({roomState:{setOnOutput:true,screenSharing:true,guestsConnected:true}}));
  await page.getByRole('button',{name:'Prepare interview questions',exact:true}).waitFor();
- assert.equal(await page.locator('.assistant-suggestions button').count(),3);
+ assert.equal(await page.locator('.assistant-suggestions-track>button').count(),3);
  await page.evaluate(()=>window.render({roomState:{setOnOutput:true,screenSharing:false,guestsConnected:false}}));
  assert.equal(await page.getByRole('button',{name:'Use room Set',exact:true}).count(),0,'context switching belongs to the header, not a permanent row');
  assert.equal(await page.locator('.assistant-sharing').count(),0,'sharing and account controls start collapsed into settings');
@@ -136,7 +135,7 @@ try {
  assert.equal(await completed.count(),0,'reading the reply dismisses its completion toast');
  await page.getByRole('button',{name:'Expand dock',exact:true}).click();
  await page.getByText('Panel draft is ready.',{exact:true}).waitFor();
- assert.equal((await page.locator('.assistant-suggestions button').allTextContents())[0],'Review changes');
+ assert.equal((await page.locator('.assistant-suggestions-track>button').allTextContents())[0],'Review changes');
  if(process.env.PRODUCER_PANEL_SCREENSHOTS)await page.locator('.assistant-docked').screenshot({path:process.env.PRODUCER_PANEL_SCREENSHOTS+'/ready.png'});
  assert.equal(await page.evaluate(()=>window.modelCalls),modelCalls,'docking and compact view retain the provider session');
  assert.equal(await page.evaluate(()=>window.cancelled),0,'moving the panel does not cancel its active turn');
@@ -186,12 +185,12 @@ try {
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Keep the retry action reachable in every dock.');await page.getByRole('button',{name:'Send ↗',exact:true}).click();await page.getByRole('button',{name:'Retry request',exact:true}).waitFor();
  for(const [name,width,height] of [['side',360,780],['narrow',240,780],['bottom',1100,360],['top',1100,240]]){
   await page.evaluate(({width,height})=>{const target=document.getElementById('right');target.style.width=width+'px';target.style.height=height+'px';document.getElementById('bottom').style.display='none';window.render({target,compact:false});},{width,height});
-  await page.waitForFunction(()=>{const element=document.querySelector('.assistant-docked textarea');return element&&element.getBoundingClientRect().height>=30});
+  await page.waitForFunction(()=>{const target=document.getElementById('right'),element=target.querySelector('.assistant-docked textarea');return element&&element.getBoundingClientRect().height>=30&&(target.clientHeight>=320||!!target.querySelector('.assistant-tight'));});
   const geometry=await page.evaluate(()=>{
    const box=document.querySelector('.assistant-docked').getBoundingClientRect();
-   return [...document.querySelectorAll('.assistant-docked .assistant-compose textarea,.assistant-docked .assistant-compose button,.assistant-docked .assistant-error button')].map(element=>{const r=element.getBoundingClientRect();return {inside:r.left>=box.left-1&&r.right<=box.right+1&&r.top>=box.top-1&&r.bottom<=box.bottom+1,width:r.width,height:r.height};});
+   return [...document.querySelectorAll('.assistant-docked .assistant-compose textarea,.assistant-docked .assistant-compose .assistant-send,.assistant-docked .assistant-error button')].map(element=>{const r=element.getBoundingClientRect();return {inside:r.left>=box.left-1&&r.right<=box.right+1&&r.top>=box.top-1&&r.bottom<=box.bottom+1,width:r.width,height:r.height};});
   });
-  assert(geometry.every(r=>r.inside&&r.width>25&&r.height>25),name+' keeps the composer and send control visible');
+  assert(geometry.every(r=>r.inside&&r.width>25&&r.height>25),name+' keeps the composer and send control visible: '+JSON.stringify(geometry));
   if(process.env.PRODUCER_PANEL_SCREENSHOTS)await page.locator('.assistant-docked').screenshot({path:process.env.PRODUCER_PANEL_SCREENSHOTS+'/'+name+'.png'});
  }
  await page.locator('.assistant-tight').waitFor();
@@ -203,10 +202,10 @@ try {
  await fullConversation.getByRole('button',{name:'Close Assistant conversation',exact:true}).click();
  assert.equal(await fullConversation.count(),0,'closing the conversation preserves the compact tile');
  await page.evaluate(()=>{const target=document.getElementById('right');target.style.width='150px';target.style.height='780px';window.failNext=true;});
- await page.getByRole('button',{name:'Assistant suggestions',exact:true}).waitFor();
+ await page.getByRole('group',{name:'Suggested actions',exact:true}).waitFor();
  await page.getByRole('textbox',{name:'Assistant prompt'}).fill('Send with Enter from the narrow sidebar.');
  assert.equal(await page.getByRole('button',{name:'Send ↗',exact:true}).isVisible(),false,'super-narrow composers use a keyboard cue');
- const keyFits=await page.locator('.assistant-composer').evaluate(element=>{const input=element.querySelector('textarea').getBoundingClientRect(),key=element.querySelector('.assistant-send-key').getBoundingClientRect();return {fits:input.right<=key.left+1,input:input.toJSON(),key:key.toJSON(),form:getComputedStyle(element.querySelector('form')).display,keyPosition:getComputedStyle(element.querySelector('.assistant-send-key')).position};});assert(keyFits.fits,'the Enter cue never paints over input text: '+JSON.stringify(keyFits));
+ const keyFits=await page.locator('.assistant-composer').evaluate(element=>{const input=element.querySelector('textarea').getBoundingClientRect(),key=element.querySelector('.assistant-send-key').getBoundingClientRect();return {fits:input.right<=key.left+1,input:input.toJSON(),key:key.toJSON(),form:getComputedStyle(element).display,keyPosition:getComputedStyle(element.querySelector('.assistant-send-key')).position};});assert(keyFits.fits,'the Enter cue never paints over input text: '+JSON.stringify(keyFits));
  await page.getByRole('textbox',{name:'Assistant prompt'}).press('Enter');
  await page.getByText('Send with Enter from the narrow sidebar.',{exact:true}).waitFor();
  assert.equal(await page.getByRole('textbox',{name:'Assistant prompt'}).inputValue(),'');

@@ -12,6 +12,24 @@ use std::{
 use tauri::Emitter;
 use tauri::Manager;
 static STORE: Mutex<()> = Mutex::new(());
+pub fn install_bundled(
+    app: &tauri::AppHandle,
+    assets: &[crate::builtin_audio::InstalledAudio],
+) -> Result<(), String> {
+    let _lock = STORE.lock().map_err(|e| e.to_string())?;
+    let root = root(app)?;
+    let mut sounds: Vec<Sound> = read(&root.join("library.json"))?;
+    for a in assets.iter().filter(|a| a.kind == "effect") {
+        if !sounds.iter().any(|s| s.id == a.sha256) {
+            sounds.push(Sound {
+                id: a.sha256.clone(),
+                name: a.name.clone(),
+                path: a.path.clone(),
+            });
+        }
+    }
+    save(&root.join("library.json"), &sounds)
+}
 static VISUAL_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 static VISUAL: Mutex<Option<(Instant, SoundVisual)>> = Mutex::new(None);
 #[derive(Clone, Serialize)]

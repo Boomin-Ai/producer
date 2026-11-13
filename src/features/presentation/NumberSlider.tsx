@@ -1,14 +1,15 @@
-import {useEffect,useId,useLayoutEffect,useRef,useState} from 'react';
+import {useEffect,useId,useLayoutEffect,useRef,useState,type CSSProperties} from 'react';
+import '../../components/ControlSlider.css';
 import './NumberSlider.css';
 
 type Props={
   owner:object;label:string;value:number;min:number;max:number;step?:number;
-  disabled?:boolean;pending?:boolean;isPending?:()=>boolean;onCommit:(value:number)=>boolean|void|Promise<unknown>;
+  unit?:string;defaultValue?:number;disabled?:boolean;pending?:boolean;isPending?:()=>boolean;onCommit:(value:number)=>boolean|void|Promise<unknown>;
 };
 const releaseKeys=new Set(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','PageUp','PageDown']);
 
 /** Dragging is private. Only a release queues a final value for this owner. */
-export function NumberSlider({owner,label,value,min,max,step,disabled=false,pending=false,isPending,onCommit}:Props){
+export function NumberSlider({owner,label,value,min,max,step,unit,defaultValue,disabled=false,pending=false,isPending,onCommit}:Props){
   const id=useId(),[draft,setDraft]=useState(value),[error,setError]=useState('');
   const live=useRef({owner,value,min,max,disabled,pending,isPending,onCommit});
   const active=useRef(false),generation=useRef(0),draftValue=useRef(value),previousValue=useRef(value);
@@ -52,8 +53,8 @@ export function NumberSlider({owner,label,value,min,max,step,disabled=false,pend
     released.current=edits.current;queued.current={value:draftValue.current,generation:generation.current};void flush();
   };
   return <div className="set-number-slider" aria-busy={pending}>
-    <label htmlFor={id}>{label}</label><output htmlFor={id}>{draft}</output>
-    <input id={id} aria-label={label} type="range" min={min} max={max} step={step??Math.min(.01,max-min)} disabled={disabled} value={draft}
+    <label htmlFor={id}>{label}</label><span className="set-slider-readout"><output htmlFor={id}>{Number(draft.toFixed(3))}{unit&&<small>{unit}</small>}</output>{defaultValue!==undefined&&<button type="button" className="set-slider-reset" aria-label={`Reset ${label}`} title={`Reset to ${defaultValue}${unit??''}`} disabled={disabled||draft===defaultValue} onClick={()=>{draftValue.current=defaultValue;setDraft(defaultValue);++edits.current;release();}}>↺</button>}</span>
+    <input id={id} className="producer-range" style={{'--slider-fill':`${100*(draft-min)/(max-min||1)}%`} as CSSProperties} aria-label={label} aria-valuetext={`${draft}${unit??''}`} type="range" min={min} max={max} step={step??Math.min(.01,max-min)} disabled={disabled} value={draft}
       onChange={event=>{const next=event.currentTarget.valueAsNumber;if(Number.isFinite(next)&&next>=min&&next<=max){++edits.current;draftValue.current=next;setDraft(next);if(!pointerActive.current&&!keyboardActive.current)release();}}}
       onPointerDown={event=>{pointerActive.current=true;try{event.currentTarget.setPointerCapture(event.pointerId);}catch{/* A synthetic event may have no active pointer. */}}}
       onPointerUp={()=>{pointerActive.current=false;release();}}
