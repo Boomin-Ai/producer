@@ -16,7 +16,7 @@ try{
   window.capture={enabled:false,saving:false,room_id:null,settings:{seconds:60,memory_mb:256,output:'landscape'},elapsed_seconds:0,video_frames:0,error:null};
   window.__TAURI_INTERNALS__={convertFileSrc:path=>path,invoke:async(command,args={})=>{window.calls.push({command,args});
    if(command==='pref_get')return null;if(command==='pref_set')return;
-   if(command==='clips_status')return {capture:window.capture,directory:'/Volumes/CanonA002/Producer Recordings'};
+   if(command==='clips_status'){const status=structuredClone({capture:window.capture,directory:'/Volumes/CanonA002/Producer Recordings'});if(window.holdStatus){window.holdStatus=false;await new Promise(resolve=>window.releaseStatus=resolve);}return status;}
    if(command==='clips_list')return window.saved;
    if(command==='clips_enable'){if(window.failEnable)throw Error('The recording folder is unavailable.');window.capture={...window.capture,enabled:true,room_id:args.roomId,settings:args.settings,elapsed_seconds:window.startEmpty?0:5,video_frames:window.startEmpty?0:150};return window.capture;}
    if(command==='clips_disable'){window.capture={...window.capture,enabled:false,saving:false,room_id:null};return window.capture;}
@@ -75,5 +75,11 @@ try{
  await page.getByRole('button',{name:'Try capture again',exact:true}).waitFor();assert(await page.getByRole('alert').isVisible(),'native startup failure stays visible');
  await page.getByRole('button',{name:'Try capture again',exact:true}).click();await page.waitForFunction(()=>window.controller.pending===null&&window.controller.capture.enabled);
  await page.getByRole('switch').click();await page.waitForFunction(()=>!window.capture.enabled);
+ // A slow status response must not undo a newer capture action.
+ await page.getByRole('switch').click();await page.waitForFunction(()=>window.controller.capture.enabled);
+ await page.evaluate(()=>{window.holdStatus=true;window.staleRefresh=window.controller.refresh();});await page.waitForFunction(()=>!!window.releaseStatus);
+ await page.getByRole('switch').click();await page.waitForFunction(()=>!window.controller.capture.enabled);
+ await page.evaluate(async()=>{window.releaseStatus();await window.staleRefresh;});
+ assert.equal(await page.evaluate(()=>window.controller.capture.enabled),false,'late status must not resurrect a stopped buffer');
  assert.deepEqual(errors,[]);console.log('Clips panel: explicit capture, save receipts, local duration, dock lifecycle, compact/expanded sizes, settings dialog and real retry actions passed.');
 }finally{await browser.close();}
