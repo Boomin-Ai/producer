@@ -63,6 +63,9 @@ struct Buffer {
     output: *mut ffi::obs_output_t,
     video: *mut ffi::obs_encoder_t,
     audio: *mut ffi::obs_encoder_t,
+    input: *mut ffi::video_t,
+    input_baseline: u32,
+    skipped_baseline: u32,
     kind: ClipOutput,
     signals: Box<Signals>,
 }
@@ -150,6 +153,9 @@ impl Buffer {
             output,
             video: venc,
             audio: aenc,
+            input: video,
+            input_baseline: ffi::video_output_get_total_frames(video),
+            skipped_baseline: ffi::video_output_get_skipped_frames(video),
             kind,
             signals,
         };
@@ -182,6 +188,10 @@ impl Buffer {
                 output: self.kind,
                 captured_frames: self.frames(),
                 encoded_frames: ffi::obs_encoder_get_encoded_frames(self.video),
+                input_frames: ffi::video_output_get_total_frames(self.input)
+                    .wrapping_sub(self.input_baseline),
+                input_skipped_frames: ffi::video_output_get_skipped_frames(self.input)
+                    .wrapping_sub(self.skipped_baseline),
                 video_active: ffi::obs_encoder_active(self.video),
                 audio_active: ffi::obs_encoder_active(self.audio),
             }
@@ -265,11 +275,18 @@ struct Pending {
     reply: mpsc::Sender<Result<Value, String>>,
     started: Instant,
 }
+struct Preparing {
+    landscape: *mut ffi::video_t,
+    portrait: *mut ffi::video_t,
+    baseline: u32,
+    bitrate: i64,
+}
 pub struct Replay {
     room: String,
     settings: ClipSettings,
     started: Instant,
     buffers: Vec<Buffer>,
+    preparing: Option<Preparing>,
     pending: Option<Pending>,
     error: Option<String>,
 }
@@ -282,6 +299,40 @@ impl Replay {
         portrait: *mut ffi::video_t,
     ) -> Result<Self, String> {
         settings.validate()?;
+        if settings.output != ClipOutput::Landscape && portrait.is_null() {
+            return Err("The vertical canvas is not ready".into());
+        }
+        // Portrait's raw preview already keeps its video output active. Let
+        // that new canvas produce fresh frames before initializing a paired
+        // audio/video clock. This runs on later owner ticks, never by sleeping
+        // on the engine or starting an encoder against a cold canvas.
+        let preparing = (settings.output != ClipOutput::Landscape).then(|| Preparing {
+            landscape,
+            portrait,
+            baseline: ffi::video_output_get_total_frames(portrait),
+            bitrate,
+        });
+        let buffers = if preparing.is_none() {
+            Self::start_buffers(&settings, bitrate, landscape, portrait)?
+        } else {
+            Vec::new()
+        };
+        Ok(Self {
+            room,
+            settings,
+            started: Instant::now(),
+            buffers,
+            preparing,
+            pending: None,
+            error: None,
+        })
+    }
+    unsafe fn start_buffers(
+        settings: &ClipSettings,
+        bitrate: i64,
+        landscape: *mut ffi::video_t,
+        portrait: *mut ffi::video_t,
+    ) -> Result<Vec<Buffer>, String> {
         let mut buffers = Vec::new();
         let count = if settings.output == ClipOutput::Both {
             2
@@ -306,14 +357,7 @@ impl Replay {
                 portrait,
             )?)
         }
-        Ok(Self {
-            room,
-            settings,
-            started: Instant::now(),
-            buffers,
-            pending: None,
-            error: None,
-        })
+        Ok(buffers)
     }
     pub fn room(&self) -> &str {
         &self.room
@@ -341,7 +385,9 @@ impl Replay {
             if let Some(e) = &self.error {
                 return Err(e.clone());
             }
-            if self.started.elapsed() < Duration::from_secs(2)
+            if self.preparing.is_some()
+                || self.buffers.is_empty()
+                || self.started.elapsed() < Duration::from_secs(2)
                 || self.buffers.iter().any(|b| b.frames() == 0)
             {
                 return Err("Wait for the first two seconds of rolling capture".into());
@@ -370,6 +416,7 @@ impl Replay {
         }
     }
     fn fail(&mut self, error: String) {
+        self.preparing = None;
         // A partial dual-output failure is not an active capture session.
         // Disconnect both packet streams immediately; keep their owner alive
         // until OBS's asynchronous file writer has drained or the room exits.
@@ -384,6 +431,34 @@ impl Replay {
         }
     }
     pub fn poll(&mut self) {
+        if let Some(preparing) = self.preparing.as_ref() {
+            let frames = unsafe { ffi::video_output_get_total_frames(preparing.portrait) }
+                .wrapping_sub(preparing.baseline);
+            if frames < 2 {
+                if self.started.elapsed() >= Duration::from_secs(10) {
+                    self.fail("The vertical canvas has not produced fresh video. Wait for the room preview, then try capture again.".into());
+                }
+                return;
+            }
+            let preparing = self.preparing.take().unwrap();
+            match unsafe {
+                Self::start_buffers(
+                    &self.settings,
+                    preparing.bitrate,
+                    preparing.landscape,
+                    preparing.portrait,
+                )
+            } {
+                Ok(buffers) => {
+                    self.buffers = buffers;
+                    self.started = Instant::now();
+                }
+                Err(error) => {
+                    self.fail(error);
+                    return;
+                }
+            }
+        }
         if self.error.is_none() {
             if let Some(b) = self.buffers.iter().find(|b| b.failed()) {
                 self.fail(b.error("Rolling capture stopped unexpectedly"));
@@ -392,7 +467,7 @@ impl Replay {
             if self.started.elapsed() >= Duration::from_secs(10) {
                 if let Some(b) = self.buffers.iter().find(|b| b.frames() == 0) {
                     let track = b.status();
-                    eprintln!("[clips] startup stalled output={:?} encoded={} video_active={} audio_active={}", track.output, track.encoded_frames, track.video_active, track.audio_active);
+                    eprintln!("[clips] startup stalled output={:?} input={} skipped={} encoded={} video_active={} audio_active={}", track.output, track.input_frames, track.input_skipped_frames, track.encoded_frames, track.video_active, track.audio_active);
                     self.fail(format!(
                         "{} capture did not receive frames. Stop and try rolling capture again.",
                         if b.kind == ClipOutput::Portrait {

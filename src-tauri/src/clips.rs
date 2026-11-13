@@ -54,6 +54,8 @@ pub struct ClipTrackStatus {
     pub output: ClipOutput,
     pub captured_frames: u64,
     pub encoded_frames: u32,
+    pub input_frames: u32,
+    pub input_skipped_frames: u32,
     pub video_active: bool,
     pub audio_active: bool,
 }
