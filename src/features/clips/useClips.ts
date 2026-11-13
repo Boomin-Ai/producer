@@ -29,12 +29,12 @@ export function useClips(roomId:string,ready:boolean,visible:boolean,observed:bo
  const act=async<T,>(kind:NonNullable<typeof pending>,run:()=>Promise<T>):Promise<T>=>{
   if(operation.current)throw Error('Wait for the current Clips action.');
   if(!state.current.ready||!state.current.visible)throw Error('Open the room before using Clips.');
-  operation.current=true;const epoch=generation.current;setPending(kind);setError('');
-  try{return await run()}catch(e){if(alive.current&&epoch===generation.current)setError(clipsError(e));throw e}finally{operation.current=false;if(alive.current&&epoch===generation.current)setPending(null);}
+  operation.current=true;const epoch=++generation.current;setPending(kind);setError('');
+  try{return await run()}catch(e){if(alive.current&&epoch===generation.current)setError(clipsError(e));throw e}finally{operation.current=false;if(alive.current&&epoch===generation.current){++generation.current;setPending(null);}}
  };
  const configure=async(value:ClipSettings)=>{
   if(state.current.capture.enabled||state.current.capture.saving||operation.current)throw Error('Stop rolling capture before changing its settings.');
-  const valid=validateClipSettings(value);setSettings(valid);state.current.settings=valid;preferences.current=preferences.current.catch(()=>{}).then(()=>ipc.prefSet(`clips.settings.${roomId}`,JSON.stringify(valid))).then(()=>{});await preferences.current;return valid;
+  const valid=validateClipSettings(value);++generation.current;setSettings(valid);state.current.settings=valid;preferences.current=preferences.current.catch(()=>{}).then(()=>ipc.prefSet(`clips.settings.${roomId}`,JSON.stringify(valid))).then(()=>{});await preferences.current;return valid;
  };
  const setEnabled=(on:boolean)=>act('capture',async()=>{if(on&&state.current.capture.error)await clips.disable(roomId);const status=on?await clips.enable(roomId,state.current.settings):await clips.disable(roomId);if(current()){if(!state.current.visible&&status.enabled){await clips.disable(roomId);setCapture(OFF_CLIPS);}else setCapture(status);}return status;});
  const toggle=()=>setEnabled(!state.current.capture.enabled);
