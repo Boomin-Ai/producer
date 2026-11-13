@@ -25,6 +25,7 @@ $tests = @(
   'obs_program_tap_copies_timestamped_video_and_stage_audio_then_disconnects',
   'windows_dual_recordings_finalize_with_video_and_audio',
   'native_dual_clips_start_rearm_and_save_without_audio_sources',
+  'native_portrait_jpeg_capture_is_demand_driven',
   'windows_native_guest_ingress_and_retirement',
   'windows_cutout_and_virtual_camera_pixels_and_lifecycle'
 )
