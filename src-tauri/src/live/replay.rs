@@ -536,7 +536,7 @@ mod tests {
         // stop callback waits for another packet, so exercise the terminal
         // stop path before qualifying the longer save/rearm cycles below.
         for output in [ClipOutput::Portrait, ClipOutput::Both] {
-            let replay = unsafe {
+            let mut replay = unsafe {
                 Replay::start(
                     "early-stop".into(),
                     ClipSettings {
@@ -550,6 +550,13 @@ mod tests {
                 )
             }
             .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(6);
+            while replay.buffers.is_empty() {
+                replay.poll();
+                assert!(replay.error.is_none(), "warmup: {:?}", replay.status());
+                assert!(Instant::now() < deadline, "vertical canvas did not warm");
+                std::thread::sleep(Duration::from_millis(10));
+            }
             let stopping = Instant::now();
             drop(replay);
             assert!(
