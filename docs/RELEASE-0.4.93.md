@@ -22,8 +22,8 @@ explicit below.
 - Studio window capture retains native window pixels instead of an early
   low-resolution resize. Perspective-correct GPU sampling, rounded capture
   masks and explicit crop boundaries improve tilted window and panel output.
-  Timeline authoring controls and the application status bar are excluded
-  from the captured room in either dock or Studio-bar placement.
+  Docked Timeline is included when presenting the Producer window. The
+  separate Studio bar and application status bar stay outside capture.
 - Studio no longer forces the room preview into landscape. Portrait and Both
   remain available for ordinary room sources and paired Set layouts.
 - Native Studio window capture, panel lifts and motion playback currently

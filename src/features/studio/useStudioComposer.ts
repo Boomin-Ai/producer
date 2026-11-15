@@ -122,10 +122,10 @@ export function useStudioComposer({ scope, mayAuthor, studioOn, timelineOpen, ti
       const height = window.innerHeight;
       if (height <= 0) return;
       const rect = dock.getBoundingClientRect();
-      // Exclude the entire authoring row. The remaining full-width aperture
-      // contains the room, never this timeline or the application footer.
-      const top = timelineOpen && timelineDock === "top" ? Math.ceil(rect.bottom) / height : 0;
-      const bottom = timelineOpen && timelineDock === "bottom"
+      // Docked Timeline is part of the presented workspace. Only the separate
+      // authoring bar stays outside capture, along with the application footer.
+      const top = 0;
+      const bottom = timelineBar && timelineOpen
         ? Math.floor(rect.top) / height : Math.floor(footer.getBoundingClientRect().top) / height;
       if (bottom - top < .25) return;
       requested = { x: 0, y: top, w: 1, h: bottom - top };

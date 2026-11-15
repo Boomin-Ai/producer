@@ -13,8 +13,9 @@ try {
    const row=root?.closest('[data-studio-timeline-region], [data-dock]');
    const crop=window.studioTimelineProof.crops.at(-1);
    if(!row||!crop||root.dataset.ready!=='true')return false;
-   const rect=row.getBoundingClientRect();
-   return position==='top'?Math.abs(crop.y*innerHeight-Math.ceil(rect.bottom))<1:Math.abs((crop.y+crop.h)*innerHeight-Math.floor(rect.top))<1;
+   const bar=row.hasAttribute('data-studio-timeline-region');
+   const edge=bar?row.getBoundingClientRect().top:document.querySelector('footer').getBoundingClientRect().top;
+   return crop.y===0&&Math.abs((crop.y+crop.h)*innerHeight-Math.floor(edge))<1;
   },position);
   assert(await page.getByRole('contentinfo').isVisible());
   assert(await page.getByRole('region',{name:'Other bottom panels'}).isVisible());
@@ -44,5 +45,5 @@ try {
   assert(await page.locator('.studio-composer').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'Timeline fits the available width');
  }
  assert.deepEqual(errors,[]);assert.deepEqual(await page.evaluate(()=>window.studioTimelineProof.errors),[]);
- console.log('PASS: dock/bar/top placement, preserved playhead, native pause, resized capture aperture, Studio toggle, footer and other dock panels.');
+ console.log('PASS: docked Timeline included in capture, separate bar excluded, top/bottom placement, preserved playhead, native pause, resized aperture, Studio toggle, footer and other dock panels.');
 } finally {await browser.close();}
