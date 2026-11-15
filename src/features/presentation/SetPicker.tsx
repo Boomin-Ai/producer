@@ -2,7 +2,7 @@ import {useId,useRef,useState} from 'react';
 import {SetThumbnail} from './SetThumbnail';
 import type {PresentationPackage} from './schema';
 type Choice={value:string;label:string;group:string;load?:()=>Promise<PresentationPackage>};
-export function SetPicker({value,options,onSelect}:{value:string;options:Choice[];onSelect:(value:string)=>void}) {
+export function SetPicker({value,options,onSelect,onOpen}:{value:string;options:Choice[];onSelect:(value:string)=>void;onOpen?:()=>void}) {
  const id=useId(),trigger=useRef<HTMLButtonElement>(null),menu=useRef<HTMLDivElement>(null),search=useRef<HTMLInputElement>(null);
  const [open,setOpen]=useState(false),[query,setQuery]=useState(''),[active,setActive]=useState(0);
  const [position,setPosition]=useState({left:8,top:80,width:360,maxHeight:360});
@@ -19,7 +19,7 @@ export function SetPicker({value,options,onSelect}:{value:string;options:Choice[
   <button ref={trigger} type="button" role="combobox" aria-label="Choose set" aria-haspopup="listbox" aria-controls={`${id}-list`} aria-expanded={open} onClick={()=>open?close():show()} onKeyDown={e=>{if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();show();}}}>
    <span>{options.find(o=>o.value===value)?.label??'Choose a set…'}</span><span aria-hidden="true">⌄</span>
   </button>
-  <div ref={menu} popover="auto" className="set-picker-menu" style={position} onToggle={e=>{setOpen(e.newState==='open');if(e.newState==='open')search.current?.focus();}}
+  <div ref={menu} popover="auto" className="set-picker-menu" style={position} onToggle={e=>{setOpen(e.newState==='open');if(e.newState==='open'){search.current?.focus();onOpen?.();}}}
    onKeyDown={e=>{
     if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close();}
     else if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();const next=filtered.length?(active+(e.key==='ArrowDown'?1:-1)+filtered.length)%filtered.length:0;setActive(next);document.getElementById(`${id}-${next}`)?.scrollIntoView({block:'nearest'});}

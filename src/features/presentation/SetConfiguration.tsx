@@ -75,7 +75,7 @@ export function SetConfiguration({ session, onChange, output, hideOutputAction=f
     <section className="set-configuration" role="toolbar" aria-label="Set configuration" data-set-id={session.package.id} data-set-version={session.package.version}>
       <div className="set-menu-section">
       <span className="set-picker-label">Choose set</span><SetPicker value={library.some(entry=>entry.file===selectedFile&&entry.id===session.package.id)?`file:${selectedFile}`:BUILTIN_SETS.some(doc=>doc.id===session.package.id&&doc.version===session.package.version)?`builtin:${session.package.id}`:library.some(entry=>entry.id===session.package.id)?`file:${library.find(entry=>entry.id===session.package.id)!.file}`:'imported'}
-        options={choices}
+        options={choices} onOpen={()=>void refreshLibrary()}
         onSelect={value=>{if(value.startsWith('file:'))void loadLibrary(value.slice(5));else {const next=BUILTIN_SETS.find(doc=>`builtin:${doc.id}`===value);if(next){setSelectedFile('');setError('');onChange(next);}}}}/>
 
 

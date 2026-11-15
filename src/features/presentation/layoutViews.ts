@@ -31,3 +31,12 @@ export function outputLayout(set:SetDesign,id:string,orientation:LayoutOrientati
  return viewForLayout(set,id)?.variants[orientation]??id;
 }
 export function preferredViewLayout(view:LayoutView){return view.variants.landscape??view.variants.portrait??view.variants.square!;}
+
+export function layoutTransitionSound(set:SetDesign,from:string,to:string):string|undefined {
+  if (!from || from===to) return;
+  const destination=viewForLayout(set,to);
+  if (destination && Object.values(destination.variants).includes(from)) return;
+  const canonical=destination ? preferredViewLayout(destination) : to;
+  return set.layouts.find(layout=>layout.id===canonical)?.transitionSoundId
+    ?? set.layouts.find(layout=>layout.id===to)?.transitionSoundId;
+}

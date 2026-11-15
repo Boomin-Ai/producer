@@ -348,6 +348,12 @@ pub async fn live_move_preview(
 
 #[tauri::command]
 pub async fn live_detach_preview(app: tauri::AppHandle) -> EngineResult<()> {
+    #[cfg(all(target_os = "macos", have_engine))]
+    if let Some(session) = STUDIO_COMPOSER.lock().unwrap().take() {
+        session
+            .closed
+            .store(true, std::sync::atomic::Ordering::Release);
+    }
     // The real engine/UI receipt can wait for graphics retirement. Keep that
     // synchronous wait off the runtime workers used by RTC and network I/O.
     tauri::async_runtime::spawn_blocking(move || {
@@ -1053,6 +1059,414 @@ pub async fn live_set_studio(
         .live
         .set_studio(on, window_id)
         .map_err(EngineError::Other)
+}
+
+/// Set the region of the Producer window emphasized by Studio output.
+/// Return false when the active capture does not support spotlight.
+#[tauri::command]
+pub async fn live_set_studio_spotlight(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    rect: Option<super::StudioSpotlightRect>,
+) -> EngineResult<bool> {
+    if rect.is_some_and(|rect| !rect.is_valid()) {
+        return Err(EngineError::Other(
+            "invalid Studio spotlight rectangle".into(),
+        ));
+    }
+
+    #[cfg(all(target_os = "macos", have_engine))]
+    {
+        use tauri::Manager;
+
+        extern "C" {
+            fn producer_studio_spotlight_window_rect(
+                window: *mut std::ffi::c_void,
+                viewport_rect: *const f64,
+                window_rect: *mut f64,
+            ) -> std::ffi::c_int;
+        }
+
+        let mapped = rect.and_then(|rect| {
+            let window = app.get_webview_window("main")?;
+            let ns_window = window.ns_window().ok()?;
+            let input = [rect.x, rect.y, rect.w, rect.h];
+            let mut output = [0.0; 4];
+            let ok = unsafe {
+                producer_studio_spotlight_window_rect(
+                    ns_window.cast(),
+                    input.as_ptr(),
+                    output.as_mut_ptr(),
+                )
+            };
+            let [x, y, w, h] = output;
+            let mapped = super::StudioSpotlightRect { x, y, w, h };
+            (ok != 0 && mapped.is_valid()).then_some(mapped)
+        });
+        let supported = state
+            .live
+            .set_studio_spotlight(mapped)
+            .await
+            .map_err(EngineError::Other)?;
+        Ok(supported && (rect.is_none() || mapped.is_some()))
+    }
+    #[cfg(not(all(target_os = "macos", have_engine)))]
+    {
+        let _ = (app, state);
+        Ok(false)
+    }
+}
+
+#[tauri::command]
+pub async fn live_open_studio_preview(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> EngineResult<()> {
+    #[cfg(all(target_os = "macos", have_engine))]
+    {
+        use tauri::Manager;
+        let window = app
+            .get_webview_window("main")
+            .ok_or_else(|| EngineError::Other("Main window missing.".into()))?;
+        let native = window
+            .ns_window()
+            .map_err(|error| EngineError::Other(error.to_string()))?;
+        state
+            .live
+            .open_studio_preview(native as usize)
+            .await
+            .map_err(EngineError::Other)
+    }
+    #[cfg(not(all(target_os = "macos", have_engine)))]
+    {
+        let _ = (app, state);
+        Err(EngineError::Other(
+            "Studio preview is available on macOS.".into(),
+        ))
+    }
+}
+
+#[cfg(all(target_os = "macos", have_engine))]
+fn map_studio_motion(
+    app: &tauri::AppHandle,
+    keyframes: Vec<super::studio_motion::StudioMotionKeyframe>,
+) -> EngineResult<Vec<super::studio_motion::NativeMotionKeyframe>> {
+    use super::studio_motion::NativeMotionKeyframe;
+    use tauri::Manager;
+
+    extern "C" {
+        fn producer_studio_spotlight_window_rect(
+            window: *mut std::ffi::c_void,
+            viewport_rect: *const f64,
+            window_rect: *mut f64,
+        ) -> std::ffi::c_int;
+    }
+
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| EngineError::Other("Main window missing.".into()))?;
+    let native = window
+        .ns_window()
+        .map_err(|error| EngineError::Other(error.to_string()))? as usize;
+    super::graph::on_main_thread(move || {
+        let mut mapped_crops = Vec::<([f64; 4], [f32; 4])>::new();
+        keyframes
+            .into_iter()
+            .map(|key| {
+                let pose = key.pose;
+                let crop = if let Some(rect) = pose.panel {
+                    let input = [rect.x, rect.y, rect.w, rect.h];
+                    if let Some((_, mapped)) = mapped_crops
+                        .iter()
+                        .find(|(candidate, _)| *candidate == input)
+                    {
+                        *mapped
+                    } else {
+                        let mut output = [0.0; 4];
+                        let ok = unsafe {
+                            producer_studio_spotlight_window_rect(
+                                native as *mut _,
+                                input.as_ptr(),
+                                output.as_mut_ptr(),
+                            )
+                        };
+                        if ok == 0 {
+                            return Err(EngineError::Other(
+                                "The Studio motion panel isn't visible in the room.".into(),
+                            ));
+                        }
+                        let mapped = output.map(|value| value as f32);
+                        mapped_crops.push((input, mapped));
+                        mapped
+                    }
+                } else {
+                    [0.0; 4]
+                };
+                Ok(NativeMotionKeyframe {
+                    at_ms: key.at_ms,
+                    crop,
+                    lift: pose.lift,
+                    floating: pose.floating,
+                    zoom: pose.zoom,
+                    pan_x: pose.pan_x,
+                    pan_y: pose.pan_y,
+                    yaw: pose.yaw,
+                    pitch: pose.pitch,
+                    roll: pose.roll,
+                    canvas_mix: pose.canvas_mix,
+                })
+            })
+            .collect()
+    })
+}
+
+#[tauri::command]
+pub async fn live_play_studio_motion(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    keyframes: Vec<super::studio_motion::StudioMotionKeyframe>,
+) -> EngineResult<()> {
+    super::studio_motion::validate_track(&keyframes).map_err(EngineError::Other)?;
+    #[cfg(all(target_os = "macos", have_engine))]
+    {
+        let keyframes = map_studio_motion(&app, keyframes)?;
+        state
+            .live
+            .set_studio_motion(keyframes)
+            .await
+            .map_err(EngineError::Other)
+    }
+    #[cfg(not(all(target_os = "macos", have_engine)))]
+    {
+        let _ = (app, state);
+        Err(EngineError::Other(
+            "Studio motion is available on macOS.".into(),
+        ))
+    }
+}
+
+#[tauri::command]
+pub async fn live_set_studio_motion_pose(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    pose: Option<super::studio_motion::StudioMotionPose>,
+) -> EngineResult<()> {
+    if let Some(pose) = &pose {
+        pose.validate().map_err(EngineError::Other)?;
+    }
+    #[cfg(all(target_os = "macos", have_engine))]
+    {
+        let keyframes = match pose {
+            Some(pose) => map_studio_motion(
+                &app,
+                vec![super::studio_motion::StudioMotionKeyframe { at_ms: 0, pose }],
+            )?,
+            None => Vec::new(),
+        };
+        state
+            .live
+            .set_studio_motion(keyframes)
+            .await
+            .map_err(EngineError::Other)
+    }
+    #[cfg(not(all(target_os = "macos", have_engine)))]
+    {
+        let _ = (app, state);
+        Err(EngineError::Other(
+            "Studio motion is available on macOS.".into(),
+        ))
+    }
+}
+
+#[tauri::command]
+pub async fn live_set_studio_canvas_only(
+    state: State<'_, AppState>,
+    enabled: bool,
+) -> EngineResult<()> {
+    #[cfg(all(target_os = "macos", have_engine))]
+    {
+        state
+            .live
+            .set_studio_canvas_only(enabled)
+            .await
+            .map_err(EngineError::Other)
+    }
+    #[cfg(not(all(target_os = "macos", have_engine)))]
+    {
+        let _ = (state, enabled);
+        Err(EngineError::Other(
+            "Studio Canvas is available on macOS.".into(),
+        ))
+    }
+}
+
+#[tauri::command]
+pub async fn live_clear_studio_motion(state: State<'_, AppState>) -> EngineResult<()> {
+    #[cfg(all(target_os = "macos", have_engine))]
+    {
+        state
+            .live
+            .set_studio_motion(Vec::new())
+            .await
+            .map_err(EngineError::Other)
+    }
+    #[cfg(not(all(target_os = "macos", have_engine)))]
+    {
+        let _ = state;
+        Ok(())
+    }
+}
+
+/// Keep the program's window aperture above the inline editor. Install it
+/// before the editor mounts. Removing it waits for a new native capture frame.
+#[tauri::command]
+pub async fn live_set_studio_room_crop(
+    state: State<'_, AppState>,
+    rect: Option<super::StudioSpotlightRect>,
+) -> EngineResult<()> {
+    if rect
+        .is_some_and(|r| !r.is_valid() || r.x != 0.0 || r.w != 1.0 || r.h < 0.25 || r.y + r.h > 1.0)
+    {
+        return Err(EngineError::Other(
+            "Invalid Studio room capture bounds.".into(),
+        ));
+    }
+    #[cfg(all(target_os = "macos", have_engine))]
+    {
+        state
+            .live
+            .set_studio_room_crop(rect.map(|r| [r.y as f32, (r.y + r.h) as f32]))
+            .await
+            .map_err(EngineError::Other)
+    }
+    #[cfg(not(all(target_os = "macos", have_engine)))]
+    {
+        let _ = (state, rect);
+        Err(EngineError::Other(
+            "Studio Composer is available on macOS.".into(),
+        ))
+    }
+}
+
+#[derive(Clone)]
+struct StudioComposerSession {
+    id: uuid::Uuid,
+    closed: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+static STUDIO_COMPOSER: std::sync::Mutex<Option<StudioComposerSession>> =
+    std::sync::Mutex::new(None);
+
+fn composer_session_id(input: &str) -> EngineResult<uuid::Uuid> {
+    uuid::Uuid::parse_str(input)
+        .map_err(|_| EngineError::Other("Invalid Studio Composer session.".into()))
+}
+
+#[tauri::command]
+pub async fn live_open_studio_composer(session_id: String) -> EngineResult<()> {
+    let id = composer_session_id(&session_id)?;
+    let mut current = STUDIO_COMPOSER.lock().unwrap();
+    if let Some(existing) = current.as_ref() {
+        if existing.id == id {
+            return Ok(());
+        }
+        existing
+            .closed
+            .store(true, std::sync::atomic::Ordering::Release);
+    }
+    *current = Some(StudioComposerSession {
+        id,
+        closed: Default::default(),
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn live_close_studio_composer(
+    state: State<'_, AppState>,
+    session_id: Option<String>,
+) -> EngineResult<()> {
+    let id = session_id.as_deref().map(composer_session_id).transpose()?;
+    let retired = {
+        let mut current = STUDIO_COMPOSER.lock().unwrap();
+        if current
+            .as_ref()
+            .is_some_and(|session| id.is_none() || id == Some(session.id))
+        {
+            let session = current.take().unwrap();
+            session
+                .closed
+                .store(true, std::sync::atomic::Ordering::Release);
+            Some(session.closed)
+        } else {
+            None
+        }
+    };
+    #[cfg(all(target_os = "macos", have_engine))]
+    if let Some(session) = retired {
+        state
+            .live
+            .set_studio_composer_preview(None, session)
+            .await
+            .map_err(EngineError::Other)?;
+    }
+    #[cfg(not(all(target_os = "macos", have_engine)))]
+    let _ = (state, retired);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn live_set_studio_composer_preview(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    session_id: String,
+    rect: Option<super::StudioSpotlightRect>,
+) -> EngineResult<()> {
+    if rect.is_some_and(|rect| !rect.is_valid() || rect.w < 0.01 || rect.h < 0.01) {
+        return Err(EngineError::Other(
+            "Invalid Studio Composer preview area.".into(),
+        ));
+    }
+    let id = composer_session_id(&session_id)?;
+    #[cfg(all(target_os = "macos", have_engine))]
+    {
+        use tauri::Manager;
+        let session = STUDIO_COMPOSER
+            .lock()
+            .unwrap()
+            .as_ref()
+            .filter(|session| session.id == id)
+            .cloned();
+        let Some(session) = session else {
+            return if rect.is_none() {
+                Ok(())
+            } else {
+                Err(EngineError::Other("Studio Composer is closed.".into()))
+            };
+        };
+        let target = match rect {
+            Some(rect) => Some(super::studio_preview::ComposerPreviewTarget {
+                window: app
+                    .get_webview_window("main")
+                    .ok_or_else(|| EngineError::Other("Producer window is closed.".into()))?,
+                rect,
+                closed: session.closed.clone(),
+            }),
+            None => None,
+        };
+        state
+            .live
+            .set_studio_composer_preview(target, session.closed)
+            .await
+            .map_err(EngineError::Other)
+    }
+    #[cfg(not(all(target_os = "macos", have_engine)))]
+    {
+        let _ = (app, state, id);
+        Err(EngineError::Other(
+            "Studio Composer preview is available on macOS.".into(),
+        ))
+    }
 }
 
 #[tauri::command]

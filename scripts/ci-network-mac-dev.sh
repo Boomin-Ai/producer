@@ -84,7 +84,7 @@ CONFIG="$RUNNER_TEMP/network-mac-dev-config/candidate.json"
 # Explicitly skip intermediate signing and updater archives. Sign only after
 # engine assembly. This source checkout is exact; Cargo may not update its lock.
 bun run tauri build --ci --no-sign --target aarch64-apple-darwin --features sets-v2-dev,guest-rtc-production --config "$CONFIG" --bundles app -- --locked
-APP="$SOURCE/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Producer DJ Test.app"
+APP="$SOURCE/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Producer Dev.app"
 [[ -d $APP/Contents ]] || { echo 'Expected isolated app was not generated' >&2; exit 1; }
 CONTENTS="$APP/Contents"
 mkdir -p "$CONTENTS/Frameworks" "$CONTENTS/PlugIns" "$CONTENTS/Resources/licenses"
@@ -146,7 +146,7 @@ ditto "$SYMBOLS" "$OUTPUT/symbols/producer.dSYM"
 xcrun dwarfdump --uuid "$CONTENTS/MacOS/$EXECUTABLE" > "$OUTPUT/symbols/binary-uuid.txt"
 xcrun dwarfdump --uuid "$OUTPUT/symbols/producer.dSYM" > "$OUTPUT/symbols/symbol-uuid.txt"
 cp "$ENGINE/manifest.json" "$OUTPUT/engine-manifest.json"
-ditto -c -k --keepParent "$APP" "$OUTPUT/Producer-DJ-Test-mac-arm64.zip"
+ditto -c -k --keepParent "$APP" "$OUTPUT/Producer-Dev-mac-arm64.zip"
 export ENGINE_RUN ENGINE_ARCHIVE_SHA256 NOTARY_SUBMISSION_ID
 python3 "$TOOLS/ci-network-mac-dev.py" receipt "$SOURCE" "$APP" "$OUTPUT" "$TOOLS"
 echo 'Verified unreleased dev candidate and native core/custom IPC smoke; no release/deployment or device/RTC qualification.'

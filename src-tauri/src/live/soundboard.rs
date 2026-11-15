@@ -142,6 +142,7 @@ impl Soundboard {
             Native::Has(r, _)
             | Native::Load(r, _, _)
             | Native::Trigger(r, ..)
+            | Native::TriggerCached(r, ..)
             | Native::Audition(r, ..)
             | Native::StopPreview(r, ..)
             | Native::Mix(r, ..)
@@ -167,6 +168,14 @@ impl Soundboard {
                                 "Sound cache is full; stop an active sound and retry".into()
                             );
                         }
+                    }
+                }
+                Native::TriggerCached(_, id, mode, gain, fade) => {
+                    if producer_soundboard_has(self.sources[0], id) == 0 {
+                        return Ok(Reply::NotCached);
+                    }
+                    if producer_soundboard_trigger(self.sources[0], id, mode, gain, fade) == 0 {
+                        return Err("Sound not ready or 32 voices already playing".into());
                     }
                 }
                 Native::Trigger(_, id, mode, gain, fade, preview) => {
@@ -248,9 +257,20 @@ pub fn selftest() -> ! {
                     [v, v]
                 })
                 .collect::<Vec<_>>();
+            if !matches!(
+                board.apply(Native::TriggerCached("proof".into(), 1, 3, 1., 0))?,
+                Reply::NotCached
+            ) {
+                return Err("Cold cache accepted a cached trigger".into());
+            }
             board.apply(Native::Load("proof".into(), 1, tone))?;
             super::program_audio::start()?;
-            board.apply(Native::Trigger("proof".into(), 1, 3, 1., 0, false))?;
+            if !matches!(
+                board.apply(Native::TriggerCached("proof".into(), 1, 3, 1., 0))?,
+                Reply::Status(_)
+            ) {
+                return Err("Cached sound could not be triggered".into());
+            }
             let program = super::program_audio::verification::measure();
             board.apply(Native::Stop("proof".into()))?;
             let stopped = super::program_audio::verification::measure();

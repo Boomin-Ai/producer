@@ -512,6 +512,8 @@ fn bootstrap_inner(
         #[cfg(target_os = "windows")]
         ffi::producer_vcam_mirror_register();
         ffi::producer_source_appearance_register();
+        super::studio_room_gate::register();
+        studio::register_capture_source();
         super::sets_v2::register();
         #[cfg(feature = "guest-rtc-pilot")]
         super::rtc_ingest::register_type();
@@ -1135,6 +1137,37 @@ pub enum Command {
         spec: Option<studio::StudioSpec>,
         reply: std::sync::mpsc::Sender<Result<bool, String>>,
     },
+    #[cfg(target_os = "macos")]
+    SetStudioSpotlight {
+        rect: Option<super::StudioSpotlightRect>,
+        reply: tokio::sync::oneshot::Sender<bool>,
+    },
+    #[cfg(target_os = "macos")]
+    SetStudioRoomCrop {
+        bounds: Option<[f32; 2]>,
+        reply: tokio::sync::oneshot::Sender<Result<(), String>>,
+    },
+    #[cfg(target_os = "macos")]
+    OpenStudioPreview {
+        window: usize,
+        reply: tokio::sync::oneshot::Sender<Result<(), String>>,
+    },
+    #[cfg(target_os = "macos")]
+    SetStudioMotion {
+        keyframes: Vec<super::studio_motion::NativeMotionKeyframe>,
+        reply: tokio::sync::oneshot::Sender<Result<(), String>>,
+    },
+    #[cfg(target_os = "macos")]
+    SetStudioCanvasOnly {
+        enabled: bool,
+        reply: tokio::sync::oneshot::Sender<Result<(), String>>,
+    },
+    #[cfg(target_os = "macos")]
+    SetStudioComposerPreview {
+        target: Option<super::studio_preview::ComposerPreviewTarget>,
+        session: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        reply: tokio::sync::oneshot::Sender<Result<(), String>>,
+    },
     /// Point a live source at a different device, keeping its transform.
     SetDevice {
         id: String,
@@ -1235,6 +1268,18 @@ fn cmd_name(c: &Command) -> &'static str {
         Command::StopStinger { .. } => "StopStinger",
         Command::SetVirtualCam { .. } => "SetVirtualCam",
         Command::SetStudio { .. } => "SetStudio",
+        #[cfg(target_os = "macos")]
+        Command::SetStudioSpotlight { .. } => "SetStudioSpotlight",
+        #[cfg(target_os = "macos")]
+        Command::SetStudioRoomCrop { .. } => "SetStudioRoomCrop",
+        #[cfg(target_os = "macos")]
+        Command::OpenStudioPreview { .. } => "OpenStudioPreview",
+        #[cfg(target_os = "macos")]
+        Command::SetStudioMotion { .. } => "SetStudioMotion",
+        #[cfg(target_os = "macos")]
+        Command::SetStudioCanvasOnly { .. } => "SetStudioCanvasOnly",
+        #[cfg(target_os = "macos")]
+        Command::SetStudioComposerPreview { .. } => "SetStudioComposerPreview",
         Command::SetDevice { .. } => "SetDevice",
         Command::ReplaceExtra { .. } => "ReplaceExtra",
         Command::RestoreRoom { .. } => "RestoreRoom",
@@ -1325,6 +1370,7 @@ pub enum LiveEvent {
         height: u32,
         fps: u32,
     },
+    StudioCaptureFailed,
     EngineError {
         message: String,
     },
@@ -1944,6 +1990,92 @@ impl LiveHandle {
             .map_err(|e| e.to_string())?;
         rx.recv_timeout(std::time::Duration::from_secs(10))
             .map_err(|_| "the engine did not answer in time".to_string())?
+    }
+
+    #[cfg(target_os = "macos")]
+    pub async fn set_studio_spotlight(
+        &self,
+        rect: Option<super::StudioSpotlightRect>,
+    ) -> Result<bool, String> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.cmd
+            .send(Command::SetStudioSpotlight { rect, reply: tx })
+            .map_err(|error| error.to_string())?;
+        tokio::time::timeout(std::time::Duration::from_secs(3), rx)
+            .await
+            .map_err(|_| "the engine did not answer in time".to_string())?
+            .map_err(|error| error.to_string())
+    }
+
+    #[cfg(target_os = "macos")]
+    pub async fn set_studio_room_crop(&self, bounds: Option<[f32; 2]>) -> Result<(), String> {
+        let (reply, receiver) = tokio::sync::oneshot::channel();
+        self.cmd
+            .send(Command::SetStudioRoomCrop { bounds, reply })
+            .map_err(|error| error.to_string())?;
+        tokio::time::timeout(Duration::from_secs(3), receiver)
+            .await
+            .map_err(|_| "Studio capture bounds did not respond in time.".to_string())?
+            .map_err(|error| error.to_string())?
+    }
+
+    #[cfg(target_os = "macos")]
+    pub async fn open_studio_preview(&self, window: usize) -> Result<(), String> {
+        let (reply, receiver) = tokio::sync::oneshot::channel();
+        self.cmd
+            .send(Command::OpenStudioPreview { window, reply })
+            .map_err(|error| error.to_string())?;
+        tokio::time::timeout(Duration::from_secs(5), receiver)
+            .await
+            .map_err(|_| "Studio preview did not open in time.".to_string())?
+            .map_err(|error| error.to_string())?
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(super) async fn set_studio_motion(
+        &self,
+        keyframes: Vec<super::studio_motion::NativeMotionKeyframe>,
+    ) -> Result<(), String> {
+        let (reply, receiver) = tokio::sync::oneshot::channel();
+        self.cmd
+            .send(Command::SetStudioMotion { keyframes, reply })
+            .map_err(|error| error.to_string())?;
+        tokio::time::timeout(Duration::from_secs(3), receiver)
+            .await
+            .map_err(|_| "Studio motion did not respond in time.".to_string())?
+            .map_err(|error| error.to_string())?
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(super) async fn set_studio_canvas_only(&self, enabled: bool) -> Result<(), String> {
+        let (reply, receiver) = tokio::sync::oneshot::channel();
+        self.cmd
+            .send(Command::SetStudioCanvasOnly { enabled, reply })
+            .map_err(|error| error.to_string())?;
+        tokio::time::timeout(Duration::from_secs(3), receiver)
+            .await
+            .map_err(|_| "Studio output did not respond in time.".to_string())?
+            .map_err(|error| error.to_string())?
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(super) async fn set_studio_composer_preview(
+        &self,
+        target: Option<super::studio_preview::ComposerPreviewTarget>,
+        session: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<(), String> {
+        let (reply, receiver) = tokio::sync::oneshot::channel();
+        self.cmd
+            .send(Command::SetStudioComposerPreview {
+                target,
+                session,
+                reply,
+            })
+            .map_err(|error| error.to_string())?;
+        tokio::time::timeout(Duration::from_secs(4), receiver)
+            .await
+            .map_err(|_| "Studio Composer preview did not respond in time.".to_string())?
+            .map_err(|error| error.to_string())?
     }
 
     pub fn prepare_stinger(&self, path: String) -> Result<(), String> {
@@ -3009,6 +3141,7 @@ pub fn start(
 
             // Studio output (studio.rs) — the studio scene over the room.
             let mut studio_out: Option<studio::Studio> = None;
+            let mut studio_vcam_waiting_for_capture = false;
             // The room-only mix the virtual camera reads, in BOTH studio modes.
             // Built once, before the vcam starts, and torn down only when the
             // vcam is off — so a studio toggle never restarts the vcam output
@@ -3207,6 +3340,34 @@ pub fn start(
                     }
                 }
                 if let Some(buffer)=replay.as_mut(){buffer.poll();}
+                #[cfg(target_os = "macos")]
+                if let Some(studio) = studio_out.as_mut() {
+                    studio.poll_preview();
+                }
+                if studio_out.as_ref().is_some_and(studio::Studio::capture_failed) {
+                    studio_vcam_waiting_for_capture = false;
+                    unsafe {
+                        if let Some(mix) = room_mix.as_mut().filter(|_| !selected_portrait) {
+                            let room = ffi::obs_get_output_source(0);
+                            mix.set_source(room);
+                            if !room.is_null() {
+                                ffi::obs_source_release(room);
+                            }
+                        }
+                        if let Some(mut studio) = studio_out.take() {
+                            studio.teardown();
+                        }
+                    }
+                    sink(&LiveEvent::StudioCaptureFailed);
+                }
+                if studio_vcam_waiting_for_capture {
+                    if let Some(studio) = studio_out.as_ref().filter(|studio| studio.capture_ready()) {
+                        studio_vcam_waiting_for_capture = false;
+                        if let Some(mix) = room_mix.as_mut().filter(|_| !selected_portrait) {
+                            unsafe { mix.set_source(studio.source()); }
+                        }
+                    }
+                }
                 let iter_t0 = Instant::now();
                 let mut iter_label: &'static str = "idle";
                 for recording in [recorder.as_ref(), portrait_recorder.as_ref()].into_iter().flatten() {
@@ -3867,6 +4028,7 @@ pub fn start(
                                 if same {
                                     return Ok(studio_out.is_some());
                                 }
+                                studio_vcam_waiting_for_capture = false;
                                 if let Some(mut st) = studio_out.take() {
                                     st.teardown();
                                 }
@@ -3892,9 +4054,10 @@ pub fn start(
                                     match studio_out.as_ref() {
                                         // The studio scene is borrowed from
                                         // Studio; set_source takes its own ref.
-                                        Some(st) => m.set_source(st.source()),
-                                        None => {
-                                            // Off: back to channel 0's room
+                                        Some(st) if st.capture_ready() => m.set_source(st.source()),
+                                        next => {
+                                            studio_vcam_waiting_for_capture = next.is_some();
+                                            // Off or waiting: use channel 0's room
                                             // scene. obs_get_output_source
                                             // hands back an OWNED reference —
                                             // release it after, exactly as
@@ -3915,6 +4078,66 @@ pub fn start(
                             sink(&LiveEvent::EngineError { message: e.clone() });
                         }
                         let _ = reply.send(r);
+                    }
+                    #[cfg(target_os = "macos")]
+                    Ok(Command::SetStudioSpotlight { rect, reply }) => {
+                        if !reply.is_closed() {
+                            let supported = studio_out
+                                .as_mut()
+                                .is_some_and(|studio| studio.set_spotlight(rect));
+                            let _ = reply.send(supported);
+                        }
+                    }
+                    #[cfg(target_os = "macos")]
+                    Ok(Command::SetStudioRoomCrop { bounds, reply }) => {
+                        if !reply.is_closed() {
+                            let result = match studio_out.as_mut() {
+                                Some(studio) => studio.set_room_crop(bounds),
+                                None if bounds.is_none() => Ok(()),
+                                None => Err("Turn on Studio output first.".into()),
+                            };
+                            let _ = reply.send(result);
+                        }
+                    }
+                    #[cfg(target_os = "macos")]
+                    Ok(Command::OpenStudioPreview { window, reply }) => {
+                        if !reply.is_closed() {
+                            let result = studio_out.as_mut()
+                                .ok_or_else(|| "Turn on Studio output first.".to_string())
+                                .and_then(|studio| studio.open_preview(window));
+                            let _ = reply.send(result);
+                        }
+                    }
+                    #[cfg(target_os = "macos")]
+                    Ok(Command::SetStudioMotion { keyframes, reply }) => {
+                        if !reply.is_closed() {
+                            let result = match studio_out.as_ref() {
+                                Some(studio) => studio.set_motion(&keyframes),
+                                None if keyframes.is_empty() => Ok(()),
+                                None => Err("Turn on Studio output first.".into()),
+                            };
+                            let _ = reply.send(result);
+                        }
+                    }
+                    #[cfg(target_os = "macos")]
+                    Ok(Command::SetStudioCanvasOnly { enabled, reply }) => {
+                        if !reply.is_closed() {
+                            let result = studio_out.as_mut()
+                                .ok_or_else(|| "Turn on Studio output first.".to_string())
+                                .and_then(|studio| studio.set_canvas_only(enabled));
+                            let _ = reply.send(result);
+                        }
+                    }
+                    #[cfg(target_os = "macos")]
+                    Ok(Command::SetStudioComposerPreview { target, session, reply }) => {
+                        if !reply.is_closed() {
+                            let result = match studio_out.as_mut() {
+                                Some(studio) => studio.set_composer_preview(target, &session),
+                                None if target.is_none() => Ok(()),
+                                None => Err("Turn on Studio output first.".into()),
+                            };
+                            let _ = reply.send(result);
+                        }
                     }
                     Ok(Command::PrepareStinger { path }) => {
                         if let Some(g) = scene.as_mut() {
@@ -4126,6 +4349,10 @@ pub fn start(
                             // room mix under the virtual camera come down
                             // first and are rebuilt after (studio.rs). This is
                             // the one command that may cycle the vcam.
+                            #[cfg(target_os = "macos")]
+                            let studio_spotlight = studio_out.as_ref().and_then(|st| st.spotlight);
+                            #[cfg(target_os = "macos")]
+                            let studio_floating = studio_out.as_ref().is_some_and(|st| st.floating);
                             let studio_spec = studio_out.take().map(|mut st| {
                                 unsafe { st.teardown() };
                                 st.spec
@@ -4148,7 +4375,16 @@ pub fn start(
                                     if let Some(sp) = studio_spec {
                                         unsafe {
                                             match studio::Studio::build(sp) {
-                                                Ok(st) => studio_out = Some(st),
+                                                Ok(st) => {
+                                                    studio_out = Some(st);
+                                                    #[cfg(target_os = "macos")]
+                                                    if let Some(studio) = &mut studio_out {
+                                                        studio.set_floating(studio_floating);
+                                                        if let Some(rect) = studio_spotlight {
+                                                            studio.set_spotlight(Some(rect));
+                                                        }
+                                                    }
+                                                }
                                                 Err(e) => sink(&LiveEvent::EngineError {
                                                     message: format!("studio: {e}"),
                                                 }),
@@ -4299,6 +4535,10 @@ pub fn start(
                     Ok(Command::DetachPreview { reply }) => {
                         let started=Instant::now();
                         performance_stage("native.preview.detach.start",Duration::ZERO,None);
+                        #[cfg(target_os = "macos")]
+                        if let Some(studio) = studio_out.as_mut() {
+                            studio.close_composer_preview();
+                        }
                         // Conceal BOTH siblings before either destruction can
                         // wait for graphics. Reply only after native removal.
                         if let Some(p)=preview.as_ref(){p.conceal();}

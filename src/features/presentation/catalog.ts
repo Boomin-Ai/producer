@@ -1,17 +1,7 @@
 import threadsDashboard from '../../../docs/shows/threads-live-dashboard.json';
-import grandArena from '../../../docs/shows/head-to-head-grand-arena.json';
-import decisionRoom from '../../../docs/shows/decision-room.json';
-import openFloor from '../../../docs/shows/open-floor.json';
 import atmosphere from '../../../docs/shows/atmosphere.json';
-import studio3d from '../../../docs/shows/grand-arena-3d-study.json';
-import justFacts from '../../../docs/shows/just-facts.json';
-import attention from '../../../docs/shows/attention-is-currency.json';
-import classic from '../../../docs/shows/classic.json';
 import { parsePackage } from './schema';
 
-/** Fresh authoring catalog. Older fixtures are regression inputs, not templates. */
-export const GRAND_ARENA = parsePackage(grandArena);
-export const DEFAULT_SET = import.meta.env.DEV ? GRAND_ARENA : parsePackage(atmosphere);
-export const BUILTIN_SETS = import.meta.env.DEV
-  ? [GRAND_ARENA,...[classic,decisionRoom,openFloor,atmosphere,justFacts,attention,studio3d,threadsDashboard].map(parsePackage)]
-  : [parsePackage(atmosphere),parsePackage(threadsDashboard)];
+/** Built-in templates match across desktop build modes. */
+export const DEFAULT_SET = parsePackage(atmosphere);
+export const BUILTIN_SETS = [DEFAULT_SET, parsePackage(threadsDashboard)];

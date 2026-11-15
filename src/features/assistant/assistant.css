@@ -270,3 +270,6 @@
 .assistant-room-approval>div{display:flex;justify-content:flex-end;gap:7px;}
 .assistant-workspace .assistant-room-approval button{font-size:11px;min-height:30px;padding:5px 9px;}
 @container assistant-dock (max-width:220px){.assistant-composer .assistant-attach{display:none;}}
+
+.assistant-failure-report{display:grid;justify-items:start;gap:4px;margin-top:8px}
+.assistant-failure-report small{font-size:10px;line-height:1.4;color:var(--text-muted,#9aabb8)}

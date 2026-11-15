@@ -9,27 +9,78 @@ try {
   const doc=structuredClone(HEAD_TO_HEAD);
   for(let i=0;i<20;i++){const layout={...structuredClone(doc.set.layouts[0]),root:{id:'root-'+i,type:'box',styles:{width:1280,height:720},children:[]},id:'extra-'+i,label:'An intentionally long segment layout number '+i};doc.set.layouts.push(layout);doc.set.controls.push({id:'layout-'+i,type:'button',label:layout.label,action:{type:'layout.select',layoutId:layout.id}});}
   doc.set.controls.push({id:'reset-topic',type:'button',label:'Reset topic',action:{type:'value.set',key:'topic',value:'Who takes the round?'}});
+  doc.set.controls.push({id:'opening-topic',type:'button',label:'Opening topic',when:{op:'eq',args:[{get:'show.phase'},doc.show.phases[0].id]},action:{type:'value.set',key:'topic',value:'Opening'}});
+  for (const layout of doc.set.layouts) (layout.root.children ??= []).push({id:'shared-topic',type:'text',text:{get:'values.topic'}});
   let last=doc.show.phases.at(-1);
   for(let i=0;i<4;i++){const phase={id:'extra-phase-'+i,label:['Counterpoint','Receipts','Crowd call','Final verdict'][i],layoutId:doc.set.layouts[0].id};last.next=phase.id;doc.show.phases.push(phase);last=phase;}
-  window.panelSession=new RehearsalSession(doc,undefined,'prepare');const host=document.createElement('div');host.className='rm-dock-bottom';host.style.cssText='height:600px;width:1400px';host.innerHTML='<div class="rm-panel-setControls" style="container:panel / inline-size;height:100%;width:100%"><div class="rm-panel-body" style="height:100%;display:flex;flex-direction:column"></div></div>';document.body.replaceChildren(host);
-  (D.createRoot??D.default.createRoot)(host.querySelector('.rm-panel-body')).render((R.createElement??R.default.createElement)(SetControlsPanel,{session:window.panelSession,onChange:()=>{},output:{renderer:'native',layoutReadiness:Object.fromEntries(doc.set.layouts.map((l,i)=>[l.id,{state:i===0?'loading':'ready'}])),active:true,busy:false,error:'',bindings:{},framing:{},sources:{items:[]},bind:()=>{},frame:()=>{},apply:async()=>{},returnToRoom:async()=>true}}));
+  last.layoutId='extra-0';
+  window.panelSession=new RehearsalSession(doc,undefined,'prepare');const slot=doc.set.slots[0];const host=document.createElement('div');host.className='rm-dock-bottom';host.style.cssText='height:600px;width:1400px';host.innerHTML='<div class="rm-panel-setControls" style="container:panel / inline-size;height:100%;width:100%"><div class="rm-panel-body" style="height:100%;display:flex;flex-direction:column"></div></div>';document.body.replaceChildren(host);
+  (D.createRoot??D.default.createRoot)(host.querySelector('.rm-panel-body')).render((R.createElement??R.default.createElement)(SetControlsPanel,{session:window.panelSession,onChange:()=>{},output:{renderer:'native',layoutReadiness:Object.fromEntries(doc.set.layouts.map((l,i)=>[l.id,{state:i===0?'loading':'ready'}])),active:true,busy:false,error:'',bindings:{[slot.id]:'test-camera'},framing:{},sources:{items:[{id:'test-camera',label:'Test camera',kind:'camera',has_frame:true}]},cameraBackground:{},bind:()=>{},frame:()=>{},apply:async()=>{},returnToRoom:async()=>true}}));
  });
- const startFits=await page.locator('.set-mode-action').evaluate(el=>el.scrollWidth<=el.clientWidth);assert(startFits,'Start show text fits inside its button');
- const readiness=await page.locator('.set-segments li').first().getAttribute('data-readiness');assert.equal(readiness,'loading');
- const bounds=()=>page.evaluate(()=>['.set-fixed-playback','.set-run','.set-participation','.set-reference'].map(s=>{const r=document.querySelector(s).getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height};}));
- await page.locator('.set-mode-action').click();await page.waitForTimeout(100);const running=await bounds();
- await page.getByRole('button',{name:'Stop run',exact:true}).click();await page.waitForTimeout(100);const prepared=await bounds();assert.deepEqual(prepared,running,'Start and Stop preserve every column and transport rectangle');
- assert.equal(await page.locator('.set-run-current-label').innerText(),await page.evaluate(()=>window.panelSession.package.show.phases.find(p=>p.id===window.panelSession.snapshot().show.phase).label));
- const sections=page.locator('.set-sections > *');assert.equal(await sections.count(),3);const columns=await bounds();assert(columns[1].x<columns[2].x&&columns[2].x<columns[3].x);assert.equal(columns[1].y,columns[2].y);assert.equal(columns[2].y,columns[3].y);
- for(const height of [600,460,360,300]){
-  await page.evaluate(h=>document.querySelector('.rm-dock-bottom').style.height=h+'px',height);await page.waitForTimeout(100);
-  const list=await page.evaluate(()=>{const list=document.querySelector('.set-segments-scroll');list.scrollTop=0;const viewport=list.getBoundingClientRect(),card=document.querySelector('.set-run').getBoundingClientRect();return {fraction:viewport.height/card.height,visible:[...list.querySelectorAll('li')].filter(el=>{const r=el.getBoundingClientRect();return r.top>=viewport.top-1&&r.bottom<=viewport.bottom+1;}).length};});
-  assert(list.fraction>.55,JSON.stringify({height,...list}));assert(list.visible>=4,JSON.stringify({height,...list}));if(height>=460)assert.equal(list.visible,7);
+ const header=page.locator('.set-run-disclosure');
+ const menu=page.getByRole('region',{name:'Show segments'});
+ const footer=page.getByRole('contentinfo',{name:'Assigned sources'});
+ const body=page.locator('.set-sections');
+ await header.waitFor();
+ const segmentControls=body.getByRole('region',{name:'Segment controls'});
+ const entireSet=body.getByRole('region',{name:'Entire Set'});
+ assert(await segmentControls.getByRole('button',{name:'Opening topic',exact:true}).isVisible());
+ assert.equal(await page.locator('.set-playback-status').textContent(),'Ready');
+ assert.equal(await entireSet.getByRole('button',{name:'Reset topic',exact:true}).count(),1);
+ assert(await entireSet.getByRole('button',{name:'Reset topic',exact:true}).isVisible(),'Set-wide cues are directly available');
+ assert.equal(await entireSet.getByRole('button',{name:/^(Expand|Collapse) .* section$/}).count(),0);
+ assert.equal(await segmentControls.evaluate(el=>getComputedStyle(el).borderTopWidth),'0px');
+ assert.equal(await entireSet.evaluate(el=>getComputedStyle(el).borderTopWidth),'1px','A single divider separates the two sections');
+ assert.equal(await segmentControls.getByRole('button',{name:'Reset topic',exact:true}).count(),0);
+ assert.equal(await segmentControls.getByRole('combobox',{name:'Segment layout'}).count(),0,'The live segment controls omit the layout selector');
+ assert((await entireSet.boundingBox()).y>(await segmentControls.boundingBox()).y);
+ assert.equal(await page.getByRole('button',{name:'Set settings',exact:true}).innerText(),'');
+ assert.equal(await body.locator('.set-segments').count(),0,'Only the dropdown contains the segment list');
+ assert.equal(await page.getByRole('region',{name:'Camera backgrounds'}).count(),0,'Saved Sets without an explicit preference omit the camera background controls');
+ for(const width of [340,240,156]){
+  await page.evaluate(w=>{const dock=document.querySelector('.rm-dock-bottom,.rm-dock-side');dock.className='rm-dock-side';dock.style.cssText=`width:${w}px;height:285px;margin-left:1050px`;},width);
+  const before=await Promise.all([header.boundingBox(),footer.boundingBox()]);
+  assert.ok(before[1].height<32,'Sources footer stays one line tall');
+  assert.ok(await body.evaluate(el=>{el.scrollTop=1000;return el.scrollTop>0&&el.scrollLeft===0;}),'The body scrolls vertically inside the dock');
+  assert.deepEqual(await Promise.all([header.boundingBox(),footer.boundingBox()]),before);
+  await header.click();
+  assert.equal(await menu.locator('li').count(),7);
+  assert.equal(await menu.locator('li').first().getAttribute('data-readiness'),'loading');
+  assert.deepEqual(await Promise.all([header.boundingBox(),footer.boundingBox()]),before,'Opening the dropdown does not move the panel');
+  const dropdown=await menu.boundingBox();
+  const toolbar=await page.locator('.set-controls-toolbar').boundingBox();
+  const transport=await page.locator('.set-fixed-playback').boundingBox();
+  const setName=await page.locator('.set-current-name').boundingBox();
+  assert(Math.abs(dropdown.x-toolbar.x)<1&&Math.abs(dropdown.width-toolbar.width)<1,'Dropdown aligns to the header');
+  assert(Math.abs(dropdown.y-(toolbar.y+toolbar.height))<1,'Dropdown starts at the header edge');
+  assert(await menu.evaluate(el=>parseFloat(getComputedStyle(el).borderBottomWidth)>=2),'The extension has a visible bottom border');
+  assert(await menu.evaluate(el=>{
+   const ctx=document.createElement('canvas').getContext('2d');
+   ctx.fillStyle=getComputedStyle(el).backgroundColor;
+   ctx.fillRect(0,0,1,1);
+   return ctx.getImageData(0,0,1,1).data[3]===255;
+  }),'The header extension must fully cover the controls underneath');
+  const tools=await page.locator('.set-toolbar-tools').boundingBox();
+  assert(setName.y+setName.height<=transport.y,'The sidebar Set name sits above playback');
+  assert(Math.abs(setName.x+setName.width/2-(toolbar.x+toolbar.width/2))<1,'The sidebar Set name is centered');
+  if(width<=250){
+   const output=await page.locator('.set-output-switch').boundingBox();
+   assert(Math.abs(transport.width-toolbar.width)<1,'Playback spans its own row');
+   assert(output.y>=transport.y+transport.height&&Math.abs(output.y-tools.y)<1,'The three actions share the next row');
+   assert(Math.abs(output.x+(tools.x+tools.width-output.x)/2-(toolbar.x+toolbar.width/2))<1,'The action row is centered');
+  }
+  assert(before[0].y>=Math.max(setName.y+setName.height,tools.y+tools.height),'Segment picker sits below the Set name and actions');
+  assert(await page.locator('.set-controls-toolbar').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'Toolbar fits horizontally');
+  await page.keyboard.press('Escape');
+  await menu.waitFor({state:'hidden'});
  }
- await page.evaluate(()=>document.querySelector('.rm-dock-bottom').style.height='460px');await page.waitForTimeout(100);
- const cards=await page.evaluate(()=>['.set-run','.set-participation','.set-reference'].map(selector=>{const el=document.querySelector(selector),s=getComputedStyle(el);return {background:s.backgroundColor,image:s.backgroundImage,border:s.borderTopColor,padding:parseFloat(s.paddingLeft)};}));
- assert.equal(new Set(cards.map(c=>c.background)).size,1,'cards share the room surface');assert(cards.every(c=>c.image==='none'));assert.equal(new Set(cards.map(c=>c.border)).size,1);assert(cards[1].padding>=12&&cards[2].padding>=12,'control and source cards have internal padding');
- const controlGap=await page.locator('.set-participation').evaluate(el=>{const picker=el.querySelector('.set-panel-layout-picker').getBoundingClientRect(),actions=el.querySelector('.set-segment-actions').getBoundingClientRect();return actions.top-picker.bottom;});assert(controlGap>=10,'layout and actions have visible separation');
+ await header.click();
+ await menu.getByRole('button',{name:/Final verdict/}).click();
+ await menu.waitFor({state:'hidden'});
+ assert.match(await header.innerText(),/Final verdict/);
+ assert.equal(await segmentControls.count(),0,'Segments with no controls omit the section');
+ assert.equal(await entireSet.getByRole('button',{name:'Reset topic',exact:true}).count(),1,'Set-wide controls stay in place when the segment changes');
+ await page.evaluate(()=>{const dock=document.querySelector('.rm-dock-side');dock.className='rm-dock-bottom';dock.style.cssText='height:460px;width:1400px';});
  await page.screenshot({path:'/private/tmp/producer-set-panel-expanded.png'});
  await page.evaluate(()=>{const dock=document.querySelector('.rm-dock-bottom');dock.classList.add('slim');dock.style.height='56px';});
  for(const width of [1400,1024,800,600,450]){
@@ -41,6 +92,7 @@ try {
   for(const node of nodes){node.scrollTop=1000;node.scrollLeft=1000;}
   return nodes.map(n=>({top:n.scrollTop,left:n.scrollLeft}));
  });assert(scroll.every(n=>n.top===0&&n.left===0),'minimized bar must not scroll in either direction');
- await page.getByRole('button',{name:'Set actions',exact:true}).click();assert(await page.locator('.set-actions-popover').evaluate(el=>el.matches(':popover-open')));
- console.log('PASS: identical prepared/running geometry, three merged sections, and compact toolbar remains bounded with 20 extra layouts');
+ await page.getByRole('button',{name:'Show rundown',exact:true}).click();
+ assert(await menu.evaluate(el=>el.matches(':popover-open')));
+ console.log('PASS: header dropdown, sticky Sources, camera controls opt-in, and compact toolbar with 20 extra layouts');
 }finally{await browser.close();}

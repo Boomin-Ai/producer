@@ -8,6 +8,7 @@ export function useClips(roomId:string,ready:boolean,visible:boolean,observed:bo
  const [settings,setSettings]=useState<ClipSettings>(DEFAULT_CLIPS);
  const [capture,setCapture]=useState<ClipStatus>(OFF_CLIPS);
  const [recent,setRecent]=useState<SavedClip[]>([]);
+ const [clipNames,setClipNames]=useState<Record<string,string>>({});
  const [directory,setDirectory]=useState('');
  const [error,setError]=useState('');
  const [pending,setPending]=useState<'capture'|'save'|'folder'|null>(null);
@@ -23,6 +24,18 @@ export function useClips(roomId:string,ready:boolean,visible:boolean,observed:bo
  },[roomId]);
  useEffect(()=>{alive.current=true;++generation.current;return()=>{alive.current=false;++generation.current;if(state.current.capture.enabled||state.current.capture.saving)void clips.disable(roomId).catch(()=>{});};},[roomId]);
  useEffect(()=>{let dead=false;void ipc.prefGet(`clips.settings.${roomId}`).then(value=>{if(!dead&&value&&!state.current.capture.enabled){try{setSettings(validateClipSettings(JSON.parse(value)))}catch{/* Ignore invalid old preferences. */}}}).catch(()=>{});return()=>{dead=true;};},[roomId]);
+ useEffect(()=>{
+  let canceled=false;
+  setClipNames({});
+  void ipc.prefGet(`clips.names.${roomId}`).then(value=>{
+   if(canceled||!value)return;
+   const names:unknown=JSON.parse(value);
+   if(names&&typeof names==='object'&&!Array.isArray(names)){
+    setClipNames(Object.fromEntries(Object.entries(names).filter(([,name])=>typeof name==='string')));
+   }
+  }).catch(()=>{});
+  return()=>{canceled=true;};
+ },[roomId]);
  useEffect(()=>{if(!ready||!visible||!observed)return;void refresh().catch(e=>{if(current())setError(clipsError(e));});},[ready,visible,observed,refresh]);
  useEffect(()=>{if(!ready||!visible||(!capture.enabled&&!capture.saving))return;let dead=false;let timer:ReturnType<typeof setTimeout>;const poll=async()=>{try{await refresh()}catch(e){if(!dead)setError(clipsError(e))}if(!dead)timer=setTimeout(poll,1000);};timer=setTimeout(poll,1000);return()=>{dead=true;clearTimeout(timer);};},[ready,visible,capture.enabled,capture.saving,refresh]);
  useEffect(()=>{if(visible)return;if(state.current.capture.enabled||state.current.capture.saving)void clips.disable(roomId).then(status=>{if(alive.current)setCapture(status)}).catch(e=>{if(alive.current)setError(clipsError(e))});},[visible,roomId]);
@@ -41,6 +54,13 @@ export function useClips(roomId:string,ready:boolean,visible:boolean,observed:bo
  const restart=()=>act('capture',async()=>{await clips.disable(roomId);const status=await clips.enable(roomId,state.current.settings);if(current())setCapture(status);return status;});
  const save=()=>act('save',async()=>{const result=await clips.save(roomId);await refresh();return result;});
  const chooseFolder=()=>act('folder',async()=>{const path=await clips.pickDirectory();if(path&&current())setDirectory(path);return path;});
- return {capture,settings,recent,directory,error,pending,ready,refresh,configure,setEnabled,toggle,restart,save,chooseFolder};
+ const rename=async(id:string,name:string)=>{
+  if(!recent.some(clip=>clip.id===id&&clip.status==='ready'))throw Error('This clip is no longer in the list.');
+  const names={...clipNames,[id]:name.trim().slice(0,80)};
+  if(!names[id])delete names[id];
+  await ipc.prefSet(`clips.names.${roomId}`,JSON.stringify(names));
+  if(current())setClipNames(names);
+ };
+ return {capture,settings,recent,clipNames,directory,error,pending,ready,refresh,configure,setEnabled,toggle,restart,save,chooseFolder,rename};
 }
 export type ClipsController=ReturnType<typeof useClips>;

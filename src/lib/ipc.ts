@@ -1,5 +1,9 @@
 import { invoke } from "./nativeInvoke";
 import { NetworkEntryError, NetworkEntryRequests } from "./networkEntry";
+import type { StudioMotionKeyframe, StudioMotionPose } from "../features/studio/motion";
+
+/** Panel bounds in top-left WebView coordinates, normalized to the viewport. */
+export type StudioSpotlightRect = { x: number; y: number; w: number; h: number };
 
 /** What an endpoint IS, derived (Rust-side) from whether it carries a brand
  * scope: "boomin" = a Boomin workspace (network, deals, room visibility);
@@ -200,6 +204,18 @@ export const ipc = {
   /** Studio output: the program becomes a capture of Producer's own window
    * (lib/studioOutput.ts). Resolves to the engine's resulting state. */
   liveSetStudio: (on: boolean) => invoke<boolean>("live_set_studio", { on }),
+  liveSetStudioSpotlight: (rect: StudioSpotlightRect | null) =>
+    invoke<boolean>("live_set_studio_spotlight", { rect }),
+  liveOpenStudioPreview: () => invoke<void>("live_open_studio_preview"),
+  liveOpenStudioComposer: (sessionId: string) => invoke<void>("live_open_studio_composer", { sessionId }),
+  liveCloseStudioComposer: (sessionId: string) => invoke<void>("live_close_studio_composer", { sessionId }),
+  liveSetStudioRoomCrop: (rect: StudioSpotlightRect | null) => invoke<void>("live_set_studio_room_crop", { rect }),
+  liveSetStudioCanvasOnly: (enabled: boolean) => invoke<void>("live_set_studio_canvas_only", { enabled }),
+  liveSetStudioComposerPreview: (sessionId: string, rect: StudioSpotlightRect | null) =>
+    invoke<void>("live_set_studio_composer_preview", { sessionId, rect }),
+  livePlayStudioMotion: (keyframes: StudioMotionKeyframe[]) => invoke<void>("live_play_studio_motion", { keyframes }),
+  liveSetStudioMotionPose: (pose: StudioMotionPose | null) => invoke<void>("live_set_studio_motion_pose", { pose }),
+  liveClearStudioMotion: () => invoke<void>("live_clear_studio_motion"),
   liveHomeGlass: () => invoke("live_home_glass"),
   /** Preview demand control: fps the engine should spend on guest thumbs
    * (0 = off). The UI asks for what it can actually display. */
@@ -402,6 +418,7 @@ export type LiveEvent =
   | { type: "levels"; extra_peaks: { id: string; peak: number }[] }
   | { type: "guest_thumbs"; w: number; h: number; thumbs: { id: string; jpeg: string }[] }
   | { type: "video_changed"; height: number; fps: number }
+  | { type: "studio_capture_failed" }
   | { type: "engine_error"; message: string };
 
 export async function listenLiveEvents(cb: (ev: LiveEvent) => void): Promise<() => void> {

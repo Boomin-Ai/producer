@@ -44,8 +44,8 @@ try{
  assert.equal(await page.locator('.set-arranged-section h4>button').first().getAttribute('aria-label'),'Collapse Layout controls section');
  await page.getByRole('button',{name:'Solo',exact:true}).click();
  assert.equal(await page.getByRole('group',{name:'Host camera background',exact:true}).count(),0,'Classic omits camera background controls');
- await page.evaluate(()=>{const doc=structuredClone(window.doc);delete doc.set.controlArrangement.cameraBackground;window.session=new window.session.constructor(doc,undefined,'prepare');window.render();});
- await page.getByRole('button',{name:'Host camera Framed',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Host camera Cutout',exact:true}).count(),1,'other Sets keep their existing camera controls by default');
+  await page.evaluate(()=>{const doc=structuredClone(window.doc);doc.set.controlArrangement.cameraBackground=true;window.session=new window.session.constructor(doc,undefined,'prepare');window.render();});
+ await page.getByRole('button',{name:'Host camera Framed',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Host camera Cutout',exact:true}).count(),1,'Sets can explicitly opt in to camera controls');
  await page.evaluate(()=>{window.session=new window.session.constructor(window.doc,undefined,'prepare');window.render();});
  await page.getByRole('button',{name:'Host camera Framed',exact:true}).waitFor({state:'detached'});
  await page.getByRole('button',{name:'Expand Look & feel section',exact:true}).click();

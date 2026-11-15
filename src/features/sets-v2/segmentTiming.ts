@@ -20,7 +20,7 @@ export async function measureSegmentTiming(sourceId:string){
    await sleep(100);events=[];button('Show on output',editor)!.click();await wait(()=>events.find(e=>e.stage==='render-complete'),'initial render').catch(e=>{throw Error(String(e)+' '+JSON.stringify(events.slice(-12)));});button('Close editor',editor)!.click();
    await invoke('live_set_v2_report',{result:{ok:false,kind:'timing-progress',set:name,debug:(await import('./preparedScenes')).preparationDebug().map(s=>({...s,entries:s.entries.filter(e=>e.state.state!=='ready').slice(0,24)}))}});
    await wait(()=>{const p=document.querySelector<HTMLElement>('.set-controls[data-layouts-total]');return p&&Number(p.dataset.layoutsTotal)>0&&p.dataset.layoutsReady===p.dataset.layoutsTotal;},'entire set layouts ready');
-   events=[];document.querySelector<HTMLButtonElement>('.set-mode-action')!.click();
+   events=[];document.querySelector<HTMLButtonElement>('.set-fixed-playback .set-transport-play')!.click();
    await sleep(500);await settled();await wait(()=>button('Next'),'next enabled');
    // Measure first visits, then repeat the same path after Restart.
    for(let pass=0;pass<2;pass++){

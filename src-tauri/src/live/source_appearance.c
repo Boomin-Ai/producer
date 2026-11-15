@@ -269,6 +269,9 @@ static void shader_render(void *data,gs_effect_t *unused){
  if(!s->painted||memcmp(values,s->last,sizeof(values))!=0){
   gs_texrender_reset(s->texture);
   if(!gs_texrender_begin(s->texture,s->rw,s->rh))return;
+  const bool was_linear=gs_get_linear_srgb(), was_srgb=gs_framebuffer_srgb_enabled();
+  gs_set_linear_srgb(false);
+  gs_enable_framebuffer_srgb(false);
   struct vec4 clear={0,0,0,0};gs_clear(GS_CLEAR_COLOR,&clear,0,0);gs_ortho(0,(float)s->rw,0,(float)s->rh,-100,100);
   shader_scalar(s->effect,"effectType",s->mode);shader_scalar(s->effect,"speed",s->speed);shader_scalar(s->effect,"radius",s->radius);shader_scalar(s->effect,"glow",s->glow);shader_scalar(s->effect,"voiceStyle",s->variant);
   gs_effect_set_vec4(gs_effect_get_param_by_name(s->effect,"paletteA"),&s->palette[0]);gs_effect_set_vec4(gs_effect_get_param_by_name(s->effect,"paletteB"),&s->palette[1]);gs_effect_set_vec4(gs_effect_get_param_by_name(s->effect,"paletteC"),&s->palette[2]);
@@ -278,11 +281,21 @@ static void shader_render(void *data,gs_effect_t *unused){
   gs_technique_t *tech=gs_effect_get_technique(s->effect,"Draw");size_t passes=gs_technique_begin(tech);
   for(size_t i=0;i<passes;i++){if(gs_technique_begin_pass(tech,i)){gs_draw_sprite(NULL,0,s->rw,s->rh);gs_technique_end_pass(tech);}}
   gs_technique_end(tech);gs_blend_state_pop();gs_texrender_end(s->texture);
+  gs_set_linear_srgb(was_linear);
+  gs_enable_framebuffer_srgb(was_srgb);
   memcpy(s->last,values,sizeof(values));s->painted=true;
  }
- gs_effect_t *draw=s->display;gs_effect_set_texture(gs_effect_get_param_by_name(draw,"image"),gs_texrender_get_texture(s->texture));
+ /* Same encoded-SDR texture boundary as the Set compositor. */
+ const bool linear=gs_get_linear_srgb(), framebuffer=gs_framebuffer_srgb_enabled();
+ gs_enable_framebuffer_srgb(linear);
+ gs_effect_t *draw=s->display;
+ gs_eparam_t *image=gs_effect_get_param_by_name(draw,"image");
+ gs_texture_t *texture=gs_texrender_get_texture(s->texture);
+ if(linear)gs_effect_set_texture_srgb(image,texture);
+ else gs_effect_set_texture(image,texture);
  gs_blend_state_push();gs_blend_function(GS_BLEND_ONE,GS_BLEND_INVSRCALPHA);
  gs_technique_t *tech=gs_effect_get_technique(draw,"Draw");size_t passes=gs_technique_begin(tech);for(size_t i=0;i<passes;i++){if(gs_technique_begin_pass(tech,i)){gs_draw_sprite(gs_texrender_get_texture(s->texture),0,s->width,s->height);gs_technique_end_pass(tech);}}gs_technique_end(tech);gs_blend_state_pop();
+ gs_enable_framebuffer_srgb(framebuffer);
 }
 static void producer_shader_register(void){struct obs_source_info info;memset(&info,0,sizeof(info));info.id="producer_shader_layer";info.type=OBS_SOURCE_TYPE_INPUT;info.output_flags=OBS_SOURCE_VIDEO|OBS_SOURCE_CUSTOM_DRAW;info.get_name=shader_name;info.create=shader_create;info.destroy=shader_destroy;info.get_width=shader_width;info.get_height=shader_height;info.video_render=shader_render;obs_register_source_s(&info,sizeof(info));}
 obs_source_t *producer_shader_create(const char *json,const char *kernel){

@@ -69,7 +69,7 @@ export async function nativeOriginSmoke(appPath,outPath){
   require(process.platform==='darwin'&&process.env.GITHUB_ACTIONS==='true'&&process.env.CI==='true','ci_macos_only');
   const workspace=resolve(process.env.GITHUB_WORKSPACE??''),runner=resolve(process.env.RUNNER_TEMP??''),app=resolve(appPath),out=resolve(outPath);
   require(process.env.GITHUB_WORKSPACE&&process.env.RUNNER_TEMP&&under(workspace,app)&&under(workspace,out),'unexpected_ci_paths');
-  require(app.endsWith('/candidate/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Producer DJ Test.app'),'unexpected_app_path');
+  require(app.endsWith('/candidate/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Producer Dev.app'),'unexpected_app_path');
   require(!await exists(out),'proof_destination_exists');
   const plist=join(app,'Contents/Info.plist');
   const info=JSON.parse(execFileSync('plutil',['-convert','json','-o','-',plist],{encoding:'utf8'}));

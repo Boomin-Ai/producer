@@ -4,7 +4,7 @@ import {validateMask,validateBackdrop,type LayerMask,type BackdropEffect} from '
 import {mediaConfig} from './playback';
 import { parseSourceAppearance, type SourceAppearance } from '../../lib/sourceAppearance';
 import { evaluate, type RehearsalState } from './rehearsal';
-import { safeStyle, type PresentationPackage, type PresentationNode, type Scalar } from './schema';
+import { isHexColor, safeStyle, type PresentationPackage, type PresentationNode, type Scalar } from './schema';
 import { motionCss } from './nordcraft-adapter/motion';
 import {type AnimationTimeline} from './animation';
 
@@ -82,14 +82,19 @@ export function outputProjection(doc: PresentationPackage, state: RehearsalState
       out.scene3d={...(music?{music}:{}),id:spec.id,pass:spec.pass,world:structuredClone(spec.world),cue:cue as string,...(typeof cueSequence==='number'?{cueSequence}:{}),...(typeof view==='string'?{view}:{})};
     }
     if(n.type==='shader'){
-      const {bindings,...shader}=structuredClone(n.shader!);
+      const {bindings, colors, ...shader}=structuredClone(n.shader!);
+      const resolvedColors = colors.map(expression => {
+        const color = evaluate(expression, publicState, props, 64, doc.set.tokens);
+        if (!isHexColor(color)) throw Error('Invalid shader color binding.');
+        return color;
+      });
       for(const [name,expression] of Object.entries(bindings??{})){
         const value=evaluate(expression,publicState,props,64,doc.set.tokens);
         const max=name==='speed'?4:name==='intensity'?2:1;
         if(typeof value!=='number'||!Number.isFinite(value)||value<0||value>max)throw Error(`Invalid shader ${name} binding.`);
         Object.assign(shader,{[name]:value});
       }
-      out.shader=shader;
+      out.shader={...shader, colors: resolvedColors};
     }
     if(n.type==='media'){out.assetId=n.assetId;out.fit=n.fit??'contain';out.loop=mediaConfig(doc,n.assetId!).loop;out.autoplay=mediaConfig(doc,n.assetId!).start==='entry';if(state.media?.[n.assetId!])out.playback={...state.media[n.assetId!]};}
     if (n.type === 'text') {

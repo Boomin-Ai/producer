@@ -1,10 +1,54 @@
-import type {PresentationPackage} from './schema';
+import type {Binding, PresentationPackage} from './schema';
+import {layoutFieldKeys} from './layoutFields';
 
 export type ArrangementControl = {id:string;label:string;type:string;sectionId:string;kind:'set'|'module'|'builtin'|'operator';moduleId?:string;controlId:string;signature:string};
-export type ArrangementSection = {id:string;label:string;purpose?:'live'|'content'|'appearance';controls:string[];collapsed:boolean};
+type AuthoredSection = NonNullable<PresentationPackage['set']['controlArrangement']>['sections'][number];
+export type ArrangementSection = AuthoredSection & {collapsed:boolean};
 export type ArrangementCatalog = {controls:ArrangementControl[];sections:ArrangementSection[];minimized:string[]};
 export type ArrangementPreferences = {version:1;signatures:Record<string,string>;minimized:Record<string,boolean>;minimizedOrder:string[];sectionOrder:string[];controlOrder:Record<string,string[]>;collapsed:Record<string,boolean>};
 export type ResolvedArrangement = {sections:ArrangementSection[];minimized:string[]};
+
+function dependsOnSegment(binding: Binding | undefined): boolean {
+  if (!binding || typeof binding !== 'object') return false;
+  if ('get' in binding) return binding.get.startsWith('show.') || binding.get.startsWith('layout.');
+  return binding.args.some(dependsOnSegment);
+}
+
+/** Identify controls whose target is shared by the entire Set. Visibility is evaluated separately. */
+export function setWideControlRefs(doc: PresentationPackage): Set<string> {
+  const refs = new Set<string>();
+  if (!doc.show) return refs;
+  const layoutFields = doc.set.layouts.map(layout => layoutFieldKeys(doc, layout.id));
+  for (const control of doc.set.controls) {
+    if (dependsOnSegment(control.when)) continue;
+    let key: string;
+    if (control.type === 'button') {
+      if (control.action.type !== 'value.set' || dependsOnSegment(control.enabled)) continue;
+      key = control.action.key;
+    } else {
+      key = control.key;
+    }
+    if (key && layoutFields.every(fields => fields.has(key))) refs.add(`set:${control.id}`);
+  }
+  for (const component of doc.set.operatorComponents ?? []) {
+    if (!dependsOnSegment(component.when)) refs.add(`operator:${component.id}`);
+  }
+  for (const instance of doc.runtime.instances) {
+    if (instance.owner !== 'set') continue;
+    const definition = doc.runtime.definitions[instance.definition];
+    for (const group of definition.controls) {
+      if (group.audience !== 'operator') continue;
+      for (const control of group.controls) {
+        if (!control.segment) refs.add(`module:${instance.id}:${control.id}`);
+      }
+    }
+    refs.add(`module:${instance.id}:$lifecycle`);
+    const behavior = definition.behavior?.type;
+    if (behavior === 'weather') refs.add(`module:${instance.id}:$weather-location`);
+    if (behavior && ['agent','vote','submissions','social'].includes(behavior)) refs.add(`module:${instance.id}:$behavior-tools`);
+  }
+  return refs;
+}
 
 /** Stable IDs describe controls, never their permission or current visibility. */
 export function arrangementCatalog(doc:PresentationPackage):ArrangementCatalog {
@@ -29,7 +73,7 @@ export function arrangementCatalog(doc:PresentationPackage):ArrangementCatalog {
   }
   const authored=doc.set.controlArrangement;
   const placed=new Set(authored?.sections.flatMap(s=>s.controls)??[]);
-  const sections:ArrangementSection[]=(authored?.sections??[]).map(s=>({id:`authored:${s.id}`,label:s.label,purpose:s.purpose,controls:[...s.controls],collapsed:s.collapsed??false}));
+  const sections:ArrangementSection[]=(authored?.sections??[]).map(s=>({...s,id:`authored:${s.id}`,controls:[...s.controls],collapsed:s.collapsed??false}));
   for(const s of defaults){const rest=s.controls.filter(id=>!placed.has(id));if(rest.length)sections.push({...s,controls:rest});}
   for(const s of sections)for(const id of s.controls){const c=controls.find(c=>c.id===id);if(c)c.sectionId=s.id;}
   return {controls,sections,minimized:[...(authored?.minimized??[])]};

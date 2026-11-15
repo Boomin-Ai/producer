@@ -1,0 +1,602 @@
+.studio-composer {
+  --composer-line: var(--line-2, #29313f);
+  --composer-border: var(--line-1, #202836);
+  --composer-text: var(--fg-1, #eef1f6);
+  --composer-muted: #a1acbb;
+  --composer-mint: var(--primary, #3ddca6);
+  --composer-panel: #0d131d;
+  --composer-control: #161e29;
+  --composer-well: #080d15;
+  --composer-radius: var(--r-ctl, 9px);
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  min-width: 0;
+  color: var(--composer-text);
+  background: var(--composer-panel);
+  font: 13px/1.4 var(--font, "Instrument Sans", "Segoe UI", system-ui, sans-serif);
+  color-scheme: dark;
+}
+
+.studio-composer h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.studio-composer button,
+.studio-composer select {
+  color: var(--composer-text);
+  background: var(--composer-control);
+  border: 1px solid var(--composer-line);
+  border-radius: var(--composer-radius);
+  min-height: 32px;
+  padding: 4px 10px;
+  font: inherit;
+  font-weight: 600;
+}
+
+.studio-composer button:not(:disabled):hover,
+.studio-composer select:not(:disabled):hover {
+  border-color: #4b5b6d;
+}
+
+.studio-composer :focus-visible {
+  outline: 2px solid var(--composer-mint);
+  outline-offset: 2px;
+}
+
+.studio-composer svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.studio-composer-target-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: #14332e;
+  color: #90e8cd;
+}
+
+.studio-composer-error {
+  margin: 0;
+  padding: 4px 14px;
+  font-size: 12px;
+  color: #ffaca5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-composer-inspector {
+  display: grid;
+  grid-area: inspector;
+  grid-template-columns: minmax(96px, .8fr) minmax(112px, 1fr) minmax(156px, 3fr) max-content 28px;
+  align-items: end;
+  gap: 10px;
+  min-width: 0;
+  padding-inline-start: 10px;
+  border-inline-start: 1px solid var(--composer-line);
+}
+
+.studio-composer h2.studio-composer-selection {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.studio-composer-selection > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-composer button.studio-composer-icon-button {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  padding: 0;
+  background: transparent;
+  color: var(--composer-muted);
+}
+
+.studio-composer button.studio-composer-remove {
+  width: 28px;
+  min-height: 28px;
+  border-color: transparent;
+}
+
+.studio-composer-target,
+.studio-composer-ending {
+  display: grid;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--composer-muted);
+}
+
+.studio-composer-target select {
+  width: 100%;
+  min-width: 0;
+  min-height: 27px;
+  padding-block: 2px;
+  text-overflow: ellipsis;
+}
+
+.studio-composer-sliders {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 10px;
+}
+
+.studio-composer-slider {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--composer-muted);
+}
+
+.studio-composer input[type="range"] {
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  accent-color: var(--composer-mint);
+  cursor: pointer;
+}
+
+.studio-composer-slider input {
+  height: 26px;
+}
+
+.studio-composer-slider input::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(to right, #64c5ab var(--slider-fill), #303c4b var(--slider-fill));
+}
+
+.studio-composer-slider input::-moz-range-track {
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(to right, #64c5ab var(--slider-fill), #303c4b var(--slider-fill));
+}
+
+.studio-composer-slider input::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: #b8efde;
+}
+
+.studio-composer-slider input::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: #b8efde;
+}
+
+.studio-composer-segmented {
+  display: flex;
+  padding: 1px;
+  gap: 2px;
+  border-radius: var(--composer-radius);
+  background: var(--composer-well);
+  border: 1px solid var(--composer-border);
+}
+
+.studio-composer-segmented button {
+  flex: 1;
+  min-width: 0;
+  min-height: 23px;
+  padding: 2px 6px;
+  border-color: transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--composer-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.studio-composer-segmented button[aria-pressed="true"] {
+  color: #c1f6e7;
+  background: #153730;
+  border-color: #29594d;
+}
+
+.studio-composer-timeline {
+  flex: none;
+  padding: 4px 14px 4px;
+  background: #101722;
+  border-top: 1px solid var(--composer-line);
+}
+
+.studio-composer-toolbar {
+  display: grid;
+  grid-template: "playback inspector add" / max-content minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 10px;
+  min-height: 45px;
+  margin-bottom: 3px;
+}
+
+.studio-composer-playback {
+  display: flex;
+  grid-area: playback;
+  align-items: center;
+  gap: 7px;
+}
+
+.studio-composer-playback button,
+.studio-composer-add > button {
+  min-height: 27px;
+}
+
+.studio-composer button.studio-composer-play {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  min-width: 75px;
+  color: #081913;
+  background: var(--composer-mint);
+  border-color: var(--composer-mint);
+}
+
+.studio-composer button.studio-composer-play:disabled {
+  color: var(--composer-muted);
+  background: var(--composer-control);
+  border-color: var(--composer-line);
+}
+
+.studio-composer-clock {
+  margin-left: 4px;
+  color: var(--composer-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.studio-composer-clock strong {
+  color: var(--composer-text);
+  font-weight: 600;
+}
+
+.studio-composer-add {
+  grid-area: add;
+  position: relative;
+}
+
+.studio-composer-add button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.studio-composer-add-options {
+  position: absolute;
+  z-index: 6;
+  display: flex;
+  gap: 2px;
+  top: calc(100% + 4px);
+  right: 0;
+  width: max-content;
+  padding: 2px;
+  border: 1px solid var(--composer-line);
+  border-radius: var(--composer-radius);
+  background: #131c28;
+  box-shadow: 0 8px 22px #0007;
+}
+
+.studio-composer-add-options button {
+  border-color: transparent;
+  background: transparent;
+  white-space: nowrap;
+}
+
+.studio-composer-track-grid {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.studio-composer-track-names,
+.studio-composer-tracks {
+  display: grid;
+  grid-template-rows: 19px 27px 17px;
+  gap: 3px;
+}
+
+.studio-composer-track-names {
+  align-items: center;
+  color: var(--composer-muted);
+  font-size: 12px;
+}
+
+.studio-composer-tracks {
+  position: relative;
+  min-width: 0;
+  margin-inline: 6px;
+}
+
+.studio-composer-ruler {
+  position: relative;
+  min-width: 0;
+}
+
+.studio-composer-ruler-labels {
+  display: flex;
+  justify-content: space-between;
+  position: absolute;
+  inset: 0;
+  color: var(--composer-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.studio-composer-ruler-labels span::after {
+  content: "";
+  display: block;
+  height: 4px;
+  width: 1px;
+  margin: 2px auto 0;
+  background: #536071;
+}
+
+.studio-composer .studio-composer-ruler input[type="range"] {
+  position: absolute;
+  inset: 2px -6px 0;
+  width: calc(100% + 12px);
+  height: 16px;
+  cursor: ew-resize;
+}
+
+.studio-composer-ruler input::-webkit-slider-runnable-track {
+  height: 1px;
+  background: transparent;
+}
+
+.studio-composer-ruler input::-moz-range-track {
+  height: 1px;
+  background: transparent;
+}
+
+.studio-composer-ruler input::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 3px 3px 6px 6px;
+  margin-top: 1px;
+  background: var(--composer-mint);
+}
+
+.studio-composer-ruler input::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 3px 3px 6px 6px;
+  background: var(--composer-mint);
+  transform: translateY(6px);
+}
+
+.studio-composer-motion-lane,
+.studio-composer-source-lane {
+  position: relative;
+  border-radius: 6px;
+  background: var(--composer-well);
+}
+
+.studio-composer-source-lane {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline: 8px;
+  border: 1px solid #293748;
+  background: #192533;
+  color: #c1ccdc;
+  font-size: 11px;
+}
+
+.studio-composer-source-lane svg {
+  width: 13px;
+  height: 13px;
+}
+
+.studio-composer-clip {
+  --trim-width: min(16px, 30%);
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  border: 1px solid #3b5368;
+  border-radius: 7px;
+  background: #243547;
+}
+
+.studio-composer-clip[data-kind="sweep"] {
+  border-color: #4b436d;
+  background: #2c2847;
+}
+
+.studio-composer-clip[data-selected="true"] {
+  border-color: #4baf95;
+  background: #1e4b42;
+}
+
+.studio-composer .studio-composer-clip button {
+  position: absolute;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  touch-action: none;
+}
+
+.studio-composer-clip button:focus-visible {
+  outline-offset: -1px;
+  z-index: 2;
+}
+
+.studio-composer button.studio-composer-clip-button {
+  inset: 0 var(--trim-width);
+  justify-content: flex-start;
+  gap: 4px;
+  overflow: hidden;
+  font-size: 11px;
+  cursor: grab;
+}
+
+.studio-composer button.studio-composer-clip-button:active {
+  cursor: grabbing;
+}
+
+.studio-composer-clip-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-composer-clip-button svg {
+  width: 13px;
+  height: 13px;
+}
+
+.studio-composer button.studio-composer-trim {
+  inset: 0 auto 0 0;
+  width: var(--trim-width);
+  color: #a6b2c5;
+  cursor: ew-resize;
+}
+
+.studio-composer button.studio-composer-trim[data-edge="end"] {
+  inset: 0 0 0 auto;
+}
+
+.studio-composer .studio-composer-trim::after {
+  content: "";
+  width: 2px;
+  height: 12px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.studio-composer .studio-composer-trim:hover {
+  color: #fff;
+  background: #ffffff16;
+}
+
+.studio-composer-clip[data-selected="true"] .studio-composer-trim {
+  color: #a8ead8;
+}
+
+.studio-composer-joint {
+  pointer-events: none;
+  position: absolute;
+  z-index: 3;
+  right: -5px;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+  border: 1px solid #25463c;
+  background: var(--composer-mint);
+  transform: rotate(45deg);
+}
+
+.studio-composer-playline {
+  pointer-events: none;
+  position: absolute;
+  z-index: 3;
+  top: 17px;
+  bottom: 0;
+  left: var(--playhead-position);
+  width: 1px;
+  background: var(--composer-mint);
+}
+
+@media (max-width: 1100px) {
+  .studio-composer-inspector {
+    grid-template-columns: minmax(112px, 1fr) minmax(156px, 3fr) max-content 28px;
+  }
+  .studio-composer h2.studio-composer-selection {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
+
+@media (max-width: 820px) {
+  .studio-composer-toolbar {
+    grid-template: "playback add" "inspector inspector" / minmax(0, 1fr) max-content;
+    row-gap: 4px;
+  }
+  .studio-composer-inspector {
+    padding-inline-start: 0;
+    border-inline-start: 0;
+  }
+  .studio-composer-add-options {
+    justify-content: end;
+    flex-wrap: wrap;
+    max-width: min(425px, calc(100vw - 30px));
+  }
+}
+
+@media (max-width: 700px) {
+  .studio-composer-ruler-labels span:nth-child(even) {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .studio-composer-inspector {
+    grid-template-columns: minmax(0, 1fr) max-content 28px;
+  }
+  .studio-composer-sliders {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .studio-composer-track-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .studio-composer-track-names {
+    display: none;
+  }
+  .studio-composer-clip-button svg {
+    display: none;
+  }
+}
+
+
+.studio-composer button.studio-composer-source-end {
+  position:absolute; right:0; top:0; bottom:0; width:22px; min-height:0;
+  padding:0; border:0; background:transparent; cursor:ew-resize; touch-action:none;
+}
+.studio-composer-source-end::after { content:""; display:block; width:3px; height:12px; margin:auto; background:#a4bdcf; border-radius:2px; }
+.studio-composer-source-end:hover { background:#284456 !important; }
+.studio-composer-source-lane { padding-right:26px; }
+
+.studio-composer button.studio-composer-placement { display: inline-flex; align-items:center; gap:6px; font-size:11px; color:var(--composer-muted); padding:3px 7px; white-space:nowrap; }
+.studio-composer button.studio-composer-placement[aria-checked="true"] { color:#b8efde; border-color:#34685a; }

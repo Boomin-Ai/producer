@@ -11,7 +11,6 @@ void initializePerformanceTrace().catch(() => {});
 document.documentElement.dataset.platform = /Windows/i.test(navigator.userAgent) ? "win" : "mac";
 
 const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
-// Explicit authoring-only native verification. No room or device is started.
 if (import.meta.env.DEV && import.meta.env.VITE_PRODUCER_ASSISTANT_WORKBENCH === '1') {
   void import('./features/assistant/AssistantWorkbench').then(({default: Workbench}) => {
     root.render(<React.StrictMode><Workbench/></React.StrictMode>);

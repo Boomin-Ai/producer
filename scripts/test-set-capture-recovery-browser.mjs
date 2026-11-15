@@ -19,7 +19,7 @@ const {chromium}=await import(playwrightModule?(playwrightModule.startsWith('fil
 const hook=await readFile(new URL('../src/features/sets-v2/useRoomOutput.ts',import.meta.url),'utf8');
 const mocks={
   performanceTrace:`export const recordTraceEvent=()=>{};export const snapshotTraceContext=()=>({});`,
-  layoutViews:`export const outputLayout=(set,id,orientation)=>orientation==='portrait'?'portrait':'landscape';`,
+  layoutViews:`export const outputLayout=(set,id,orientation)=>orientation==='portrait'?'portrait':'landscape';export const layoutTransitionSound=()=>undefined;`,
   nativeInvoke:`export const invoke=(cmd,arg)=>window.native.invoke(cmd,arg);`,
   ipc:`export const ipc={liveSetStatus:async()=>({generation:1}),liveEngineStatus:async()=>({engine_ready:true,video_height:720})};export const uiLog=()=>{};export const listenLiveEvents=async()=>()=>{};`,
   useSetOutput:`export const setOutputProjection=(session,revision,id)=>session.project(id);`,

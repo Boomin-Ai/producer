@@ -129,6 +129,7 @@ export interface RoomConfig {
    * never per component. */
   dock_bg?: Partial<Record<"top" | "left" | "right" | "bottom", boolean>>;
   /** Where the stage's quick controls float: an edge of the canvas. */
+  timeline_bar?: boolean;
   stage_bar?: "bottom" | "top" | "left" | "right";
   /** Output canvas the room was last set to: height (720/1080/2160) and
    * frame rate (30/60). Stored verbatim — the ENGINE is the authority on
@@ -208,6 +209,7 @@ export function parseConfig(raw: string | null | undefined): RoomConfig {
     if (Object.keys(mf).length) base.mod_feeds = mf;
   }
   if (v.sizes && typeof v.sizes === "object") base.sizes = v.sizes as DockSizes;
+  if (typeof v.timeline_bar === "boolean") base.timeline_bar = v.timeline_bar;
   if (v.stage_bar === "bottom" || v.stage_bar === "top" || v.stage_bar === "left" || v.stage_bar === "right") {
     base.stage_bar = v.stage_bar;
   }

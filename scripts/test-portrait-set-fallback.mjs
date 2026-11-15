@@ -25,6 +25,9 @@ try {
  // The existing paired-layout behavior must continue to pick vertical layouts.
  await page.goto(`${process.env.PRODUCER_PREVIEW_ORIGIN??'http://127.0.0.1:1432'}/scripts/portrait-browser.html?paired`);
  await page.getByRole('button',{name:'Apply test set'}).click();
+ await page.getByRole('button',{name:'Output settings',exact:true}).click();
+ await page.getByRole('button',{name:'Both',exact:true}).click();
+ await page.getByRole('button',{name:'Close output settings',exact:true}).click();
  await page.waitForFunction(()=>window.portraitProof.requests.some(r=>r.projection.root.id.endsWith('opening-portrait-canvas')));
  await page.getByRole('button',{name:'Next layout'}).click();
  await page.waitForFunction(()=>window.portraitProof.requests.some(r=>r.projection.root.id.endsWith('next-portrait-canvas')));

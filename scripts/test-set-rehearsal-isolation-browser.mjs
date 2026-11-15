@@ -85,7 +85,7 @@ try{
  assert.equal(await page.evaluate(()=>window.roomSession.snapshot().values.hostName),'Prepared draft');
  assert.equal(await page.evaluate(()=>window.roomSession.snapshot().show.phase),'round');
  assert.equal(await editor.getByRole('combobox',{name:'Edit segment',exact:true}).inputValue(),'round');
- await editor.getByRole('button',{name:'Close editor',exact:true}).click();await page.locator('.set-mode-action').click();
+ await editor.getByRole('button',{name:'Close editor',exact:true}).click();await page.locator('.set-fixed-playback .set-transport-play').click();
  assert.equal(await page.evaluate(()=>window.roomSession.snapshot().workspaceMode),'live');
  await page.waitForFunction(()=>window.roomSession.snapshot().elapsedMs>100);
  await page.getByRole('button',{name:'Set settings',exact:true}).click();const phase=await page.evaluate(()=>window.roomSession.snapshot().show.phase);

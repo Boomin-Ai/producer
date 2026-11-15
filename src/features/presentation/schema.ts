@@ -142,11 +142,20 @@ const scene3dWorld:Codec<Scene3dWorld>={json:WORLD_SCHEMA,read(v,p){try{return p
 // importer for old drafts. Resolved values are checked before authored commits.
 const typedBinding = (value: Codec<unknown>): Codec<Binding> => ({...binding,
   json: {anyOf: [value.json, ...(binding.json.anyOf as JsonSchema[]).slice(1)]}});
+const hexColor = string(7, '^#[0-9a-fA-F]{6}$');
+export const isHexColor = (value: unknown): value is string =>
+  typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
+const colorBinding = typedBinding(hexColor);
+const controlColorRole = union(literal('primary'), literal('choiceA'), literal('choiceB'), literal('onAir'));
+const controlTheme = object({
+  surface: optional(colorBinding), text: optional(colorBinding), border: optional(colorBinding),
+  primary: optional(colorBinding), choiceA: optional(colorBinding), choiceB: optional(colorBinding), onAir: optional(colorBinding),
+});
 const musicDrop = {...number(0, 1_000_000), json: {type: 'integer', minimum: 0, maximum: 1_000_000}};
 const musicBindings=object({sensitivity:typedBinding(number(0,3)),intensity:typedBinding(number(0,2)),waveform:typedBinding(union(literal('bars'),literal('line'),literal('off'))),waveHeight:typedBinding(number(.25,2)),drop:typedBinding(musicDrop),money:typedBinding(boolean),color:typedBinding(string(7,'^#[0-9a-fA-F]{6}$')),motion:typedBinding(number(0,2)),soundPopups:optional(typedBinding(boolean))});
 const scene3dLayer=object({music:optional(musicBindings),id:string(53,'^[a-z][a-z0-9-]{0,52}$'),pass:union(literal('background'),literal('foreground')),world:scene3dWorld,cue:optional(binding),view:optional(binding),cueSequence:optional(binding)});
 const chart=object({id,kind:union(literal('line'),literal('area'),literal('bar')),unit:optional(binding),timeZone:optional(binding),data:union(string(32768),binding),color:string(9,'^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$'),gridColor:optional(string(9,'^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$')),durationMs:optional(number(0,2000)),lineWidth:optional(number(1,8)),fillOpacity:optional(number(0,.5)),yMin:optional(number(-1e6,1e6)),yMax:optional(number(-1e6,1e6)),windowMs:optional(number(1,604800000))});
-const shader=object({effect:union(literal('aurora'),literal('edgeGlow'),literal('lightSweep'),literal('plasma'),literal('silk'),literal('rings'),literal('grid'),literal('stars'),literal('petals'),literal('contours'),literal('prism'),literal('borderFlare'),literal('rain'),literal('snow'),literal('clouds'),literal('voiceBars'),literal('voiceRing'),literal('launchV1'),literal('voiceSea')),colors:array(string(7),3),speed:number(0,4),intensity:number(0,2),scale:number(.25,4),opacity:number(0,1),radius:number(0,960),glow:optional(number(0,1)),variant:optional(number(0,15)),bindings:optional(object({intensity:optional(binding),speed:optional(binding),glow:optional(binding)})),quality:union(literal('low'),literal('medium')),clock:union(literal('show'),literal('segment'))});
+const shader=object({effect:union(literal('aurora'),literal('edgeGlow'),literal('lightSweep'),literal('plasma'),literal('silk'),literal('rings'),literal('grid'),literal('stars'),literal('petals'),literal('contours'),literal('prism'),literal('borderFlare'),literal('rain'),literal('snow'),literal('clouds'),literal('voiceBars'),literal('voiceRing'),literal('launchV1'),literal('voiceSea')),colors:array(colorBinding,3),speed:number(0,4),intensity:number(0,2),scale:number(.25,4),opacity:number(0,1),radius:number(0,960),glow:optional(number(0,1)),variant:optional(number(0,15)),bindings:optional(object({intensity:optional(binding),speed:optional(binding),glow:optional(binding)})),quality:union(literal('low'),literal('medium')),clock:union(literal('show'),literal('segment'))});
 const layerMask=object({kind:union(literal('rounded'),literal('circle'),literal('wipe')),radius:optional(binding),progress:optional(binding),x:optional(binding),y:optional(binding),feather:optional(binding),invert:optional(binding),direction:optional(union(literal('left'),literal('right'),literal('up'),literal('down')))});
 const backdropEffect=object({blur:binding});
 const animation=object({cue:optional(binding),tracks:array(object({target:id,property:union(literal('x'),literal('y'),literal('width'),literal('height'),literal('opacity'),literal('scale'),literal('rotation'),literal('shader.intensity'),literal('shader.scale'),literal('mask.progress')),
@@ -158,7 +167,7 @@ export interface PresentationNode {
   id: string; type: 'box' | 'text' | 'slot' | 'component' | 'media' | 'shader' | 'scene3d' | 'chart';
   mask?:Type<typeof layerMask>;backdrop?:Type<typeof backdropEffect>;
   chart?:Type<typeof chart>;
-  shader?:import('./shaders').ShaderEffect;
+  shader?:Omit<import('./shaders').ShaderEffect,'colors'> & {colors:Binding[]};
   scene3d?:{music?:Record<keyof import('./scene3d/contract.mjs').MusicControl,Binding>;id:string;pass:'background'|'foreground';world:Scene3dWorld;cue?:Binding;view?:Binding;cueSequence?:Binding};
   styleId?: string; styles?: Record<string, Binding>; text?: Binding; children?: PresentationNode[];
   assetId?:string;fit?:'contain'|'cover';loop?:boolean;autoplay?:boolean;
@@ -205,8 +214,11 @@ const action = union(object({ type: literal('layout.select'), layoutId: id }),
   object({ type: literal('show.vote'), choiceId: id }), object({ type: literal('show.reveal') }),
   object({ type: literal('show.reopen') }), object({ type: literal('show.tiebreak') }), object({ type: literal('show.draw') }));
 export type RehearsalAction = Type<typeof action>;
+// Content-addressed soundboard IDs are portable references, never file paths.
+const soundId = string(64, '^[a-f0-9]{64}$');
 const control = union(
-  object({ id, type: literal('button'), label: string(80), action, when: optional(binding), enabled: optional(binding) }),
+  object({ id, type: literal('button'), label: string(80), action, soundId: optional(soundId), when: optional(binding), enabled: optional(binding),
+    emphasis: optional(literal('primary')), colorRole: optional(controlColorRole), choice: optional(boolean) }),
   object({ id, type: literal('text'), label: string(80), key: id, when: optional(binding), presentation:optional(literal('color')) }),
   object({ id, type: literal('number'), label: string(80), key: id, when: optional(binding),
     presentation: optional(literal('slider')), step: optional(number(.000001, 1e6)),unit:optional(string(12)) }),
@@ -215,7 +227,17 @@ export type SetControl = Type<typeof control>;
 const operatorComponent=object({id,type:literal('music'),label:string(80),when:optional(binding),defaultTrack:optional(id)});
 export type OperatorComponent=Type<typeof operatorComponent>;
 const controlReference=string(210,'^(builtin:layout|operator:[a-zA-Z][a-zA-Z0-9_-]{0,63}|set:[a-zA-Z][a-zA-Z0-9_-]{0,63}|module:[a-zA-Z][a-zA-Z0-9_-]{0,63}:([a-zA-Z][a-zA-Z0-9_-]{0,63}|\\$(lifecycle|weather-location|behavior-tools)))$');
-const controlArrangement=object({sections:array(object({id,label:string(80),purpose:optional(union(literal('live'),literal('content'),literal('appearance'))),controls:array(controlReference,256),collapsed:optional(boolean)}),64),minimized:array(controlReference,64),cameraBackground:optional(boolean)});
+const controlArrangement = object({
+  sections: array(object({
+    id, label: string(80), purpose: optional(union(literal('live'), literal('content'), literal('appearance'))),
+    controls: array(controlReference, 256), collapsed: optional(boolean),
+    density: optional(literal('compact')), buttonLayout: optional(union(literal('equal'), literal('segmented'), literal('select'))),
+    highlight: optional(object({role: controlColorRole, treatment: union(literal('mark'), literal('tint')), when: optional(binding), status: optional(string(32))})),
+  }), 64),
+  minimized: array(controlReference, 64),
+  cameraBackground: optional(boolean),
+  segmentHeading: optional(boolean),
+});
 const show = object({ id, version: string(32), initialPhase: id,
   phases: array(object({ id, label: string(80), layoutId: id, next: optional(id), collectMs: optional(number(1000, 3_600_000)) }), 16),
   choices: defaulted(array(object({ id, label: string(80) }), 6), []),
@@ -230,11 +252,11 @@ const integrationRequirement=object({
 });
 const codec = object({
   schema: literal('producer.presentation/2'),integrations:optional(object({schema:literal('producer.integrations/1'),requirements:array(integrationRequirement,32)})),requires:optional(array(union(literal('mask@1'),literal('backdrop@1'),literal('chart@1')),3)), runtime:defaulted(moduleCodec,{schema:'producer.modules/1',definitions:{},instances:[]}), id, version: string(32), name: string(80),
-  set: object({ viewController:optional(id),views:optional(dictionary(object({landscape:optional(id),portrait:optional(id),square:optional(id)}),32)),initialView:optional(id),styles:optional(dictionary(styles,32)), tokens:optional(dictionary(union(string(240),number(-10000,10000)),64)), assets:optional(dictionary(object({name:string(160),mime:string(40),data:string(ASSET_BYTES*4/3+100),playback:optional(object({start:union(literal('entry'),literal('manual')),loop:boolean,exit:union(literal('reset'),literal('pause'),literal('continue')),return:union(literal('restart'),literal('resume')),hostControls:boolean}))}),24)),initialLayout: id, values: dictionary(valueDefinition),
+  set: object({ viewController:optional(id),views:optional(dictionary(object({landscape:optional(id),portrait:optional(id),square:optional(id)}),32)),initialView:optional(id),styles:optional(dictionary(styles,32)), tokens:optional(dictionary(union(string(240),number(-10000,10000)),64)), assets:optional(dictionary(object({name:string(160),mime:string(40),data:string(ASSET_BYTES*4/3+100),playback:optional(object({start:union(literal('entry'),literal('manual')),loop:boolean,exit:union(literal('reset'),literal('pause'),literal('continue')),return:union(literal('restart'),literal('resume')),hostControls:boolean}))}),24)),initialLayout: id, errorSoundId: optional(soundId), values: dictionary(valueDefinition),
     feeds: dictionary(valueDefinition), slots: array(object({ id, label: string(80) }), 8),
     components: dictionary(object({ props: dictionary(scalar), root: ref('node', () => node) }), 16),
-    layouts: array(object({ id, label: string(80), width: number(320, 1920), height: number(320, 1920), root: ref('node', () => node),animation:optional(animation) }), 32),
-    controls: array(control, MAX_SET_CONTROLS, count => `Set control budget exceeded: ${count}/${MAX_SET_CONTROLS}. Buttons, text fields and numeric controls share this limit. Keep existing controls unless the user approves replacing them.`),operatorComponents:optional(array(operatorComponent,16)),controlArrangement:optional(controlArrangement),
+    layouts: array(object({ id, label: string(80), width: number(320, 1920), height: number(320, 1920), root: ref('node', () => node),animation:optional(animation), transitionSoundId:optional(soundId) }), 32),
+    controls: array(control, MAX_SET_CONTROLS, count => `Set control budget exceeded: ${count}/${MAX_SET_CONTROLS}. Buttons, text fields and numeric controls share this limit. Keep existing controls unless the user approves replacing them.`),operatorComponents:optional(array(operatorComponent,16)),controlTheme:optional(controlTheme),controlArrangement:optional(controlArrangement),
   }), show: optional(show),
 });
 export type PresentationPackage = Type<typeof codec>;
@@ -307,6 +329,22 @@ export function parsePackage(value: unknown): PresentationPackage {
   const booleanBinding = (b: Binding, props: Record<string, Scalar> = {}) => {
     if (bindingType(b, props) !== 'boolean') fail('$', 'Visibility/enabled binding must be boolean.');
   };
+  const checkColor = (value: Binding, scope: Set<string>, props: Record<string, Scalar>, path: string) => {
+    checkBinding(value, scope);
+    if (bindingType(value, props) !== 'string' || typeof value !== 'object' && !isHexColor(value)) {
+      fail(path, 'Use a six-digit hex color or a binding to a hex color.');
+    }
+    if (typeof value === 'object' && 'get' in value) {
+      const [source, key] = value.get.split('.');
+      const initial = source === 'tokens' ? doc.set.tokens?.[key] : source === 'values' ? doc.set.values[key]?.default : undefined;
+      if (initial !== undefined && !isHexColor(initial)) fail(path, 'The bound color must default to a six-digit hex color.');
+    }
+  };
+  for (const value of Object.values(doc.set.controlTheme ?? {})) checkColor(value, new Set(), {}, '$.set.controlTheme');
+  for (const section of doc.set.controlArrangement?.sections ?? []) {
+    const when = section.highlight?.when;
+    if (when !== undefined) { checkBinding(when, new Set()); booleanBinding(when); }
+  }
   for(const preset of Object.values(doc.set.styles??{}))for(const [key,value] of Object.entries(preset)){checkBinding(value,new Set());if(bindingType(value)==='boolean')fail('$.set.styles','Styles must be text or numbers.');if(typeof value!=='object')safeStyle(key,value);}
   const slots = new Set<string>();
   doc.set.slots.forEach(s => { if (slots.has(s.id)) fail('$.set.slots', 'Duplicate slot ID.'); slots.add(s.id); });
@@ -356,7 +394,8 @@ export function parsePackage(value: unknown): PresentationPackage {
     if(n.type==='shader'){
       if(n.shader!.variant!==undefined&&!Number.isInteger(n.shader!.variant))fail('$.set','Shader variants require a whole number.');
       for(const value of Object.values(n.shader!.bindings??{})){checkBinding(value,scope);if(bindingType(value,props)!=='number')fail('$.set','Shader parameter bindings must be numeric.');}
-      if(n.shader!.colors.length!==3||n.shader!.colors.some(c=>!/^#[0-9a-f]{6}$/i.test(c)))fail('$.set','Shader colors require three hex colors.');
+      if(n.shader!.colors.length!==3)fail('$.set','Shader colors require three hex colors.');
+      for (const value of n.shader!.colors) checkColor(value, scope, props, '$.set.shader.colors');
       if(n.styles?.position!=='absolute'||['left','top','width','height'].some(k=>typeof n.styles?.[k]!=='number'))fail('$.set','Shader layers require numeric absolute geometry.');
       if(Object.keys(n.styles??{}).some(k=>!['position','left','top','width','height'].includes(k)))fail('$.set','Use shader opacity and radius rather than CSS effects.');
     }
@@ -431,6 +470,9 @@ export function parsePackage(value: unknown): PresentationPackage {
   for(const c of doc.set.operatorComponents??[]){if(operators.has(c.id))fail('$.set.operatorComponents','Duplicate operator component ID.');operators.add(c.id);if(c.when!==undefined){checkBinding(c.when,new Set());booleanBinding(c.when);}}
   doc.set.controls.forEach(c => {
     if (controls.has(c.id)) fail('$.set.controls', 'Duplicate control ID.'); controls.add(c.id);
+    if (c.type === 'button' && c.choice && (c.action.type !== 'value.set' || c.emphasis === 'primary')) {
+      fail('$.set.controls', 'Choice buttons must set a value and use secondary emphasis.');
+    }
     if (c.when !== undefined) { checkBinding(c.when, new Set()); booleanBinding(c.when); }
     if ('enabled' in c && c.enabled !== undefined) { checkBinding(c.enabled, new Set()); booleanBinding(c.enabled); }
     if (c.type !== 'button') {

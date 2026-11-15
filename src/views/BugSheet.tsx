@@ -15,21 +15,18 @@
 //     auth-optional precisely so this path exists.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { guests, uiDiagnostics } from "../lib/ipc";
-import { isBoomin, resolveActiveEndpoint } from "../lib/workspace";
+import { uiDiagnostics } from "../lib/ipc";
+import { resolveBugReporter, submitBugReport } from "../lib/submitBugReport";
 import { copyText } from "../lib/roomLink";
 import { notify } from "../lib/notices";
 import { IS_MAC, IS_WINDOWS } from "../lib/platform";
-import { buildReport, githubIssueUrl, reportToText, type BugReport } from "../lib/bugReport";
-
-/** Where an unauthenticated report goes. Mirrors the Rust
- *  `DEFAULT_BOOMIN_API_ROOT`; a self-hosted server has no such route. */
-const BOOMIN_API = "https://api.boomin.ai";
-const REPORT_PATH = "/v1/app/support/report";
+import { buildReport, githubIssueUrl, redactSecrets, reportToText, TEXT_LIMIT, type BugReport } from "../lib/bugReport";
 
 export interface BugSheetProps {
   open: boolean;
+  assistantDraft?: {text:string} | null;
   onClose: () => void;
   version: string | null;
   engine?: string | null;
@@ -69,18 +66,40 @@ function navigatorFallback(): { os: string; arch: string } {
   return { os, arch };
 }
 
-export function BugSheet({ open, onClose, version, engine, encoder, scenes, sources }: BugSheetProps) {
+export function BugSheet({ open, onClose, version, engine, encoder, scenes, sources, assistantDraft }: BugSheetProps) {
   const [text, setText] = useState("");
+  const [suggestedText, setSuggestedText] = useState("");
   const [contact, setContact] = useState("");
   const [attach, setAttach] = useState(true);
   const [showWhat, setShowWhat] = useState(false);
   const [phase, setPhase] = useState<Phase>({ k: "edit" });
   const [host, setHost] = useState<{ log: string; os: string; arch: string } | null>(null);
   const [gpu, setGpu] = useState<string | undefined>(undefined);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const consumedDraft = useRef<BugSheetProps["assistantDraft"]>(null);
   const areaRef = useRef<HTMLTextAreaElement>(null);
   // Resolved as a PROMISE, not state: Send must never race the lookup and post
   // anonymously from a workspace that had a perfectly good session.
   const boominRef = useRef<Promise<string | null> | null>(null);
+
+  useEffect(() => {
+    if (assistantDraft && open && consumedDraft.current !== assistantDraft) {
+      consumedDraft.current = assistantDraft;
+      const safeText = redactSecrets(assistantDraft.text).slice(0, TEXT_LIMIT);
+      if (text.trim()) setSuggestedText(safeText);
+      else setText(safeText);
+      setAttach(false);
+      setShowWhat(false);
+      setPhase({k:"edit"});
+    }
+  }, [assistantDraft, open, text]);
+
+  useEffect(() => {
+    if (!open || !assistantDraft) return;
+    const dialog = dialogRef.current;
+    dialog?.showModal();
+    return () => dialog?.close();
+  }, [open, assistantDraft]);
 
   // The log tail is read when the sheet OPENS, not when Send is pressed: the
   // last lines before the user noticed something is the interesting window, and
@@ -88,9 +107,7 @@ export function BugSheet({ open, onClose, version, engine, encoder, scenes, sour
   useEffect(() => {
     if (!open) return;
     let live = true;
-    boominRef.current = resolveActiveEndpoint()
-      .then((ep) => (isBoomin(ep) && ep ? ep.id : null))
-      .catch(() => null);
+    boominRef.current = resolveBugReporter();
     setGpu(gpuName());
     uiDiagnostics()
       .then((d) => live && setHost(d))
@@ -105,13 +122,13 @@ export function BugSheet({ open, onClose, version, engine, encoder, scenes, sour
   // Esc closes — but never mid-send, which would strand the request with no
   // surface to report back to.
   useEffect(() => {
-    if (!open) return;
+    if (!open || assistantDraft) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && phase.k !== "sending") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, phase.k, onClose]);
+  }, [open, assistantDraft, phase.k, onClose]);
 
   const fallback = navigatorFallback();
   // ONE report object: previewed below, posted on Send, copied on failure.
@@ -141,31 +158,7 @@ export function BugSheet({ open, onClose, version, engine, encoder, scenes, sour
     setPhase({ k: "sending" });
     try {
       const boominEndpointId = await (boominRef.current ?? Promise.resolve(null));
-      let body: Record<string, unknown>;
-      if (boominEndpointId) {
-        // The authenticated door (v0.4.32's `endpoint_request`): the report
-        // carries who filed it and which brand they were in.
-        const r = await guests.request(boominEndpointId, "POST", REPORT_PATH, report);
-        if (!r.available) throw new Error("This server has no bug-report route.");
-        body = (r.body ?? {}) as Record<string, unknown>;
-      } else {
-        // Self-hosted or signed out: the SAME Boomin route, unauthenticated.
-        const res = await fetch(BOOMIN_API + REPORT_PATH, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(report),
-        });
-        body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-        if (!res.ok) {
-          throw new Error(
-            res.status === 429
-              ? "Too many reports in the last hour. Try again shortly."
-              : typeof body.message === "string"
-                ? body.message
-                : `The server answered ${res.status}.`,
-          );
-        }
-      }
+      const body = await submitBugReport(report, boominEndpointId);
       const n = typeof body.issue_number === "number" ? body.issue_number : null;
       if (n !== null) {
         // The number, and nothing else. Filing a bug must not throw the user out
@@ -177,6 +170,7 @@ export function BugSheet({ open, onClose, version, engine, encoder, scenes, sour
       }
       // Only a success clears the sheet.
       setText("");
+      setSuggestedText("");
       setContact("");
       setPhase({ k: "edit" });
       onClose();
@@ -195,10 +189,7 @@ export function BugSheet({ open, onClose, version, engine, encoder, scenes, sour
     });
   };
 
-  return (
-    <>
-      {open && <div className="acct-backdrop" onClick={phase.k === "sending" ? undefined : onClose} />}
-      <div className={`acct-sheet bug-sheet${open ? " open" : ""}`} role="dialog" aria-label="Report a bug" aria-hidden={!open}>
+  const contents = (
         <div className="acct-sheet-in">
           <div className="acc-confirm-title">Report a bug</div>
           <div className="cr-hint bug-lede">
@@ -206,12 +197,22 @@ export function BugSheet({ open, onClose, version, engine, encoder, scenes, sour
             reaches us just the same.
           </div>
 
+          <p className="cr-hint">Reports are filed as public GitHub issues.</p>
+          {assistantDraft && suggestedText && (
+            <details className="cr-hint">
+              <summary>Assistant draft</summary>
+              <p>{suggestedText}</p>
+              <button className="cr-ghost" disabled={phase.k === "sending"} onClick={() => {setText(suggestedText);setSuggestedText("");}}>
+                Replace report text
+              </button>
+            </details>
+          )}
           <textarea
             ref={areaRef}
             className="bug-text"
             placeholder="What happened?"
             value={text}
-            maxLength={4000}
+            maxLength={TEXT_LIMIT}
             onChange={(e) => setText(e.target.value)}
             // ⌘/Ctrl+Enter sends: the muscle memory for a box like this one.
             onKeyDown={(e) => {
@@ -269,6 +270,18 @@ export function BugSheet({ open, onClose, version, engine, encoder, scenes, sour
             </button>
           </div>
         </div>
+  );
+  if (open && assistantDraft) return createPortal(
+    <dialog ref={dialogRef} className="acct-sheet bug-sheet open assistant-bug-sheet" aria-label="Report a bug"
+      onCancel={event => { event.preventDefault(); if (phase.k !== "sending") onClose(); }}>
+      {contents}
+    </dialog>, document.body,
+  );
+  return (
+    <>
+      {open && <div className="acct-backdrop" onClick={phase.k === "sending" ? undefined : onClose} />}
+      <div className={`acct-sheet bug-sheet${open ? " open" : ""}`} role="dialog" aria-label="Report a bug" aria-hidden={!open}>
+        {contents}
       </div>
     </>
   );
