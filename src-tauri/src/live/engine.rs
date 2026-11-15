@@ -512,6 +512,8 @@ fn bootstrap_inner(
         #[cfg(target_os = "windows")]
         ffi::producer_vcam_mirror_register();
         ffi::producer_source_appearance_register();
+        super::studio_room_gate::register();
+        studio::register_capture_source();
         super::sets_v2::register();
         #[cfg(feature = "guest-rtc-pilot")]
         super::rtc_ingest::register_type();
@@ -1325,6 +1327,7 @@ pub enum LiveEvent {
         height: u32,
         fps: u32,
     },
+    StudioCaptureFailed,
     EngineError {
         message: String,
     },
@@ -3009,6 +3012,7 @@ pub fn start(
 
             // Studio output (studio.rs) — the studio scene over the room.
             let mut studio_out: Option<studio::Studio> = None;
+            let mut studio_vcam_waiting_for_capture = false;
             // The room-only mix the virtual camera reads, in BOTH studio modes.
             // Built once, before the vcam starts, and torn down only when the
             // vcam is off — so a studio toggle never restarts the vcam output
@@ -3207,6 +3211,30 @@ pub fn start(
                     }
                 }
                 if let Some(buffer)=replay.as_mut(){buffer.poll();}
+                if studio_out.as_ref().is_some_and(studio::Studio::capture_failed) {
+                    studio_vcam_waiting_for_capture = false;
+                    unsafe {
+                        if let Some(mix) = room_mix.as_mut().filter(|_| !selected_portrait) {
+                            let room = ffi::obs_get_output_source(0);
+                            mix.set_source(room);
+                            if !room.is_null() {
+                                ffi::obs_source_release(room);
+                            }
+                        }
+                        if let Some(mut studio) = studio_out.take() {
+                            studio.teardown();
+                        }
+                    }
+                    sink(&LiveEvent::StudioCaptureFailed);
+                }
+                if studio_vcam_waiting_for_capture {
+                    if let Some(studio) = studio_out.as_ref().filter(|studio| studio.capture_ready()) {
+                        studio_vcam_waiting_for_capture = false;
+                        if let Some(mix) = room_mix.as_mut().filter(|_| !selected_portrait) {
+                            unsafe { mix.set_source(studio.source()); }
+                        }
+                    }
+                }
                 let iter_t0 = Instant::now();
                 let mut iter_label: &'static str = "idle";
                 for recording in [recorder.as_ref(), portrait_recorder.as_ref()].into_iter().flatten() {
@@ -3867,6 +3895,7 @@ pub fn start(
                                 if same {
                                     return Ok(studio_out.is_some());
                                 }
+                                studio_vcam_waiting_for_capture = false;
                                 if let Some(mut st) = studio_out.take() {
                                     st.teardown();
                                 }
@@ -3892,9 +3921,10 @@ pub fn start(
                                     match studio_out.as_ref() {
                                         // The studio scene is borrowed from
                                         // Studio; set_source takes its own ref.
-                                        Some(st) => m.set_source(st.source()),
-                                        None => {
-                                            // Off: back to channel 0's room
+                                        Some(st) if st.capture_ready() => m.set_source(st.source()),
+                                        next => {
+                                            studio_vcam_waiting_for_capture = next.is_some();
+                                            // Off or waiting: use channel 0's room
                                             // scene. obs_get_output_source
                                             // hands back an OWNED reference —
                                             // release it after, exactly as

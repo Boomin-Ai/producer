@@ -40,6 +40,7 @@ fn link_live_engine() {
     println!("cargo:rerun-if-changed=src/live/source_appearance.c");
     println!("cargo:rerun-if-changed=src/live/soundboard.c");
     println!("cargo:rerun-if-changed=src/live/source_appearance.effect.h");
+    println!("cargo:rerun-if-changed=src/live/studio_room_gate.c");
     // The one seam that decides whether this is a live build. Each supported OS
     // resolves its own artifact and emits its own link flags; anything else
     // returns and the ~50 cfg(have_engine) sites compile to stubs.
@@ -105,6 +106,7 @@ fn link_live_engine_macos() {
     // AppKit/AVFoundation shim (M-L6 preview + TCC + device lookup).
     println!("cargo:rerun-if-changed=src/live/shim.m");
     println!("cargo:rerun-if-changed=src/live/capture_guard.m");
+    println!("cargo:rerun-if-changed=src/live/studio_window_capture.m");
     // Cutout: the Vision person-mask filter (registered through shim.m).
     println!("cargo:rerun-if-changed=src/live/person_mask.m");
     println!("cargo:rerun-if-changed=src/live/person_mask.effect.h");
@@ -115,6 +117,8 @@ fn link_live_engine_macos() {
         .file("src/live/person_mask.m")
         .file("src/live/source_appearance.c")
         .file("src/live/soundboard.c")
+        .file("src/live/studio_room_gate.c")
+        .file("src/live/studio_window_capture.m")
         .std("c11")
         .define("PRODUCER_AUDIO_REACTIVE", None)
         .flag("-fobjc-arc")
@@ -132,6 +136,7 @@ fn link_live_engine_macos() {
     println!("cargo:rustc-link-lib=framework=Security");
     println!("cargo:rustc-link-lib=framework=CoreGraphics");
     println!("cargo:rustc-link-lib=framework=CoreMedia");
+    println!("cargo:rustc-link-arg=-Wl,-weak_framework,ScreenCaptureKit");
     // Bundled app resolves the engine beside the executable. Debug builds may
     // also run from target/, so they get an extra rpath into the artifact;
     // release binaries carry ONLY the bundle-relative rpath so the M-L1
@@ -260,6 +265,7 @@ fn link_live_engine_windows() {
         .file("src/live/person_mask_win.c")
         .file("src/live/source_appearance.c")
         .file("src/live/soundboard.c")
+        .file("src/live/studio_room_gate.c")
         .std("c11")
         .define("PRODUCER_AUDIO_REACTIVE", None)
         .compile("producer_live_shim");

@@ -14,7 +14,7 @@ try {
   window.nativeCalls=[];window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};
   window.__TAURI_INTERNALS__={invoke:async command=>{
    window.nativeCalls.push(command);
-   if(command==='plugin:app|name')return 'Producer DJ Test';
+   if(command==='plugin:app|identifier')return 'ai.boomin.producer.sets-v2-dev';
    if(command==='plugin:event|listen')return 1;
    if(command==='plugin:event|unlisten')return;
    if(command==='set_library_list')return [];

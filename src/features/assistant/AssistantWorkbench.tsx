@@ -1,6 +1,6 @@
 /** Explicit dev-only verification using the real provider and Set editor. */
 import {useEffect, useMemo, useState, useSyncExternalStore} from 'react';
-import {getName} from '@tauri-apps/api/app';
+import {getIdentifier} from '@tauri-apps/api/app';
 import {SetConfiguration} from '../presentation/SetConfiguration';
 import {SetPreview} from '../presentation/SetPreview';
 import {RehearsalSession} from '../presentation/rehearsal';
@@ -16,8 +16,8 @@ export default function AssistantWorkbench() {
   const state = useSyncExternalStore(session.subscribe, session.snapshot);
   useEffect(() => {
     let disposed = false;
-    void getName().then(name => {
-      if (name !== 'Producer DJ Test') throw Error('Use the isolated Producer DJ Test bundle for this check.');
+    void getIdentifier().then(identifier => {
+      if (identifier !== 'ai.boomin.producer.sets-v2-dev') throw Error('Use the isolated Producer Dev bundle for this check.');
       if (!disposed) setAllowed(true);
     }).catch(e => {if (!disposed) setError(String(e));});
     return () => {disposed = true;};

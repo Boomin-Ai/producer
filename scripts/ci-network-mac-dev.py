@@ -61,7 +61,7 @@ def isolated_config(dev, source):
     require(dev['build'].get('frontendDist') in [None, DEV_ORIGIN], 'Unexpected frontend override in the development overlay')
     require('capabilities' not in dev.get('app', {}).get('security', {}), 'Keep the source default capabilities; no inline remote grants are accepted')
     result = json.loads(json.dumps(dev))
-    result['productName'] = 'Producer DJ Test'
+    result['productName'] = 'Producer Dev'
     # Tauri release builds derive the local app origin from frontendDist, not
     # devUrl. Native sets-v2-dev then navigates to this exact loopback origin.
     # A filesystem frontendDist would make that navigation remote and deny
@@ -70,7 +70,7 @@ def isolated_config(dev, source):
     result['build']['frontendDist'] = DEV_ORIGIN
     for window in result.get('app', {}).get('windows', []):
         require(window.get('label', 'main') == 'main' and window.get('url', 'index.html') in ['index.html', './index.html'], 'Unexpected window or remote navigation in development overlay')
-        window['title'] = 'Producer DJ Test'
+        window['title'] = 'Producer Dev'
     result['bundle'] = {'targets': ['app'], 'createUpdaterArtifacts': False}
     # This unreleased dev app must not replace itself from the production updater.
     result['plugins'] = {'updater': {'endpoints': []}}
@@ -131,7 +131,7 @@ def receipt(source, app, output, tools):
     notarized = os.environ.get('NOTARIZE', '1') == '1'
     submission = os.environ.get('NOTARY_SUBMISSION_ID', '')
     require(not notarized or re.fullmatch('[A-Fa-f0-9-]{36}', submission), 'Missing accepted notarization receipt')
-    archive = output / 'Producer-DJ-Test-mac-arm64.zip'
+    archive = output / 'Producer-Dev-mac-arm64.zip'
     generated_config = Path(os.environ['RUNNER_TEMP']) / 'network-mac-dev-config/candidate.json'
     expected_config = isolated_config(json.loads((source / 'src-tauri/tauri.sets-v2-dev.conf.json').read_text()), source)
     require(json.loads(generated_config.read_text()) == expected_config, 'Generated dev runtime configuration changed')

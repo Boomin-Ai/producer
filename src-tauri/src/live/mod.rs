@@ -84,6 +84,8 @@ pub mod stream;
 // pure "who sees which scene" decision.
 #[cfg(have_engine)]
 pub mod studio;
+#[cfg(have_engine)]
+mod studio_room_gate;
 
 use std::path::{Path, PathBuf};
 

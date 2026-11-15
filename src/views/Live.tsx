@@ -5145,6 +5145,10 @@ export function LiveView({
           if (visibleRef.current) next[t.id] = `data:image/jpeg;base64,${t.jpeg}`;
         }
         if (Object.keys(next).length) setGuestThumbs((prev) => ({ ...prev, ...next }));
+      } else if (ev.type === "studio_capture_failed") {
+        setStudioOn(false);
+        if (cfgRef.current.studio_output) writeCfg({ ...cfgRef.current, studio_output: false });
+        notify("Studio window capture is unavailable. The room is on output.", { key: "banner", tone: "warning" });
       } else if (ev.type === "engine_error") {
         notify(ev.message, { key: "banner", tone: "error", sticky: true });
       } else if (ev.type === "engine_ready") {

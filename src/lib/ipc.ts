@@ -402,6 +402,7 @@ export type LiveEvent =
   | { type: "levels"; extra_peaks: { id: string; peak: number }[] }
   | { type: "guest_thumbs"; w: number; h: number; thumbs: { id: string; jpeg: string }[] }
   | { type: "video_changed"; height: number; fps: number }
+  | { type: "studio_capture_failed" }
   | { type: "engine_error"; message: string };
 
 export async function listenLiveEvents(cb: (ev: LiveEvent) => void): Promise<() => void> {

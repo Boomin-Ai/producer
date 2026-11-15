@@ -10,11 +10,11 @@
 //! * PROGRAM (stream, record, and anything reading the main mix): the ROOM
 //!   scene stays on output channel 0 — its audio tree, its program thumb, the
 //!   Windows selection outline all read channel 0 and keep working — and a
-//!   hidden STUDIO scene sits on channel [`STUDIO_CHANNEL`] above it: a black
-//!   backdrop plus a cursor-less window capture of Producer's own window,
-//!   fitted to the canvas. Later channels composite on top, so the main mix
-//!   IS the studio; the room underneath costs one scene draw and keeps every
-//!   source active (audio is mixed only from the main view's channel tree).
+//!   hidden Studio scene sits above it on [`STUDIO_CHANNEL`]: a cursor-less
+//!   capture of Producer's window fitted to the canvas with black bars.
+//!   Once that capture covers the main mix, the gate skips the room's
+//!   obscured draw on that target. The room stays active for audio, source
+//!   state, and other video consumers.
 //!
 //! * STAGE (the in-app preview): while studio is on, `preview_draw` renders
 //!   the channel-0 ROOM scene directly (`obs_source_video_render`) instead of
@@ -24,8 +24,8 @@
 //! * RETURN FEED (virtual camera → guests' return feed, mod monitors): the
 //!   virtual camera would otherwise mirror the main mix. An auxiliary
 //!   `obs_view` whose single channel is the room scene gets its own mix
-//!   ([`RoomMix`], `obs_view_add`), and the vcam output is pointed at that mix
-//!   — ALWAYS, studio on or off. Guests and mods never see the UI.
+//!   ([`RoomMix`], `obs_view_add`). Studio toggles may retarget the current
+//!   landscape virtual-camera mix in place. They do not restart the device.
 //!
 //!   v0.4.41: the room mix used to be born with the studio, so toggling studio
 //!   re-pointed a LIVE vcam output by stopping it, destroying it and starting a
@@ -35,11 +35,10 @@
 //!   `formatDescription` unguarded, so the second stop was a double release
 //!   (pointer-auth trap on the "live-engine" thread). On Windows the same
 //!   stop/start made the camera device vanish from Google Meet. So the room mix
-//!   now outlives the studio: it is created once, before the vcam starts, and
-//!   `set_studio` never touches the vcam output at all.
+//!   outlives the Studio scene, so the live output can keep its media handle.
 //!
 //! Off = the studio scene does not exist: channel 2 is empty and the preview
-//! renders the main texture. The vcam keeps reading the same room mix.
+//! renders the main texture.
 
 use std::ffi::CString;
 use std::ptr;
@@ -49,6 +48,19 @@ use super::ffi;
 
 /// Output channel the studio scene occupies (0 = room scene, 1 = mic).
 pub const STUDIO_CHANNEL: u32 = 2;
+
+#[cfg(target_os = "macos")]
+extern "C" {
+    fn producer_studio_window_capture_available() -> bool;
+    fn producer_studio_window_capture_register();
+    fn producer_studio_window_capture_failed(source: *mut ffi::obs_source_t) -> bool;
+}
+
+/// Register after obs_startup, before building any Studio output.
+pub(super) unsafe fn register_capture_source() {
+    #[cfg(target_os = "macos")]
+    producer_studio_window_capture_register();
+}
 
 /// Read by `preview_draw` on the graphics thread: true = draw the room scene,
 /// not the main texture.
@@ -95,6 +107,11 @@ pub struct Studio {
     /// the window capture (and macOS's screen-sharing indicator with it)
     /// outlived Studio being switched off.
     cap_item: *mut ffi::obs_sceneitem_t,
+    room_gate: Option<super::studio_room_gate::RoomProgramGate>,
+    #[cfg(target_os = "macos")]
+    native_capture: bool,
+    #[cfg(target_os = "macos")]
+    capture_started: std::time::Instant,
     pub spec: StudioSpec,
 }
 
@@ -271,9 +288,30 @@ impl RoomMix {
 }
 
 impl Studio {
-    /// The studio scene as a source, for whoever needs to render it — the
-    /// program takes it on [`STUDIO_CHANNEL`], and (v0.4.48) the room mix
-    /// under the virtual camera takes it too while studio is on.
+    pub(super) fn capture_ready(&self) -> bool {
+        #[cfg(target_os = "macos")]
+        return !self.native_capture || unsafe { ffi::obs_source_get_width(self.cap) != 0 };
+        #[cfg(target_os = "windows")]
+        return true;
+    }
+
+    /// The direct window source opens asynchronously so the room and encoder
+    /// never wait for ScreenCaptureKit. Report an explicit startup/runtime
+    /// failure to the engine after taking the program back to the room.
+    pub(super) fn capture_failed(&self) -> bool {
+        #[cfg(target_os = "macos")]
+        return self.native_capture
+            && unsafe {
+                producer_studio_window_capture_failed(self.cap)
+                    || (self.capture_started.elapsed() >= std::time::Duration::from_secs(6)
+                        && !self.capture_ready())
+            };
+        #[cfg(target_os = "windows")]
+        return false;
+    }
+
+    /// Studio scene used by the main mix and the landscape virtual-camera
+    /// route while Studio is on.
     pub fn source(&self) -> *mut ffi::obs_source_t {
         unsafe { ffi::obs_scene_get_source(self.scene) }
     }
@@ -283,12 +321,21 @@ impl Studio {
     /// Engine-thread only (§5.1).
     pub unsafe fn build(spec: StudioSpec) -> Result<Studio, String> {
         let mut ovi: std::mem::MaybeUninit<ffi::obs_video_info> = std::mem::MaybeUninit::zeroed();
-        let (bw, bh) = if ffi::obs_get_video_info(ovi.as_mut_ptr()) {
+        let ((bw, bh), (_fps_num, _fps_den)) = if ffi::obs_get_video_info(ovi.as_mut_ptr()) {
             let ovi = ovi.assume_init();
-            (ovi.base_width as i64, ovi.base_height as i64)
+            (
+                (i64::from(ovi.base_width), i64::from(ovi.base_height)),
+                (i64::from(ovi.fps_num), i64::from(ovi.fps_den)),
+            )
         } else {
-            (1280, 720)
+            ((1280, 720), (30, 1))
         };
+        #[cfg(target_os = "macos")]
+        let native_capture = producer_studio_window_capture_available()
+            && std::env::var_os("PRODUCER_STUDIO_LEGACY_WINDOW_CAPTURE").as_deref()
+                != Some(std::ffi::OsStr::new("1"));
+        #[cfg(target_os = "windows")]
+        let native_capture = false;
 
         let name = CString::new("studio").unwrap();
         let scene = ffi::obs_scene_create(name.as_ptr());
@@ -300,13 +347,18 @@ impl Studio {
             bg: ptr::null_mut(),
             cap: ptr::null_mut(),
             cap_item: ptr::null_mut(),
+            room_gate: None,
+            #[cfg(target_os = "macos")]
+            native_capture,
+            #[cfg(target_os = "macos")]
+            capture_started: std::time::Instant::now(),
             spec: spec.clone(),
         };
 
-        // Black backdrop the size of the canvas: the window capture is fitted
-        // (letterboxed) and whatever it does not cover must not show the room
-        // scene underneath.
-        {
+        // Legacy sources are fitted by OBS, with a separate black backdrop.
+        // The direct Mac source produces an opaque canvas itself. While that
+        // source starts up (or fails), let the room remain visible instead.
+        if !native_capture {
             let d = ffi::obs_data_create();
             ffi::obs_data_set_int(
                 d,
@@ -339,7 +391,20 @@ impl Studio {
                     return Err(error);
                 }
             };
-            let id = CString::new(super::graph::ids::WINDOW).unwrap();
+            // The macOS Studio source fits into program pixels inside
+            // ScreenCaptureKit. Windows still uses the native WGC texture.
+            let capture_id = super::graph::ids::WINDOW;
+            #[cfg(target_os = "macos")]
+            let capture_id = if native_capture {
+                ffi::obs_data_set_int(d, c"pixel_width".as_ptr(), bw);
+                ffi::obs_data_set_int(d, c"pixel_height".as_ptr(), bh);
+                ffi::obs_data_set_int(d, c"fps_num".as_ptr(), _fps_num);
+                ffi::obs_data_set_int(d, c"fps_den".as_ptr(), _fps_den);
+                "producer_studio_window"
+            } else {
+                capture_id
+            };
+            let id = CString::new(capture_id).unwrap();
             let n = CString::new("studio-window").unwrap();
             me.cap = ffi::obs_source_create(id.as_ptr(), n.as_ptr(), d, ptr::null_mut());
             ffi::obs_data_release(d);
@@ -361,16 +426,22 @@ impl Studio {
             ffi::obs_sceneitem_set_bounds(item, &b);
         }
 
-        // Last: the studio goes over the room on the main view, and the stage
-        // switches to drawing the room directly.
-        ffi::obs_set_output_source(STUDIO_CHANNEL, ffi::obs_scene_get_source(scene));
+        // Switch the stage before publishing window capture so it never
+        // samples its own captured pixels while the gate attaches.
         STUDIO_ON.store(true, Ordering::SeqCst);
+        ffi::obs_set_output_source(STUDIO_CHANNEL, ffi::obs_scene_get_source(scene));
+        let required_capture = if native_capture {
+            me.cap
+        } else {
+            ptr::null_mut()
+        };
+        me.room_gate = super::studio_room_gate::RoomProgramGate::attach(required_capture);
         Ok(me)
     }
 
     /// Undo everything, in reverse. Safe on a half-built studio.
     pub unsafe fn teardown(&mut self) {
-        STUDIO_ON.store(false, Ordering::SeqCst);
+        drop(self.room_gate.take());
         ffi::obs_set_output_source(STUDIO_CHANNEL, ptr::null_mut());
         // The capture leaves the SCENE first. The scene owns a reference of
         // its own, so dropping only ours left the window capture alive and
@@ -391,6 +462,7 @@ impl Studio {
             ffi::obs_scene_release(self.scene);
             self.scene = ptr::null_mut();
         }
+        STUDIO_ON.store(false, Ordering::SeqCst);
     }
 }
 
