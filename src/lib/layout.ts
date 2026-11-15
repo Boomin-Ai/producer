@@ -6,7 +6,7 @@
  * canvas. Everything else is a card.
  * Beginners pick a preset; everyone else moves panels one by one. */
 
-export type PanelId = "scenes" | "sources" | "mixer" | "chat" | "channels" | "guests" | "vote" | "mods" | "stats" | "updates" | "dj" | "sounds" | "setControls" | "assistant" | "clips";
+export type PanelId = "scenes" | "sources" | "mixer" | "chat" | "channels" | "guests" | "vote" | "mods" | "stats" | "updates" | "dj" | "sounds" | "setControls" | "assistant" | "clips" | "timeline";
 
 export type Dock = "top" | "left" | "right" | "bottom" | "hidden";
 
@@ -19,6 +19,7 @@ export interface Layout {
 }
 
 export const PANEL_META: Record<PanelId, { title: string; hint: string }> = {
+  timeline: { title: "Timeline", hint: "Studio motion, panel lifts and window or canvas sweeps" },
   clips: { title: "Clips", hint: "Opt-in rolling capture and locally saved moments" },
   assistant: { title: "Assistant", hint: "Create and refine private Set drafts with your connected AI account" },
   setControls: { title: "Set controls", hint: "Set fields, layouts, show segments and rehearsal" },
@@ -39,7 +40,7 @@ export const PANEL_META: Record<PanelId, { title: string; hint: string }> = {
 
 // Stream health is deliberately NOT here: it lives in the header, always
 // visible. Health you have to dock is health you find out about too late.
-export const PANEL_ORDER: PanelId[] = ["scenes", "sources", "mixer", "chat", "channels", "guests", "vote", "mods", "stats", "updates", "dj", "sounds", "setControls", "assistant", "clips"];
+export const PANEL_ORDER: PanelId[] = ["scenes", "sources", "mixer", "chat", "channels", "guests", "vote", "mods", "stats", "updates", "dj", "sounds", "setControls", "assistant", "clips", "timeline"];
 
 /** Per-room sizing: bottom panels carry a flex weight (they share one row),
  * side docks carry a pixel width. Absent = the built-in default. */
@@ -83,20 +84,20 @@ export const PRESETS: { key: string; label: string; note: string; layout: Layout
       left: ["scenes", "guests", "vote", "sources", "mods"],
       right: ["chat", "channels", "updates"],
       bottom: ["mixer", "stats", "dj", "sounds"],
-      hidden: ["setControls", "assistant", "clips"],
+      hidden: ["setControls", "assistant", "clips", "timeline"],
     },
   },
   {
     key: "simple",
     label: "Simple",
     note: "Stage plus the two things you touch live",
-    layout: { top: [], left: [], right: [], bottom: ["sources", "mixer"], hidden: ["scenes", "chat", "channels", "guests", "vote", "mods", "stats", "updates", "dj", "sounds", "setControls", "assistant", "clips"] },
+    layout: { top: [], left: [], right: [], bottom: ["sources", "mixer"], hidden: ["scenes", "chat", "channels", "guests", "vote", "mods", "stats", "updates", "dj", "sounds", "setControls", "assistant", "clips", "timeline"] },
   },
   {
     key: "chat",
     label: "Chat first",
     note: "The conversation gets the column; controls stay below",
-    layout: { top: [], left: [], right: ["chat"], bottom: ["sources", "mixer", "guests"], hidden: ["scenes", "channels", "vote", "mods", "stats", "updates", "dj", "sounds", "setControls", "assistant", "clips"] },
+    layout: { top: [], left: [], right: ["chat"], bottom: ["sources", "mixer", "guests"], hidden: ["scenes", "channels", "vote", "mods", "stats", "updates", "dj", "sounds", "setControls", "assistant", "clips", "timeline"] },
   },
 ]
 
@@ -145,7 +146,18 @@ export function normalize(p: Partial<Layout>): Layout {
   // never lists it, so it lands on the left ONCE; hide it and it stays hidden.
   const INTRO_DOCK: Partial<Record<PanelId, Dock>> = { sounds: "bottom", dj: "bottom", stats: "bottom", updates: "right", mods: "left", vote: "left" };
   for (const id of PANEL_ORDER) if (!seen.has(id)) l[INTRO_DOCK[id] ?? "hidden"].push(id);
+  // Timeline is horizontal only, including layouts restored from storage.
+  for (const side of ["left", "right"] as const) {
+    if (l[side].includes("timeline")) {
+      l[side] = l[side].filter(id => id !== "timeline");
+      l.bottom.push("timeline");
+    }
+  }
   return l;
+}
+
+export function panelCanDock(id: PanelId, dock: Dock): boolean {
+  return id !== "timeline" || dock === "top" || dock === "bottom" || dock === "hidden";
 }
 
 export function dockOf(l: Layout, id: PanelId): Dock {
@@ -157,6 +169,7 @@ export function dockOf(l: Layout, id: PanelId): Dock {
 }
 
 export function movePanel(l: Layout, id: PanelId, to: Dock): Layout {
+  if (!panelCanDock(id, to)) return l;
   const next = clone(l);
   for (const d of ["top", "left", "right", "bottom", "hidden"] as Dock[]) {
     next[d] = next[d].filter((x) => x !== id);
@@ -180,6 +193,7 @@ export function shiftPanel(l: Layout, id: PanelId, delta: number): Layout {
 
 /** Drop a panel into a dock at a precise slot (drag-and-drop). */
 export function movePanelTo(l: Layout, id: PanelId, to: Dock, index: number): Layout {
+  if (!panelCanDock(id, to)) return l;
   const from = dockOf(l, id);
   const next: Layout = {
     top: l.top.filter((x) => x !== id),

@@ -72,20 +72,16 @@ env = dict(os.environ, CARGO_TARGET_DIR=str(target), CARGO_PROFILE_DEV_DEBUG='0'
 if compact_build:
     env['CARGO_PROFILE_DEV_OPT_LEVEL']='1'
 
-# Fresh catalog: never seed retired sets back into the development library.
-# Grand Arena's configured copy is preserved; new showcase packages will be
-# added explicitly after their capability and output acceptance checks pass.
+# Saved Sets are seeded only for an isolated library. A shared library is
+# populated through the Set editor and must never receive dev fixtures on boot.
 profile=Path.home()/'Library/Application Support'/config['identifier']
 library=profile/'sets-library'
-library.mkdir(parents=True,exist_ok=True)
-original=root/'docs/shows/head-to-head-grand-arena.json'
-destination=library/original.name
-if not destination.exists():
-    shutil.copyfile(original,destination)
-for name in ['decision-room','open-floor','atmosphere','just-facts']:
-    original=root/'docs/shows'/(name+'.json')
-    destination=library/original.name
-    if not destination.exists():shutil.copyfile(original,destination)
+if not library.is_symlink():
+    library.mkdir(parents=True,exist_ok=True)
+    for name in ['head-to-head-grand-arena','decision-room','open-floor','atmosphere','just-facts']:
+        original=root/'docs/shows'/(name+'.json')
+        destination=library/original.name
+        if not destination.exists():shutil.copyfile(original,destination)
 original_grants=Path.home()/'Library/Application Support/ai.boomin.producer/set-media-files.json'
 if original_grants.is_file() and not (profile/'set-media-files.json').exists():
     shutil.copyfile(original_grants,profile/'set-media-files.json')

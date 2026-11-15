@@ -9,6 +9,8 @@ import type {SetOutputControls} from '../src/features/presentation/useSetOutput'
 import '../src/App.css';
 const proof={requests:[] as unknown[],stops:0,previews:[] as unknown[],transforms:[] as unknown[],roomStarts:0,jpegCalls:0,landscapeEdits:0};Object.assign(window,{portraitProof:proof});
 const cameraControls=new URLSearchParams(location.search).has('camera-controls');
+const edge=new URLSearchParams(location.search).get('edge');
+const position=edge==='top'||edge==='left'||edge==='right'?edge:'bottom';
 ipc.liveSelectOutput=async()=>{if(cameraControls)await new Promise<void>(resolve=>Object.assign(window,{finishOutputSwitch:resolve}));};
 let mirror=false;ipc.liveVirtualCamMirror=async(on)=>{if(on!==undefined)mirror=on;return mirror;};
 ipc.liveSetStatus=async()=>({generation:3,lease:null,revision:0});
@@ -35,6 +37,14 @@ function Harness(){
  return new RehearsalSession(doc,undefined,'prepare');});
  const [applied,setApplied]=useState(false);
  const paired=new URLSearchParams(location.search).has('paired')||new URLSearchParams(location.search).has('landscape-only');
- return <div style={{height:'90vh',display:'flex',flexDirection:'column',padding:20}}><RoomOutputView view={view} portrait={monitor} portraitContent={<PortraitCanvas monitor={monitor} selected={selected} onSelect={setSelected} onSources={sources=>setMonitor(old=>({...old,sources}))}/>}>{view!=='portrait'&&<div className="rm-landscape-monitor"><div className="live-preview" aria-label="Landscape room output" style={{background:'#26495c'}}>Landscape</div></div>}</RoomOutputView>{paired&&<><button onClick={()=>setApplied(true)}>Apply test set</button><button onClick={()=>session.send({type:'control',action:{type:'layout.select',layoutId:'next-landscape'}})}>Next layout</button></>}<OutputSettings cameraOn={cameraOn} onStopCamera={stopCamera} icon="⚙" session={session} output={{...output,active:applied}} sourceNames={{camera:'Djayla'}} view={view} onViewChange={setView} onMonitor={setMonitor}/></div>;
+ return <div style={{height:'90vh',display:'flex',flexDirection:'column',padding:20}}>
+  <div style={{position:'relative',display:'flex',flexDirection:'column',flex:1,minHeight:0}}>
+   <RoomOutputView view={view} portrait={monitor} portraitContent={<PortraitCanvas monitor={monitor} selected={selected} onSelect={setSelected} onSources={sources=>setMonitor(old=>({...old,sources}))}/>}>
+    {view!=='portrait'&&<div className="rm-landscape-monitor"><div className="live-preview" aria-label="Landscape room output" style={{background:'#26495c'}}>Landscape</div></div>}
+   </RoomOutputView>
+   <OutputSettings position={position} cameraOn={cameraOn} onStopCamera={stopCamera} icon="⚙" session={session} output={{...output,active:applied}} sourceNames={{camera:'Djayla'}} view={view} onViewChange={setView} onMonitor={setMonitor}/>
+  </div>
+  {paired&&<><button onClick={()=>setApplied(true)}>Apply test set</button><button onClick={()=>session.send({type:'control',action:{type:'layout.select',layoutId:'next-landscape'}})}>Next layout</button></>}
+ </div>;
 }
 createRoot(document.getElementById('root')!).render(<Harness/>);

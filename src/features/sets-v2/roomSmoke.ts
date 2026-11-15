@@ -218,7 +218,7 @@ export async function roomSmoke(timingOnly=false,resolutionOnly=false,showcaseOn
     await invoke('live_set_v2_report',{result:{ok:true,kind:'portrait-color',expected:[136,96,46],...sample,completedAt:new Date().toISOString()}});return;
    }
    const checks=[];const generation=(await invoke<{generation:number}>('live_set_status')).generation;
-   document.querySelector<HTMLButtonElement>('.set-mode-action')!.click();
+   document.querySelector<HTMLButtonElement>('.set-fixed-playback .set-transport-play')!.click();
    for(let step=0;step<3;step++){
     await until(()=>document.querySelector('.set-output-switch[data-output="set"]'),'showcase output idle');await sleep(800);
     const before=await invoke<{renderedRevision:number}>('live_set_v2',{request:{op:'status',generation}});

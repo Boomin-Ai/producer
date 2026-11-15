@@ -1,5 +1,6 @@
 import { recordTraceEvent, snapshotTraceContext } from "../../lib/performanceTrace";
-import {outputLayout} from '../presentation/layoutViews';
+import {layoutTransitionSound,outputLayout} from '../presentation/layoutViews';
+import {playSetSound} from '../../lib/soundboard';
 import { invoke } from "../../lib/nativeInvoke";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ipc, uiLog, listenLiveEvents, type LiveSources } from "../../lib/ipc";
@@ -53,6 +54,7 @@ export function useRoomOutput(
   const [pendingChange, setPendingChange] = useState<"set" | "segment" | "content">("content");
   const shownCharts=useRef(''),portraitShownCharts=useRef('');
   const shownContentKey=useRef<string|undefined>(undefined),portraitContentKey=useRef<string|undefined>(undefined);
+  const soundSelection = useRef<{session:RehearsalSession;layout:string}|null>(null);
   const shownSelection = useRef({definition: "", layout: "", phase: ""});
   const deliberatelyHidden=useRef(false);
   useEffect(()=>{deliberatelyHidden.current=false;},[session.package.id,roomId]);
@@ -115,7 +117,7 @@ export function useRoomOutput(
   const invalidateRoom=()=>{
     ++operation.current;++portraitOperation.current;
     confirmed.current="";shownLayout.current="";portraitShownLayout.current="";shownCharts.current="";portraitShownCharts.current="";
-    isActive.current=false;setPresentedSession(null);setError("");
+    soundSelection.current=null;isActive.current=false;setPresentedSession(null);setError("");
     bank.current?.reset();setRetryVersion(v=>v+1);
   };
   if(!transport.current)transport.current=sceneTransport<NativeStatus>(value=>invoke<NativeStatus>('live_set_v2',{request:value}),async()=>(await ipc.liveSetStatus()).generation,next=>{
@@ -319,6 +321,12 @@ export function useRoomOutput(
         authoredCrossfadeMs(full.timeline?.transition,isActive.current&&(shownSelection.current.definition!==selection.definition||shownLayout.current!==layout),snapshot.paused,isActive.current&&!chartUpdate&&(full.contentKey===undefined||full.contentKey!==shownContentKey.current));
       timing('take-request',{transitionMs:transition});
       await request(portraitSpec?{op:'takePair',generation:takeGeneration,programRevision:attempted,portraitRevision:entries[1].revision,durationMs:transition,mode:'dissolve'}:{op:'take',generation:takeGeneration,revision:attempted,durationMs:transition,mode:'dissolve'});
+      if (stillTaking() && isActive.current && soundSelection.current?.session === current.session
+        && current.session.snapshot().layoutId === layout) {
+        const cue = layoutTransitionSound(current.session.package.set, soundSelection.current.layout, layout);
+        if (cue) playSetSound(current.roomId ?? 'local', cue);
+      }
+      if (stillTaking()) soundSelection.current = {session:current.session,layout};
       let sawTransition=false;
       for (let i = 0; i < 200; i++) {
         if (!stillTaking()) throw interrupted;
@@ -434,6 +442,7 @@ export function useRoomOutput(
     try {
       const status = await request({ op: "return" });
       transport.current!.observeGeneration(status.generation);
+      soundSelection.current = null;
       isActive.current = false;deliberatelyHidden.current=true;
       setPresentedSession(null);
       setActive(false);
@@ -471,6 +480,7 @@ export function useRoomOutput(
       currentRoom.current = roomId;
       setBindings(initialBindings);
       setFraming(initialFraming);
+      soundSelection.current = null;
       isActive.current = false;
       setPresentedSession(null);
       setActive(false);

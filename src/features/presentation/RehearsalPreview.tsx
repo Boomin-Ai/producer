@@ -42,14 +42,21 @@ function PreviewDialog({ doc, state, onClose, returnFocus, editor, sources, outp
   </dialog>, document.body);
 }
 
-export function RehearsalPreview({ openRequest, onOpenRequest, doc, state, editor, sources, outputActive, output, configuration, workspace, workspaceBusy, onEditorClose }: { openRequest?:string; onOpenRequest?:(id:string)=>void; onEditorClose?:()=>void; workspace?:EditorWorkspace; workspaceBusy?:boolean; configuration?:ReactNode; output?:SetOutputControls; editor?:ReactNode; sources?:ReactNode; outputActive?:boolean; doc: PresentationPackage; state: RehearsalState }) {
+export function RehearsalPreview({ openRequest, onOpenRequest, onOpen, doc, state, editor, sources, outputActive, output, configuration, workspace, workspaceBusy, onEditorClose }: { openRequest?:string; onOpenRequest?:(id:string)=>void; onOpen?:()=>void; onEditorClose?:()=>void; workspace?:EditorWorkspace; workspaceBusy?:boolean; configuration?:ReactNode; output?:SetOutputControls; editor?:ReactNode; sources?:ReactNode; outputActive?:boolean; doc: PresentationPackage; state: RehearsalState }) {
   const [expanded, setExpanded] = useState(false);
   useEffect(()=>{if(openRequest){setExpanded(true);onOpenRequest?.(openRequest);}},[openRequest]);
   useEffect(()=>{const open=()=>setExpanded(true);window.addEventListener('producer:edit-set',open);return()=>window.removeEventListener('producer:edit-set',open);},[]);
   const expandButton = useRef<HTMLButtonElement>(null);
   return <div className="set-visual">
     <div className="set-preview-tools">
-      <button ref={expandButton} aria-label={editor ? "Set settings" : "Set preview"} title={editor ? "Choose and edit sets" : "Preview set"} aria-haspopup="dialog" aria-expanded={expanded} onClick={() => setExpanded(true)}>{editor ? 'Set' : 'Set preview ↗'}</button>
+      <button ref={expandButton} aria-label={editor ? "Set settings" : "Set preview"} title={editor ? "Choose and edit sets" : "Preview set"} aria-haspopup="dialog" aria-expanded={expanded} onClick={() => {onOpen?.();setExpanded(true);}}>
+        {editor ? (
+          <svg width="16" height="16" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        ) : 'Set preview ↗'}
+      </button>
     </div>
     {expanded && <PreviewDialog doc={doc} state={state} editor={editor} sources={sources} outputActive={outputActive} output={output} configuration={configuration} workspace={workspace} workspaceBusy={workspaceBusy} returnFocus={expandButton.current} onClose={() => {onEditorClose?.();setExpanded(false);}} />}
   </div>;

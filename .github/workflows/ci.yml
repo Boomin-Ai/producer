@@ -73,6 +73,8 @@ jobs:
       - run: bun run test:prepared-scenes
       - run: bun run test:roster-poll
       - run: node scripts/test-preview-session.mjs
+      - run: node scripts/test-studio-motion.mjs
+      - run: node scripts/test-timeline-docking.mjs
       - run: node scripts/test-room-session.mjs
       - run: node scripts/test-room-control.mjs
       - run: node scripts/test-room-votes.mjs

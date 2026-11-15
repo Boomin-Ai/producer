@@ -1,4 +1,5 @@
 import { ipc } from "./ipc";
+import { IS_WINDOWS } from "./platform";
 
 /**
  * Windows float mode: the native preview window sits ABOVE the webview, so a
@@ -33,6 +34,7 @@ const OVERLAY_SELECTOR = [
 ].join(",");
 
 type R = { x: number; y: number; w: number; h: number };
+const observers = new Set<(rects: R[]) => void>();
 let last = "";
 let scheduled = 0;
 
@@ -66,7 +68,8 @@ function flush() {
   const key = JSON.stringify(rects);
   if (key === last) return;
   last = key;
-  ipc.livePreviewCutouts(rects).catch(() => {});
+  if (IS_WINDOWS) ipc.livePreviewCutouts(rects).catch(() => {});
+  for (const observe of observers) observe(rects);
 }
 
 function schedule() {
@@ -87,4 +90,11 @@ export function installStageCutouts() {
   // Animated popovers move for a few frames after they mount: settle them.
   const tick = () => { schedule(); setTimeout(tick, 250); };
   tick();
+}
+
+export function observeStageCutouts(observe: (rects: R[]) => void) {
+  installStageCutouts();
+  observers.add(observe);
+  observe(collect());
+  return () => { observers.delete(observe); };
 }

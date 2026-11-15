@@ -112,6 +112,19 @@ try {
       assert.deepEqual(clipped, [], `${width}px wide, ${height}px tall: deck controls clipped`);
     }
   }
+  await page.evaluate(() => window.renderDJ(330, "bottom", false));
+  await page.waitForFunction(() =>
+    document.querySelector(".dj-master-volume [aria-orientation='horizontal']"),
+  );
+  const narrow = await page.evaluate(() => {
+    document.querySelector(".rm-panel-dj").style.height = "200px";
+    return [".dj-console", ".dj-master-volume", ".dj-options-rail", ".dj-library"]
+      .map((selector) => document.querySelector(selector).getBoundingClientRect().toJSON());
+  });
+  const [consoleBounds, volumeBounds, mixerBounds, tracksBounds] = narrow;
+  assert.ok(consoleBounds.bottom <= volumeBounds.top + 1, "narrow mixer overlaps decks");
+  assert.ok(volumeBounds.right <= mixerBounds.left + 1, "narrow volume overlaps mixer buttons");
+  assert.ok(mixerBounds.bottom <= tracksBounds.top + 1, "narrow mixer overlaps tracks");
   await page.evaluate(() => window.renderDJ(240, "left", false));
   await page.waitForSelector(".deck-a .dj-platter img");
   assert.equal(
@@ -209,7 +222,13 @@ try {
     "none",
     "crossfader still looks like a progress bar",
   );
+  const rowVolume = page.locator('.dj-master-volume [role="slider"]');
+  assert.equal(await rowVolume.getAttribute("aria-orientation"), "horizontal");
+  await page.evaluate(() => window.renderDJ(240, "left", false));
   const volume = page.locator('.dj-master-volume [role="slider"]');
+  await page.waitForFunction(() =>
+    document.querySelector(".dj-master-volume [aria-orientation='vertical']"),
+  );
   assert.equal(await volume.getAttribute("aria-orientation"), "vertical");
   const vr = await volume.boundingBox();
   await page.mouse.move(vr.x + vr.width / 2, vr.y + vr.height - 6);
@@ -256,6 +275,18 @@ try {
     await page.locator(".dj-panel").evaluate((e) => e.scrollTop),
     0,
     "library scroll moved entire panel",
+  );
+  await page.evaluate(() => window.renderDJ(240, "top", true));
+  const compactTrack = page.getByRole("combobox", { name: "Load a track into the active deck" });
+  const beforeCompactLoad = await page.evaluate(() => window.djCalls.length);
+  await compactTrack.selectOption("extra-0");
+  await page.waitForFunction((before) =>
+    window.djCalls.slice(before).some((call) =>
+      call.kind === "load" && call.track.id === "extra-0",
+    ), beforeCompactLoad);
+  assert.ok(
+    await page.evaluate((before) => !window.djCalls.slice(before).some((call) => call.kind === "play"), beforeCompactLoad),
+    "choosing a track from the collapsed dock unexpectedly started music",
   );
   console.log(
     "PASS: collapsed search/filter/reset, selected deck loads paused, centered crossfader preserved, vertical volume follows drag at far left, independent library scroll.",

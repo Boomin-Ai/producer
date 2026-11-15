@@ -179,7 +179,8 @@ for(const orientation of ['landscape','portrait'])for(const [index,[view,label]]
  // Quiet motion runs on a graphics-only layer. Source parents remain stationary.
  children.push(studioLayer('classic-frame-'+orientation,[4,4,w-8,h-8],'frame'));
  children.push(box('light-travel',[64,p?1765:971,p?180:260,2],[],{background:accent,opacity:.45},V('motion')),...cues(p));
- const layout={id:view+'-'+orientation,label:label+' · '+(p?'Portrait':'Landscape'),width:w,height:h,
+ const transitionSoundId=view==='solo'?'85b51aedf62675032b626e1760d0c3e4de209b2daafd5cc380fdb07a57db6ed1':undefined;
+ const layout={transitionSoundId,id:view+'-'+orientation,label:label+' · '+(p?'Portrait':'Landscape'),width:w,height:h,
   root:box('stage',[0,0,w,h],children,{position:'relative',background:color('#0b0e12','#f1f4f6'),overflow:'hidden'}),
   animation:{transition:{type:'morph',durationMs:420,contentDurationMs:180},tracks:[{target:'light-travel',property:'x',keyframes:[{atMs:0,value:64},{atMs:16000,value:p?836:1596}],easing:'easeInOut',clock:'show',loop:'pingpong'}]},
  };

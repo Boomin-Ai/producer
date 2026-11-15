@@ -1,6 +1,6 @@
 {
   "schema": "producer.audio-library/1",
-  "version": "f2c9a8418225ac97073cb2393258c5c56e5f7c23fbf0bcd54181b3aa22d65afc",
+  "version": "2b58114485970f84d50128b9dfeba39d91d15a105b0a10a5978dad3d7cf94b87",
   "owner": "Boomin",
   "assets": [
     {
@@ -721,7 +721,9 @@
       "file": "files/15bda96ff8800f9ea746f7adee2797e998478b7816dfa93f631f53ba8e3f6cc5.mp3",
       "sha256": "15bda96ff8800f9ea746f7adee2797e998478b7816dfa93f631f53ba8e3f6cc5",
       "bytes": 18318,
-      "duration_ms": 0
+      "duration_ms": 731,
+      "purpose": "button",
+      "description": "Short dry click for selecting a Set option."
     },
     {
       "id": "effect-081",
@@ -1054,7 +1056,9 @@
       "file": "files/5aa31331affb5756e0e7ba2b20e500834cbec9011013e8282b01fe498cdffc11.mp3",
       "sha256": "5aa31331affb5756e0e7ba2b20e500834cbec9011013e8282b01fe498cdffc11",
       "bytes": 17934,
-      "duration_ms": 0
+      "duration_ms": 1097,
+      "purpose": "reaction",
+      "description": "Game-show buzzer for a rejected cue or wrong answer."
     },
     {
       "id": "effect-118",
@@ -2261,6 +2265,66 @@
       "sha256": "96c02450414712a2804c07abf9dcd779625004a792b2a31caaa86760b3a8f69a",
       "bytes": 2681843,
       "duration_ms": 187298
+    },
+    {
+      "id": "wind-whoosh",
+      "kind": "effect",
+      "name": "Whoosh Wind",
+      "file": "files/85b51aedf62675032b626e1760d0c3e4de209b2daafd5cc380fdb07a57db6ed1.mp3",
+      "sha256": "85b51aedf62675032b626e1760d0c3e4de209b2daafd5cc380fdb07a57db6ed1",
+      "bytes": 11212,
+      "duration_ms": 679,
+      "purpose": "transition",
+      "description": "Fast wind sweep for scene or layout changes.",
+      "source": "https://www.myinstants.com/en/instant/whoosh-wind-64105/"
+    },
+    {
+      "id": "price-is-right-winner",
+      "kind": "effect",
+      "name": "The Price Is Right Winner",
+      "file": "files/c99ca395d5c81d495917af9cfc6ed3c6a1140584c6fe8ec4396fcace6329407f.mp3",
+      "sha256": "c99ca395d5c81d495917af9cfc6ed3c6a1140584c6fe8ec4396fcace6329407f",
+      "bytes": 240997,
+      "duration_ms": 15047,
+      "purpose": "button",
+      "description": "Game-show celebration for winner reveals, poll results, and victory buttons. About 15 seconds.",
+      "source": "https://www.myinstants.com/en/instant/the-price-is-right-winner-sound-13275/"
+    },
+    {
+      "id": "ahhhh-reaction",
+      "kind": "effect",
+      "name": "Ahhhh!",
+      "file": "files/fc253c36efcdb0f06080b6feb60de815cb5280b9c0c5e5f40f35e9464d35b311.mp3",
+      "sha256": "fc253c36efcdb0f06080b6feb60de815cb5280b9c0c5e5f40f35e9464d35b311",
+      "bytes": 217603,
+      "duration_ms": 13558,
+      "purpose": "reaction",
+      "description": "Extended vocal reaction for shock, disbelief or a comedic escalation.",
+      "source": "https://www.myinstants.com/en/instant/ahhhh-ah-ahhhhh-ahhh-ahhhh-20161/"
+    },
+    {
+      "id": "kanye-praise-the-lord",
+      "kind": "effect",
+      "name": "Kanye West · Praise the Lord",
+      "file": "files/7fba0d6e18267edf3935fd2a5f778b0cc74dc14fb1f3ddc52cfa53e71467df6d.mp3",
+      "sha256": "7fba0d6e18267edf3935fd2a5f778b0cc74dc14fb1f3ddc52cfa53e71467df6d",
+      "bytes": 234267,
+      "duration_ms": 14616,
+      "purpose": "reaction",
+      "description": "Celebratory vocal clip for a big reveal or a moment of relief.",
+      "source": "https://www.myinstants.com/en/instant/kanye-west-praise-the-lord-73325/"
+    },
+    {
+      "id": "grandpa-too-damn-bad",
+      "kind": "effect",
+      "name": "Grandpa · That’s Too Damn Bad",
+      "file": "files/efd1bb4c2d3dc89db8f2633433c0502c46549c26538aae5d981776e4d9629787.mp3",
+      "sha256": "efd1bb4c2d3dc89db8f2633433c0502c46549c26538aae5d981776e4d9629787",
+      "bytes": 60950,
+      "duration_ms": 3788,
+      "purpose": "reaction",
+      "description": "Call-and-response punchline for playful frustration. Contains profanity.",
+      "source": "https://www.myinstants.com/en/instant/im-tired-of-this-grandpa-thats-too-damn-bad-45201/"
     }
   ]
 }

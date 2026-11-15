@@ -21,6 +21,10 @@ struct Asset {
     sha256: String,
     bytes: u64,
     duration_ms: u64,
+    #[serde(default)]
+    purpose: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct InstalledAudio {
@@ -30,6 +34,10 @@ pub struct InstalledAudio {
     pub path: String,
     pub sha256: String,
     pub duration_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub purpose: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Receipt {
@@ -128,6 +136,8 @@ fn install(app: &tauri::AppHandle) -> Result<Receipt, String> {
             path: path.to_string_lossy().into(),
             sha256: asset.sha256,
             duration_ms: asset.duration_ms,
+            purpose: asset.purpose,
+            description: asset.description,
         });
     }
     crate::dj::install_bundled(app, &mut assets)?;
@@ -172,6 +182,8 @@ mod tests {
             sha256: hex::encode(Sha256::digest(b"test")),
             bytes: 4,
             duration_ms: 100,
+            purpose: None,
+            description: None,
         };
         assert!(checked(&root, &asset).is_ok());
         asset.bytes = 5;

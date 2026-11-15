@@ -20,11 +20,18 @@ pub fn install_bundled(
     let root = root(app)?;
     let mut sounds: Vec<Sound> = read(&root.join("library.json"))?;
     for a in assets.iter().filter(|a| a.kind == "effect") {
-        if !sounds.iter().any(|s| s.id == a.sha256) {
+        if let Some(sound) = sounds.iter_mut().find(|s| s.id == a.sha256) {
+            sound.duration_ms = a.duration_ms;
+            sound.purpose = a.purpose.clone();
+            sound.description = a.description.clone();
+        } else {
             sounds.push(Sound {
                 id: a.sha256.clone(),
                 name: a.name.clone(),
                 path: a.path.clone(),
+                duration_ms: a.duration_ms,
+                purpose: a.purpose.clone(),
+                description: a.description.clone(),
             });
         }
     }
@@ -93,7 +100,8 @@ fn preview_ticket(request: &Request) -> Option<u64> {
     )
     .then(|| PREVIEW_GENERATION.fetch_add(1, Ordering::SeqCst) + 1)
 }
-static DECODE: Mutex<()> = Mutex::new(());
+// Coalesce repeated decodes for a given asset without blocking unrelated cues.
+static DECODE: [Mutex<()>; 8] = [const { Mutex::new(()) }; 8];
 pub static ACTIVE: Mutex<Option<String>> = Mutex::new(None);
 pub static REMOTE: OnceLock<Pairing> = OnceLock::new();
 #[derive(Clone, Serialize, Deserialize)]
@@ -101,6 +109,12 @@ pub struct Sound {
     pub id: String,
     pub name: String,
     pub path: String,
+    #[serde(default)]
+    pub duration_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub purpose: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Pad {
@@ -159,6 +173,7 @@ pub enum Native {
     Has(String, u64),
     Load(String, u64, Vec<f32>),
     Trigger(String, u64, i32, f32, u32, bool),
+    TriggerCached(String, u64, i32, f32, u32),
     Audition(String, u64, f32, u32, u64),
     StopPreview(String, u64),
     Stop(String),
@@ -168,6 +183,7 @@ pub enum Native {
 pub enum Reply {
     Status(Status),
     Cached(bool),
+    NotCached,
 }
 fn key(bytes: &[u8]) -> String {
     hex::encode(Sha256::digest(bytes))
@@ -238,6 +254,9 @@ fn dispatch(app: &tauri::AppHandle, n: Native) -> Result<Reply, String> {
 }
 fn mapped(app: &tauri::AppHandle, s: Status) -> Result<Status, String> {
     let lib = library(app, &s.room)?;
+    Ok(map_status(s, &lib))
+}
+fn map_status(s: Status, lib: &Library) -> Status {
     let map = |items: Vec<String>| {
         items
             .into_iter()
@@ -249,11 +268,11 @@ fn mapped(app: &tauri::AppHandle, s: Status) -> Result<Status, String> {
             })
             .collect()
     };
-    Ok(Status {
+    Status {
         playing: map(s.playing),
         previewing: map(s.previewing),
         ..s
-    })
+    }
 }
 fn status(app: &tauri::AppHandle, n: Native) -> Result<Status, String> {
     match dispatch(app, n)? {
@@ -314,7 +333,9 @@ fn prepare(app: &tauri::AppHandle, room: &str, sound: &Sound) -> Result<(), Stri
     ) {
         return Ok(());
     }
-    let _g = DECODE.lock().map_err(|e| e.to_string())?;
+    let _g = DECODE[(n % DECODE.len() as u64) as usize]
+        .lock()
+        .map_err(|e| e.to_string())?;
     ensure_active(room)?;
     if matches!(
         dispatch(app, Native::Has(room.into(), n))?,
@@ -376,67 +397,89 @@ fn execute_at(app: &tauri::AppHandle, r: Request, ticket: Option<u64>) -> Result
                 Native::Mix(r.room.clone(), board.volume, board.monitor),
             )
         }
-        "play" | "preview" | "prepare" | "stop" => {
+        "play" | "play_cue" | "preview" | "prepare" | "stop" => {
+            let start = Instant::now();
             let lib = library(app, &r.room)?;
-            let p = lib.board.pads.iter().find(|p| p.id == r.id);
-            if r.action != "preview" && p.is_none() {
+            let sound = lib.sounds.iter().find(|s| s.id == r.id);
+            let pad = lib.board.pads.iter().find(|p| p.id == r.id);
+            let bundled_cue = matches!(
+                sound.and_then(|s| s.purpose.as_deref()),
+                Some("transition" | "button" | "reaction")
+            );
+            if pad.is_none()
+                && r.action != "preview"
+                && !(bundled_cue && matches!(r.action.as_str(), "play_cue" | "prepare"))
+            {
                 return Err("Sound is not assigned to this room".into());
             }
-            let sound = lib
-                .sounds
-                .iter()
-                .find(|s| s.id == r.id)
-                .ok_or("Sound file is missing")?;
-            if r.action != "stop" {
-                prepare(app, &r.room, sound)?;
-            }
-            if generation != GENERATION.load(Ordering::SeqCst) {
-                return Err("Sound trigger cancelled".into());
-            }
-            if r.action == "preview" {
-                return status(
+            let sound = sound.ok_or("Sound file is missing")?;
+            let id = numeric(&r.id)?;
+            let gain = pad.map_or(if bundled_cue { 0.55 } else { 0.8 }, |p| p.volume);
+            let fade = pad.map_or(5, |p| p.fade_ms);
+            let play = matches!(r.action.as_str(), "play" | "play_cue");
+            let mode = match (r.action.as_str(), pad.map(|p| p.mode.as_str())) {
+                ("stop", _) => 4,
+                (_, Some("toggle")) => 1,
+                (_, Some("overlap")) => 2,
+                (_, Some("loop")) => 3,
+                _ => 0,
+            };
+            let current = || generation == GENERATION.load(Ordering::SeqCst);
+            let mut cached = false;
+            let mut response = Reply::NotCached;
+            if play {
+                if !current() {
+                    return Err("Sound trigger cancelled".into());
+                }
+                response = dispatch(
                     app,
-                    Native::Audition(
-                        r.room,
-                        numeric(&r.id)?,
-                        p.map_or(0.8, |p| p.volume),
-                        p.map_or(5, |p| p.fade_ms),
+                    Native::TriggerCached(r.room.clone(), id, mode, gain, fade),
+                )?;
+                cached = !matches!(response, Reply::NotCached);
+            }
+            if matches!(response, Reply::NotCached) {
+                if r.action != "stop" {
+                    prepare(app, &r.room, sound)?;
+                }
+                if !current() {
+                    return Err("Sound trigger cancelled".into());
+                }
+                let command = match r.action.as_str() {
+                    "preview" => Native::Audition(
+                        r.room.clone(),
+                        id,
+                        gain,
+                        fade,
                         ticket.ok_or("Missing preview ticket")?,
                     ),
-                );
+                    "prepare" => Native::Status(r.room.clone()),
+                    _ => Native::Trigger(r.room.clone(), id, mode, gain, fade, false),
+                };
+                response = dispatch(app, command)?;
             }
-            let p = p.ok_or("Sound is not assigned to this room")?;
-            if r.action == "prepare" {
-                return status(app, Native::Status(r.room));
-            }
-            let mode = if r.action == "stop" {
-                4
-            } else if r.action == "preview" {
-                0
-            } else {
-                match p.mode.as_str() {
-                    "toggle" => 1,
-                    "overlap" => 2,
-                    "loop" => 3,
-                    _ => 0,
-                }
+            let Reply::Status(status) = response else {
+                return Err("Unexpected audio reply".into());
             };
-            let reply = status(
-                app,
-                Native::Trigger(
-                    r.room.clone(),
-                    numeric(&p.id)?,
-                    mode,
-                    p.volume,
-                    p.fade_ms,
-                    r.action == "preview",
-                ),
-            )?;
-            if r.action == "play"
-                && generation == GENERATION.load(Ordering::SeqCst)
-                && reply.playing.contains(&r.id)
-            {
-                publish_visual(app, &r.room, &p.name);
+            let reply = map_status(status, &lib);
+            if play {
+                let elapsed = start.elapsed().as_millis();
+                if !cached || elapsed >= 50 {
+                    let app = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let _ = crate::live::commands::ui_log(
+                            app,
+                            format!("[soundboard] trigger_ms={elapsed} cached={cached}"),
+                        )
+                        .await;
+                    });
+                }
+                if current() && reply.playing.contains(&r.id) {
+                    publish_visual(
+                        app,
+                        &r.room,
+                        pad.map_or(sound.name.as_str(), |p| p.name.as_str()),
+                    );
+                }
             }
             Ok(reply)
         }
@@ -595,6 +638,9 @@ pub async fn soundboard_import(
                     id: id.clone(),
                     name: name.clone(),
                     path: dest.to_string_lossy().into(),
+                    duration_ms: 0,
+                    purpose: None,
+                    description: None,
                 });
             }
             if !board.pads.iter().any(|p| p.id == id) {

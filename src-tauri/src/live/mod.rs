@@ -57,6 +57,27 @@ pub struct CutoutRect {
     pub w: f64,
     pub h: f64,
 }
+
+/// Top-left-origin rectangle expressed as fractions of the viewport.
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+pub struct StudioSpotlightRect {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
+
+impl StudioSpotlightRect {
+    fn is_valid(self) -> bool {
+        [self.x, self.y, self.w, self.h].iter().all(|v| v.is_finite())
+            && (self.w as f32) > 0.0
+            && (self.h as f32) > 0.0
+            && self.x >= 0.0
+            && self.y >= 0.0
+            && self.x + self.w <= 1.0
+            && self.y + self.h <= 1.0
+    }
+}
 #[cfg(have_engine)]
 pub mod engine;
 #[cfg(have_engine)]
@@ -84,6 +105,9 @@ pub mod stream;
 // pure "who sees which scene" decision.
 #[cfg(have_engine)]
 pub mod studio;
+mod studio_motion;
+#[cfg(all(target_os = "macos", have_engine))]
+mod studio_preview;
 #[cfg(have_engine)]
 mod studio_room_gate;
 
@@ -769,11 +793,76 @@ impl Live {
         self.handle
             .as_ref()
             .ok_or("live engine not running")?
-            .set_studio(on.then_some(studio::StudioSpec { window_id }))
+            .set_studio(on.then_some(studio::StudioSpec {
+                window_id,
+                #[cfg(target_os = "macos")]
+                room_bounds: None,
+                #[cfg(target_os = "macos")]
+                canvas_only: false,
+            }))
     }
     #[cfg(not(have_engine))]
     pub fn set_studio(&self, _on: bool, _w: usize) -> Result<bool, String> {
         Err("live engine not bundled in this build".into())
+    }
+
+    #[cfg(all(target_os = "macos", have_engine))]
+    pub async fn set_studio_spotlight(
+        &self,
+        rect: Option<StudioSpotlightRect>,
+    ) -> Result<bool, String> {
+        match &self.handle {
+            Some(engine) => engine.set_studio_spotlight(rect).await,
+            None => Ok(false),
+        }
+    }
+
+    #[cfg(all(target_os = "macos", have_engine))]
+    async fn set_studio_room_crop(&self, bounds: Option<[f32; 2]>) -> Result<(), String> {
+        self.handle.as_ref().ok_or("live engine not running")?.set_studio_room_crop(bounds).await
+    }
+
+    #[cfg(all(target_os = "macos", have_engine))]
+    pub async fn open_studio_preview(&self, window: usize) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .open_studio_preview(window)
+            .await
+    }
+
+    #[cfg(all(target_os = "macos", have_engine))]
+    async fn set_studio_motion(
+        &self,
+        keyframes: Vec<studio_motion::NativeMotionKeyframe>,
+    ) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .set_studio_motion(keyframes)
+            .await
+    }
+
+    #[cfg(all(target_os = "macos", have_engine))]
+    async fn set_studio_canvas_only(&self, enabled: bool) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .set_studio_canvas_only(enabled)
+            .await
+    }
+
+    #[cfg(all(target_os = "macos", have_engine))]
+    async fn set_studio_composer_preview(
+        &self,
+        target: Option<studio_preview::ComposerPreviewTarget>,
+        session: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<(), String> {
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .set_studio_composer_preview(target, session)
+            .await
     }
 
     #[cfg(have_engine)]

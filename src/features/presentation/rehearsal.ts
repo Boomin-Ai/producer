@@ -322,7 +322,7 @@ export class RehearsalSession {
     this.state=freeze({...this.state,media,revision:this.state.revision+1});this.emit();return true;
   };
   subscribe = (fn: () => void) => { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; };
-  send(event: SimulationEvent): boolean {
+  send(event: SimulationEvent, onCommitted?: () => void): boolean {
     if(this.hasRoomControl()){
       if(event.type==='tick'){if(this.controlClock?.running){this.state=freeze({...this.state,elapsedMs:this.controlClock.positionMs+Math.max(0,Date.now()-this.controlClock.anchorMs)});this.emit();}return false;}
       let op:ControlCommand['op']|undefined,input:ControlCommand['input'];
@@ -339,7 +339,7 @@ export class RehearsalSession {
         if(!this.controlTransport||this.state.controlPending)return false;
         const snapshot=this.moduleSnapshot(),generation=this.controlGeneration,send=this.controlTransport;
         this.state=freeze({...this.state,controlPending:true,controlError:''});this.emit();
-        void send({id:crypto.randomUUID(),setEpoch:snapshot.setEpoch,expectedRevision:snapshot.revision,op,...(input?{input}:{})}).then(result=>{if(result.status==='rejected')throw Error(result.error);}).catch(error=>{if(generation===this.controlGeneration){this.state=freeze({...this.state,controlError:error instanceof Error?error.message:String(error)});}}).finally(()=>{if(generation===this.controlGeneration){this.state=freeze({...this.state,controlPending:false});this.emit();}});
+        void send({id:crypto.randomUUID(),setEpoch:snapshot.setEpoch,expectedRevision:snapshot.revision,op,...(input?{input}:{})}).then(result=>{if(result.status==='rejected')throw Error(result.error);if(generation===this.controlGeneration)onCommitted?.();}).catch(error=>{if(generation===this.controlGeneration){this.state=freeze({...this.state,controlError:error instanceof Error?error.message:String(error)});}}).finally(()=>{if(generation===this.controlGeneration){this.state=freeze({...this.state,controlPending:false});this.emit();}});
         return true;
       }
       // Live time is projected from the committed anchor; a UI timer cannot
@@ -493,12 +493,14 @@ export class RehearsalSession {
           else next.media[id]={playing:false,positionMs:mediaPosition(t,now),anchorMs:now,resumeAfterPause:(event.type==='pause'||event.type==='segment.select')&&t.playing};
         }
       }
-      next.revision++; this.state = freeze(next);this.syncModuleLifecycle();this.emit(); return true;
+      next.revision++; this.state = freeze(next);this.syncModuleLifecycle();this.emit();
     } catch (e) {
       const rejected = structuredClone(this.state);
       rejected.trace = [...rejected.trace.slice(-29), { at: rejected.elapsedMs, message: `Rejected: ${e instanceof Error ? e.message : 'Invalid input.'}` }];
       this.state = freeze(rejected); this.emit(); return false;
     }
+    onCommitted?.();
+    return true;
   }
   private writeValue(target: Record<string, Scalar>, defs: PresentationPackage['set']['values'], key: string, value: Scalar) {
     if (!Object.prototype.hasOwnProperty.call(defs, key)) throw new Error('Unknown field.');

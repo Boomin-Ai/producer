@@ -6,9 +6,9 @@ type Dock={target:HTMLElement|null;compact:boolean;onExpand():void};
 const previewText=(text:string)=>text.replace(/\[([^\]]+)\]\([^)]*\)/g,'$1').replace(/[*_`#]/g,'').replace(/\s+/g,' ').trim();
 
 /** Views only: the parent retains the request, prompt and private draft owner. */
-export function AssistantDockSurface({dock,parking,reviewOpen,busy,connected,connecting,onConnect,status,summary,conversation,composer,completion,onRead,dismissKey}: {
+export function AssistantDockSurface({dock,parking,reviewOpen,busy,connected,connecting,onConnect,status,summary,conversation,composer,completion,failureAction,onRead,dismissKey}: {
   dock:Dock;parking:HTMLElement;reviewOpen:boolean;busy:boolean;connected:boolean;status:string;summary:string;
-  conversation:(docked?:boolean)=>ReactNode;composer:ReactNode;completion?:AssistantCompletion;onRead():void;dismissKey?:string;connecting:boolean;onConnect():void;
+  conversation:(docked?:boolean)=>ReactNode;composer:ReactNode;completion?:AssistantCompletion;failureAction?:ReactNode;onRead():void;dismissKey?:string;connecting:boolean;onConnect():void;
 }) {
   const [shallow,setShallow]=useState(false),[open,setOpen]=useState(false);
   const [dismissedNotification,setDismissedNotification]=useState<string>();
@@ -29,7 +29,7 @@ export function AssistantDockSurface({dock,parking,reviewOpen,busy,connected,con
   useEffect(()=>{if(!compact||reviewOpen)setOpen(false);if(!compact||open||reviewOpen)onRead();},[compact,open,reviewOpen,completion?.id]);
   const showToast=compact&&!reviewOpen&&!open&&!!completion&&dismissedNotification!==completion.id;
   useEffect(()=>{
-    if(!showToast||!completion)return;
+    if(!showToast||!completion||completion.kind==='error')return;
     // Dismissing the preview is not reading the reply. Keep its unread cue.
     const id=completion.id,timer=setTimeout(()=>setDismissedNotification(id),8000);
     return()=>clearTimeout(timer);
@@ -78,7 +78,7 @@ export function AssistantDockSurface({dock,parking,reviewOpen,busy,connected,con
       <div className="assistant-floating-tools"><button type="button" onClick={()=>{setOpen(false);dock.onExpand();}}>Expand dock</button><button type="button" aria-label="Close Assistant conversation" onClick={close}>×</button></div>{conversation()}
     </div>,document.body)}
     {showToast&&createPortal(<div ref={toast} className="assistant-task-toast" role={completion.kind==='error'?'alert':'status'} data-over-stage style={{left:toastPosition?.left??0,top:toastPosition?.top??0,width:toastPosition?.width,visibility:toastPosition?'visible':'hidden'}}>
-      <div><strong>{completion.kind==='error'?'Needs attention':'Reply ready'}</strong><button type="button" aria-label="Dismiss Assistant notification" onClick={()=>setDismissedNotification(completion.id)}>×</button></div><p>{previewText(completion.text)}</p><button type="button" onClick={openConversation}>View reply ↗</button>
+      <div><strong>{completion.kind==='error'?'Needs attention':'Reply ready'}</strong><button type="button" aria-label="Dismiss Assistant notification" onClick={()=>setDismissedNotification(completion.id)}>×</button></div><p>{previewText(completion.text)}</p>{completion.kind==='error'&&failureAction}<button type="button" onClick={openConversation}>View reply ↗</button>
     </div>,document.body)}
   </>;
 }

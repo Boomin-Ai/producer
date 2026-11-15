@@ -30,6 +30,17 @@ static void shader_program_proof(void){
  color(capture(b,32,32,32,32),32,16,16,0,255,0,255,"first instance update preserves second texture");
  producer_shader_frame(b,2,.5,1,1);
  color(capture(b,32,32,32,32),32,16,16,0,128,0,255,"second redraw restores its own palette");
+ // The kernel emits premultiplied SDR. A linear parent must read the same
+ // encoded pixel, without applying a second gamma curve to the raw channels.
+ producer_shader_frame(a,3,.25,1,.5);
+ color(capture(a,32,32,32,32),32,16,16,64,0,0,128,"encoded shader in SDR target");
+ const bool original_linear=capture_linear;
+ const int original_framebuffer=capture_framebuffer;
+ capture_linear=true;
+ capture_framebuffer=1;
+ color(capture(a,32,32,32,32),32,16,16,64,0,0,128,"encoded shader in linear target");
+ capture_linear=original_linear;
+ capture_framebuffer=original_framebuffer;
  obs_source_release(a);obs_source_release(b);obs_wait_for_destroy_queue();
  obs_source_t *again=producer_shader_create(red,kernel);require(again!=NULL,"shader pool recreated after teardown");
  require(producer_shader_effect_compilations()==before+4,"last lease releases both compiled programs");

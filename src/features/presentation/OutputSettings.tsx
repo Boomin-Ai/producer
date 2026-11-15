@@ -1,7 +1,7 @@
 import {outputLayout} from './layoutViews';
 import {IS_MAC,IS_WINDOWS} from '../../lib/platform';
 import {AssetTransport} from './assetTransport';
-import {useEffect,useRef,useState,useSyncExternalStore,type ReactNode} from 'react';
+import {useEffect,useId,useRef,useState,useSyncExternalStore,type ReactNode} from 'react';
 import {ipc} from '../../lib/ipc';
 import {sharedProgramCapture} from '../../lib/programCapture';
 import {RehearsalSession} from './rehearsal';
@@ -15,8 +15,10 @@ export function RoomOutputView({view,portrait,portraitContent,children}:{view:Ou
   {portrait.error&&<div className="rm-portrait-error" role="alert">{portrait.error}</div>}
  </div>}</div>;
 }
-export function OutputSettings({icon,session,output,sourceNames,view='landscape',onViewChange,onMonitor,cameraOn=false,cameraBusy=false,onStopCamera}:{icon:ReactNode;session:RehearsalSession;output:SetOutputControls;sourceNames:Record<string,string>;view?:OutputView;onViewChange?:(view:OutputView)=>void;onMonitor?:(monitor:PortraitMonitor)=>void;cameraOn?:boolean;cameraBusy?:boolean;onStopCamera?:()=>Promise<unknown>}){
- const pop=useRef<HTMLElement>(null);
+export function OutputSettings({icon,session,output,sourceNames,view='landscape',onViewChange,onMonitor,cameraOn=false,cameraBusy=false,onStopCamera,position='bottom',children,endControls}:{icon:ReactNode;session:RehearsalSession;output:SetOutputControls;sourceNames:Record<string,string>;view?:OutputView;onViewChange?:(view:OutputView)=>void;onMonitor?:(monitor:PortraitMonitor)=>void;cameraOn?:boolean;cameraBusy?:boolean;onStopCamera?:()=>Promise<unknown>;position?:'top'|'bottom'|'left'|'right';children?:ReactNode;endControls?:ReactNode}){
+ const [expanded,setExpanded]=useState(false);
+ const settingsId=useId();
+ const trigger=useRef<HTMLButtonElement>(null);
  const state=useSyncExternalStore(session.subscribe,session.snapshot);
  const [active,setActive]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const [mirrored,setMirrored]=useState<boolean|null>(null),[mirrorBusy,setMirrorBusy]=useState(false),[mirrorError,setMirrorError]=useState('');
@@ -81,11 +83,20 @@ export function OutputSettings({icon,session,output,sourceNames,view='landscape'
  useEffect(()=>{if(!authored){media.current.clear();warmed.current='';fingerprint.current='';}},[authored]);
  const choose=async(next:OutputView)=>{if(chooseFlight.current||cameraOn||cameraBusy||next===view)return;chooseFlight.current=true;setSwitching(true);setError('');try{await ipc.liveSelectOutput(next==='portrait');sharedProgramCapture.setPortrait(next==='portrait');onViewChange?.(next);setActive(next!=='landscape');}catch(e){setError(String(e));}finally{chooseFlight.current=false;setSwitching(false);}};
  const stopCamera=async()=>{if(!onStopCamera||stoppingCamera)return;setStoppingCamera(true);setError('');try{await onStopCamera();}catch(e){setError(String(e));}finally{setStoppingCamera(false);}};
- return <>
-  <button className="stg-btn" title="Output settings" aria-label="Output settings" aria-haspopup="dialog" onClick={e=>{if(!pop.current)return;const a=e.currentTarget.getBoundingClientRect();pop.current.togglePopover();if(pop.current.matches(':popover-open')){const bounds=pop.current.getBoundingClientRect();pop.current.style.left=`${Math.max(8,Math.min(innerWidth-bounds.width-8,a.left-140))}px`;pop.current.style.top=`${Math.max(8,Math.min(innerHeight-bounds.height-8,a.top-bounds.height-8))}px`;}}}>{icon}</button>
-  <section ref={pop} popover="auto" role="dialog" aria-label="Output settings" className="rm-output-settings">
-   <header><strong>Output settings</strong><button aria-label="Close output settings" onClick={()=>pop.current?.hidePopover()}>×</button></header>
-   {<>
+ const triggerLabel=expanded?'Close output settings':'Output settings';
+ return <div className={`stg-bar pos-${position}${expanded?' settings-expanded':''}`} data-over-stage onKeyDown={event=>{
+  if(event.key==='Escape'&&expanded){
+   event.stopPropagation();
+   setExpanded(false);
+   trigger.current?.focus();
+  }
+ }}>
+  <div className="stg-bar-tools">
+   {children}
+   <button ref={trigger} type="button" className="stg-btn" title={triggerLabel} aria-label={triggerLabel} aria-expanded={expanded} aria-controls={expanded?settingsId:undefined} onClick={()=>setExpanded(open=>!open)}>{icon}</button>
+   {endControls}
+  </div>
+  {expanded&&<section id={settingsId} aria-label="Output settings" className="rm-output-settings">
     <div className="rm-output-views" role="group" aria-label="Room output view">{(['landscape','portrait','both'] as const).map(mode=><button key={mode} aria-pressed={view===mode} disabled={cameraOn||cameraBusy||switching||stoppingCamera} onClick={()=>void choose(mode)}>{mode==='landscape'?'Landscape':mode==='portrait'?'Portrait':'Both'}</button>)}</div>
     {(cameraOn||cameraBusy||stoppingCamera)&&<p role="status">{cameraBusy||stoppingCamera?'Waiting for the virtual camera…':'Virtual camera is on. Stop it to change orientation.'} {cameraOn&&onStopCamera&&<button disabled={cameraBusy||stoppingCamera} onClick={()=>void stopCamera()}>{stoppingCamera?'Stopping…':'Stop virtual camera'}</button>}</p>}
     {switching&&<p role="status">Switching output…</p>}
@@ -93,10 +104,15 @@ export function OutputSettings({icon,session,output,sourceNames,view='landscape'
     <p className="rm-output-settings-note">{usingSet?(fitted?`${session.package.name} has no matching portrait layout. The complete set is fitted into portrait; add a portrait layout for a full-height design.`:layout==='auto'?'Portrait follows the matching set / segment layout.':'Portrait uses the selected set layout.'):'Portrait uses room sources. Drag, resize, crop and arrange them directly on its canvas.'}</p>
     {active&&!authored&&sources?.items?.length?<details className="rm-portrait-sources"><summary>Portrait sources</summary>{sources.items.map(source=><button key={source.id} aria-pressed={source.visible} aria-label={`${source.visible?'Hide':'Show'} ${sourceNames[source.id]??source.label} on portrait`} onClick={()=>void ipc.livePortraitTransform(source.id,{visible:!source.visible}).then(setSources).catch(e=>setError(String(e)))}><span>{sourceNames[source.id]??source.label}</span><span>{source.visible?'Shown':'Hidden'}</span></button>)}</details>:null}
     {busy&&<p role="status">Preparing portrait…</p>}{error&&<p role="alert">{error}</p>}
-    {(IS_MAC||IS_WINDOWS)&&<div><label><input type="checkbox" aria-label="Mirror virtual camera" checked={mirrored===true} disabled={mirrored===null||mirrorBusy} onChange={e=>void changeMirror(e.currentTarget.checked)}/> Mirror virtual camera</label><p className="rm-output-settings-note">Flips the entire outgoing camera picture horizontally, including set text.</p>{mirrorError&&<p role="alert">{mirrorError} <button onClick={()=>{setMirrorError('');void ipc.liveVirtualCamMirror().then(setMirrored).catch(e=>setMirrorError(String(e)));}}>Retry</button></p>}</div>}
-    <p className="rm-output-settings-note">Virtual camera follows the selected canvas. For vertical apps, choose Portrait, start Virtual cam, then select “Producer Virtual Camera” in the other app. Stop Virtual cam before switching canvases; reconnect it in the other app if its format stays locked. Camera video does not include show audio.</p>
-    <p className="rm-output-settings-note">Both records separate landscape and portrait files. Portrait sends the vertical canvas to streams and guests. Both sends landscape and records both canvases.</p>
-   </>}
-  </section>
- </>;
+    {(IS_MAC||IS_WINDOWS)&&<div><label className="rm-output-mirror"><input type="checkbox" aria-label="Mirror virtual camera" checked={mirrored===true} disabled={mirrored===null||mirrorBusy} onChange={e=>void changeMirror(e.currentTarget.checked)}/> Mirror virtual camera</label>{mirrorError&&<p role="alert">{mirrorError} <button onClick={()=>{setMirrorError('');void ipc.liveVirtualCamMirror().then(setMirrored).catch(e=>setMirrorError(String(e)));}}>Retry</button></p>}</div>}
+    <details className="rm-output-help">
+     <summary>Output help</summary>
+     <p>Portrait sends the vertical canvas to streams and guests. Both sends landscape and records separate files for both canvases.</p>
+     {(IS_MAC||IS_WINDOWS)&&<>
+      <p>Virtual camera follows the selected canvas and carries video only. For vertical apps, choose Portrait, start Virtual cam, then choose Producer Virtual Camera in the other app. Stop Virtual cam before switching canvases. Reconnect in the other app if its format stays locked.</p>
+      <p>Flips the entire outgoing camera picture horizontally, including set text.</p>
+     </>}
+    </details>
+  </section>}
+ </div>;
 }

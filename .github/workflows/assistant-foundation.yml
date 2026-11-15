@@ -71,6 +71,7 @@ jobs:
           node scripts/test-classic-browser.mjs
           node scripts/test-classic-graphics-browser.mjs
           node scripts/test-clips-panel.mjs
+          PRODUCER_PREVIEW_ORIGIN=http://127.0.0.1:1445 node scripts/test-studio-timeline-browser.mjs
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

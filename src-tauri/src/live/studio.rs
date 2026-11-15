@@ -17,9 +17,9 @@
 //!   state, and other video consumers.
 //!
 //! * STAGE (the in-app preview): while studio is on, `preview_draw` renders
-//!   the channel-0 ROOM scene directly (`obs_source_video_render`) instead of
-//!   `obs_render_main_texture`. The window shows the room, the capture shows
-//!   the window — no recursion.
+//!   the channel-0 ROOM scene directly (`obs_source_video_render`). An optional
+//!   monitor shows the composed program in the same canvas via a separate
+//!   native child window that ScreenCaptureKit excludes from the room capture.
 //!
 //! * RETURN FEED (virtual camera → guests' return feed, mod monitors): the
 //!   virtual camera would otherwise mirror the main mix. An auxiliary
@@ -54,6 +54,22 @@ extern "C" {
     fn producer_studio_window_capture_available() -> bool;
     fn producer_studio_window_capture_register();
     fn producer_studio_window_capture_failed(source: *mut ffi::obs_source_t) -> bool;
+    fn producer_studio_window_set_room_crop(source: *mut ffi::obs_source_t, top: f32, bottom: f32) -> bool;
+    fn producer_studio_window_set_spotlight(
+        source: *mut ffi::obs_source_t,
+        active: bool,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    ) -> bool;
+    fn producer_studio_window_set_floating(source: *mut ffi::obs_source_t, floating: bool) -> bool;
+    fn producer_studio_window_set_canvas_only(source: *mut ffi::obs_source_t, enabled: bool) -> bool;
+    fn producer_studio_window_set_motion(
+        source: *mut ffi::obs_source_t,
+        keys: *const super::studio_motion::NativeMotionKeyframe,
+        count: usize,
+    ) -> bool;
 }
 
 /// Register after obs_startup, before building any Studio output.
@@ -70,6 +86,10 @@ pub static STUDIO_ON: AtomicBool = AtomicBool::new(false);
 #[derive(Debug, Clone)]
 pub struct StudioSpec {
     pub window_id: usize,
+    #[cfg(target_os = "macos")]
+    pub room_bounds: Option<[f32; 2]>,
+    #[cfg(target_os = "macos")]
+    pub canvas_only: bool,
 }
 
 /// The pure decision every output-facing path asks: which scene does this
@@ -112,6 +132,12 @@ pub struct Studio {
     native_capture: bool,
     #[cfg(target_os = "macos")]
     capture_started: std::time::Instant,
+    #[cfg(target_os = "macos")]
+    pub(super) spotlight: Option<super::StudioSpotlightRect>,
+    #[cfg(target_os = "macos")]
+    pub(super) floating: bool,
+    #[cfg(target_os = "macos")]
+    preview: Option<super::studio_preview::StudioPreview>,
     pub spec: StudioSpec,
 }
 
@@ -288,6 +314,129 @@ impl RoomMix {
 }
 
 impl Studio {
+    #[cfg(target_os = "macos")]
+    pub(super) fn set_canvas_only(&mut self, enabled: bool) -> Result<(), String> {
+        if !self.native_capture || !unsafe { producer_studio_window_set_canvas_only(self.cap, enabled) } {
+            return Err("Studio could not switch its output source.".into());
+        }
+        self.spec.canvas_only = enabled;
+        Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(super) fn set_room_crop(&mut self, bounds: Option<[f32; 2]>) -> Result<(), String> {
+        if !self.native_capture || !unsafe { producer_studio_window_set_room_crop(self.cap, bounds.map_or(0.0, |b| b[0]), bounds.map_or(1.0, |b| b[1])) } {
+            return Err("Studio Composer requires working native window capture.".into());
+        }
+        self.spec.room_bounds = bounds;
+        Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(super) fn set_motion(&self, keyframes: &[super::studio_motion::NativeMotionKeyframe]) -> Result<(), String> {
+        if self.native_capture && unsafe { producer_studio_window_set_motion(self.cap, keyframes.as_ptr(), keyframes.len()) } {
+            Ok(())
+        } else if keyframes.is_empty() {
+            Ok(())
+        } else {
+            Err("Studio motion requires working native window capture.".into())
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(super) fn open_preview(&mut self, window: usize) -> Result<(), String> {
+        if !self.native_capture {
+            return Err("Studio preview requires native window capture.".into());
+        }
+        self.poll_preview();
+        self.close_composer_preview();
+        if let Some(preview) = &self.preview {
+            preview.show();
+        } else {
+            self.preview = Some(super::studio_preview::StudioPreview::new(window, self.floating)?);
+        }
+        Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(super) fn set_composer_preview(
+        &mut self,
+        target: Option<super::studio_preview::ComposerPreviewTarget>,
+        session: &std::sync::Arc<AtomicBool>,
+    ) -> Result<(), String> {
+        self.poll_preview();
+        let Some(target) = target else {
+            if let Some(preview) = self.preview.as_ref().filter(|preview| preview.matches_session(session)) {
+                preview.hide_stage();
+            }
+            return Ok(());
+        };
+        if !self.native_capture {
+            return Err("Studio preview requires native window capture.".into());
+        }
+        if let Some(preview) = self.preview.as_ref().filter(|preview| preview.matches_session(session)) {
+            return preview.move_stage(target);
+        }
+        drop(self.preview.take());
+        self.preview = Some(super::studio_preview::StudioPreview::new_stage(target)?);
+        Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(super) fn close_composer_preview(&mut self) {
+        if self.preview.as_ref().is_some_and(super::studio_preview::StudioPreview::is_stage_monitor) {
+            drop(self.preview.take());
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(super) fn poll_preview(&mut self) {
+        if let Some(preview) = &self.preview {
+            let floating = preview.floating();
+            if preview.is_closed() {
+                drop(self.preview.take());
+            }
+            if let Some(floating) = floating {
+                if floating != self.floating {
+                    self.set_floating(floating);
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(super) fn set_floating(&mut self, floating: bool) {
+        if self.native_capture && unsafe { producer_studio_window_set_floating(self.cap, floating) } {
+            self.floating = floating;
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(super) fn set_spotlight(&mut self, rect: Option<super::StudioSpotlightRect>) -> bool {
+        if !self.native_capture {
+            return false;
+        }
+        let (x, y, w, h) = match rect {
+            Some(rect) => {
+                let x = rect.x as f32;
+                let y = rect.y as f32;
+                (
+                    x,
+                    y,
+                    (rect.w as f32).min(1.0 - x),
+                    (rect.h as f32).min(1.0 - y),
+                )
+            }
+            None => (0.0, 0.0, 0.0, 0.0),
+        };
+        let applied =
+            unsafe { producer_studio_window_set_spotlight(self.cap, rect.is_some(), x, y, w, h) };
+        if applied {
+            self.spotlight = rect;
+        }
+        applied
+    }
+
     pub(super) fn capture_ready(&self) -> bool {
         #[cfg(target_os = "macos")]
         return !self.native_capture || unsafe { ffi::obs_source_get_width(self.cap) != 0 };
@@ -352,6 +501,12 @@ impl Studio {
             native_capture,
             #[cfg(target_os = "macos")]
             capture_started: std::time::Instant::now(),
+            #[cfg(target_os = "macos")]
+            spotlight: None,
+            #[cfg(target_os = "macos")]
+            floating: false,
+            #[cfg(target_os = "macos")]
+            preview: None,
             spec: spec.clone(),
         };
 
@@ -400,6 +555,11 @@ impl Studio {
                 ffi::obs_data_set_int(d, c"pixel_height".as_ptr(), bh);
                 ffi::obs_data_set_int(d, c"fps_num".as_ptr(), _fps_num);
                 ffi::obs_data_set_int(d, c"fps_den".as_ptr(), _fps_den);
+                ffi::obs_data_set_int(d, c"canvas_only".as_ptr(), i64::from(spec.canvas_only));
+                if let Some([top, bottom]) = spec.room_bounds {
+                    ffi::obs_data_set_int(d, c"room_top_millionths".as_ptr(), (top * 1_000_000.0).round() as i64);
+                    ffi::obs_data_set_int(d, c"room_bottom_millionths".as_ptr(), (bottom * 1_000_000.0).round() as i64);
+                }
                 "producer_studio_window"
             } else {
                 capture_id
@@ -441,6 +601,8 @@ impl Studio {
 
     /// Undo everything, in reverse. Safe on a half-built studio.
     pub unsafe fn teardown(&mut self) {
+        #[cfg(target_os = "macos")]
+        drop(self.preview.take());
         drop(self.room_gate.take());
         ffi::obs_set_output_source(STUDIO_CHANNEL, ptr::null_mut());
         // The capture leaves the SCENE first. The scene owns a reference of

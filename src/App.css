@@ -1926,12 +1926,24 @@ textarea::placeholder {
 /* ── Room (Boomin Live room language, mock-faithful) ───────────────────── */
 
 .room {
+  --room-footer-height: 30px;
   height: 100vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   background: oklch(0.16 0.035 250);
   color: oklch(0.94 0.008 250);
+}
+
+.rm-studio-timeline { flex: 1; min-width: 0; min-height: 0; overflow: auto; }
+.rm-studio-timeline[data-ready="false"] { visibility: hidden; }
+.rm-panel-timeline .rm-panel-body { padding: 0; }
+.rm-panel-timeline .studio-composer { min-width: 0; }
+.rm-panel-timeline { container-type: size; }
+@container (max-height: 100px) {
+  .rm-panel-timeline .studio-composer-track-grid,
+  .rm-panel-timeline .studio-composer-inspector { display: none; }
+  .rm-panel-timeline .studio-composer-toolbar { grid-template: "playback add" / minmax(0,1fr) max-content; }
 }
 
 
@@ -7123,7 +7135,6 @@ textarea::placeholder {
   bottom: auto;
   left: 14px;
   transform: translateY(-50%);
-  flex-direction: column;
 }
 .stg-bar.pos-right { left: auto; right: 14px; }
 /* Icons dead-center: block-level SVGs, no baseline slack. */
@@ -7746,6 +7757,12 @@ button.ks-key:hover { border-color: var(--line-2); }
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
+/* The Studio program's native monitor sits above the room window. Keep the
+   canvas controls beside its frame so they stay visible and clickable. */
+.rm-center[data-studio-monitor]:has(.stg-bar.pos-bottom) { padding-bottom: 64px; }
+.rm-center[data-studio-monitor]:has(.stg-bar.pos-top) { padding-top: 64px; }
+.rm-center[data-studio-monitor]:has(.stg-bar.pos-left) { padding-left: 64px; }
+.rm-center[data-studio-monitor]:has(.stg-bar.pos-right) { padding-right: 64px; }
 .stg-btn {
   width: 34px;
   height: 34px;
@@ -7758,6 +7775,8 @@ button.ks-key:hover { border-color: var(--line-2); }
   cursor: pointer;
 }
 .stg-btn:hover { background: var(--surface-3); }
+.stg-studio-source[aria-pressed="true"] { color: #a2f0ce; background: #203b34; }
+.stg-studio-source:disabled { opacity: 0.6; }
 /* Uniform circles: an OFF control dims, it never loses its shape — mixed
  * bare icons and circles read as misalignment. */
 .stg-btn.off { color: var(--fg-3); background: var(--surface-2); opacity: 0.55; }
@@ -7767,9 +7786,9 @@ button.ks-key:hover { border-color: var(--line-2); }
 /* ── Footer strip (P6) ── */
 .rm-foot {
   display: flex;
+  flex: 0 0 var(--room-footer-height);
   align-items: center;
   gap: 18px;
-  height: 30px;
   padding: 0 14px;
   border-top: 0.5px solid var(--line-1);
   font-size: 11px;
@@ -9537,6 +9556,8 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
    A form, so it is a touch wider and its own controls are plain. ─────── */
 .acct-sheet.bug-sheet { left: 50%; top: 56px; width: min(520px, 94vw); transform: translate(-50%, -6px); }
 .acct-sheet.bug-sheet.open { transform: translate(-50%, 0); }
+.acct-sheet.assistant-bug-sheet { margin: 0; padding: 0; top: 56px; color: inherit; background: var(--surface, #151d27); }
+.assistant-bug-sheet::backdrop { background: rgba(0, 0, 0, .35); }
 .bug-lede { padding: 0 8px 10px; line-height: 1.5; }
 .bug-text {
   width: 100%; min-height: 116px; resize: vertical; margin: 0 0 10px;
@@ -11156,17 +11177,60 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .mb-role-status {grid-column:1/-1; display:flex; justify-content:space-between; color:var(--fg-2); font-size:12px; padding:4px 0;}
 @media(max-width:850px) {.modboard.mb-workspace {grid-template-columns:minmax(0,1fr) 260px; padding:8px; gap:8px;} .mb-workspace .mb-monitor {height:30vh;} }
 @media(max-width:640px) {.modboard.mb-workspace {display:flex;flex-direction:column;overflow:auto;} .mb-production,.mb-source-sidebar {overflow:visible;flex-shrink:0;} }
-.rm-output-settings { position:fixed; inset:auto; margin:0; width:320px; max-width:calc(100vw - 16px); padding:14px; border:1px solid #33404d; border-radius:12px; background:#141c28; color:#e7edf2; box-shadow:0 14px 40px #0009; font:12px system-ui,sans-serif; }
-.rm-output-settings header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
-.rm-output-settings header strong { font-size:14px; }
-.rm-output-settings header button { border:0; background:transparent; color:inherit; font-size:20px; cursor:pointer; }
-.rm-output-settings p { margin:8px 0; color:#9aa8b7; }
+.stg-bar-tools { display:flex; flex:none; align-items:center; gap:6px; }
+.stg-bar:is(.pos-left,.pos-right) .stg-bar-tools { flex-direction:column; }
+.stg-bar.settings-expanded {
+  box-sizing:border-box;
+  max-width:calc(100% - 28px);
+  max-height:calc(100% - 28px);
+  border-radius:16px;
+  box-shadow:0 6px 20px #0006;
+}
+.stg-bar.settings-expanded.pos-top { flex-direction:column; }
+.stg-bar.settings-expanded.pos-bottom { flex-direction:column-reverse; }
+.stg-bar.settings-expanded.pos-right { flex-direction:row-reverse; }
+.stg-btn[aria-expanded="true"] { color:#a2f0ce; background:#203b34; }
+.rm-output-settings {
+  display:flex;
+  flex-direction:column;
+  align-self:stretch;
+  gap:8px;
+  box-sizing:border-box;
+  width:264px;
+  min-width:0;
+  max-width:100%;
+  min-height:0;
+  padding:8px;
+  overflow:auto;
+  overscroll-behavior:contain;
+  color:#e7edf2;
+  font-size:12px;
+}
+.pos-top .rm-output-settings { border-top:1px solid var(--line-2); }
+.pos-bottom .rm-output-settings { border-bottom:1px solid var(--line-2); }
+.pos-left .rm-output-settings { border-left:1px solid var(--line-2); }
+.pos-right .rm-output-settings { border-right:1px solid var(--line-2); }
+.rm-output-settings > * { flex-shrink:0; }
+.rm-output-settings p { margin:0; color:#9aa8b7; }
+.rm-output-settings label:not(.rm-output-mirror) { display:grid; gap:4px; }
+.rm-output-settings select {
+  width:100%;
+  min-width:0;
+  padding:5px 7px;
+  border:1px solid #334052;
+  border-radius:6px;
+  background:#111923;
+  color:inherit;
+  font:inherit;
+}
+.rm-output-mirror { display:flex; align-items:center; gap:6px; }
+.rm-output-help summary { color:#9aa8b7; cursor:pointer; }
+.rm-output-help p { margin-top:6px; line-height:1.4; }
 .rm-output-format { display:flex; justify-content:space-between; gap:8px; border:1px solid #2a3544; padding:10px; border-radius:7px; margin:6px 0; }
 .rm-output-format span { color:#9aa8b7; font-size:11px; }
 .rm-output-format.active { border-color:#6bd6ad66; background:#6bd6ad12; }
 .rm-output-format.active span { color:#6bd6ad; }
-.rm-output-settings .rm-output-settings-note { font-size:11px; line-height:1.5; margin:12px 0 0; }
-.rm-output-settings { width:340px; max-height:calc(100dvh - 16px); overflow:auto; }
+.rm-output-settings .rm-output-settings-note { font-size:11px; line-height:1.4; }
 .rm-portrait-test h4 { display:flex; justify-content:space-between; margin:12px 0; font-size:13px; }
 .rm-portrait-test small { color:#edc78b; font-size:10px; }
 .rm-portrait-test label { display:flex; flex-direction:column; gap:5px; margin:8px 0; color:#a9b6c3; }
@@ -11177,8 +11241,8 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .rm-portrait-preview span { font-size:11px; text-align:center; padding:12px; }
 
 /* Room viewing choices preserve each output's composition and aspect ratio. */
-.rm-output-views {display:flex;gap:6px;margin:12px 0 18px;}
-.rm-output-views button {flex:1;padding:9px 6px;border:1px solid #334052;border-radius:8px;background:#111923;color:#dce6ee;}
+.rm-output-views {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;}
+.rm-output-views button {padding:6px 2px;border:1px solid #334052;border-radius:7px;background:#111923;color:#dce6ee;font:inherit;overflow-wrap:anywhere;}
 .rm-output-views button[aria-pressed="true"] {border-color:#72dcb1;background:#203b34;color:#a2f0ce;}
 .rm-landscape-monitor {width:100%;height:100%;min-width:0;min-height:0;display:flex;align-items:center;justify-content:center;container-type:size;}
 /* Match the native attachment rectangle to a contained 16:9 room frame. */
@@ -11330,3 +11394,6 @@ html[data-platform="win"] *::-webkit-scrollbar-button {
 .set-diagnostics label { display:flex; align-items:center; gap:10px; margin-block:12px; }
 .set-diagnostics p { max-width:72ch; color:var(--muted); font-size:13px; line-height:1.5; }
 .set-diagnostics-actions { display:flex; gap:10px; flex-wrap:wrap; margin-block:16px; }
+
+.rm-timeline-bar { flex: 0 0 auto; min-height: 0; max-height: 32vh; overflow: auto; background: #0d131d; }
+.rm-timeline-bar > .rm-studio-timeline { overflow: visible; }

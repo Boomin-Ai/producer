@@ -14,6 +14,7 @@ export function layoutFieldKeys(doc:PresentationPackage,layoutId:string):Set<str
     Object.values(node.mask??{}).forEach(binding);Object.values(node.backdrop??{}).forEach(binding);
     Object.values(node.styles??{}).forEach(binding);
     Object.values(node.appearance??{}).forEach(binding);
+    node.shader?.colors.forEach(binding);
     Object.values(node.shader?.bindings??{}).forEach(binding);
     Object.values(node.scene3d?.music??{}).forEach(binding);
     binding(node.scene3d?.cue);binding(node.scene3d?.cueSequence);binding(node.scene3d?.view);
@@ -25,6 +26,9 @@ export function layoutFieldKeys(doc:PresentationPackage,layoutId:string):Set<str
     }
   };
   const layout=doc.set.layouts.find(layout=>layout.id===layoutId);
-  if(layout)visit(layout.root,new Set());
+  if(layout) {
+    visit(layout.root,new Set());
+    Object.values(doc.set.controlTheme ?? {}).forEach(binding);
+  }
   return keys;
 }

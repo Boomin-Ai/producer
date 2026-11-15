@@ -146,11 +146,13 @@ export function DJPanel({
   roomId,
   enabled,
   mini,
+  row = false,
   visible = true,
 }: {
   roomId: string;
   enabled: boolean;
   mini: boolean;
+  row?: boolean;
   visible?: boolean;
 }) {
   const [mixing, setMixing] = useState(
@@ -446,7 +448,19 @@ export function DJPanel({
       <div className="dj-mini">
         {cover(activeTrack, false, active.state === 1, true)}
         <div className="dj-mini-track">
-          <strong>{active.track?.title ?? "Load a track"}</strong>
+          <select
+            aria-label="Load a track into the active deck"
+            title={active.track?.title ?? "Load a track"}
+            value={tracks.some((track) => track.id === active.track?.id) ? active.track!.id : ""}
+            disabled={!enabled || busy || !tracks.length}
+            onChange={(event) => {
+              const track = tracks.find((item) => item.id === event.target.value);
+              if (track) void load(track, status.active);
+            }}
+          >
+            <option value="" disabled>{active.track?.title ?? "Load a track"}</option>
+            {tracks.map((track) => <option key={track.id} value={track.id}>{track.title}</option>)}
+          </select>
           <small>
             {(active.track?.matched_bpm ?? activeTrack?.bpm)
               ? `${(active.track?.matched_bpm ?? activeTrack!.bpm!).toFixed(1)} BPM`
@@ -589,6 +603,7 @@ export function DJPanel({
                   {i === 1 && d.track && status.decks[0].track && (
                     <button
                       className="dj-match"
+                      aria-label="Sync deck B to deck A"
                       disabled={
                         busy ||
                         !enabled ||
@@ -616,7 +631,7 @@ export function DJPanel({
                         })
                       }
                     >
-                      Sync to A
+                      {row ? "↔" : "Sync to A"}
                     </button>
                   )}
                 </div>
@@ -629,7 +644,7 @@ export function DJPanel({
         <DJIcon name="music" />
         <DJSlider
           label="Music volume"
-          orientation="vertical"
+          orientation={row ? "horizontal" : "vertical"}
           max={1}
           step={0.01}
           value={status.volume}

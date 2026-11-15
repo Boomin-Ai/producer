@@ -1846,6 +1846,7 @@
       },
       {
         "id": "solo-landscape",
+        "transitionSoundId": "85b51aedf62675032b626e1760d0c3e4de209b2daafd5cc380fdb07a57db6ed1",
         "label": "Solo · Landscape",
         "width": 1920,
         "height": 1080,
@@ -16074,6 +16075,7 @@
       },
       {
         "id": "solo-portrait",
+        "transitionSoundId": "85b51aedf62675032b626e1760d0c3e4de209b2daafd5cc380fdb07a57db6ed1",
         "label": "Solo · Portrait",
         "width": 1080,
         "height": 1920,

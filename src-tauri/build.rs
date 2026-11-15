@@ -107,6 +107,7 @@ fn link_live_engine_macos() {
     println!("cargo:rerun-if-changed=src/live/shim.m");
     println!("cargo:rerun-if-changed=src/live/capture_guard.m");
     println!("cargo:rerun-if-changed=src/live/studio_window_capture.m");
+    println!("cargo:rerun-if-changed=src/live/studio_preview.m");
     // Cutout: the Vision person-mask filter (registered through shim.m).
     println!("cargo:rerun-if-changed=src/live/person_mask.m");
     println!("cargo:rerun-if-changed=src/live/person_mask.effect.h");
@@ -119,6 +120,7 @@ fn link_live_engine_macos() {
         .file("src/live/soundboard.c")
         .file("src/live/studio_room_gate.c")
         .file("src/live/studio_window_capture.m")
+        .file("src/live/studio_preview.m")
         .std("c11")
         .define("PRODUCER_AUDIO_REACTIVE", None)
         .flag("-fobjc-arc")

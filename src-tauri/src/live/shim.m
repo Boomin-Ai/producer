@@ -106,6 +106,65 @@ uint32_t producer_window_id(void *ns_window) {
     return wid;
 }
 
+// Map top-left fractions of the WebView to top-left fractions of the
+// shadow-free capture window. AppKit accounts for titlebar and Wry insets.
+int producer_studio_spotlight_window_rect(void *ns_window, const double *viewport_rect,
+                                         double *window_rect) {
+    __block int ok = 0;
+    run_on_main(^{
+        NSWindow *win = (__bridge NSWindow *)ns_window;
+        if (!win) return;
+        NSView *web = find_webview(win.contentView);
+        NSRect frame = win.frame;
+        if (!web || NSIsEmptyRect(frame)) return;
+
+        NSRect bounds = web.bounds;
+        CGFloat x = viewport_rect[0] * NSWidth(bounds);
+        CGFloat y = viewport_rect[1] * NSHeight(bounds);
+        CGFloat w = viewport_rect[2] * NSWidth(bounds);
+        CGFloat h = viewport_rect[3] * NSHeight(bounds);
+        NSRect local = NSMakeRect(NSMinX(bounds) + x,
+            web.isFlipped ? NSMinY(bounds) + y : NSMaxY(bounds) - y - h, w, h);
+        NSRect screen = [win convertRectToScreen:[web convertRect:local toView:nil]];
+        NSRect visible = NSIntersectionRect(screen, frame);
+        if (NSIsEmptyRect(visible)) return;
+
+        window_rect[0] = (NSMinX(visible) - NSMinX(frame)) / NSWidth(frame);
+        window_rect[1] = (NSMaxY(frame) - NSMaxY(visible)) / NSHeight(frame);
+        window_rect[2] = MIN(NSWidth(visible) / NSWidth(frame), 1.0 - window_rect[0]);
+        window_rect[3] = MIN(NSHeight(visible) / NSHeight(frame), 1.0 - window_rect[1]);
+        ok = 1;
+    });
+    return ok;
+}
+
+// Screen coordinates for the Studio monitor's separate, capture-excluded
+// window. Use the same WKWebView bounds as the normal room preview.
+int producer_studio_preview_screen_rect(void *ns_window, const double normalized[4],
+                                        double screen[4]) {
+    __block int ok = 0;
+    run_on_main(^{
+        NSWindow *window = (__bridge NSWindow *)ns_window;
+        NSView *content = window.contentView;
+        NSView *web = find_webview(content);
+        if (!web) return;
+        NSRect bounds = web.bounds;
+        if (NSIsEmptyRect(bounds)) return;
+        NSRect frame = frame_from_css(content,
+            normalized[0] * NSWidth(bounds), normalized[1] * NSHeight(bounds),
+            normalized[2] * NSWidth(bounds), normalized[3] * NSHeight(bounds));
+        NSRect visible = NSIntersectionRect(window.frame,
+            [window convertRectToScreen:[content convertRect:frame toView:nil]]);
+        if (NSIsEmptyRect(visible)) return;
+        screen[0] = NSMinX(visible);
+        screen[1] = NSMinY(visible);
+        screen[2] = NSWidth(visible);
+        screen[3] = NSHeight(visible);
+        ok = 1;
+    });
+    return ok;
+}
+
 // Returns a retained NSView* (as void*) added BELOW the webview; writes the
 // backing pixel size (for obs_display) into out_px_w/out_px_h.
 void *producer_preview_attach(void *ns_window, double x, double y, double w, double h,

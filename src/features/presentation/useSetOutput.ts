@@ -1,4 +1,6 @@
 import {useShowClock} from './showClock';
+import {layoutTransitionSound} from './layoutViews';
+import {playSetSound} from '../../lib/soundboard';
 import {useRoomOutput} from '../sets-v2/useRoomOutput';
 import {invoke} from '../../lib/nativeInvoke';
 import {AssetTransport} from './assetTransport';
@@ -87,6 +89,7 @@ function useLegacySetOutput(session:RehearsalSession,roomId:string|null,sources:
   const inFlight=useRef<Promise<boolean>|null>(null),alive=useRef(true),returnIntent=useRef(0);
   const latest=useRef({session,bindings,framing,sources,enabled,roomId});latest.current={session,bindings,framing,sources,enabled,roomId};
   const warmFlight=useRef<Promise<void>|null>(null),warmLease=useRef<string|null>(null),warmed=useRef('');const [warmVersion,setWarmVersion]=useState(0);
+  const soundSelection=useRef<{session:RehearsalSession;layout:string}|null>(null);
   const acknowledged=useRef('');const media=useRef(new AssetTransport());
   const project=(current:typeof latest.current,rev:number)=>{const p=setOutputProjection(current.session,rev);const visit=(n:OutputProjection['root'])=>{if(n.slotId && current.framing[n.slotId])n.framing=current.framing[n.slotId];n.children.forEach(visit);};visit(p.root);return p;};
   const sourceDimensions=(current:typeof latest.current)=>Object.values(current.bindings).map(id=>{const item=current.sources.items?.find(s=>s.id===id);return [id,item?.src_w,item?.src_h];});
@@ -94,7 +97,7 @@ function useLegacySetOutput(session:RehearsalSession,roomId:string|null,sources:
   const returnToRoom=async()=> {
     ++returnIntent.current;
     ++operation.current;
-    const lease=owner.current;owner.current=null;acknowledged.current='';media.current.clear();setActive(false);
+    const lease=owner.current;owner.current=null;soundSelection.current=null;acknowledged.current='';media.current.clear();setActive(false);
     if (!lease){setPresentedSession(null);return true;}
     try {const status=await ipc.liveSetReturn(lease);generation.current=status.generation;setPresentedSession(null);setError('');return true;}
     catch(e){owner.current=lease;setActive(true);setError(String(e));return false;}
@@ -112,10 +115,11 @@ function useLegacySetOutput(session:RehearsalSession,roomId:string|null,sources:
       const current={...latest.current,bindings:resolveRoomBindings(latest.current.bindings,latest.current.sources)};lease??=warmLease.current;
       const status=await ipc.liveSetStatus();
       if(!stillTaking())return false;
-      if(status.generation!==generation.current){media.current.clear();warmed.current='';setPresentedSession(null);}
+      if(status.generation!==generation.current){soundSelection.current=null;media.current.clear();warmed.current='';setPresentedSession(null);}
       if(status.lease && status.lease!==lease)throw new Error('Another set owns the output. Choose Show room scene before replacing it.');
       generation.current=status.generation;
       lease ??= crypto.randomUUID();owner.current=lease;warmLease.current=null;
+      const layout=current.session.snapshot().layoutId;
       const projection=project(current,++revision.current);const preload=nextSetProjection(current.session,undefined,current.framing);if(preload)preload.revision=projection.revision;
       const declared=new Set<string>();const visit=(n:OutputProjection['root'])=>{if(n.slotId)declared.add(n.slotId);n.children.forEach(visit);};visit(projection.root);
       const resolved=Object.fromEntries(Object.entries(current.bindings).filter(([slot])=>declared.has(slot)));
@@ -132,6 +136,12 @@ function useLegacySetOutput(session:RehearsalSession,roomId:string|null,sources:
       if(ticket!==operation.current || latest.current.roomId!==current.roomId){await ipc.liveSetReturn(lease);return false;}
       if(!stillTaking()){setPresentedSession(null);return false;}
       if(receipt.revision!==projection.revision||receipt.lease!==lease)throw Error('Set activation did not confirm the requested output.');
+      const previousSoundSelection=soundSelection.current;
+      soundSelection.current={session:current.session,layout};
+      if (previousSoundSelection?.session===current.session && current.session.snapshot().layoutId===layout) {
+        const cue=layoutTransitionSound(current.session.package.set,previousSoundSelection.layout,layout);
+        if (cue) playSetSound(current.roomId??'local',cue);
+      }
       media.current.acknowledge(projection);if(preload)media.current.acknowledge(preload);acknowledged.current=signature;setPresentedSession(current.session);setActive(true);
       return true;
     } catch(e) {
@@ -139,7 +149,7 @@ function useLegacySetOutput(session:RehearsalSession,roomId:string|null,sources:
         setError(String(e));
         media.current.clear();warmed.current='';
         const status=await ipc.liveSetStatus().catch(()=>null);
-        if(status?.lease!==owner.current){owner.current=null;setPresentedSession(null);setActive(false);}
+        if(status?.lease!==owner.current){soundSelection.current=null;owner.current=null;setPresentedSession(null);setActive(false);}
       }
       throw e;
     } finally {if(alive.current)setBusy(false);}
@@ -166,6 +176,7 @@ function useLegacySetOutput(session:RehearsalSession,roomId:string|null,sources:
   };
   useEffect(()=> {
     alive.current=true;
+    soundSelection.current=null;
     owner.current=null;warmLease.current=null;warmed.current='';acknowledged.current='';media.current.clear();setPresentedSession(null);setActive(false);setBindings(initialBindings);setFraming(initialFraming);setError('');
     return ()=> {alive.current=false;++operation.current;const lease=owner.current??warmLease.current;owner.current=null;warmLease.current=null;warmed.current='';if(lease)void ipc.liveSetReturn(lease).catch(()=>{});};
   },[roomId]);
