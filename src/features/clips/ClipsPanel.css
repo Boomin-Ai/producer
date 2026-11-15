@@ -232,7 +232,7 @@
   .clips-console:has(.clips-latest) { padding-inline: 0; gap: 2px; }
   .clips-console:has(.clips-latest) :is(.clips-save, .clips-library) { width: 21px; }
   .clips-console:has(.clips-latest) .clips-console-toggle { min-width: 31px; gap: 3px; }
-  .clips-console:has(.clips-latest) .clips-console-window select { width: 40px; }
+  .clips-console:has(.clips-latest) .clips-console-window select { width: 38px; }
   .clips-console .clips-latest { width: 18px; padding-inline: 0; }
   .clips-latest .clips-thumbnail { width: 16px; height: 16px; }
 }
