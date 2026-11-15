@@ -69,7 +69,9 @@ pub struct StudioSpotlightRect {
 
 impl StudioSpotlightRect {
     fn is_valid(self) -> bool {
-        [self.x, self.y, self.w, self.h].iter().all(|v| v.is_finite())
+        [self.x, self.y, self.w, self.h]
+            .iter()
+            .all(|v| v.is_finite())
             && (self.w as f32) > 0.0
             && (self.h as f32) > 0.0
             && self.x >= 0.0
@@ -819,7 +821,11 @@ impl Live {
 
     #[cfg(all(target_os = "macos", have_engine))]
     async fn set_studio_room_crop(&self, bounds: Option<[f32; 2]>) -> Result<(), String> {
-        self.handle.as_ref().ok_or("live engine not running")?.set_studio_room_crop(bounds).await
+        self.handle
+            .as_ref()
+            .ok_or("live engine not running")?
+            .set_studio_room_crop(bounds)
+            .await
     }
 
     #[cfg(all(target_os = "macos", have_engine))]

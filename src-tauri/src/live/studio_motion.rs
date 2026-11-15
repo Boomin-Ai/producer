@@ -27,7 +27,9 @@ pub struct StudioMotionKeyframe {
 
 impl StudioMotionPose {
     pub(super) fn validate(&self) -> Result<(), String> {
-        if self.panel.is_some_and(|rect| !rect.is_valid()) || (self.lift > 0.0 && self.panel.is_none()) {
+        if self.panel.is_some_and(|rect| !rect.is_valid())
+            || (self.lift > 0.0 && self.panel.is_none())
+        {
             return Err("Studio motion requires a visible panel rectangle to lift a panel.".into());
         }
         for (name, value, low, high) in [
@@ -42,7 +44,9 @@ impl StudioMotionPose {
             ("canvasMix", self.canvas_mix, 0.0, 1.0),
         ] {
             if !(low..=high).contains(&value) {
-                return Err(format!("Studio motion {name} must be between {low} and {high}."));
+                return Err(format!(
+                    "Studio motion {name} must be between {low} and {high}."
+                ));
             }
         }
         Ok(())
@@ -55,7 +59,9 @@ pub(super) fn validate_track(keyframes: &[StudioMotionKeyframe]) -> Result<(), S
     }
     for (index, key) in keyframes.iter().enumerate() {
         if key.at_ms > 60_000 || (index > 0 && key.at_ms <= keyframes[index - 1].at_ms) {
-            return Err("Studio motion keyframes must increase strictly and fit in 60 seconds.".into());
+            return Err(
+                "Studio motion keyframes must increase strictly and fit in 60 seconds.".into(),
+            );
         }
         key.pose.validate()?;
     }

@@ -4,19 +4,30 @@
 use std::ffi::c_void;
 use std::mem::MaybeUninit;
 use std::ptr;
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 use super::{ffi, graph};
 
 extern "C" {
-    fn producer_studio_preview_create(window: *mut c_void, width: *mut f64, height: *mut f64) -> *mut c_void;
+    fn producer_studio_preview_create(
+        window: *mut c_void,
+        width: *mut f64,
+        height: *mut f64,
+    ) -> *mut c_void;
     fn producer_studio_preview_show(view: *mut c_void);
     fn producer_studio_preview_destroy(view: *mut c_void);
     fn producer_studio_preview_is_closed(view: *mut c_void) -> bool;
     fn producer_studio_preview_floating(view: *mut c_void) -> bool;
     fn producer_studio_preview_set_floating(view: *mut c_void, floating: bool);
-    fn producer_studio_stage_preview_create(window: *mut c_void, normalized: *const f64,
-        width: *mut f64, height: *mut f64) -> *mut c_void;
+    fn producer_studio_stage_preview_create(
+        window: *mut c_void,
+        normalized: *const f64,
+        width: *mut f64,
+        height: *mut f64,
+    ) -> *mut c_void;
     fn producer_studio_stage_preview_bind(view: *mut c_void, display: *mut ffi::obs_display_t);
     fn producer_studio_stage_preview_move(view: *mut c_void, normalized: *const f64) -> bool;
     fn producer_studio_stage_preview_hide(view: *mut c_void);
@@ -42,7 +53,14 @@ extern "C" fn draw_program(_: *mut c_void, width: u32, height: u32) {
             fitted_width,
             fitted_height,
         );
-        ffi::gs_ortho(0.0, base_width as f32, 0.0, base_height as f32, -100.0, 100.0);
+        ffi::gs_ortho(
+            0.0,
+            base_width as f32,
+            0.0,
+            base_height as f32,
+            -100.0,
+            100.0,
+        );
         ffi::obs_render_main_texture();
         ffi::gs_projection_pop();
         ffi::gs_viewport_pop();
@@ -88,7 +106,8 @@ impl StudioPreview {
     pub(super) fn new(window: usize, floating: bool) -> Result<Self, String> {
         let (view, display) = graph::on_main_thread(move || unsafe {
             let (mut width, mut height) = (0.0, 0.0);
-            let view = producer_studio_preview_create(window as *mut c_void, &mut width, &mut height);
+            let view =
+                producer_studio_preview_create(window as *mut c_void, &mut width, &mut height);
             if view.is_null() {
                 return (0, 0);
             }
@@ -106,7 +125,11 @@ impl StudioPreview {
         unsafe {
             ffi::obs_display_add_draw_callback(display as *mut _, draw_program, ptr::null_mut());
         }
-        let preview = Self { view, display, stage_session: None };
+        let preview = Self {
+            view,
+            display,
+            stage_session: None,
+        };
         preview.show();
         Ok(preview)
     }
@@ -115,11 +138,23 @@ impl StudioPreview {
         let closed = target.closed.clone();
         let (view, display) = graph::on_main_thread(move || unsafe {
             let bounds = target.bounds()?;
-            let window = target.window.ns_window().map_err(|error| error.to_string())?.cast();
+            let window = target
+                .window
+                .ns_window()
+                .map_err(|error| error.to_string())?
+                .cast();
             let (mut width, mut height) = (0.0, 0.0);
-            let view = producer_studio_stage_preview_create(window, bounds.as_ptr(), &mut width, &mut height);
+            let view = producer_studio_stage_preview_create(
+                window,
+                bounds.as_ptr(),
+                &mut width,
+                &mut height,
+            );
             if view.is_null() {
-                return Err("The in-canvas Studio preview needs macOS 14.2 or later and a visible canvas.".into());
+                return Err(
+                    "The in-canvas Studio preview needs macOS 14.2 or later and a visible canvas."
+                        .into(),
+                );
             }
             let display = make_display(view, width, height);
             if display.is_null() {
@@ -131,9 +166,14 @@ impl StudioPreview {
         unsafe {
             ffi::obs_display_add_draw_callback(display as *mut _, draw_program, ptr::null_mut());
         }
-        let preview = Self { view, display, stage_session: Some(closed.clone()) };
+        let preview = Self {
+            view,
+            display,
+            stage_session: Some(closed.clone()),
+        };
         graph::on_main_thread(move || unsafe {
-            if !closed.load(Ordering::Acquire) && !producer_studio_preview_is_closed(view as *mut _) {
+            if !closed.load(Ordering::Acquire) && !producer_studio_preview_is_closed(view as *mut _)
+            {
                 producer_studio_stage_preview_bind(view as *mut _, display as *mut _);
             }
         });
@@ -155,7 +195,9 @@ impl StudioPreview {
     pub(super) fn hide_stage(&self) {
         debug_assert!(self.is_stage_monitor());
         let view = self.view;
-        graph::on_main_thread(move || unsafe { producer_studio_stage_preview_hide(view as *mut _) });
+        graph::on_main_thread(move || unsafe {
+            producer_studio_stage_preview_hide(view as *mut _)
+        });
     }
 
     pub(super) fn is_stage_monitor(&self) -> bool {
@@ -163,7 +205,9 @@ impl StudioPreview {
     }
 
     pub(super) fn matches_session(&self, session: &Arc<AtomicBool>) -> bool {
-        self.stage_session.as_ref().is_some_and(|closed| Arc::ptr_eq(closed, session))
+        self.stage_session
+            .as_ref()
+            .is_some_and(|closed| Arc::ptr_eq(closed, session))
     }
 
     pub(super) fn show(&self) {
@@ -172,12 +216,15 @@ impl StudioPreview {
     }
 
     pub(super) fn is_closed(&self) -> bool {
-        self.stage_session.as_ref().is_some_and(|closed| closed.load(Ordering::Acquire))
+        self.stage_session
+            .as_ref()
+            .is_some_and(|closed| closed.load(Ordering::Acquire))
             || unsafe { producer_studio_preview_is_closed(self.view as *mut _) }
     }
 
     pub(super) fn floating(&self) -> Option<bool> {
-        (!self.is_stage_monitor()).then(|| unsafe { producer_studio_preview_floating(self.view as *mut _) })
+        (!self.is_stage_monitor())
+            .then(|| unsafe { producer_studio_preview_floating(self.view as *mut _) })
     }
 }
 

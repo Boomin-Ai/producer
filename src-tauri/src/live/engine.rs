@@ -2010,7 +2010,9 @@ impl LiveHandle {
     #[cfg(target_os = "macos")]
     pub async fn set_studio_room_crop(&self, bounds: Option<[f32; 2]>) -> Result<(), String> {
         let (reply, receiver) = tokio::sync::oneshot::channel();
-        self.cmd.send(Command::SetStudioRoomCrop { bounds, reply }).map_err(|error| error.to_string())?;
+        self.cmd
+            .send(Command::SetStudioRoomCrop { bounds, reply })
+            .map_err(|error| error.to_string())?;
         tokio::time::timeout(Duration::from_secs(3), receiver)
             .await
             .map_err(|_| "Studio capture bounds did not respond in time.".to_string())?
@@ -2064,7 +2066,11 @@ impl LiveHandle {
     ) -> Result<(), String> {
         let (reply, receiver) = tokio::sync::oneshot::channel();
         self.cmd
-            .send(Command::SetStudioComposerPreview { target, session, reply })
+            .send(Command::SetStudioComposerPreview {
+                target,
+                session,
+                reply,
+            })
             .map_err(|error| error.to_string())?;
         tokio::time::timeout(Duration::from_secs(4), receiver)
             .await

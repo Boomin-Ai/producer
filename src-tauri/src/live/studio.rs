@@ -54,7 +54,11 @@ extern "C" {
     fn producer_studio_window_capture_available() -> bool;
     fn producer_studio_window_capture_register();
     fn producer_studio_window_capture_failed(source: *mut ffi::obs_source_t) -> bool;
-    fn producer_studio_window_set_room_crop(source: *mut ffi::obs_source_t, top: f32, bottom: f32) -> bool;
+    fn producer_studio_window_set_room_crop(
+        source: *mut ffi::obs_source_t,
+        top: f32,
+        bottom: f32,
+    ) -> bool;
     fn producer_studio_window_set_spotlight(
         source: *mut ffi::obs_source_t,
         active: bool,
@@ -64,7 +68,10 @@ extern "C" {
         h: f32,
     ) -> bool;
     fn producer_studio_window_set_floating(source: *mut ffi::obs_source_t, floating: bool) -> bool;
-    fn producer_studio_window_set_canvas_only(source: *mut ffi::obs_source_t, enabled: bool) -> bool;
+    fn producer_studio_window_set_canvas_only(
+        source: *mut ffi::obs_source_t,
+        enabled: bool,
+    ) -> bool;
     fn producer_studio_window_set_motion(
         source: *mut ffi::obs_source_t,
         keys: *const super::studio_motion::NativeMotionKeyframe,
@@ -316,7 +323,9 @@ impl RoomMix {
 impl Studio {
     #[cfg(target_os = "macos")]
     pub(super) fn set_canvas_only(&mut self, enabled: bool) -> Result<(), String> {
-        if !self.native_capture || !unsafe { producer_studio_window_set_canvas_only(self.cap, enabled) } {
+        if !self.native_capture
+            || !unsafe { producer_studio_window_set_canvas_only(self.cap, enabled) }
+        {
             return Err("Studio could not switch its output source.".into());
         }
         self.spec.canvas_only = enabled;
@@ -325,7 +334,15 @@ impl Studio {
 
     #[cfg(target_os = "macos")]
     pub(super) fn set_room_crop(&mut self, bounds: Option<[f32; 2]>) -> Result<(), String> {
-        if !self.native_capture || !unsafe { producer_studio_window_set_room_crop(self.cap, bounds.map_or(0.0, |b| b[0]), bounds.map_or(1.0, |b| b[1])) } {
+        if !self.native_capture
+            || !unsafe {
+                producer_studio_window_set_room_crop(
+                    self.cap,
+                    bounds.map_or(0.0, |b| b[0]),
+                    bounds.map_or(1.0, |b| b[1]),
+                )
+            }
+        {
             return Err("Studio Composer requires working native window capture.".into());
         }
         self.spec.room_bounds = bounds;
@@ -333,8 +350,15 @@ impl Studio {
     }
 
     #[cfg(target_os = "macos")]
-    pub(super) fn set_motion(&self, keyframes: &[super::studio_motion::NativeMotionKeyframe]) -> Result<(), String> {
-        if self.native_capture && unsafe { producer_studio_window_set_motion(self.cap, keyframes.as_ptr(), keyframes.len()) } {
+    pub(super) fn set_motion(
+        &self,
+        keyframes: &[super::studio_motion::NativeMotionKeyframe],
+    ) -> Result<(), String> {
+        if self.native_capture
+            && unsafe {
+                producer_studio_window_set_motion(self.cap, keyframes.as_ptr(), keyframes.len())
+            }
+        {
             Ok(())
         } else if keyframes.is_empty() {
             Ok(())
@@ -353,7 +377,10 @@ impl Studio {
         if let Some(preview) = &self.preview {
             preview.show();
         } else {
-            self.preview = Some(super::studio_preview::StudioPreview::new(window, self.floating)?);
+            self.preview = Some(super::studio_preview::StudioPreview::new(
+                window,
+                self.floating,
+            )?);
         }
         Ok(())
     }
@@ -366,7 +393,11 @@ impl Studio {
     ) -> Result<(), String> {
         self.poll_preview();
         let Some(target) = target else {
-            if let Some(preview) = self.preview.as_ref().filter(|preview| preview.matches_session(session)) {
+            if let Some(preview) = self
+                .preview
+                .as_ref()
+                .filter(|preview| preview.matches_session(session))
+            {
                 preview.hide_stage();
             }
             return Ok(());
@@ -374,7 +405,11 @@ impl Studio {
         if !self.native_capture {
             return Err("Studio preview requires native window capture.".into());
         }
-        if let Some(preview) = self.preview.as_ref().filter(|preview| preview.matches_session(session)) {
+        if let Some(preview) = self
+            .preview
+            .as_ref()
+            .filter(|preview| preview.matches_session(session))
+        {
             return preview.move_stage(target);
         }
         drop(self.preview.take());
@@ -384,7 +419,11 @@ impl Studio {
 
     #[cfg(target_os = "macos")]
     pub(super) fn close_composer_preview(&mut self) {
-        if self.preview.as_ref().is_some_and(super::studio_preview::StudioPreview::is_stage_monitor) {
+        if self
+            .preview
+            .as_ref()
+            .is_some_and(super::studio_preview::StudioPreview::is_stage_monitor)
+        {
             drop(self.preview.take());
         }
     }
@@ -406,7 +445,8 @@ impl Studio {
 
     #[cfg(target_os = "macos")]
     pub(super) fn set_floating(&mut self, floating: bool) {
-        if self.native_capture && unsafe { producer_studio_window_set_floating(self.cap, floating) } {
+        if self.native_capture && unsafe { producer_studio_window_set_floating(self.cap, floating) }
+        {
             self.floating = floating;
         }
     }
@@ -557,8 +597,16 @@ impl Studio {
                 ffi::obs_data_set_int(d, c"fps_den".as_ptr(), _fps_den);
                 ffi::obs_data_set_int(d, c"canvas_only".as_ptr(), i64::from(spec.canvas_only));
                 if let Some([top, bottom]) = spec.room_bounds {
-                    ffi::obs_data_set_int(d, c"room_top_millionths".as_ptr(), (top * 1_000_000.0).round() as i64);
-                    ffi::obs_data_set_int(d, c"room_bottom_millionths".as_ptr(), (bottom * 1_000_000.0).round() as i64);
+                    ffi::obs_data_set_int(
+                        d,
+                        c"room_top_millionths".as_ptr(),
+                        (top * 1_000_000.0).round() as i64,
+                    );
+                    ffi::obs_data_set_int(
+                        d,
+                        c"room_bottom_millionths".as_ptr(),
+                        (bottom * 1_000_000.0).round() as i64,
+                    );
                 }
                 "producer_studio_window"
             } else {
