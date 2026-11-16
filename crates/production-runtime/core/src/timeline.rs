@@ -52,6 +52,9 @@ fn fail(code: &str, message: &str) -> Error {
     Error::new(code, "timeline", message)
 }
 impl Timeline {
+    pub fn is_active(&self) -> bool {
+        self.active
+    }
     pub fn new(plan: Arc<SequencePlan>, looping: bool, now: OutputInstant) -> Result<Self> {
         let mut transport = Transport::new(plan.duration, now)?;
         transport.looping = looping;

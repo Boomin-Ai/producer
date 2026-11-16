@@ -13,6 +13,7 @@ The document stays JSON for agents and interchange. Serde derives typed Rust mod
 - Pure Rust layout and numeric/vector/step track compilation. Scoped component bindings are evaluated once per instance at compile time. Nested sequence placements have independent exact trims, speed, loops and scoped target/player bindings. Silent seeks reconstruct values without replaying effects; cue crossings and output timestamps have separate semantics.
 - Synthetic prepare/take/presentation states, resource reservations, delayed disposal, generation-fenced readiness, compatible identity preservation, remove/recreate fencing and exact-token reconciliation after a lost presentation response.
 - Owned overrides that hold while connected, with a five-second disconnect lease and incarnation/token fencing; bounded command admission with an independent stop intent, redacted chunked observers and a bounded/coalesced analytic renderer-data channel.
+- Manual Show runs with fresh segment occurrences, scoped overrides/pause ownership, a bounded logical owner/borrower/read graph and exact disposal fences; numeric Show frame sampling remains separate from allocating control transitions.
 - A real stdio CLI, generated tool schema/TypeScript models, a file-free paired-layout fixture and scripts that author flat/nested documents incrementally, retry, save, restart, inspect and rehearse transport without dispatching effects.
 
 The 3D fixture declares instanced geometry/material references and typed camera/light/material parameters. **No Three.js renderer or GPU acceleration was added here.** A thousand declared instances are synthetic contract proof, not a thousand rendered objects or a measured FPS improvement.
@@ -28,6 +29,7 @@ cargo build --manifest-path crates/production-runtime/Cargo.toml --locked
 python3 crates/production-runtime/scripts/generate.py --binary "$CARGO_TARGET_DIR/debug/producer-core" --check
 python3 crates/production-runtime/scripts/prove.py --binary "$CARGO_TARGET_DIR/debug/producer-core"
 python3 crates/production-runtime/scripts/prove-nested.py --binary "$CARGO_TARGET_DIR/debug/producer-core"
+python3 crates/production-runtime/scripts/prove-show.py --binary "$CARGO_TARGET_DIR/debug/producer-core"
 node crates/production-runtime/scripts/canonical-check.mjs "$CARGO_TARGET_DIR/debug/producer-core"
 npm ci --ignore-scripts --no-audit --no-fund --prefix crates/production-runtime/scripts
 node crates/production-runtime/scripts/node_modules/typescript/bin/tsc -p crates/production-runtime/scripts/tsconfig.json
@@ -74,10 +76,12 @@ Compilation can reuse unchanged immutable layout/sequence fragments; full docume
 
 ## Next qualification gates
 
-The broad Phase 1 plan is **not complete** merely because these tests pass. See [readiness](READINESS.md) for A01–A25 evidence and open items. Before desktop adoption: finish general occurrence/owner cleanup and process-wide admission beyond the lifecycle/compile host; qualify real file media first; then prove GPU/CEF/Studio sampling fidelity, capture/audio, retirement threads and performance on physical platforms. Only then migrate Classic and other product capabilities and consider a release.
+The broad Phase 1 plan is **not complete** merely because these tests pass. See [readiness](READINESS.md) for A01–A25 evidence and open items. Before desktop adoption: finish native ownership wiring and process-wide admission beyond the lifecycle/compile/Show host; qualify real file media first; then prove GPU/CEF/Studio sampling fidelity, capture/audio, retirement threads and performance on physical platforms. Only then migrate Classic and other product capabilities and consider a release.
 
 The four-platform CI workflow is core-only (Apple Silicon, Intel Mac, Windows, Linux). A workflow file is not a successful remote run. This local branch has not published a release or replaced any native build.
 
 See the [current capability/authority inventory](INVENTORY.md) and [implementation review ledger](REVIEW.md) before extending this laboratory or connecting a desktop adapter.
 
 This isolated slice adds [nested sequence composition and transport rehearsal](NESTED-TIMELINES.md). Prior flat benchmark evidence in `evidence/profile.json` belongs to the first slice; the nested-slice evidence is recorded in [nested-profile.json](evidence/nested-profile.json). The subsequent workspace/reuse slice is documented in [WORKSPACE-COMPILATION.md](WORKSPACE-COMPILATION.md), with fresh measurements in [incremental-profile.json](evidence/incremental-profile.json). None measures production desktop speed or GPU performance.
+
+The subsequent Show/ownership slice is documented in [SHOW-OWNERSHIP.md](SHOW-OWNERSHIP.md). It adds headless execution/cleanup semantics and CLI rehearsal, not a desktop or UI-framework migration.

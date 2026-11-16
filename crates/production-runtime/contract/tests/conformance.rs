@@ -2,6 +2,59 @@ use producer_production_contract::*;
 use std::collections::BTreeMap;
 
 #[test]
+fn shows_and_segment_collections_have_explicit_boundary_limits() {
+    let mut d = fixture::classic_like();
+    let segment = d.shows["pilot"].segments[0].clone();
+    d.shows.get_mut("pilot").unwrap().segments.clear();
+    assert!(validate_document(&d).is_err());
+    d.shows.get_mut("pilot").unwrap().segments = (0..256)
+        .map(|i| Segment {
+            id: format!("s-{i}"),
+            ..segment.clone()
+        })
+        .collect();
+    validate_document(&d).unwrap();
+    d.shows.get_mut("pilot").unwrap().segments.push(Segment {
+        id: "overflow".into(),
+        ..segment
+    });
+    assert!(validate_document(&d).is_err());
+    d.shows.get_mut("pilot").unwrap().segments.pop();
+    let show = d.shows["pilot"].clone();
+    for i in 0..3 {
+        d.shows.insert(format!("show-{i}"), show.clone());
+    }
+    validate_document(&d).unwrap(); // 1024 aggregate segments
+    d.shows.insert(
+        "one-too-many".into(),
+        Show {
+            segments: vec![show.segments[0].clone()],
+            ..show.clone()
+        },
+    );
+    assert!(validate_document(&d).is_err());
+    d.shows.clear();
+    for i in 0..64 {
+        d.shows.insert(
+            format!("show-{i}"),
+            Show {
+                segments: vec![show.segments[0].clone()],
+                ..show.clone()
+            },
+        );
+    }
+    validate_document(&d).unwrap();
+    d.shows.insert(
+        "one-too-many".into(),
+        Show {
+            segments: vec![show.segments[0].clone()],
+            ..show
+        },
+    );
+    assert!(validate_document(&d).is_err());
+}
+
+#[test]
 fn paired_component_player_show_fixture_roundtrips() {
     let d = fixture::classic_like();
     let i = validate_document(&d).unwrap();

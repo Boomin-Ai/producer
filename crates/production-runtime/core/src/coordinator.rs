@@ -86,7 +86,7 @@ impl<S: Storage> Coordinator<S> {
             ));
         }
         let id = uuid::Uuid::new_v4().to_string();
-        let fence = RevokeFence(Arc::new(AtomicU64::new(1)));
+        let fence = RevokeFence(Arc::new(AtomicU64::new(if author { 1 } else { 0 })));
         self.sessions.insert(
             id.clone(),
             Session {
@@ -100,6 +100,17 @@ impl<S: Storage> Coordinator<S> {
         self.sessions
             .get(s)
             .ok_or_else(|| fail("AUTH_REQUIRED", "authenticated local session required"))
+    }
+    /// A reader session can never lend a write/runtime capability to an adapter.
+    pub fn author_grant(&self, session: &str) -> Result<RevokeFence> {
+        let s = self.reader(session)?;
+        if !s.author || !s.fence.is_current() || self.read_only {
+            return Err(fail(
+                "FORBIDDEN",
+                "current author grant and known save state required",
+            ));
+        }
+        Ok(s.fence.clone())
     }
     pub fn disconnect(&mut self, s: &str) {
         if let Some(session) = self.sessions.remove(s) {

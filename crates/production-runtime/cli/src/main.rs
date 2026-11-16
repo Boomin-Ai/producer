@@ -4,6 +4,7 @@ use producer_production_core::{
     compile,
     contract::*,
     coordinator::*,
+    show::{ShowEvent, ShowRun},
     storage::*,
     timeline::{Timeline, TimelineEvent},
     transport::OutputInstant,
@@ -60,6 +61,13 @@ enum Request {
         looping: bool,
         #[schemars(length(max = 128))]
         events: Vec<TimelineEvent>,
+    },
+    /// Pure Show rehearsal with scoped cleanup. No output take or effect dispatch.
+    SimulateShow {
+        session: String,
+        show: String,
+        #[schemars(length(max = 128))]
+        events: Vec<ShowEvent>,
     },
 }
 fn error(code: &str, m: impl Into<String>) -> Error {
@@ -142,6 +150,34 @@ fn evaluate(d: &Document, sequence: &str, time: Time) -> Result<serde_json::Valu
         .map_err(|e| error("EVALUATE", format!("{e:?}")))?;
     Ok(serde_json::json!({"time":time,"values":values}))
 }
+fn simulate_show(
+    d: &Document,
+    id: &str,
+    events: Vec<ShowEvent>,
+    grant: RevokeFence,
+) -> Result<serde_json::Value> {
+    if events.len() > 128 {
+        return Err(error("SHOW_LIMIT", "maximum 128 simulation events"));
+    }
+    let bytes = serde_json::to_vec(&events).map_err(|e| error("STRUCTURE", e.to_string()))?;
+    ingress::parse_envelope(&bytes, COMMAND_BYTES)?;
+    let mut show = ShowRun::compile(d, id, grant, OutputInstant(Counter(0)))?;
+    if events.len().saturating_mul(show.work_per_event()) > 65_536 {
+        return Err(error(
+            "SHOW_LIMIT",
+            "maximum 65536 aggregate simulated track/player/cue visits",
+        ));
+    }
+    let mut samples = Vec::new();
+    let mut budget = ByteBudget(DOCUMENT_BYTES - 1024);
+    for event in events {
+        let sample = show.apply(event)?;
+        serde_json::to_writer(&mut budget, &sample)
+            .map_err(|_| error("SHOW_LIMIT", "simulation response exceeds 8 MiB"))?;
+        samples.push(sample);
+    }
+    Ok(serde_json::json!({"synthetic":true,"samples":samples}))
+}
 fn rpc(c: &mut Coordinator<FileStore>, r: Request, now: u64) -> Result<serde_json::Value> {
     Ok(match r {
         // The inherited stdio pipe is the authenticated local transport. A future
@@ -194,6 +230,11 @@ fn rpc(c: &mut Coordinator<FileStore>, r: Request, now: u64) -> Result<serde_jso
             c.status(&session, "")?;
             simulate(&c.state.document, &sequence, looping, events)?
         }
+        Request::SimulateShow {
+            session,
+            show,
+            events,
+        } => simulate_show(&c.state.document, &show, events, c.author_grant(&session)?)?,
     })
 }
 fn serve(dir: &str, id: &str) -> Result<()> {
@@ -261,8 +302,9 @@ fn main_result() -> Result<Option<serde_json::Value>> {
         "compile"=>{let d=parse_document(&read(arg(1)?,DOCUMENT_BYTES)?)?;serde_json::to_value(compile::compile(&d)?).unwrap()},
         "evaluate"=>{let d=parse_document(&read(arg(1)?,DOCUMENT_BYTES)?)?;let t=serde_json::from_value::<Time>(ingress::parse_envelope(arg(3)?.as_bytes(),COMMAND_BYTES)?).map_err(|e|error("TIME",e.to_string()))?;evaluate(&d,arg(2)?,t)?},
         "simulate"=>{let d=parse_document(&read(arg(1)?,DOCUMENT_BYTES)?)?;let events=serde_json::from_value::<Vec<TimelineEvent>>(ingress::parse_envelope(arg(3)?.as_bytes(),COMMAND_BYTES)?).map_err(|e|error("STRUCTURE",e.to_string()))?;simulate(&d,arg(2)?,false,events)?},
+        "simulate-show"=>{let d=parse_document(&read(arg(1)?,DOCUMENT_BYTES)?)?;let events=serde_json::from_value::<Vec<ShowEvent>>(ingress::parse_envelope(arg(3)?.as_bytes(),COMMAND_BYTES)?).map_err(|e|error("STRUCTURE",e.to_string()))?;let grant=Coordinator::new(Snapshot::new(Document::empty("rehearsal", "Rehearsal"))?,MemoryStore::default()).session(true)?.1;simulate_show(&d,arg(2)?,events,grant)?},
         "serve" if arg(1)?=="--store"&&arg(3)?=="--document-id"=>{serve(arg(2)?,arg(4)?)?;return Ok(None);},
-        _=>return Err(error("USAGE","producer-core schema|command-schema|tool-schema|fixture|nested-fixture|validate FILE|compile FILE|evaluate FILE SEQUENCE TIME_JSON|simulate FILE SEQUENCE EVENTS_JSON|serve --store EXPLICIT_DIRECTORY --document-id ID")),
+        _=>return Err(error("USAGE","producer-core schema|command-schema|tool-schema|fixture|nested-fixture|validate FILE|compile FILE|evaluate FILE SEQUENCE TIME_JSON|simulate FILE SEQUENCE EVENTS_JSON|simulate-show FILE SHOW EVENTS_JSON|serve --store EXPLICIT_DIRECTORY --document-id ID")),
     };
     Ok(Some(v))
 }

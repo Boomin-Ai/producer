@@ -23,3 +23,7 @@ The independent closure above applies to the first-slice commit `a1e0f16`, not a
 ## Subsequent workspace/reuse slice
 
 The independent first-slice review does not certify this later implementation. The parent reviewed worker cancellation/close/reopen races, base-cache lease retention, frame-fence forwarding, dependency invalidation and overflow admission. Regressions are in `core/tests/incremental.rs` and `workspace.rs`; source-linked timings and the bounded small-edit memory proof are documented in `WORKSPACE-COMPILATION.md`. Broader owner/borrower graphs, native adapter lifetimes and a fresh independent implementation review remain open.
+
+## Subsequent Show/ownership slice
+
+This slice has parent-authored review/tests, not a new independent closure. Counterexamples checked include same-segment reentry receiving a stale completion, a reader receiving an author fence, a visibility pause resuming an operator pause, a Set-scoped override surviving its run, retirement while a read remains, wrong-lane/foreign disposal acknowledgments, static/ended sequences losing manual control, and inactive properties lacking a track slot. Numeric override slot mappings are built off callback. See `SHOW-OWNERSHIP.md`; actual native ownership, resource-lane execution and effect dispatch are still unqualified.

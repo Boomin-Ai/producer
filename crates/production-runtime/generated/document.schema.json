@@ -1167,6 +1167,8 @@
           "items": {
             "$ref": "#/$defs/Segment"
           },
+          "maxItems": 256,
+          "minItems": 1,
           "type": "array"
         },
         "set": {

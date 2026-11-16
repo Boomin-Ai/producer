@@ -24,6 +24,7 @@ pub struct Document {
     #[serde(default)]
     pub sequences: BTreeMap<Id, Sequence>,
     #[serde(default)]
+    #[schemars(length(max = 64))]
     pub shows: BTreeMap<Id, Show>,
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq)]
@@ -443,6 +444,7 @@ pub enum Bus {
 pub struct Show {
     pub set: Id,
     pub authority: Authority,
+    #[schemars(length(min = 1, max = 256))]
     pub segments: Vec<Segment>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]

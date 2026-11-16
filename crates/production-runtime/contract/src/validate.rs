@@ -692,14 +692,17 @@ pub fn validate_document(d: &Document) -> Result<Inventory> {
         }
         temporal::validate_expanded(d, &w.out, &expanded, &mut temporal_work)?;
     }
+    if d.shows.len() > 64 || d.shows.values().map(|s| s.segments.len()).sum::<usize>() > 1024 {
+        return Err(err("shows", "maximum 64 Shows and 1024 aggregate segments"));
+    }
     for (id, show) in &d.shows {
         let set = d
             .sets
             .get(&show.set)
             .ok_or_else(|| err(id, "Show Set missing"))?;
         idset(show.segments.iter().map(|s| s.id.as_str()), id)?;
-        if show.segments.is_empty() {
-            return Err(err(id, "Show segments required"));
+        if show.segments.is_empty() || show.segments.len() > 256 {
+            return Err(err(id, "Show requires 1..256 segments"));
         }
         for s in &show.segments {
             if set.layouts.get(&s.landscape).map(|l| l.orientation) != Some(Orientation::Landscape)

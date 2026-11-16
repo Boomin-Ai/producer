@@ -171,6 +171,60 @@ fn main() {
     let allocations = ALLOCS.load(Ordering::Relaxed);
     assert_eq!(allocations, 0, "evaluation allocated");
     let p99 = percentile(&mut samples, 99);
+    // Same graph, now through Show + nested Timeline + 256 held overrides.
+    // All controller publication/allocation stays outside this sampling loop.
+    let grant = producer_production_core::coordinator::Coordinator::new(
+        producer_production_core::storage::Snapshot::new(Document::empty("profile", "Profile"))
+            .unwrap(),
+        producer_production_core::storage::MemoryStore::default(),
+    )
+    .session(true)
+    .unwrap()
+    .1;
+    let mut show = producer_production_core::show::ShowRun::compile(
+        &d,
+        "pilot",
+        grant,
+        producer_production_core::transport::OutputInstant(Counter(0)),
+    )
+    .unwrap();
+    show.apply(producer_production_core::show::ShowEvent::Start {
+        at: Counter(0),
+        segment: None,
+    })
+    .unwrap();
+    for track in &sequence.tracks {
+        show.apply(producer_production_core::show::ShowEvent::Override {
+            at: Counter(0),
+            scope: producer_production_core::show::ExecutionScope::Run,
+            owner: "profile".into(),
+            target: p.targets[track.target].clone(),
+            value: Value::Number(0.5),
+        })
+        .unwrap();
+    }
+    let mut show_out = vec![None; show.scratch_len()];
+    let mut show_samples = Vec::with_capacity(20_000);
+    for i in 0..1000 {
+        show.evaluate_into(
+            producer_production_core::transport::OutputInstant(Counter((i % 960) * 8_333_333)),
+            &mut show_out,
+        )
+        .unwrap();
+    }
+    ALLOCS.store(0, Ordering::Relaxed);
+    COUNT.store(true, Ordering::Relaxed);
+    for i in 0..20_000 {
+        let at = producer_production_core::transport::OutputInstant(Counter((i % 960) * 8_333_333));
+        let begin = Instant::now();
+        show.evaluate_into(at, std::hint::black_box(&mut show_out))
+            .unwrap();
+        show_samples.push(begin.elapsed().as_nanos());
+    }
+    COUNT.store(false, Ordering::Relaxed);
+    let show_allocations = ALLOCS.load(Ordering::Relaxed);
+    assert_eq!(show_allocations, 0, "Show numeric sampling allocated");
+    let show_p99 = percentile(&mut show_samples, 99);
     let mut compiles = Vec::new();
     for _ in 0..30 {
         let begin = Instant::now();
@@ -216,10 +270,10 @@ fn main() {
     }
     let incremental_p95 = percentile(&mut incremental, 95);
     let controls_p95 = percentile(&mut controls, 95);
-    let result = serde_json::json!({"nested":nested,"temporalDepth":if nested {2} else {0},"fixtureDigest":digest(&d).unwrap(),"nodes":p.nodes.len(),"tracks":sequence.tracks.len(),"evaluationSamples":samples.len(),"evaluationP99Ms":p99,"evaluationAllocations":allocations,"firstCompileMs":cold,"repeatedFullCompileP95Ms":p95,"evaluationGate1Ms":p99<=1.0,"coldCompileGate250Ms":cold<=250.0,"fullCompileReference50Ms":p95<=50.0,"dirtyLayoutCompileP95Ms":incremental_p95,"authoringOnlyCompileP95Ms":controls_p95,"dirtyCompileGate50Ms":incremental_p95<=50.0,"admission":"full validation and canonical digest on every build","nativeGpu":"not measured"});
+    let result = serde_json::json!({"nested":nested,"temporalDepth":if nested {2} else {0},"fixtureDigest":digest(&d).unwrap(),"nodes":p.nodes.len(),"tracks":sequence.tracks.len(),"evaluationSamples":samples.len(),"evaluationP99Ms":p99,"evaluationAllocations":allocations,"showEvaluationSamples":show_samples.len(),"showEvaluationP99Ms":show_p99,"showEvaluationAllocations":show_allocations,"showOverrides":sequence.tracks.len(),"showEvaluationGate1Ms":show_p99<=1.0,"firstCompileMs":cold,"repeatedFullCompileP95Ms":p95,"evaluationGate1Ms":p99<=1.0,"coldCompileGate250Ms":cold<=250.0,"fullCompileReference50Ms":p95<=50.0,"dirtyLayoutCompileP95Ms":incremental_p95,"authoringOnlyCompileP95Ms":controls_p95,"dirtyCompileGate50Ms":incremental_p95<=50.0,"admission":"full validation and canonical digest on every build","nativeGpu":"not measured"});
     println!("{}", serde_json::to_string_pretty(&result).unwrap());
     assert!(
-        p99 <= 1.0 && cold <= 250.0,
+        p99 <= 1.0 && show_p99 <= 1.0 && cold <= 250.0,
         "core evaluation/cold compile gate failed"
     );
 }

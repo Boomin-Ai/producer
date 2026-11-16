@@ -14,6 +14,142 @@ fn grant() -> RevokeFence {
     .unwrap()
     .1
 }
+
+#[test]
+fn never_started_show_can_be_inspected_and_disposed_after_close() {
+    use producer_production_core::{ownership::Lane, transport::OutputInstant};
+    let mut w = Workspace::new().unwrap();
+    let d = fixture::classic_like();
+    w.open(&d.id).unwrap();
+    let t = prepare(&mut w, d.clone(), 0);
+    w.load_show(&d.id, t, "pilot", 1, OutputInstant(Counter(0)), grant())
+        .unwrap();
+    w.close(&d.id).unwrap();
+    let status = w.show_status(&d.id).unwrap();
+    assert!(status.closed && !status.active);
+    assert_eq!(status.ownership.retiring, 1);
+    w.show_disposed(&d.id, status.set_resource, Lane::Video)
+        .unwrap();
+    w.finish_close(&d.id).unwrap();
+    assert_eq!(w.status().used, Cost::default());
+}
+
+#[test]
+fn show_plan_stays_charged_until_logical_close_and_exact_disposal_ack() {
+    use producer_production_core::{ownership::Lane, show::ShowEvent, transport::OutputInstant};
+    let mut w = Workspace::new().unwrap();
+    let d = fixture::classic_like();
+    w.open(&d.id).unwrap();
+    let t = prepare(&mut w, d.clone(), 0);
+    let before = w.status().used.cpu;
+    w.load_show(&d.id, t, "pilot", 1, OutputInstant(Counter(0)), grant())
+        .unwrap();
+    assert_eq!(w.status().used.cpu, before + (64 << 20));
+    let start = w
+        .show_event(
+            &d.id,
+            ShowEvent::Start {
+                at: Counter(0),
+                segment: None,
+            },
+        )
+        .unwrap();
+    assert!(start.active);
+    w.stop(&d.id).unwrap();
+    assert!(
+        !w.show_event(&d.id, ShowEvent::Advance { at: Counter(1) })
+            .unwrap()
+            .active
+    );
+    w.close(&d.id).unwrap();
+    assert!(w.finish_close(&d.id).is_err());
+    assert_eq!(w.status().used.cpu, 64 << 20);
+    assert!(w
+        .show_disposed(&d.id, start.set_resource, Lane::Audio)
+        .is_err());
+    w.show_disposed(&d.id, start.set_resource, Lane::Video)
+        .unwrap();
+    w.finish_close(&d.id).unwrap();
+    assert_eq!(w.status().reservations, 0);
+    assert_eq!(w.status().documents, 0);
+}
+
+#[test]
+fn shows_in_two_documents_never_share_component_or_disposal_identity() {
+    use producer_production_core::{ownership::Lane, show::ShowEvent, transport::OutputInstant};
+    let mut w = Workspace::new().unwrap();
+    let a = fixture::classic_like();
+    let mut b = a.clone();
+    b.id = "other-show".into();
+    w.open(&a.id).unwrap();
+    w.open(&b.id).unwrap();
+    let ta = prepare(&mut w, a.clone(), 0);
+    let tb = prepare(&mut w, b.clone(), 0);
+    w.load_show(&a.id, ta, "pilot", 1, OutputInstant(Counter(0)), grant())
+        .unwrap();
+    w.load_show(&b.id, tb, "pilot", 1, OutputInstant(Counter(0)), grant())
+        .unwrap();
+    let sa = w
+        .show_event(
+            &a.id,
+            ShowEvent::Start {
+                at: Counter(0),
+                segment: None,
+            },
+        )
+        .unwrap();
+    let sb = w
+        .show_event(
+            &b.id,
+            ShowEvent::Start {
+                at: Counter(0),
+                segment: None,
+            },
+        )
+        .unwrap();
+    assert_ne!(sa.execution, sb.execution);
+    assert_ne!(sa.set_resource, sb.set_resource);
+    w.close(&a.id).unwrap();
+    w.close(&b.id).unwrap();
+    assert!(w
+        .show_disposed(&b.id, sa.set_resource, Lane::Video)
+        .is_err());
+    w.show_disposed(&a.id, sa.set_resource, Lane::Video)
+        .unwrap();
+    w.show_disposed(&b.id, sb.set_resource, Lane::Video)
+        .unwrap();
+    w.finish_close(&a.id).unwrap();
+    w.finish_close(&b.id).unwrap();
+    assert_eq!(w.status().reservations, 0);
+}
+
+#[test]
+fn old_or_expired_preparations_cannot_open_a_show_or_leak_reservations() {
+    use producer_production_core::transport::OutputInstant;
+    let mut w = Workspace::new().unwrap();
+    let mut d = fixture::classic_like();
+    w.open(&d.id).unwrap();
+    let old = prepare(&mut w, d.clone(), 0);
+    let used = w.status().reservations;
+    assert!(w
+        .load_show(
+            &d.id,
+            old,
+            "pilot",
+            30_001,
+            OutputInstant(Counter(0)),
+            grant()
+        )
+        .is_err());
+    assert_eq!(w.status().reservations, used);
+    d.title = "next revision".into();
+    prepare(&mut w, d.clone(), 1);
+    let used = w.status().reservations;
+    assert!(w
+        .load_show(&d.id, old, "pilot", 1, OutputInstant(Counter(0)), grant())
+        .is_err());
+    assert_eq!(w.status().reservations, used);
+}
 fn wait(w: &mut Workspace, now: u64) -> Vec<CompileOutcome> {
     let deadline = Instant::now() + Duration::from_secs(15);
     let mut out = vec![];

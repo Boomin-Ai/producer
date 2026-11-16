@@ -6,7 +6,10 @@ use crate::{
     coordinator::RevokeFence,
     incremental::{CompileStats, Compiler},
     lifecycle::*,
+    ownership::{Lane, ResourceId},
     resources::{Budget, Reservation},
+    show::{ShowEvent, ShowRun, ShowSample},
+    transport::OutputInstant,
 };
 use serde::Serialize;
 use std::{
@@ -57,6 +60,7 @@ struct Entry {
     cache: Option<Arc<Reservation>>,
     pending: Option<Job>,
     closing: bool,
+    show: Option<(ShowRun, Reservation)>,
 }
 #[derive(Debug, Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
@@ -182,6 +186,7 @@ impl Workspace {
                 cache: None,
                 pending: None,
                 closing: false,
+                show: None,
             },
         );
         Ok(())
@@ -364,6 +369,9 @@ impl Workspace {
     /// charged until workers finish and adapters confirm exact-token disposal.
     pub fn stop(&mut self, id: &str) -> Result<()> {
         let entry = self.entry_mut(id)?;
+        if let Some((show, _)) = &mut entry.show {
+            show.halt(false);
+        }
         if let Some(generation) = entry.generation.checked_add(1) {
             entry.generation = generation;
         } else {
@@ -381,6 +389,9 @@ impl Workspace {
         self.stop(id)?;
         let e = self.entry_mut(id)?;
         e.closing = true;
+        if let Some((show, _)) = &mut e.show {
+            show.halt(true);
+        }
         e.compiler.clear();
         e.cache = None;
         e.runtime.discard_superseded();
@@ -394,7 +405,19 @@ impl Workspace {
                 "stop and await worker/disposal completion",
             ));
         }
-        e.runtime.ledger.close()?;
+        if e.show
+            .as_ref()
+            .is_some_and(|(show, _)| !show.closed_and_disposed())
+        {
+            return Err(fail(
+                "DOCUMENT_CLOSING",
+                "Show ownership disposal acknowledgment required",
+            ));
+        }
+        // Its plan/ownership metadata remains charged through logical close
+        // and the exact disposal acknowledgment, then releases before ledger close.
+        self.entry_mut(id)?.show = None;
+        self.entry(id)?.runtime.ledger.close()?;
         self.entries.remove(id);
         if self.descriptors.len() == DESCRIPTORS {
             self.descriptors.pop_front();
@@ -412,6 +435,73 @@ impl Workspace {
             reservations: self.budget.count(),
             used: self.budget.used(),
         }
+    }
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Keep native grant and both clock domains explicit"
+    )]
+    pub fn load_show(
+        &mut self,
+        id: &str,
+        token: Counter,
+        show: &str,
+        now_ms: u64,
+        at: OutputInstant,
+        grant: RevokeFence,
+    ) -> Result<()> {
+        let e = self.entry_mut(id)?;
+        if e.closing
+            || e.show
+                .as_ref()
+                .is_some_and(|(show, _)| !show.closed_and_disposed())
+        {
+            return Err(fail(
+                "SHOW_OPEN",
+                "close and dispose the previous execution before replacement",
+            ));
+        }
+        let (revision, digest) = e
+            .desired
+            .as_ref()
+            .ok_or_else(|| fail("PREPARE_STATE", "submit a document first"))?;
+        // Fixed conservative CPU-only reservation for pinned immutable plan,
+        // Show definition, bounded control transactions and ownership metadata.
+        // This creates no additional native players/captures/surfaces.
+        let cost = e.runtime.ledger.lease(Cost {
+            cpu: 64 << 20,
+            ..Cost::default()
+        })?;
+        let execution = e
+            .runtime
+            .show_execution(token, *revision, digest, show, now_ms, at, grant)?;
+        e.show = Some((execution, cost));
+        Ok(())
+    }
+    pub fn show_event(&mut self, id: &str, event: ShowEvent) -> Result<ShowSample> {
+        let e = self.entry_mut(id)?;
+        if e.closing {
+            return Err(fail("DOCUMENT_CLOSING", "no new Show events while closing"));
+        }
+        e.show
+            .as_mut()
+            .ok_or_else(|| fail("SHOW_MISSING", "load a Show first"))?
+            .0
+            .apply(event)
+    }
+    pub fn show_disposed(&mut self, id: &str, resource: ResourceId, lane: Lane) -> Result<()> {
+        self.entry_mut(id)?
+            .show
+            .as_mut()
+            .ok_or_else(|| fail("SHOW_MISSING", "Show execution absent"))?
+            .0
+            .disposed(resource, lane)
+    }
+    pub fn show_status(&self, id: &str) -> Result<ShowSample> {
+        self.entry(id)?
+            .show
+            .as_ref()
+            .map(|(show, _)| show.status())
+            .ok_or_else(|| fail("SHOW_MISSING", "Show execution absent"))
     }
     /// Only bounded unopened descriptors, not documents/plans, are retained.
     pub fn descriptors(&self, offset: usize, limit: usize) -> Vec<&str> {

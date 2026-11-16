@@ -35,6 +35,7 @@ jobs:
       - run: python crates/production-runtime/scripts/generate.py --binary target/production-core/debug/${{ matrix.binary }} --check
       - run: python crates/production-runtime/scripts/prove.py --binary target/production-core/debug/${{ matrix.binary }}
       - run: python crates/production-runtime/scripts/prove-nested.py --binary target/production-core/debug/${{ matrix.binary }}
+      - run: python crates/production-runtime/scripts/prove-show.py --binary target/production-core/debug/${{ matrix.binary }}
       - run: node crates/production-runtime/scripts/canonical-check.mjs target/production-core/debug/${{ matrix.binary }}
       - run: npm ci --ignore-scripts --no-audit --no-fund --prefix crates/production-runtime/scripts
       - run: node crates/production-runtime/scripts/node_modules/typescript/bin/tsc -p crates/production-runtime/scripts/tsconfig.json

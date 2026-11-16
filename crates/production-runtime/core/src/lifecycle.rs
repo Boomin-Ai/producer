@@ -242,6 +242,37 @@ impl Runtime {
             ..Self::default()
         }
     }
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Keep preparation and monotonic time domains explicit"
+    )]
+    pub(crate) fn show_execution(
+        &self,
+        token: Counter,
+        revision: Counter,
+        digest: &str,
+        show: &str,
+        now_ms: u64,
+        at: crate::transport::OutputInstant,
+        grant: RevokeFence,
+    ) -> Result<crate::show::ShowRun> {
+        let slot = self
+            .slots
+            .get(&token.0)
+            .ok_or_else(|| fail("UNKNOWN_PREPARATION", "prepare a document first"))?;
+        if slot.generation != self.generation
+            || slot.revision != revision
+            || slot.plan.digest != digest
+            || !matches!(slot.state, TakeState::Prepared | TakeState::Active)
+            || slot.state == TakeState::Prepared && now_ms > slot.expires
+        {
+            return Err(fail(
+                "STALE_PREPARATION",
+                "Show must pin the current admitted document",
+            ));
+        }
+        crate::show::ShowRun::from_plan(&slot.document, slot.plan.clone(), show, grant, at)
+    }
     pub(crate) fn pending_count(&self) -> usize {
         self.slots
             .values()

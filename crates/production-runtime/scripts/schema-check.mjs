@@ -22,6 +22,11 @@ const nestedConflict=structuredClone(nested);nestedConflict.sequences.timeline.i
 const unknownInstance=structuredClone(nested);unknownInstance.sequences.timeline.instances[0].unchecked=true;
 const cyclic=structuredClone(nested);cyclic.sequences.timeline.instances[0].sequence='timeline';
 cases.push(['nested',JSON.stringify(nested),true,null],['nested-driver',JSON.stringify(nestedConflict),true,'DRIVER_CONFLICT'],['nested-shape',JSON.stringify(unknownInstance),false,'STRUCTURE'],['nested-cycle',JSON.stringify(cyclic),true,'TEMPORAL']);
+const emptyShow=structuredClone(fixture);emptyShow.shows.pilot.segments=[];
+const largeShow=structuredClone(fixture);largeShow.shows.pilot.segments=Array.from({length:257},(_,i)=>({...fixture.shows.pilot.segments[0],id:`s-${i}`}));
+const aggregateShows=structuredClone(fixture);aggregateShows.shows={};
+for(let i=0;i<5;i++)aggregateShows.shows[`show-${i}`]={...fixture.shows.pilot,segments:Array.from({length:i===4?1:256},(_,j)=>({...fixture.shows.pilot.segments[0],id:`s-${j}`}))};
+cases.push(['empty-show',JSON.stringify(emptyShow),false,'SEMANTIC'],['large-show',JSON.stringify(largeShow),false,'SEMANTIC'],['aggregate-shows',JSON.stringify(aggregateShows),true,'SEMANTIC']);
 const directory=mkdtempSync(join(tmpdir(),'producer-schema-'));
 try{for(const[name,raw,shape,code]of cases){if(Boolean(structural(JSON.parse(raw)))!==shape)throw Error(`structural mismatch ${name}: ${JSON.stringify(structural.errors)}`);const path=join(directory,`${name}.json`);writeFileSync(path,raw);const result=spawnSync(binary,['validate',path],{encoding:'utf8'});if(code){if(result.status===0||JSON.parse(result.stderr).code!==code)throw Error(`native stage mismatch ${name}: ${result.stderr}`);}else if(result.status!==0)throw Error(result.stderr);}}
 finally{rmSync(directory,{recursive:true,force:true});}

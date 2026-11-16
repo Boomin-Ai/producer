@@ -534,6 +534,15 @@
       ],
       "type": "object"
     },
+    "ExecutionScope": {
+      "enum": [
+        "set",
+        "run",
+        "segment"
+      ],
+      "type": "string",
+      "x-maxUtf8Bytes": 65536
+    },
     "Expr": {
       "oneOf": [
         {
@@ -1840,6 +1849,8 @@
           "items": {
             "$ref": "#/$defs/Segment"
           },
+          "maxItems": 256,
+          "minItems": 1,
           "type": "array"
         },
         "set": {
@@ -1853,6 +1864,300 @@
         "segments"
       ],
       "type": "object"
+    },
+    "ShowEvent": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Counter"
+            },
+            "kind": {
+              "const": "start",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "segment": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "at"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Counter"
+            },
+            "kind": {
+              "const": "enter",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "segment": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind",
+            "at",
+            "segment"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Counter"
+            },
+            "kind": {
+              "const": "next",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind",
+            "at"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Counter"
+            },
+            "kind": {
+              "const": "previous",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind",
+            "at"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Counter"
+            },
+            "kind": {
+              "const": "advance",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind",
+            "at"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Counter"
+            },
+            "kind": {
+              "const": "seek",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "to": {
+              "$ref": "#/$defs/Time"
+            }
+          },
+          "required": [
+            "kind",
+            "at",
+            "to"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Counter"
+            },
+            "kind": {
+              "const": "pause",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "owner": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "reason": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "scope": {
+              "$ref": "#/$defs/ExecutionScope"
+            }
+          },
+          "required": [
+            "kind",
+            "at",
+            "scope",
+            "owner",
+            "reason"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Counter"
+            },
+            "kind": {
+              "const": "resume",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "owner": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "reason": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "scope": {
+              "$ref": "#/$defs/ExecutionScope"
+            }
+          },
+          "required": [
+            "kind",
+            "at",
+            "scope",
+            "owner",
+            "reason"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Counter"
+            },
+            "kind": {
+              "const": "override",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "owner": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "scope": {
+              "$ref": "#/$defs/ExecutionScope"
+            },
+            "target": {
+              "$ref": "#/$defs/Target"
+            },
+            "value": {
+              "$ref": "#/$defs/Value"
+            }
+          },
+          "required": [
+            "kind",
+            "at",
+            "scope",
+            "owner",
+            "target",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Counter"
+            },
+            "kind": {
+              "const": "release",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "owner": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "target": {
+              "$ref": "#/$defs/Target"
+            },
+            "token": {
+              "$ref": "#/$defs/Counter"
+            }
+          },
+          "required": [
+            "kind",
+            "at",
+            "owner",
+            "target",
+            "token"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Counter"
+            },
+            "kind": {
+              "const": "stop",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind",
+            "at"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Counter"
+            },
+            "kind": {
+              "const": "close",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind",
+            "at"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "Size": {
       "oneOf": [
@@ -2560,6 +2865,39 @@
         "method",
         "session",
         "sequence",
+        "events"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Pure Show rehearsal with scoped cleanup. No output take or effect dispatch.",
+      "properties": {
+        "events": {
+          "items": {
+            "$ref": "#/$defs/ShowEvent"
+          },
+          "maxItems": 128,
+          "type": "array"
+        },
+        "method": {
+          "const": "simulateShow",
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "session": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "show": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        }
+      },
+      "required": [
+        "method",
+        "session",
+        "show",
         "events"
       ],
       "type": "object"

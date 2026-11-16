@@ -95,6 +95,13 @@ def run(binary):
         overwork=raw('simulateTimeline',session=session,sequence='opener',events=[{'kind':'start','at':'0'}]*16)
         assert not overwork['ok'] and overwork['error']['code']=='TIMELINE_LIMIT'
         assert 'aggregate' in overwork['error']['message']
+        for method, limit_code, fields in [('simulateShow', 'SHOW_LIMIT', {'show':'pilot'})]:
+            oversized=raw(method,session=session,**fields,events=[{'kind':'start','at':'0'}]*15)
+            assert not oversized['ok'] and oversized['error']['code']==limit_code,oversized
+            assert 'response' in oversized['error']['message']
+            overwork=raw(method,session=session,**fields,events=[{'kind':'start','at':'0'}]*16)
+            assert not overwork['ok'] and overwork['error']['code']==limit_code,overwork
+            assert 'aggregate' in overwork['error']['message']
         assert rpc('inspect',session=session)['digest']==before_guard
         rpc('disconnect',session=session);process.stdin.close();assert process.wait(timeout=30)==0
         print(json.dumps({'incrementalCommits':revision,'nestedDepth':2,'independentPlayers':2,'simulationEvents':len(events),'replayedIdenticalAfterRestart':True,'rejectedConflictingEditAtomically':True,'skippedEffectsStaySilent':True,'responseBudgetRejected':True,'fixtureDigest':inspected['digest']},indent=2))
