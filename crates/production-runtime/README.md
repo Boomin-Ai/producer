@@ -9,10 +9,10 @@ The document stays JSON for agents and interchange. Serde derives typed Rust mod
 - Separate immutable assets, live sources, explicit file players, reusable pinned components, Sets/layouts, Shows/segments and sequences/tracks/cues. Two players can use one asset with independent playheads; audio routes are explicit per bus.
 - Raw byte/UTF-8/depth/value-work/duplicate-key checks, generated structural schemas, native semantic checks, safe integer counters and exact rational time. Canonical hashing uses RFC 8785 number/key rules, tested independently against JavaScript.
 - Atomic incremental commands, expected revisions, native-issued opaque tickets, bounded terminal outcomes, revocation fences, undo as a new revision, a single filesystem writer and checksummed journal/checkpoints. An uncertain flush blocks further writes until recovery.
-- Pure Rust layout and numeric/vector/step track compilation. Scoped component bindings are evaluated once per instance at compile time. Silent seeks reconstruct values; cue crossings and output timestamps have separate semantics.
+- Pure Rust layout and numeric/vector/step track compilation. Scoped component bindings are evaluated once per instance at compile time. Nested sequence placements have independent exact trims, speed, loops and scoped target/player bindings. Silent seeks reconstruct values without replaying effects; cue crossings and output timestamps have separate semantics.
 - Synthetic prepare/take/presentation states, resource reservations, delayed disposal, generation-fenced readiness, compatible identity preservation, remove/recreate fencing and exact-token reconciliation after a lost presentation response.
 - Owned overrides that hold while connected, with a five-second disconnect lease and incarnation/token fencing; bounded command admission with an independent stop intent, redacted chunked observers and a bounded/coalesced analytic renderer-data channel.
-- A real stdio CLI, generated tool schema/TypeScript models, a file-free paired-layout fixture and a script that authors it incrementally, retries, saves, restarts and inspects it.
+- A real stdio CLI, generated tool schema/TypeScript models, a file-free paired-layout fixture and scripts that author flat/nested documents incrementally, retry, save, restart, inspect and rehearse transport without dispatching effects.
 
 The 3D fixture declares instanced geometry/material references and typed camera/light/material parameters. **No Three.js renderer or GPU acceleration was added here.** A thousand declared instances are synthetic contract proof, not a thousand rendered objects or a measured FPS improvement.
 
@@ -26,11 +26,13 @@ cargo test --manifest-path crates/production-runtime/Cargo.toml --locked
 cargo build --manifest-path crates/production-runtime/Cargo.toml --locked
 python3 crates/production-runtime/scripts/generate.py --binary "$CARGO_TARGET_DIR/debug/producer-core" --check
 python3 crates/production-runtime/scripts/prove.py --binary "$CARGO_TARGET_DIR/debug/producer-core"
+python3 crates/production-runtime/scripts/prove-nested.py --binary "$CARGO_TARGET_DIR/debug/producer-core"
 node crates/production-runtime/scripts/canonical-check.mjs "$CARGO_TARGET_DIR/debug/producer-core"
 npm ci --ignore-scripts --no-audit --no-fund --prefix crates/production-runtime/scripts
 node crates/production-runtime/scripts/node_modules/typescript/bin/tsc -p crates/production-runtime/scripts/tsconfig.json
 node crates/production-runtime/scripts/schema-check.mjs "$CARGO_TARGET_DIR/debug/producer-core"
 cargo run --manifest-path crates/production-runtime/Cargo.toml --locked --release -p producer-production-core --example profile
+cargo run --manifest-path crates/production-runtime/Cargo.toml --locked --release -p producer-production-core --example profile -- --nested
 ```
 
 Windows uses `producer-core.exe`. `generate.py` without `--check` refreshes the checked-in Rust-derived artifacts. It must run after changing a contract. Structural TS/schema checks never substitute for native admission.
@@ -39,6 +41,7 @@ Other commands:
 
 ```sh
 producer-core fixture
+producer-core nested-fixture
 producer-core schema
 producer-core command-schema
 producer-core tool-schema
@@ -54,7 +57,7 @@ The store requires an experimental marker, rejects nonempty unrelated folders an
 
 ## First profile and limitations
 
-Document ingress: 8 MiB, depth 32, 64 KiB UTF-8 strings, 1,048,576 JSON values. The value-work cap is an additional denial-of-service guard introduced during implementation; byte size alone permits large allocations from tiny values. Expanded nodes: 4,096, spatial depth 32; aggregate unused-definition validation work: 16,384 expansions. Tracks: 512; keys per track: 256. Atomic command: 256 KiB/64 operations; bulk import is separate.
+Document ingress: 8 MiB, depth 32, 64 KiB UTF-8 strings, 1,048,576 JSON values. The value-work cap is an additional denial-of-service guard introduced during implementation; byte size alone permits large allocations from tiny values. Expanded nodes: 4,096, spatial depth 32; aggregate unused-definition validation work: 16,384 expansions. Tracks: 512, including aggregate expanded tracks across sequence roots; keys per track: 256. Temporal nesting: 16 instance edges, 4,096 aggregate expanded sequence occurrences, and 16,384 charged preflight work units. See [nested timeline semantics](NESTED-TIMELINES.md) for explicit projection/catch-up limits. Atomic command: 256 KiB/64 operations; bulk import is separate.
 
 Store limits: 8 sessions, 256 issued tickets with a 120-second monotonic admission lifetime; 4,096/16 MiB receipts retained at most seven days by the host wall clock; 64 MiB journal and two 48 MiB aggregate checkpoints. Ticket TTL/output time never use that retention wall clock. An OS clock adjustment may expire history early; unknown history still cannot replay. The current local CLI serializes requests; it is not an asynchronous multi-client daemon.
 
@@ -64,14 +67,16 @@ The synthetic runtime replaces all active outputs together. Changing the active 
 
 Analytic 3D only: 256 typed parameters per source, 8 batches, 4,096 aggregate declared instances; the renderer channel carries at most 256 parameter values, 256 KiB packets, two pending packets and 8 MiB/s. Stateful particles, scripts, arbitrary shader/mesh imports and full-matrix streaming are unsupported. A context/generation mismatch requires new state. Two orientations can share analytic evaluation but still require two actual renders later.
 
-There is no DOM measurement or text auto-layout. Fixed boxes and top-down row/column/grid allocation are available. The first profile does not yet expose anchors/aspect constraints, nested sequence instances, speed ramps, reverse media, native font metrics or editorial handles. Current positive constant-speed source range mapping is exact; actual MOV decode/preroll/audio is a later native gate.
+There is no DOM measurement or text auto-layout. Fixed boxes and top-down row/column/grid allocation are available. The first profile does not yet expose anchors/aspect constraints, speed ramps, reverse media, native font metrics or editorial handles. Current positive constant-speed source range mapping is exact; actual MOV decode/preroll/audio is a later native gate.
 
 Compilation currently rebuilds the full plan. Dirty-subgraph compilation and the 100,000-command RSS plateau qualification remain open. The release benchmark labels repeated **full** compile timings honestly. The synthetic lifecycle/queue/observer tests are models, not proof of a threaded renderer's stop latency or actual CEF delivery.
 
 ## Next qualification gates
 
-The broad Phase 1 plan is **not complete** merely because these tests pass. See [readiness](READINESS.md) for A01–A25 evidence and open items. Before desktop adoption: finish nested temporal composition, global coordination and incremental compile/work scheduling; qualify real file media first; then prove GPU/CEF/Studio sampling fidelity, capture/audio, retirement threads and performance on physical platforms. Only then migrate Classic and other product capabilities and consider a release.
+The broad Phase 1 plan is **not complete** merely because these tests pass. See [readiness](READINESS.md) for A01–A25 evidence and open items. Before desktop adoption: finish general occurrence/owner cleanup, global coordination and incremental compile/work scheduling; qualify real file media first; then prove GPU/CEF/Studio sampling fidelity, capture/audio, retirement threads and performance on physical platforms. Only then migrate Classic and other product capabilities and consider a release.
 
 The four-platform CI workflow is core-only (Apple Silicon, Intel Mac, Windows, Linux). A workflow file is not a successful remote run. This local branch has not published a release or replaced any native build.
 
 See the [current capability/authority inventory](INVENTORY.md) and [implementation review ledger](REVIEW.md) before extending this laboratory or connecting a desktop adapter.
+
+This isolated slice adds [nested sequence composition and transport rehearsal](NESTED-TIMELINES.md). Prior flat benchmark evidence in `evidence/profile.json` belongs to the first slice; current flat/nested evidence is recorded in [nested-profile.json](evidence/nested-profile.json). Neither measures the production desktop or a GPU.

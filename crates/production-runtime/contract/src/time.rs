@@ -81,18 +81,22 @@ impl Time {
         Self { ticks, rate: 1 }
     }
     fn wide(t: i128, r: i128) -> Result<Self> {
+        Self::try_ratio(t, r).ok_or_else(bad)
+    }
+    /// Allocation-free checked arithmetic for compiled frame evaluators.
+    pub fn try_ratio(t: i128, r: i128) -> Option<Self> {
         if r <= 0 {
-            return Err(bad());
+            return None;
         }
         if t == 0 {
-            return Ok(Self::ZERO);
+            return Some(Self::ZERO);
         }
         let g = gcd(t.unsigned_abs(), r as u128) as i128;
         let (t, r) = (t / g, r / g);
         if r > 1_000_000_000 || t < i64::MIN as i128 || t > i64::MAX as i128 {
-            return Err(bad());
+            return None;
         }
-        Ok(Self {
+        Some(Self {
             ticks: t as i64,
             rate: r as u32,
         })

@@ -28,7 +28,7 @@ unsafe impl GlobalAlloc for Counted {
 }
 #[global_allocator]
 static A: Counted = Counted;
-fn fixture() -> Document {
+fn fixture(nested: bool) -> Document {
     let mut d = fixture::classic_like();
     let n = validate_document(&d).unwrap().expanded_nodes;
     let root = &mut d
@@ -85,6 +85,57 @@ fn fixture() -> Document {
             interpolation: Interpolation::Linear,
         })
         .collect();
+    if nested {
+        let template = q.tracks[0].clone();
+        let targets = q
+            .tracks
+            .iter()
+            .map(|t| t.target.clone())
+            .collect::<Vec<_>>();
+        q.tracks.clear();
+        let instance = |id: String, sequence: &str| SequenceInstance {
+            id,
+            sequence: sequence.into(),
+            range: Range {
+                start: Time::ZERO,
+                duration: Time::seconds(8),
+            },
+            source_in: Time::ZERO,
+            speed: Speed::default(),
+            looping: true,
+            target_bindings: vec![],
+            source_bindings: vec![],
+        };
+        q.instances = targets
+            .into_iter()
+            .enumerate()
+            .map(|(i, target)| {
+                let mut i = instance(format!("placement-{i}"), "motif");
+                i.target_bindings.push(TargetBinding {
+                    from: template.target.clone(),
+                    to: target,
+                });
+                i
+            })
+            .collect();
+        let mut leaf = Sequence {
+            duration: Time::seconds(8),
+            tracks: vec![template],
+            instances: vec![],
+            placements: vec![],
+            cues: vec![],
+            audio_routes: vec![],
+        };
+        d.sequences.insert("leaf".into(), leaf.clone());
+        leaf.tracks.clear();
+        let mut twice = instance("double-speed".into(), "leaf");
+        twice.speed = Speed {
+            numerator: 2,
+            denominator: 1,
+        };
+        leaf.instances.push(twice);
+        d.sequences.insert("motif".into(), leaf);
+    }
     d
 }
 fn percentile(ns: &mut [u128], percent: usize) -> f64 {
@@ -92,7 +143,8 @@ fn percentile(ns: &mut [u128], percent: usize) -> f64 {
     ns[(ns.len() - 1) * percent / 100] as f64 / 1_000_000.0
 }
 fn main() {
-    let d = fixture();
+    let nested = std::env::args().any(|a| a == "--nested");
+    let d = fixture(nested);
     let begin = Instant::now();
     let p = compile(&d).unwrap();
     let cold = begin.elapsed().as_secs_f64() * 1000.0;
@@ -126,7 +178,7 @@ fn main() {
         compiles.push(begin.elapsed().as_nanos());
     }
     let p95 = percentile(&mut compiles, 95);
-    let result = serde_json::json!({"fixtureDigest":digest(&d).unwrap(),"nodes":p.nodes.len(),"tracks":sequence.tracks.len(),"evaluationSamples":samples.len(),"evaluationP99Ms":p99,"evaluationAllocations":allocations,"firstCompileMs":cold,"repeatedFullCompileP95Ms":p95,"evaluationGate1Ms":p99<=1.0,"coldCompileGate250Ms":cold<=250.0,"fullCompileReference50Ms":p95<=50.0,"dirtySubgraphCompile":"not implemented/qualified","nativeGpu":"not measured"});
+    let result = serde_json::json!({"nested":nested,"temporalDepth":if nested {2} else {0},"fixtureDigest":digest(&d).unwrap(),"nodes":p.nodes.len(),"tracks":sequence.tracks.len(),"evaluationSamples":samples.len(),"evaluationP99Ms":p99,"evaluationAllocations":allocations,"firstCompileMs":cold,"repeatedFullCompileP95Ms":p95,"evaluationGate1Ms":p99<=1.0,"coldCompileGate250Ms":cold<=250.0,"fullCompileReference50Ms":p95<=50.0,"dirtySubgraphCompile":"not implemented/qualified","nativeGpu":"not measured"});
     println!("{}", serde_json::to_string_pretty(&result).unwrap());
     assert!(
         p99 <= 1.0 && cold <= 250.0,

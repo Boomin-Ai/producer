@@ -248,6 +248,8 @@ fn cue_cursor_dedupes_crossing_and_silent_seek() {
     assert!(c.advance(Time::seconds(3)).unwrap().is_empty());
     c.seek_silent(Time::seconds(1)).unwrap();
     assert!(c.advance(Time::seconds(1)).unwrap().is_empty());
+    assert!(c.advance(Time::seconds(3)).unwrap().is_empty());
+    c.rearm(Counter(2)).unwrap();
     assert_eq!(c.advance(Time::seconds(3)).unwrap().len(), 1);
     let r = c.advance(Time::seconds(400));
     assert_eq!(r.unwrap_err().code, "CUE_CATCHUP_LIMIT");

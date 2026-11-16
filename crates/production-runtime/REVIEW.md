@@ -15,3 +15,7 @@ Reviewed 2026-11-15 by the independent adversarial review agent requested by the
 Two additional parent counterexamples have regressions: feasible mixed min/max weighted allocation, and finite-source loop mapping from a negative preroll interval.
 
 The reviewer's final closure found no remaining **concrete blocker in the reviewed implementation** after these fixes. This means the corrected isolated slice is reviewable; it does not certify the unimplemented portions of Phase 1. `READINESS.md` records those gaps explicitly. No review promises an absence of future bugs.
+
+## Subsequent nested timeline slice
+
+The independent closure above applies to the first-slice commit `a1e0f16`, not automatically to later code. The nested slice has parent-authored regression/CLI/benchmark qualification in `NESTED-TIMELINES.md` and `READINESS.md`; it has not received a new independent implementation review. Counterexamples addressed here include rewind cue replay, lost root loop identity across pause/resume, rebinding conflicts, canceling speed ratios, preflight fuel bypass through binding scans and oversized simulation responses. No desktop adoption is authorized by this ledger.

@@ -1,0 +1,152 @@
+{
+  "measuredAtUtc": "2026-11-16T04:45:47.585936+00:00",
+  "branch": "feat/production-core-phase1",
+  "baseCommit": "a1e0f16d96380d54efe06e8f07c4787d22569506",
+  "sourceManifestSha256": "98d49b8f5f5e43c2c7bb8e07cadf5c2387ec6e88f88c0f44267c1b5a072f0710",
+  "architecture": "arm64",
+  "operatingSystem": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434",
+  "toolchain": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: aarch64-apple-darwin\nrelease: 1.99.1\nLLVM version: 23.1.1",
+  "profileBinarySha256": "6cc664e1007ed5b1c853eaa05ce838feb8ff5c640f2a09b0126aea63a180bea2",
+  "runs": [
+    {
+      "coldCompileGate250Ms": true,
+      "dirtySubgraphCompile": "not implemented/qualified",
+      "evaluationAllocations": 0,
+      "evaluationGate1Ms": true,
+      "evaluationP99Ms": 0.072542,
+      "evaluationSamples": 20000,
+      "firstCompileMs": 43.049042,
+      "fixtureDigest": "e1bc2b14cf3ac84843a51a213beec9d78b0ca67f07805a5bfa3b00f154682a66",
+      "fullCompileReference50Ms": true,
+      "nativeGpu": "not measured",
+      "nested": false,
+      "nodes": 1000,
+      "repeatedFullCompileP95Ms": 48.217125,
+      "temporalDepth": 0,
+      "tracks": 256
+    },
+    {
+      "coldCompileGate250Ms": true,
+      "dirtySubgraphCompile": "not implemented/qualified",
+      "evaluationAllocations": 0,
+      "evaluationGate1Ms": true,
+      "evaluationP99Ms": 0.145667,
+      "evaluationSamples": 20000,
+      "firstCompileMs": 44.415917,
+      "fixtureDigest": "5e3401160d9c783314968b653535114552732917f10c70f8a2bf4a7d5e7fa2f0",
+      "fullCompileReference50Ms": true,
+      "nativeGpu": "not measured",
+      "nested": true,
+      "nodes": 1000,
+      "repeatedFullCompileP95Ms": 43.999125,
+      "temporalDepth": 2,
+      "tracks": 256
+    },
+    {
+      "coldCompileGate250Ms": true,
+      "dirtySubgraphCompile": "not implemented/qualified",
+      "evaluationAllocations": 0,
+      "evaluationGate1Ms": true,
+      "evaluationP99Ms": 0.205875,
+      "evaluationSamples": 20000,
+      "firstCompileMs": 40.850917,
+      "fixtureDigest": "e1bc2b14cf3ac84843a51a213beec9d78b0ca67f07805a5bfa3b00f154682a66",
+      "fullCompileReference50Ms": false,
+      "nativeGpu": "not measured",
+      "nested": false,
+      "nodes": 1000,
+      "repeatedFullCompileP95Ms": 51.492291,
+      "temporalDepth": 0,
+      "tracks": 256
+    },
+    {
+      "coldCompileGate250Ms": true,
+      "dirtySubgraphCompile": "not implemented/qualified",
+      "evaluationAllocations": 0,
+      "evaluationGate1Ms": true,
+      "evaluationP99Ms": 0.1885,
+      "evaluationSamples": 20000,
+      "firstCompileMs": 67.355792,
+      "fixtureDigest": "5e3401160d9c783314968b653535114552732917f10c70f8a2bf4a7d5e7fa2f0",
+      "fullCompileReference50Ms": false,
+      "nativeGpu": "not measured",
+      "nested": true,
+      "nodes": 1000,
+      "repeatedFullCompileP95Ms": 56.488834,
+      "temporalDepth": 2,
+      "tracks": 256
+    },
+    {
+      "coldCompileGate250Ms": true,
+      "dirtySubgraphCompile": "not implemented/qualified",
+      "evaluationAllocations": 0,
+      "evaluationGate1Ms": true,
+      "evaluationP99Ms": 0.118,
+      "evaluationSamples": 20000,
+      "firstCompileMs": 53.037292,
+      "fixtureDigest": "e1bc2b14cf3ac84843a51a213beec9d78b0ca67f07805a5bfa3b00f154682a66",
+      "fullCompileReference50Ms": false,
+      "nativeGpu": "not measured",
+      "nested": false,
+      "nodes": 1000,
+      "repeatedFullCompileP95Ms": 66.005458,
+      "temporalDepth": 0,
+      "tracks": 256
+    },
+    {
+      "coldCompileGate250Ms": true,
+      "dirtySubgraphCompile": "not implemented/qualified",
+      "evaluationAllocations": 0,
+      "evaluationGate1Ms": true,
+      "evaluationP99Ms": 0.499708,
+      "evaluationSamples": 20000,
+      "firstCompileMs": 53.658042,
+      "fixtureDigest": "5e3401160d9c783314968b653535114552732917f10c70f8a2bf4a7d5e7fa2f0",
+      "fullCompileReference50Ms": false,
+      "nativeGpu": "not measured",
+      "nested": true,
+      "nodes": 1000,
+      "repeatedFullCompileP95Ms": 52.810625,
+      "temporalDepth": 2,
+      "tracks": 256
+    }
+  ],
+  "summary": {
+    "flat": {
+      "evaluationP99MsRange": [
+        0.072542,
+        0.205875
+      ],
+      "firstCompileMsRange": [
+        40.850917,
+        53.037292
+      ],
+      "repeatedFullCompileP95MsRange": [
+        48.217125,
+        66.005458
+      ],
+      "evaluationAllocations": 0
+    },
+    "nested": {
+      "evaluationP99MsRange": [
+        0.145667,
+        0.499708
+      ],
+      "firstCompileMsRange": [
+        44.415917,
+        67.355792
+      ],
+      "repeatedFullCompileP95MsRange": [
+        43.999125,
+        56.488834
+      ],
+      "evaluationAllocations": 0
+    }
+  },
+  "gates": {
+    "evaluationUnder1MsAllRuns": true,
+    "firstCompileUnder250MsAllRuns": true,
+    "fullCompileReferenceUnder50MsAllRuns": false
+  },
+  "scope": "Synthetic core-only. Three new process runs per flat/nested mode; 1000 nodes, 256 animated tracks, 20000 evaluation samples per run. No CPU-load isolation, native media, GPU, rendering, FPS or desktop latency measurement. Repeated compile is full-plan compile/drop, not incremental compilation. Previous first-slice evidence is historical and separately pinned."
+}

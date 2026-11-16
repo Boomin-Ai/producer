@@ -1038,6 +1038,13 @@
         "duration": {
           "$ref": "#/$defs/Time"
         },
+        "instances": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SequenceInstance"
+          },
+          "type": "array"
+        },
         "placements": {
           "default": [],
           "items": {
@@ -1055,6 +1062,58 @@
       },
       "required": [
         "duration"
+      ],
+      "type": "object"
+    },
+    "SequenceInstance": {
+      "additionalProperties": false,
+      "description": "A placement owns time mapping, not a copy of the reusable definition.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "looping": {
+          "default": false,
+          "type": "boolean"
+        },
+        "range": {
+          "$ref": "#/$defs/Range"
+        },
+        "sequence": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "sourceBindings": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SourceBinding"
+          },
+          "type": "array"
+        },
+        "sourceIn": {
+          "$ref": "#/$defs/Time"
+        },
+        "speed": {
+          "$ref": "#/$defs/Speed",
+          "default": {
+            "denominator": 1,
+            "numerator": 1
+          }
+        },
+        "targetBindings": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/TargetBinding"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "sequence",
+        "range",
+        "sourceIn"
       ],
       "type": "object"
     },
@@ -1233,6 +1292,24 @@
         }
       ]
     },
+    "SourceBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "to": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "type": "object"
+    },
     "Speed": {
       "additionalProperties": false,
       "properties": {
@@ -1267,6 +1344,23 @@
       "required": [
         "path",
         "property"
+      ],
+      "type": "object"
+    },
+    "TargetBinding": {
+      "additionalProperties": false,
+      "description": "Exact exported-property rebinding; no prefix substitution or arbitrary paths.",
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/Target"
+        },
+        "to": {
+          "$ref": "#/$defs/Target"
+        }
+      },
+      "required": [
+        "from",
+        "to"
       ],
       "type": "object"
     },

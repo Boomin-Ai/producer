@@ -5,6 +5,8 @@ use producer_production_core::{
     contract::*,
     coordinator::*,
     storage::*,
+    timeline::{Timeline, TimelineEvent},
+    transport::OutputInstant,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -44,6 +46,21 @@ enum Request {
     Disconnect {
         session: String,
     },
+    /// Pure numeric sampling of the saved production document. No effects fire.
+    Evaluate {
+        session: String,
+        sequence: String,
+        time: Time,
+    },
+    /// Bounded headless transport rehearsal; emits cue intents but never dispatches them.
+    SimulateTimeline {
+        session: String,
+        sequence: String,
+        #[serde(default)]
+        looping: bool,
+        #[schemars(length(max = 128))]
+        events: Vec<TimelineEvent>,
+    },
 }
 fn error(code: &str, m: impl Into<String>) -> Error {
     Error::new(code, "cli", m)
@@ -65,6 +82,69 @@ fn response<T: Serialize>(r: Result<T>) -> serde_json::Value {
         Ok(result) => serde_json::json!({"ok":true,"result":result}),
         Err(e) => serde_json::json!({"ok":false,"error":e}),
     }
+}
+struct ByteBudget(usize);
+impl Write for ByteBudget {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0 = self
+            .0
+            .checked_sub(bytes.len())
+            .ok_or_else(|| io::Error::other("simulation response budget exceeded"))?;
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+fn simulate(
+    d: &Document,
+    sequence: &str,
+    looping: bool,
+    events: Vec<TimelineEvent>,
+) -> Result<serde_json::Value> {
+    if events.len() > 128 {
+        return Err(error("TIMELINE_LIMIT", "maximum 128 simulation events"));
+    }
+    let bytes = serde_json::to_vec(&events).map_err(|e| error("STRUCTURE", e.to_string()))?;
+    ingress::parse_envelope(&bytes, COMMAND_BYTES)?;
+    let plan = compile::compile(d)?;
+    let sequence = plan
+        .sequences
+        .get(sequence)
+        .ok_or_else(|| error("SEQUENCE", "sequence missing"))?;
+    let per_event = sequence.tracks.len() + sequence.players.len() + sequence.cues.len() + 1;
+    if events.len().saturating_mul(per_event) > 65_536 {
+        return Err(error(
+            "TIMELINE_LIMIT",
+            "maximum 65536 aggregate simulated track/player/cue visits",
+        ));
+    }
+    let mut timeline = Timeline::new(
+        std::sync::Arc::new(sequence.clone()),
+        looping,
+        OutputInstant(Counter(0)),
+    )?;
+    let mut samples = Vec::new();
+    let mut budget = ByteBudget(DOCUMENT_BYTES - 1024);
+    for event in events {
+        let sample = timeline.apply(event)?;
+        serde_json::to_writer(&mut budget, &sample)
+            .map_err(|_| error("TIMELINE_LIMIT", "simulation response exceeds 8 MiB"))?;
+        samples.push(sample);
+    }
+    Ok(serde_json::json!({"synthetic":true,"samples":samples}))
+}
+fn evaluate(d: &Document, sequence: &str, time: Time) -> Result<serde_json::Value> {
+    let plan = compile::compile(d)?;
+    let sequence = plan
+        .sequences
+        .get(sequence)
+        .ok_or_else(|| error("SEQUENCE", "sequence missing"))?;
+    let mut values = vec![None; sequence.tracks.len()];
+    sequence
+        .evaluate_into(time, &mut values)
+        .map_err(|e| error("EVALUATE", format!("{e:?}")))?;
+    Ok(serde_json::json!({"time":time,"values":values}))
 }
 fn rpc(c: &mut Coordinator<FileStore>, r: Request, now: u64) -> Result<serde_json::Value> {
     Ok(match r {
@@ -100,6 +180,23 @@ fn rpc(c: &mut Coordinator<FileStore>, r: Request, now: u64) -> Result<serde_jso
             c.status(&session, "")?;
             c.disconnect(&session);
             serde_json::json!({"disconnected":true})
+        }
+        Request::Evaluate {
+            session,
+            sequence,
+            time,
+        } => {
+            c.status(&session, "")?;
+            evaluate(&c.state.document, &sequence, time)?
+        }
+        Request::SimulateTimeline {
+            session,
+            sequence,
+            looping,
+            events,
+        } => {
+            c.status(&session, "")?;
+            simulate(&c.state.document, &sequence, looping, events)?
         }
     })
 }
@@ -163,11 +260,13 @@ fn main_result() -> Result<Option<serde_json::Value>> {
     let v=match arg(0)? {
         "schema"=>schema(),"command-schema"=>commands::schema(),"tool-schema"=>serde_json::to_value(schemars::schema_for!(Request)).unwrap(),
         "fixture"=>serde_json::to_value(fixture::classic_like()).unwrap(),
+        "nested-fixture"=>serde_json::to_value(fixture::nested_timeline()).unwrap(),
         "validate"=>{let d=parse_document(&read(arg(1)?,DOCUMENT_BYTES)?)?;serde_json::json!({"digest":digest(&d)?,"inventory":validate_document(&d)?})},
         "compile"=>{let d=parse_document(&read(arg(1)?,DOCUMENT_BYTES)?)?;serde_json::to_value(compile::compile(&d)?).unwrap()},
-        "evaluate"=>{let d=parse_document(&read(arg(1)?,DOCUMENT_BYTES)?)?;let p=compile::compile(&d)?;let s=p.sequences.get(arg(2)?).ok_or_else(||error("SEQUENCE","sequence missing"))?;let t=serde_json::from_str::<Time>(arg(3)?).map_err(|e|error("TIME",e.to_string()))?;let mut values=vec![None;s.tracks.len()];s.evaluate_into(t,&mut values).map_err(|e|error("EVALUATE",format!("{e:?}")))?;serde_json::json!({"time":t,"values":values})},
+        "evaluate"=>{let d=parse_document(&read(arg(1)?,DOCUMENT_BYTES)?)?;let t=serde_json::from_value::<Time>(ingress::parse_envelope(arg(3)?.as_bytes(),COMMAND_BYTES)?).map_err(|e|error("TIME",e.to_string()))?;evaluate(&d,arg(2)?,t)?},
+        "simulate"=>{let d=parse_document(&read(arg(1)?,DOCUMENT_BYTES)?)?;let events=serde_json::from_value::<Vec<TimelineEvent>>(ingress::parse_envelope(arg(3)?.as_bytes(),COMMAND_BYTES)?).map_err(|e|error("STRUCTURE",e.to_string()))?;simulate(&d,arg(2)?,false,events)?},
         "serve" if arg(1)?=="--store"&&arg(3)?=="--document-id"=>{serve(arg(2)?,arg(4)?)?;return Ok(None);},
-        _=>return Err(error("USAGE","producer-core schema|command-schema|tool-schema|fixture|validate FILE|compile FILE|evaluate FILE SEQUENCE TIME_JSON|serve --store EXPLICIT_DIRECTORY --document-id ID")),
+        _=>return Err(error("USAGE","producer-core schema|command-schema|tool-schema|fixture|nested-fixture|validate FILE|compile FILE|evaluate FILE SEQUENCE TIME_JSON|simulate FILE SEQUENCE EVENTS_JSON|serve --store EXPLICIT_DIRECTORY --document-id ID")),
     };
     Ok(Some(v))
 }

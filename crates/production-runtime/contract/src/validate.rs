@@ -9,6 +9,8 @@ pub struct Inventory {
     pub expanded_nodes: usize,
     pub instances: u32,
     pub tracks: usize,
+    pub temporal_instances: usize,
+    pub expanded_tracks: usize,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NodeIdentity {
@@ -557,9 +559,22 @@ pub fn validate_document(d: &Document) -> Result<Inventory> {
             return Err(err(id, "sequence duration must be positive"));
         }
         idset(seq.tracks.iter().map(|t| t.id.as_str()), id)?;
+        idset(seq.instances.iter().map(|t| t.id.as_str()), id)?;
         idset(seq.placements.iter().map(|p| p.id.as_str()), id)?;
         idset(seq.cues.iter().map(|c| c.id.as_str()), id)?;
         idset(seq.audio_routes.iter().map(|r| r.id.as_str()), id)?;
+        if seq.instances.len() > TEMPORAL_INSTANCES
+            || seq.placements.len() > NODES
+            || seq.cues.len() > NODES
+            || seq.audio_routes.len() > NODES
+        {
+            return Err(err(id, "temporal declaration budget exceeded"));
+        }
+        for instance in &seq.instances {
+            if instance.target_bindings.len() > 256 || instance.source_bindings.len() > 256 {
+                return Err(err(&instance.id, "instance binding budget exceeded"));
+            }
+        }
         w.out.tracks += seq.tracks.len();
         if w.out.tracks > TRACKS {
             return Err(err(id, "active track budget exceeded"));
@@ -666,6 +681,16 @@ pub fn validate_document(d: &Document) -> Result<Inventory> {
                 ));
             }
         }
+    }
+    let mut temporal_work = TEMPORAL_WORK;
+    for id in d.sequences.keys() {
+        let expanded = temporal::expand(d, id, &mut temporal_work)?;
+        w.out.temporal_instances += expanded.instances;
+        w.out.expanded_tracks += expanded.tracks.len();
+        if w.out.temporal_instances > TEMPORAL_INSTANCES || w.out.expanded_tracks > TRACKS {
+            return Err(err(id, "aggregate expanded temporal budget exceeded"));
+        }
+        temporal::validate_expanded(d, &w.out, &expanded, &mut temporal_work)?;
     }
     for (id, show) in &d.shows {
         let set = d

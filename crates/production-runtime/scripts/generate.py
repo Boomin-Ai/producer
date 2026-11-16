@@ -50,6 +50,7 @@ def run(binary, check):
         types[{"document":"Document","commands":"Command","tools":"Request"}[name]]=ts(schema)
     outputs["contract.d.ts"]="// Generated from Rust. Types are structural; always use native admission.\n"+"\n".join(f"export type {k} = {v};" for k,v in sorted(types.items()))+"\n"
     outputs["classic-like.json"]=subprocess.check_output([binary,"fixture"],text=True)
+    outputs["nested-timeline.json"]=subprocess.check_output([binary,"nested-fixture"],text=True)
     for name,body in outputs.items():
         path=generated/name
         if check:

@@ -312,6 +312,8 @@ pub enum ControlScope {
 pub struct Sequence {
     pub duration: Time,
     #[serde(default)]
+    pub instances: Vec<SequenceInstance>,
+    #[serde(default)]
     pub placements: Vec<Placement>,
     #[serde(default)]
     pub tracks: Vec<Track>,
@@ -319,6 +321,36 @@ pub struct Sequence {
     pub cues: Vec<Cue>,
     #[serde(default)]
     pub audio_routes: Vec<AudioRoute>,
+}
+/// A placement owns time mapping, not a copy of the reusable definition.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct SequenceInstance {
+    pub id: Id,
+    pub sequence: Id,
+    pub range: Range,
+    pub source_in: Time,
+    #[serde(default)]
+    pub speed: Speed,
+    #[serde(default)]
+    pub looping: bool,
+    #[serde(default)]
+    pub target_bindings: Vec<TargetBinding>,
+    #[serde(default)]
+    pub source_bindings: Vec<SourceBinding>,
+}
+/// Exact exported-property rebinding; no prefix substitution or arbitrary paths.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct TargetBinding {
+    pub from: Target,
+    pub to: Target,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct SourceBinding {
+    pub from: Id,
+    pub to: Id,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]

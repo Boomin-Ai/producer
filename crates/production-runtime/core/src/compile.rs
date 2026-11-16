@@ -60,13 +60,28 @@ pub struct TrackPlan {
     pub range: Range,
     pub keys: Vec<(Time, CompactValue)>,
     pub interpolation: Interpolation,
+    pub maps: Vec<temporal::TimeMap>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlayerPlan {
+    pub path: String,
+    pub source: String,
+    pub range: Range,
+    pub maps: Vec<temporal::TimeMap>,
+    pub available: Option<Range>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CuePlan {
+    pub path: String,
+    pub cue: Cue,
+    pub maps: Vec<temporal::TimeMap>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SequencePlan {
     pub duration: Time,
     pub tracks: Vec<TrackPlan>,
-    pub players: Vec<Placement>,
-    pub cues: Vec<Cue>,
+    pub players: Vec<PlayerPlan>,
+    pub cues: Vec<CuePlan>,
     pub routes: Vec<AudioRoute>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,6 +114,10 @@ impl SequencePlan {
         out.fill(None);
         for (slot, track) in out.iter_mut().zip(&self.tracks) {
             *slot = None;
+            let Some(t) = temporal::map_chain(&track.maps, t).map_err(|_| EvalError::TimeRange)?
+            else {
+                continue;
+            };
             // Half-open track; its endpoint remains a key, not an extra active frame.
             if t < track.range.start || t >= track.range.end().map_err(|_| EvalError::TimeRange)? {
                 continue;
@@ -124,6 +143,24 @@ impl SequencePlan {
             });
         }
         Ok(())
+    }
+}
+impl PlayerPlan {
+    /// Live capture remains live; None available means this is only a visibility
+    /// gate. A file's returned time is source PTS, not the parent's content clock.
+    pub fn sample(&self, root: Time) -> std::result::Result<Option<Time>, EvalError> {
+        let Some(local) =
+            temporal::map_chain(&self.maps, root).map_err(|_| EvalError::TimeRange)?
+        else {
+            return Ok(None);
+        };
+        if self.available.is_some() {
+            Ok(Some(local))
+        } else {
+            let end =
+                temporal::add(self.range.start, self.range.duration).ok_or(EvalError::TimeRange)?;
+            Ok((local >= self.range.start && local < end).then_some(Time::ZERO))
+        }
     }
 }
 fn bad(p: &str, m: &str) -> Error {
@@ -355,14 +392,18 @@ pub fn compile(d: &Document) -> Result<Plan> {
         }
     }
     let mut sequences = BTreeMap::new();
+    let mut temporal_work = TEMPORAL_WORK;
     for (id, s) in &d.sequences {
+        let expanded = temporal::expand(d, id, &mut temporal_work)?;
         let mut tracks = Vec::new();
-        for t in &s.tracks {
+        for resolved in expanded.tracks {
+            let t = resolved.template;
             tracks.push(TrackPlan {
-                id: t.id.clone(),
-                target: handles[&t.target],
+                id: resolved.path,
+                target: handles[&resolved.target],
                 range: t.range,
                 interpolation: t.interpolation,
+                maps: resolved.maps,
                 keys: t
                     .keys
                     .iter()
@@ -370,14 +411,54 @@ pub fn compile(d: &Document) -> Result<Plan> {
                     .collect::<Result<_>>()?,
             });
         }
+        let mut players = Vec::new();
+        for p in expanded.players {
+            let mut maps = p.maps;
+            let available = if let Source::Player { asset } = &d.sources[&p.source] {
+                d.assets[asset].available
+            } else {
+                None
+            };
+            if let Some(source_range) = available {
+                maps.push(temporal::TimeMap {
+                    range: p.template.range,
+                    source_range,
+                    source_in: p.template.source_in,
+                    speed: p.template.speed,
+                    looping: p.template.looping,
+                });
+            }
+            players.push(PlayerPlan {
+                path: p.path,
+                source: p.source,
+                range: p.template.range,
+                maps,
+                available,
+            });
+        }
+        let mut routes = Vec::new();
+        let mut routed = std::collections::BTreeSet::new();
+        for route in expanded.routes {
+            if routed.insert((route.source.clone(), route.bus)) {
+                routes.push(route);
+            }
+        }
         sequences.insert(
             id.clone(),
             SequencePlan {
                 duration: s.duration,
                 tracks,
-                players: s.placements.clone(),
-                cues: s.cues.clone(),
-                routes: s.audio_routes.clone(),
+                players,
+                cues: expanded
+                    .cues
+                    .into_iter()
+                    .map(|c| CuePlan {
+                        path: c.path,
+                        cue: c.template.clone(),
+                        maps: c.maps,
+                    })
+                    .collect(),
+                routes,
             },
         );
     }

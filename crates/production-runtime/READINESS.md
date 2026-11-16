@@ -7,12 +7,13 @@ Date: 2026-11-15. Baseline: 0.4.93, `667147951452931ebbc7f26db6dec02616aee74d`. 
 ## Executed checks
 
 - `cargo fmt --all --check`, `cargo clippy --all-targets -- -D warnings`: pass.
-- `cargo test --locked`: **42 passed, zero failed** (13 contract/ingress tests, 11 foundation tests, 9 lifecycle tests and 9 review regressions).
-- `scripts/generate.py --check`: five generated artifacts match Rust.
+- `cargo test --locked`: **62 passed, zero failed** (13 contract/ingress tests, 11 foundation tests, 9 lifecycle tests, 20 nested timeline tests and 9 review regressions).
+- `scripts/generate.py --check`: six generated artifacts match Rust.
 - `scripts/prove.py`: **14 incremental durable commits**, exactly one effect per replayed ticket, saved/restarted, paired layouts, independent players and 1,000 declared analytic instances.
+- `scripts/prove-nested.py`: **16 incremental durable commits**, two nested instance levels and independent file trims, atomic conflict rejection, 11 transport events, silent seek/rearm, and identical rehearsal after checkpoint/restart except fresh execution identity. Event/work/response guards are separately enforced.
 - `scripts/canonical-check.mjs`: independent JavaScript/Rust canonical digest parity.
-- Isolated TypeScript strict check: pass. `scripts/schema-check.mjs`: five structural/native companion cases pass, including duplicate keys that a parsed JS validator cannot detect.
-- Three optimized benchmark process runs: see [profile evidence](evidence/profile.json). These are synthetic **core-only** timings and allocation checks, not GPU/FPS/native latency measurements.
+- Isolated TypeScript strict check: pass. `scripts/schema-check.mjs`: nine structural/native companion cases pass, including duplicate keys that a parsed JS validator cannot detect.
+- Historical first-slice benchmark runs: see [profile evidence](evidence/profile.json). Current flat/nested measurements: [nested slice evidence](evidence/nested-profile.json), with a separate source manifest. Across three processes per mode, flat evaluation p99 was **0.073–0.206 ms**, nested depth-two evaluation p99 **0.146–0.500 ms**, each with **zero numeric-evaluation allocations** at 1,000 nodes/256 tracks. First full compile was 40.85–67.36 ms. Repeated full compile p95 was 44.00–66.01 ms across both modes, so the 50 ms reference was **not met in all runs**. Incremental compilation is still open; no host-load isolation is claimed. Historical source hashes do not certify the new implementation. These are synthetic **core-only** timings and allocation checks, not GPU/FPS/native latency measurements.
 
 ## Acceptance ledger
 
@@ -27,11 +28,11 @@ Date: 2026-11-15. Baseline: 0.4.93, `667147951452931ebbc7f26db6dec02616aee74d`. 
 | A05 persistence/crash/bounds | Partial | Single writer, torn tail, corrupt complete record, checksums, full-disk/unknown-flush injection and serialized aggregate limits. Not every filesystem operation has kill/power-loss injection; Windows directory durability remains unqualified. |
 | A06 exact time | Pass (local profile) | 24-hour simulation and 10,000 seeded exact round trips, overflow/reduction, half-open ranges, ties-even endpoints. |
 | A07 output PTS | Pass (model) | Content seek/pause cannot rewind monotonic output clock; epoch counter tested. Actual encoder PTS requires the native adapter. |
-| A08 source/parent time maps | Partial | Independent flat trims/speeds/finite loops, negative preroll and boundary rejection. Nested sequence instance maps/loops are not implemented. |
+| A08 source/parent time maps | Partial | Independent nested placements, positive constant speeds, finite/root/ancestor loops, negative source origins, half-open seams and speed cancellation tested. Interval/cue projection requires representable intermediate boundaries; unsupported projections reject explicitly. Variable speed/reverse and physical source adapters remain future work. |
 | A09 exclusive drivers/overrides | Partial | Expanded target conflicts, owner/token/incarnation fencing and five-second disconnect lease. Full run/segment scope cleanup and authority adapter wiring remain open. |
-| A10 pause/lifecycle ownership | Partial | Named pauses and synthetic removal/retirement tested. General owner/borrower graphs and segment-occurrence pause cleanup remain open. |
-| A11 cues | Partial | Start/crossing dedupe, silent seek, loop policy and catch-up cap tested for flat sequences. Nested occurrence identity/rearm still needs implementation. |
-| A12 players/audio routes | Pass (model) | Two independent players of one finite asset; explicit source/bus route duplicate rejection. No decode, audio generation or mix-minus change. |
+| A10 pause/lifecycle ownership | Partial | Named pauses, unwrapped root loop progress, run-owned pause reset and synthetic removal/retirement tested. General owner/borrower graphs and segment-occurrence pause cleanup remain open. |
+| A11 cues | Partial | Nested scoped occurrence ancestry, independent discrete cue oracle, silent seek frontier, explicit increasing-run rearm, stop fence and atomic catch-up cap tested. External dispatch/delivery semantics remain unqualified. |
+| A12 players/audio routes | Pass (model) | Independent nested players of one finite asset, post-binding playhead conflicts and inherited route membership coalescing tested; explicit source/bus route duplicate rejection remains. No decode, audio generation or mix-minus change. |
 | A13 hosted ownership | Pass (model) | Local commands cannot mint, modify or delete hosted state; inherited hosted authority remains read-only. Trusted hosted projection installation/transfer is future work. |
 | A14 headless layout | Partial | Deterministic fixed/weighted row/column/grid, raster rounding and infeasibility including mixed min/max. Anchors, pivots and explicit aspect constraints remain open. |
 | A15 bounded component expansion | Pass (model) | Pinned references, cycles, spatial depth, after-expansion node cap, scoped bindings and aggregate unused-definition work cap. |
@@ -39,7 +40,7 @@ Date: 2026-11-15. Baseline: 0.4.93, `667147951452931ebbc7f26db6dec02616aee74d`. 
 | A17 uncertain/late frames | Pass (model) | Source/plan/transport/context fence matching, revocation, preparation expiry, unknown swaps and exact-token reconciliation. Stop cannot resurrect an older generation. |
 | A18 stop under pressure | Pass (model) | Saturated queue retains independent stop intent. Actual multi-thread/OBS/CEF stop latency is unmeasured. |
 | A19 observers | Pass (model) | Redacted revision/digest snapshot chunks, complete-ACK handshake, bounded history and gap resnapshot. No remote delivery/load test. |
-| A20 CLI/Assistant schema parity | Pass (local boundary) | Incremental CLI proof, generated commands/tools/types and required native semantic companion. Production Room Assistant is not connected to this new core. |
+| A20 CLI/Assistant schema parity | Pass (local boundary) | Incremental flat/nested CLI authoring and transport rehearsal, generated commands/tools/types and required native semantic companion. Production Room Assistant is not connected to this new core. |
 | A21 four platforms | Not run remotely | Core-only CI matrix prepared for Silicon/Intel Mac, Windows and Linux. Local Apple Silicon passed. A workflow file is not evidence of successful remote runs. |
 | A22 benchmark/fuzz/memory | Partial | Release 1,000-node/256-track evaluation benchmark and 10,000 seeded malformed byte inputs passed. Coverage-guided fuzzing, dirty-subgraph compile timing, 100,000-command RSS plateau and platform profiles remain open. |
 | A23 typed analytic 3D | Pass (model) | Typed target/property ranges, expanded driver conflicts, source/resource incarnation and camera/material track compilation tested. |
@@ -48,7 +49,7 @@ Date: 2026-11-15. Baseline: 0.4.93, `667147951452931ebbc7f26db6dec02616aee74d`. 
 
 ## Next work, in dependency order
 
-1. Complete nested temporal composition, occurrence ownership, scope cleanup and deterministic seek/cue tests. Add anchors/aspect constraints with rejecting-stage fixtures.
+1. Extend the nested timeline slice into general Show segment occurrence ownership and borrower/scope cleanup. Add anchors/aspect constraints with rejecting-stage fixtures.
 2. Implement runtime-global two-document caps, compile scheduling/coalescing and dependency-aware incremental compilation; then run the 100,000-command memory plateau and failure/saturation tests.
 3. Run the core matrix and coverage-guided fuzz jobs, retain source/toolchain/artifact hashes, and close remaining Phase 1 ledger items. Do not substitute native app tests for these semantic tests or vice versa.
 4. Only after contract proof, start the independent MOV decode/seek/preroll/audio ownership spike, followed by the 3D/CEF/Studio fidelity/performance matrix from the plan.

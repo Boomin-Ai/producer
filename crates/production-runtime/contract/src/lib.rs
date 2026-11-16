@@ -2,6 +2,7 @@
 pub mod fixture;
 pub mod ingress;
 pub mod model;
+pub mod temporal;
 pub mod time;
 pub mod validate;
 
@@ -18,6 +19,8 @@ pub const RAW_DEPTH: usize = 32;
 pub const RAW_VALUES: usize = 1_048_576;
 pub const SPATIAL_DEPTH: usize = 32;
 pub const TEMPORAL_DEPTH: usize = 16;
+pub const TEMPORAL_WORK: usize = 16_384;
+pub const TEMPORAL_INSTANCES: usize = 4096;
 pub const NODES: usize = 4096;
 pub const TRACKS: usize = 512;
 pub const KEYS: usize = 256;

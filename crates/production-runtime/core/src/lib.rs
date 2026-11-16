@@ -7,4 +7,5 @@ pub mod coordinator;
 pub mod drivers;
 pub mod lifecycle;
 pub mod storage;
+pub mod timeline;
 pub mod transport;

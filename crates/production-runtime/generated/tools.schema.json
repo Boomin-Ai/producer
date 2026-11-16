@@ -1711,6 +1711,13 @@
         "duration": {
           "$ref": "#/$defs/Time"
         },
+        "instances": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SequenceInstance"
+          },
+          "type": "array"
+        },
         "placements": {
           "default": [],
           "items": {
@@ -1728,6 +1735,58 @@
       },
       "required": [
         "duration"
+      ],
+      "type": "object"
+    },
+    "SequenceInstance": {
+      "additionalProperties": false,
+      "description": "A placement owns time mapping, not a copy of the reusable definition.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "looping": {
+          "default": false,
+          "type": "boolean"
+        },
+        "range": {
+          "$ref": "#/$defs/Range"
+        },
+        "sequence": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "sourceBindings": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SourceBinding"
+          },
+          "type": "array"
+        },
+        "sourceIn": {
+          "$ref": "#/$defs/Time"
+        },
+        "speed": {
+          "$ref": "#/$defs/Speed",
+          "default": {
+            "denominator": 1,
+            "numerator": 1
+          }
+        },
+        "targetBindings": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/TargetBinding"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "sequence",
+        "range",
+        "sourceIn"
       ],
       "type": "object"
     },
@@ -1906,6 +1965,24 @@
         }
       ]
     },
+    "SourceBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "to": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "type": "object"
+    },
     "Speed": {
       "additionalProperties": false,
       "properties": {
@@ -1943,6 +2020,23 @@
       ],
       "type": "object"
     },
+    "TargetBinding": {
+      "additionalProperties": false,
+      "description": "Exact exported-property rebinding; no prefix substitution or arbitrary paths.",
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/Target"
+        },
+        "to": {
+          "$ref": "#/$defs/Target"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "type": "object"
+    },
     "Time": {
       "additionalProperties": false,
       "properties": {
@@ -1963,6 +2057,132 @@
         "rate"
       ],
       "type": "object"
+    },
+    "TimelineEvent": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Counter"
+            },
+            "kind": {
+              "const": "start",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind",
+            "at"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Counter"
+            },
+            "kind": {
+              "const": "advance",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind",
+            "at"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Counter"
+            },
+            "kind": {
+              "const": "seek",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "to": {
+              "$ref": "#/$defs/Time"
+            }
+          },
+          "required": [
+            "kind",
+            "at",
+            "to"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Counter"
+            },
+            "kind": {
+              "const": "pause",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "owner": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind",
+            "at",
+            "owner"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Counter"
+            },
+            "kind": {
+              "const": "resume",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "owner": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind",
+            "at",
+            "owner"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "at": {
+              "$ref": "#/$defs/Counter"
+            },
+            "kind": {
+              "const": "stop",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind",
+            "at"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "Track": {
       "additionalProperties": false,
@@ -2275,6 +2495,72 @@
       "required": [
         "method",
         "session"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Pure numeric sampling of the saved production document. No effects fire.",
+      "properties": {
+        "method": {
+          "const": "evaluate",
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "sequence": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "session": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "time": {
+          "$ref": "#/$defs/Time"
+        }
+      },
+      "required": [
+        "method",
+        "session",
+        "sequence",
+        "time"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "description": "Bounded headless transport rehearsal; emits cue intents but never dispatches them.",
+      "properties": {
+        "events": {
+          "items": {
+            "$ref": "#/$defs/TimelineEvent"
+          },
+          "maxItems": 128,
+          "type": "array"
+        },
+        "looping": {
+          "default": false,
+          "type": "boolean"
+        },
+        "method": {
+          "const": "simulateTimeline",
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "sequence": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "session": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        }
+      },
+      "required": [
+        "method",
+        "session",
+        "sequence",
+        "events"
       ],
       "type": "object"
     }

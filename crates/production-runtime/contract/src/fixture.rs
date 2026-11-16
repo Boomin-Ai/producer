@@ -206,6 +206,7 @@ pub fn classic_like() -> Document {
         duration: Time::seconds(8),
     };
     let sequence = Sequence {
+        instances: vec![],
         duration: range.duration,
         placements: vec![
             Placement {
@@ -289,5 +290,134 @@ pub fn classic_like() -> Document {
             }],
         },
     );
+    d
+}
+
+/// Agent-shaped nested authoring fixture. The definition is shared, while two
+/// placements bind different component properties and independent file players.
+pub fn nested_timeline() -> Document {
+    let mut d = classic_like();
+    d.id = "nested-lab".into();
+    d.title = "Nested production timeline".into();
+    let target = |path: &str| Target {
+        path: path.into(),
+        property: Property::Opacity,
+    };
+    let template_target = target("sets/classic/layouts/wide/root/first-badge/badge/label");
+    let blank = |seconds| Sequence {
+        duration: Time::seconds(seconds),
+        instances: vec![],
+        placements: vec![],
+        tracks: vec![],
+        cues: vec![],
+        audio_routes: vec![],
+    };
+    let mut pulse = blank(2);
+    let range = Range {
+        start: Time::ZERO,
+        duration: Time::seconds(2),
+    };
+    pulse.tracks.push(Track {
+        id: "fade".into(),
+        target: template_target.clone(),
+        range,
+        keys: vec![
+            Key {
+                at: Time::ZERO,
+                value: Value::Number(0.0),
+            },
+            Key {
+                at: Time::seconds(2),
+                value: Value::Number(1.0),
+            },
+        ],
+        interpolation: Interpolation::Linear,
+    });
+    pulse.placements.push(Placement {
+        id: "movie".into(),
+        source: "player-a".into(),
+        range,
+        source_in: Time::seconds(1),
+        speed: Speed::default(),
+        looping: false,
+    });
+    pulse.cues = vec![
+        Cue {
+            id: "entry".into(),
+            at: Time::ZERO,
+            at_start: true,
+            each_loop: true,
+        },
+        Cue {
+            id: "beat".into(),
+            at: Time::new(1, 2).unwrap(),
+            at_start: false,
+            each_loop: true,
+        },
+        Cue {
+            id: "once".into(),
+            at: Time::seconds(1),
+            at_start: false,
+            each_loop: false,
+        },
+    ];
+    pulse.audio_routes.push(AudioRoute {
+        id: "program".into(),
+        source: "player-a".into(),
+        bus: Bus::Program,
+    });
+    d.sequences.insert("pulse".into(), pulse);
+    let mut motif = blank(4);
+    motif.instances.push(SequenceInstance {
+        id: "beat".into(),
+        sequence: "pulse".into(),
+        range: Range {
+            start: Time::ZERO,
+            duration: Time::seconds(4),
+        },
+        source_in: Time::ZERO,
+        speed: Speed::default(),
+        looping: true,
+        target_bindings: vec![],
+        source_bindings: vec![],
+    });
+    d.sequences.insert("motif".into(), motif);
+    let mut timeline = blank(8);
+    for (id, source_in, binding, player) in [
+        (
+            "left",
+            Time::ZERO,
+            "sets/classic/layouts/wide/root/first-badge/badge/label",
+            "player-a",
+        ),
+        (
+            "right",
+            Time::seconds(1),
+            "sets/classic/layouts/wide/root/second-badge/badge/label",
+            "player-b",
+        ),
+    ] {
+        timeline.instances.push(SequenceInstance {
+            id: id.into(),
+            sequence: "motif".into(),
+            range: Range {
+                start: Time::ZERO,
+                duration: Time::seconds(8),
+            },
+            source_in,
+            speed: Speed::default(),
+            looping: true,
+            target_bindings: vec![TargetBinding {
+                from: template_target.clone(),
+                to: target(binding),
+            }],
+            source_bindings: vec![SourceBinding {
+                from: "player-a".into(),
+                to: player.into(),
+            }],
+        });
+    }
+    d.sequences.insert("timeline".into(), timeline);
+    d.shows.get_mut("pilot").unwrap().segments[0].sequence = Some("timeline".into());
     d
 }
