@@ -29,7 +29,7 @@ pub const CAP: Cost = Cost {
     voices: 64,
 };
 impl Cost {
-    fn checked_add(self, b: Self) -> Result<Self> {
+    pub(crate) fn checked_add(self, b: Self) -> Result<Self> {
         macro_rules! sum {
             ($f:ident) => {
                 self.$f
@@ -47,7 +47,7 @@ impl Cost {
             voices: sum!(voices),
         })
     }
-    fn fits(self, cap: Self) -> bool {
+    pub(crate) fn fits(self, cap: Self) -> bool {
         self.cpu <= cap.cpu
             && self.gpu <= cap.gpu
             && self.players <= cap.players
@@ -56,8 +56,17 @@ impl Cost {
             && self.surfaces <= cap.surfaces
             && self.voices <= cap.voices
     }
-    pub fn retire_slots(self) -> u32 {
-        self.players + self.captures + self.browsers + self.surfaces + self.voices
+    pub fn retire_slots(self) -> u64 {
+        [
+            self.players,
+            self.captures,
+            self.browsers,
+            self.surfaces,
+            self.voices,
+        ]
+        .into_iter()
+        .map(u64::from)
+        .sum()
     }
 }
 fn fail(code: &str, m: &str) -> Error {
@@ -90,43 +99,9 @@ fn source_identity(d: &Document, s: &Source) -> Result<String> {
     }
 }
 
-/// Every current/prepared/cached/unknown/retiring reservation is retained here.
-#[derive(Default)]
-pub struct Ledger {
-    entries: BTreeMap<u64, Cost>,
-    next: u64,
-}
-impl Ledger {
-    pub fn used(&self) -> Cost {
-        self.entries
-            .values()
-            .try_fold(Cost::default(), |a, b| a.checked_add(*b))
-            .expect("admitted costs are bounded")
-    }
-    pub fn reserve(&mut self, cost: Cost) -> Result<u64> {
-        if self.entries.len() >= 160 {
-            return Err(fail("RESOURCE_LIMIT", "reservation handle limit reached"));
-        }
-        let total = self.used().checked_add(cost)?;
-        if !total.fits(CAP) || total.retire_slots() > 152 {
-            return Err(fail(
-                "RESOURCE_LIMIT",
-                "capacity includes future retirement slots",
-            ));
-        }
-        self.next = self
-            .next
-            .checked_add(1)
-            .ok_or_else(|| fail("GENERATION_EXHAUSTED", "new runtime required"))?;
-        self.entries.insert(self.next, cost);
-        Ok(self.next)
-    }
-    fn release(&mut self, id: u64) {
-        self.entries.remove(&id);
-    }
-}
+pub use crate::resources::Ledger;
 /// Conservative fake costs, intentionally distinct from future native probe costs.
-fn estimate(d: &Document) -> Result<Cost> {
+pub(crate) fn estimate(d: &Document) -> Result<Cost> {
     let inventory = validate_document(d)?;
     let mut c = Cost {
         cpu: ((inventory.expanded_nodes * 4096 + inventory.targets.len() * 256) as u64)
@@ -193,7 +168,7 @@ struct Slot {
     revision: Counter,
     plan: Plan,
     document: Document,
-    cost: u64,
+    _cost: crate::resources::Reservation,
     expires: u64,
     state: TakeState,
     outputs: Vec<Output>,
@@ -228,6 +203,52 @@ pub struct Runtime {
 }
 impl Runtime {
     pub fn prepare(&mut self, d: &Document, revision: Counter, now_ms: u64) -> Result<Counter> {
+        self.check_prepare(d)?;
+        let expires = now_ms
+            .checked_add(30_000)
+            .ok_or_else(|| fail("TIME_UNREPRESENTABLE", "deadline overflow"))?;
+        let cost = self.ledger.lease(estimate(d)?)?;
+        let plan = compile::compile(d)?;
+        self.install(d, revision, expires, cost, plan)
+    }
+    pub(crate) fn install(
+        &mut self,
+        d: &Document,
+        revision: Counter,
+        expires: u64,
+        cost: crate::resources::Reservation,
+        plan: Plan,
+    ) -> Result<Counter> {
+        self.check_prepare(d)?;
+        let token = cost.id();
+        let slot = Slot {
+            generation: self.generation,
+            revision,
+            plan,
+            document: d.clone(),
+            _cost: cost,
+            expires,
+            state: TakeState::Prepared,
+            outputs: vec![],
+            fences: BTreeMap::new(),
+        };
+        self.slots.insert(token, slot);
+        self.document_id = Some(d.id.clone());
+        Ok(Counter(token))
+    }
+    pub(crate) fn with_ledger(ledger: Ledger) -> Self {
+        Self {
+            ledger,
+            ..Self::default()
+        }
+    }
+    pub(crate) fn pending_count(&self) -> usize {
+        self.slots
+            .values()
+            .filter(|s| matches!(s.state, TakeState::Prepared | TakeState::Unknown))
+            .count()
+    }
+    pub(crate) fn check_prepare(&self, d: &Document) -> Result<()> {
         if self.document_id.as_ref().is_some_and(|id| id != &d.id) {
             return Err(fail(
                 "DOCUMENT_NAMESPACE",
@@ -249,31 +270,10 @@ impl Runtime {
                 "four preparation/unknown tickets maximum",
             ));
         }
-        let expires = now_ms
-            .checked_add(30_000)
-            .ok_or_else(|| fail("TIME_UNREPRESENTABLE", "deadline overflow"))?;
-        let cost = self.ledger.reserve(estimate(d)?)?;
-        let plan = match compile::compile(d) {
-            Ok(p) => p,
-            Err(e) => {
-                self.ledger.release(cost);
-                return Err(e);
-            }
-        };
-        let slot = Slot {
-            generation: self.generation,
-            revision,
-            plan,
-            document: d.clone(),
-            cost,
-            expires,
-            state: TakeState::Prepared,
-            outputs: vec![],
-            fences: BTreeMap::new(),
-        };
-        self.slots.insert(cost, slot);
-        self.document_id = Some(d.id.clone());
-        Ok(Counter(cost))
+        Ok(())
+    }
+    pub(crate) fn discard_superseded(&mut self) {
+        self.slots.retain(|_, s| s.state != TakeState::Superseded);
     }
     pub fn state(&self, t: Counter) -> Option<TakeState> {
         self.slots.get(&t.0).map(|s| s.state.clone())
@@ -513,8 +513,7 @@ impl Runtime {
     pub fn cancel(&mut self, t: Counter) -> Result<()> {
         match self.state(t) {
             Some(TakeState::Prepared | TakeState::Superseded) => {
-                let s = self.slots.remove(&t.0).unwrap();
-                self.ledger.release(s.cost);
+                self.slots.remove(&t.0);
                 Ok(())
             }
             _ => Err(fail(
@@ -531,8 +530,7 @@ impl Runtime {
             .map(|(id, _)| *id)
             .collect();
         for id in ids {
-            let s = self.slots.remove(&id).unwrap();
-            self.ledger.release(s.cost);
+            self.slots.remove(&id);
         }
     }
     /// Disposal is explicit and typed-thread completion is a Phase 2 adapter obligation.
@@ -541,7 +539,7 @@ impl Runtime {
             return Err(fail("RETIRE_STATE", "not retiring"));
         }
         let slot = self.slots.remove(&t.0).unwrap();
-        self.ledger.release(slot.cost);
+        drop(slot);
         Ok(())
     }
     /// The stop intent uses a dedicated control path, independent of admitted command load.

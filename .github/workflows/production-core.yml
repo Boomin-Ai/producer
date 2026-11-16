@@ -45,6 +45,7 @@ jobs:
           rustc -Vv > core-platform.txt
           cargo run --manifest-path crates/production-runtime/Cargo.toml --locked --release -p producer-production-core --example profile > core-profile.json
           cargo run --manifest-path crates/production-runtime/Cargo.toml --locked --release -p producer-production-core --example profile -- --nested > core-nested-profile.json
+          cargo run --manifest-path crates/production-runtime/Cargo.toml --locked --release -p producer-production-core --example workspace_proof > core-workspace-proof.json
       - uses: actions/upload-artifact@v4
         with:
           name: isolated-core-${{ matrix.os }}-${{ github.sha }}
@@ -52,4 +53,5 @@ jobs:
             core-platform.txt
             core-profile.json
             core-nested-profile.json
+            core-workspace-proof.json
           retention-days: 14

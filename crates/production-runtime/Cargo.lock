@@ -184,6 +184,7 @@ name = "producer-production-core"
 version = "0.1.0"
 dependencies = [
  "fs2",
+ "libc",
  "producer-production-contract",
  "schemars",
  "serde",

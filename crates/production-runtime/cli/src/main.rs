@@ -119,11 +119,7 @@ fn simulate(
             "maximum 65536 aggregate simulated track/player/cue visits",
         ));
     }
-    let mut timeline = Timeline::new(
-        std::sync::Arc::new(sequence.clone()),
-        looping,
-        OutputInstant(Counter(0)),
-    )?;
+    let mut timeline = Timeline::new(sequence.clone(), looping, OutputInstant(Counter(0)))?;
     let mut samples = Vec::new();
     let mut budget = ByteBudget(DOCUMENT_BYTES - 1024);
     for event in events {

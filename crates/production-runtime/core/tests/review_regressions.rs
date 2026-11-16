@@ -249,7 +249,7 @@ fn repeated_undo_traverses_history_and_failed_save_does_not_consume_it() {
 fn reusable_scratch_does_not_leak_drivers_from_a_longer_sequence() {
     let plan = compile(&fixture::classic_like()).unwrap();
     let long = &plan.sequences["opener"];
-    let mut short = long.clone();
+    let mut short = (**long).clone();
     short.tracks.truncate(1);
     let mut scratch = vec![None; 16];
     long.evaluate_into(Time::seconds(2), &mut scratch).unwrap();

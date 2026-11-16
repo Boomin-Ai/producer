@@ -19,3 +19,7 @@ The reviewer's final closure found no remaining **concrete blocker in the review
 ## Subsequent nested timeline slice
 
 The independent closure above applies to the first-slice commit `a1e0f16`, not automatically to later code. The nested slice has parent-authored regression/CLI/benchmark qualification in `NESTED-TIMELINES.md` and `READINESS.md`; it has not received a new independent implementation review. Counterexamples addressed here include rewind cue replay, lost root loop identity across pause/resume, rebinding conflicts, canceling speed ratios, preflight fuel bypass through binding scans and oversized simulation responses. No desktop adoption is authorized by this ledger.
+
+## Subsequent workspace/reuse slice
+
+The independent first-slice review does not certify this later implementation. The parent reviewed worker cancellation/close/reopen races, base-cache lease retention, frame-fence forwarding, dependency invalidation and overflow admission. Regressions are in `core/tests/incremental.rs` and `workspace.rs`; source-linked timings and the bounded small-edit memory proof are documented in `WORKSPACE-COMPILATION.md`. Broader owner/borrower graphs, native adapter lifetimes and a fresh independent implementation review remain open.

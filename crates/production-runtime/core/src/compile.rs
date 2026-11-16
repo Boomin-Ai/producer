@@ -1,7 +1,7 @@
 //! Off-callback compilation; frame evaluation consumes only numeric handles/keys.
 use crate::contract::*;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", content = "value", rename_all = "camelCase")]
@@ -87,9 +87,9 @@ pub struct SequencePlan {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Plan {
     pub digest: String,
-    pub nodes: Vec<NodePlan>,
+    pub nodes: Vec<Arc<NodePlan>>,
     pub targets: Vec<Target>,
-    pub sequences: BTreeMap<String, SequencePlan>,
+    pub sequences: BTreeMap<String, Arc<SequencePlan>>,
     pub inventory: Inventory,
 }
 
@@ -319,7 +319,7 @@ fn expand(
     path: &str,
     r: Rect,
     props: &BTreeMap<String, Value>,
-    out: &mut Vec<NodePlan>,
+    out: &mut Vec<Arc<NodePlan>>,
 ) -> Result<()> {
     let path = format!("{path}/{}", n.id);
     let kind = match &n.content {
@@ -342,7 +342,7 @@ fn expand(
             ))
         })
         .collect::<Result<_>>()?;
-    out.push(NodePlan {
+    out.push(Arc::new(NodePlan {
         path: path.clone(),
         frame: snapped,
         kind: kind.into(),
@@ -352,7 +352,7 @@ fn expand(
             None
         },
         bound,
-    });
+    }));
     if let Content::Component {
         definition,
         props: overrides,
@@ -393,73 +393,10 @@ pub fn compile(d: &Document) -> Result<Plan> {
     }
     let mut sequences = BTreeMap::new();
     let mut temporal_work = TEMPORAL_WORK;
-    for (id, s) in &d.sequences {
-        let expanded = temporal::expand(d, id, &mut temporal_work)?;
-        let mut tracks = Vec::new();
-        for resolved in expanded.tracks {
-            let t = resolved.template;
-            tracks.push(TrackPlan {
-                id: resolved.path,
-                target: handles[&resolved.target],
-                range: t.range,
-                interpolation: t.interpolation,
-                maps: resolved.maps,
-                keys: t
-                    .keys
-                    .iter()
-                    .map(|k| Ok((k.at, CompactValue::from_value(&k.value)?)))
-                    .collect::<Result<_>>()?,
-            });
-        }
-        let mut players = Vec::new();
-        for p in expanded.players {
-            let mut maps = p.maps;
-            let available = if let Source::Player { asset } = &d.sources[&p.source] {
-                d.assets[asset].available
-            } else {
-                None
-            };
-            if let Some(source_range) = available {
-                maps.push(temporal::TimeMap {
-                    range: p.template.range,
-                    source_range,
-                    source_in: p.template.source_in,
-                    speed: p.template.speed,
-                    looping: p.template.looping,
-                });
-            }
-            players.push(PlayerPlan {
-                path: p.path,
-                source: p.source,
-                range: p.template.range,
-                maps,
-                available,
-            });
-        }
-        let mut routes = Vec::new();
-        let mut routed = std::collections::BTreeSet::new();
-        for route in expanded.routes {
-            if routed.insert((route.source.clone(), route.bus)) {
-                routes.push(route);
-            }
-        }
+    for id in d.sequences.keys() {
         sequences.insert(
             id.clone(),
-            SequencePlan {
-                duration: s.duration,
-                tracks,
-                players,
-                cues: expanded
-                    .cues
-                    .into_iter()
-                    .map(|c| CuePlan {
-                        path: c.path,
-                        cue: c.template.clone(),
-                        maps: c.maps,
-                    })
-                    .collect(),
-                routes,
-            },
+            Arc::new(sequence(d, id, &handles, &mut temporal_work)?),
         );
     }
     Ok(Plan {
@@ -468,5 +405,90 @@ pub fn compile(d: &Document) -> Result<Plan> {
         targets,
         sequences,
         inventory,
+    })
+}
+
+pub(crate) fn layout(d: &Document, sid: &str, lid: &str) -> Result<Vec<Arc<NodePlan>>> {
+    let l = &d.sets[sid].layouts[lid];
+    let mut nodes = vec![];
+    expand(
+        d,
+        &l.root,
+        &format!("sets/{sid}/layouts/{lid}"),
+        l.root.frame.unwrap(),
+        &BTreeMap::new(),
+        &mut nodes,
+    )?;
+    Ok(nodes)
+}
+pub(crate) fn sequence(
+    d: &Document,
+    id: &str,
+    handles: &BTreeMap<Target, usize>,
+    temporal_work: &mut usize,
+) -> Result<SequencePlan> {
+    let expanded = temporal::expand(d, id, temporal_work)?;
+    let mut tracks = Vec::new();
+    for resolved in expanded.tracks {
+        let t = resolved.template;
+        tracks.push(TrackPlan {
+            id: resolved.path,
+            target: handles[&resolved.target],
+            range: t.range,
+            interpolation: t.interpolation,
+            maps: resolved.maps,
+            keys: t
+                .keys
+                .iter()
+                .map(|k| Ok((k.at, CompactValue::from_value(&k.value)?)))
+                .collect::<Result<_>>()?,
+        });
+    }
+    let mut players = Vec::new();
+    for p in expanded.players {
+        let mut maps = p.maps;
+        let available = if let Source::Player { asset } = &d.sources[&p.source] {
+            d.assets[asset].available
+        } else {
+            None
+        };
+        if let Some(source_range) = available {
+            maps.push(temporal::TimeMap {
+                range: p.template.range,
+                source_range,
+                source_in: p.template.source_in,
+                speed: p.template.speed,
+                looping: p.template.looping,
+            });
+        }
+        players.push(PlayerPlan {
+            path: p.path,
+            source: p.source,
+            range: p.template.range,
+            maps,
+            available,
+        });
+    }
+    let mut routes = Vec::new();
+    let mut routed = std::collections::BTreeSet::new();
+    for route in expanded.routes {
+        if routed.insert((route.source.clone(), route.bus)) {
+            routes.push(route);
+        }
+    }
+    Ok(SequencePlan {
+        duration: d.sequences[id].duration,
+        tracks,
+        players,
+        cues: expanded
+            .cues
+            .into_iter()
+            .map(|c| CuePlan {
+                path: c.path,
+                cue: c.template.clone(),
+                maps: c.maps,
+            })
+            .collect(),
+        routes,
     })
 }

@@ -1,5 +1,4 @@
 use producer_production_core::{compile::*, contract::*, timeline::*, transport::*};
-use std::sync::Arc;
 fn at(ns: u64) -> Counter {
     Counter(ns)
 }
@@ -14,7 +13,7 @@ fn plan() -> Plan {
 }
 fn timeline(looping: bool) -> Timeline {
     Timeline::new(
-        Arc::new(plan().sequences["timeline"].clone()),
+        plan().sequences["timeline"].clone(),
         looping,
         OutputInstant(sec(0)),
     )

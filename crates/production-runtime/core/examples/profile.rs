@@ -1,5 +1,5 @@
 //! Reproducible core-only profile; no renderer, browser, codec or claimed FPS gain.
-use producer_production_core::{compile::*, contract::*};
+use producer_production_core::{compile::*, contract::*, incremental::Compiler};
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     sync::atomic::{AtomicBool, AtomicU64, Ordering},
@@ -178,7 +178,45 @@ fn main() {
         compiles.push(begin.elapsed().as_nanos());
     }
     let p95 = percentile(&mut compiles, 95);
-    let result = serde_json::json!({"nested":nested,"temporalDepth":if nested {2} else {0},"fixtureDigest":digest(&d).unwrap(),"nodes":p.nodes.len(),"tracks":sequence.tracks.len(),"evaluationSamples":samples.len(),"evaluationP99Ms":p99,"evaluationAllocations":allocations,"firstCompileMs":cold,"repeatedFullCompileP95Ms":p95,"evaluationGate1Ms":p99<=1.0,"coldCompileGate250Ms":cold<=250.0,"fullCompileReference50Ms":p95<=50.0,"dirtySubgraphCompile":"not implemented/qualified","nativeGpu":"not measured"});
+    let mut compiler = Compiler::default();
+    compiler.compile(&d).unwrap();
+    let mut changed = d.clone();
+    let mut incremental = Vec::with_capacity(30);
+    let mut controls = Vec::with_capacity(30);
+    for i in 0..30 {
+        changed
+            .sets
+            .get_mut("classic")
+            .unwrap()
+            .layouts
+            .get_mut("wide")
+            .unwrap()
+            .root
+            .children[2]
+            .bindings = vec![Binding {
+            property: Property::Opacity,
+            expression: Expr::Literal {
+                value: Value::Number(if i % 2 == 0 { 0.9 } else { 0.8 }),
+            },
+        }];
+        let begin = Instant::now();
+        let (plan, stats) = compiler.compile(&changed).unwrap();
+        assert_eq!(stats.layouts_built, 1);
+        assert_eq!(stats.layouts_reused, 1);
+        assert_eq!(stats.sequences_built, 0);
+        std::hint::black_box(plan);
+        incremental.push(begin.elapsed().as_nanos());
+        changed.title = format!("Authoring edit {i}");
+        let begin = Instant::now();
+        let (plan, stats) = compiler.compile(&changed).unwrap();
+        assert_eq!(stats.layouts_built, 0);
+        assert_eq!(stats.sequences_built, 0);
+        std::hint::black_box(plan);
+        controls.push(begin.elapsed().as_nanos());
+    }
+    let incremental_p95 = percentile(&mut incremental, 95);
+    let controls_p95 = percentile(&mut controls, 95);
+    let result = serde_json::json!({"nested":nested,"temporalDepth":if nested {2} else {0},"fixtureDigest":digest(&d).unwrap(),"nodes":p.nodes.len(),"tracks":sequence.tracks.len(),"evaluationSamples":samples.len(),"evaluationP99Ms":p99,"evaluationAllocations":allocations,"firstCompileMs":cold,"repeatedFullCompileP95Ms":p95,"evaluationGate1Ms":p99<=1.0,"coldCompileGate250Ms":cold<=250.0,"fullCompileReference50Ms":p95<=50.0,"dirtyLayoutCompileP95Ms":incremental_p95,"authoringOnlyCompileP95Ms":controls_p95,"dirtyCompileGate50Ms":incremental_p95<=50.0,"admission":"full validation and canonical digest on every build","nativeGpu":"not measured"});
     println!("{}", serde_json::to_string_pretty(&result).unwrap());
     assert!(
         p99 <= 1.0 && cold <= 250.0,
