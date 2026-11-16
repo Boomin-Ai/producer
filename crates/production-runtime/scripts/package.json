@@ -1,0 +1,6 @@
+{
+  "name":"producer-production-contract-checks",
+  "private":true,
+  "type":"module",
+  "devDependencies":{"ajv":"8.17.1","typescript":"5.9.3"}
+}

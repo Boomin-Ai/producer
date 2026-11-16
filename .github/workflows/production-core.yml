@@ -1,0 +1,52 @@
+name: Isolated production core
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['crates/production-runtime/**', '.github/workflows/production-core.yml']
+permissions:
+  contents: read
+jobs:
+  core:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-24.04, binary: producer-core}
+          - {os: windows-2022, binary: producer-core.exe}
+          - {os: macos-latest, binary: producer-core}
+          - {os: macos-15-intel, binary: producer-core}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target/production-core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - run: cargo fmt --manifest-path crates/production-runtime/Cargo.toml --all --check
+      - run: cargo clippy --manifest-path crates/production-runtime/Cargo.toml --locked --all-targets -- -D warnings
+      - run: cargo test --manifest-path crates/production-runtime/Cargo.toml --locked
+      - run: cargo build --manifest-path crates/production-runtime/Cargo.toml --locked
+      - run: python crates/production-runtime/scripts/generate.py --binary target/production-core/debug/${{ matrix.binary }} --check
+      - run: python crates/production-runtime/scripts/prove.py --binary target/production-core/debug/${{ matrix.binary }}
+      - run: node crates/production-runtime/scripts/canonical-check.mjs target/production-core/debug/${{ matrix.binary }}
+      - run: npm ci --ignore-scripts --no-audit --no-fund --prefix crates/production-runtime/scripts
+      - run: node crates/production-runtime/scripts/node_modules/typescript/bin/tsc -p crates/production-runtime/scripts/tsconfig.json
+      - run: node crates/production-runtime/scripts/schema-check.mjs target/production-core/debug/${{ matrix.binary }}
+      - name: Record platform and release profile
+        shell: bash
+        run: |
+          rustc -Vv > core-platform.txt
+          cargo run --manifest-path crates/production-runtime/Cargo.toml --locked --release -p producer-production-core --example profile > core-profile.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: isolated-core-${{ matrix.os }}-${{ github.sha }}
+          path: |
+            core-platform.txt
+            core-profile.json
+          retention-days: 14

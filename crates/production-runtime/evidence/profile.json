@@ -1,0 +1,72 @@
+{
+  "date": "2026-11-15",
+  "baselineCommit": "667147951452931ebbc7f26db6dec02616aee74d",
+  "branch": "feat/production-core-phase1",
+  "sourceManifestSha256": "a83308159493cc160c6c3891e32891c8a982fbfaabe874db3229e14dd6abd4bb",
+  "architecture": "arm64",
+  "operatingSystem": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0.1\nBuildVersion:\t\t26A434",
+  "toolchain": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: aarch64-apple-darwin\nrelease: 1.99.1\nLLVM version: 23.1.1",
+  "runs": [
+    {
+      "coldCompileGate250Ms": true,
+      "dirtySubgraphCompile": "not implemented/qualified",
+      "evaluationAllocations": 0,
+      "evaluationGate1Ms": true,
+      "evaluationP99Ms": 0.060333,
+      "evaluationSamples": 20000,
+      "firstCompileMs": 33.310458000000004,
+      "fixtureDigest": "87d1942143d2ad0a9e4c2571567f2106809ef4fa6522475db44444b18f229b4c",
+      "fullCompileReference50Ms": true,
+      "nativeGpu": "not measured",
+      "nodes": 1000,
+      "repeatedFullCompileP95Ms": 38.935958,
+      "tracks": 256
+    },
+    {
+      "coldCompileGate250Ms": true,
+      "dirtySubgraphCompile": "not implemented/qualified",
+      "evaluationAllocations": 0,
+      "evaluationGate1Ms": true,
+      "evaluationP99Ms": 0.059834,
+      "evaluationSamples": 20000,
+      "firstCompileMs": 32.49975,
+      "fixtureDigest": "87d1942143d2ad0a9e4c2571567f2106809ef4fa6522475db44444b18f229b4c",
+      "fullCompileReference50Ms": true,
+      "nativeGpu": "not measured",
+      "nodes": 1000,
+      "repeatedFullCompileP95Ms": 39.668083,
+      "tracks": 256
+    },
+    {
+      "coldCompileGate250Ms": true,
+      "dirtySubgraphCompile": "not implemented/qualified",
+      "evaluationAllocations": 0,
+      "evaluationGate1Ms": true,
+      "evaluationP99Ms": 0.079333,
+      "evaluationSamples": 20000,
+      "firstCompileMs": 47.160208000000004,
+      "fixtureDigest": "87d1942143d2ad0a9e4c2571567f2106809ef4fa6522475db44444b18f229b4c",
+      "fullCompileReference50Ms": true,
+      "nativeGpu": "not measured",
+      "nodes": 1000,
+      "repeatedFullCompileP95Ms": 37.782166,
+      "tracks": 256
+    }
+  ],
+  "scope": "Synthetic core-only; no native media, GPU, CEF, rendering or FPS measurement. Repeated compile is a full compile, not dirty-subgraph compilation.",
+  "summary": {
+    "evaluationP99MsRange": [
+      0.059834,
+      0.079333
+    ],
+    "firstCompileMsRange": [
+      32.49975,
+      47.160208000000004
+    ],
+    "repeatedFullCompileP95MsRange": [
+      37.782166,
+      39.668083
+    ]
+  },
+  "profileBinarySha256": "ce66be2b2553cd5ee8e77f9fff693bcdc36f2614cbb750cace69580d20ffd047"
+}

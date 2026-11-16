@@ -1,0 +1,583 @@
+{
+  "assets": {
+    "geometry": {
+      "available": null,
+      "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "kind": "geometry"
+    },
+    "material": {
+      "available": null,
+      "hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "kind": "material"
+    },
+    "movie": {
+      "available": {
+        "duration": {
+          "rate": 1,
+          "ticks": "21"
+        },
+        "start": {
+          "rate": 1,
+          "ticks": "-1"
+        }
+      },
+      "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "kind": "video"
+    }
+  },
+  "components": {
+    "badge": {
+      "authority": "local",
+      "props": {
+        "level": {
+          "type": "number",
+          "value": 0.8
+        }
+      },
+      "root": {
+        "bindings": [],
+        "children": [
+          {
+            "bindings": [
+              {
+                "expression": {
+                  "name": "level",
+                  "op": "input"
+                },
+                "property": "opacity"
+              }
+            ],
+            "children": [],
+            "content": {
+              "font": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "kind": "text",
+              "value": "Your next chapter"
+            },
+            "flow": {
+              "kind": "overlay"
+            },
+            "frame": {
+              "height": 60.0,
+              "width": 280.0,
+              "x": 0.0,
+              "y": 0.0
+            },
+            "id": "label"
+          }
+        ],
+        "content": {
+          "kind": "group"
+        },
+        "flow": {
+          "kind": "overlay"
+        },
+        "frame": null,
+        "id": "badge"
+      },
+      "version": 1
+    }
+  },
+  "id": "classic-lab",
+  "metadata": {},
+  "schema": "producer.production/1",
+  "sequences": {
+    "opener": {
+      "audioRoutes": [
+        {
+          "bus": "program",
+          "id": "movie-program",
+          "source": "player-a"
+        }
+      ],
+      "cues": [
+        {
+          "at": {
+            "rate": 1,
+            "ticks": "2"
+          },
+          "atStart": false,
+          "eachLoop": false,
+          "id": "whoosh"
+        }
+      ],
+      "duration": {
+        "rate": 1,
+        "ticks": "8"
+      },
+      "placements": [
+        {
+          "id": "clip-a",
+          "looping": false,
+          "range": {
+            "duration": {
+              "rate": 1,
+              "ticks": "8"
+            },
+            "start": {
+              "rate": 1,
+              "ticks": "0"
+            }
+          },
+          "source": "player-a",
+          "sourceIn": {
+            "rate": 1,
+            "ticks": "0"
+          },
+          "speed": {
+            "denominator": 1,
+            "numerator": 1
+          }
+        },
+        {
+          "id": "clip-b",
+          "looping": false,
+          "range": {
+            "duration": {
+              "rate": 1,
+              "ticks": "8"
+            },
+            "start": {
+              "rate": 1,
+              "ticks": "0"
+            }
+          },
+          "source": "player-b",
+          "sourceIn": {
+            "rate": 1,
+            "ticks": "4"
+          },
+          "speed": {
+            "denominator": 1,
+            "numerator": 1
+          }
+        }
+      ],
+      "tracks": [
+        {
+          "id": "host-fade",
+          "interpolation": "linear",
+          "keys": [
+            {
+              "at": {
+                "rate": 1,
+                "ticks": "0"
+              },
+              "value": {
+                "type": "number",
+                "value": 0.0
+              }
+            },
+            {
+              "at": {
+                "rate": 1,
+                "ticks": "8"
+              },
+              "value": {
+                "type": "number",
+                "value": 1.0
+              }
+            }
+          ],
+          "range": {
+            "duration": {
+              "rate": 1,
+              "ticks": "8"
+            },
+            "start": {
+              "rate": 1,
+              "ticks": "0"
+            }
+          },
+          "target": {
+            "path": "sets/classic/layouts/wide/root/host",
+            "property": "opacity"
+          }
+        },
+        {
+          "id": "camera-move",
+          "interpolation": "linear",
+          "keys": [
+            {
+              "at": {
+                "rate": 1,
+                "ticks": "0"
+              },
+              "value": {
+                "type": "vec3",
+                "value": [
+                  0.0,
+                  0.0,
+                  5.0
+                ]
+              }
+            },
+            {
+              "at": {
+                "rate": 1,
+                "ticks": "8"
+              },
+              "value": {
+                "type": "vec3",
+                "value": [
+                  2.0,
+                  1.0,
+                  3.0
+                ]
+              }
+            }
+          ],
+          "range": {
+            "duration": {
+              "rate": 1,
+              "ticks": "8"
+            },
+            "start": {
+              "rate": 1,
+              "ticks": "0"
+            }
+          },
+          "target": {
+            "path": "sources/stage/parameters/camera",
+            "property": "cameraPosition"
+          }
+        }
+      ]
+    }
+  },
+  "sets": {
+    "classic": {
+      "actions": {
+        "hide-host": [
+          {
+            "kind": "setParameter",
+            "target": {
+              "path": "sets/classic/layouts/wide/root/host",
+              "property": "opacity"
+            },
+            "value": {
+              "type": "number",
+              "value": 0.0
+            }
+          }
+        ]
+      },
+      "controls": [
+        {
+          "action": "hide-host",
+          "compact": true,
+          "equalWidth": true,
+          "id": "host-visibility",
+          "label": "Hide host",
+          "primary": true,
+          "scope": {
+            "kind": "layout",
+            "layout": "wide"
+          }
+        }
+      ],
+      "layouts": {
+        "tall": {
+          "height": 1920,
+          "orientation": "vertical",
+          "root": {
+            "bindings": [],
+            "children": [
+              {
+                "bindings": [],
+                "children": [],
+                "content": {
+                  "fit": "cover",
+                  "kind": "source",
+                  "source": "host"
+                },
+                "flow": {
+                  "kind": "overlay"
+                },
+                "frame": {
+                  "height": 640.0,
+                  "width": 600.0,
+                  "x": 32.0,
+                  "y": 80.0
+                },
+                "id": "host"
+              },
+              {
+                "bindings": [],
+                "children": [],
+                "content": {
+                  "fit": "contain",
+                  "kind": "source",
+                  "source": "screen"
+                },
+                "flow": {
+                  "kind": "overlay"
+                },
+                "frame": {
+                  "height": 280.0,
+                  "width": 1000.0,
+                  "x": 32.0,
+                  "y": 760.0
+                },
+                "id": "screen"
+              },
+              {
+                "bindings": [],
+                "children": [],
+                "content": {
+                  "definition": "badge",
+                  "kind": "component",
+                  "pin": "7f782f839fed39097dc838c6d71bd688d91760af7ee35e361f7ab1883209ee9a",
+                  "props": {
+                    "level": {
+                      "type": "number",
+                      "value": 0.8
+                    }
+                  }
+                },
+                "flow": {
+                  "kind": "overlay"
+                },
+                "frame": {
+                  "height": 60.0,
+                  "width": 280.0,
+                  "x": 680.0,
+                  "y": 80.0
+                },
+                "id": "first-badge"
+              },
+              {
+                "bindings": [],
+                "children": [],
+                "content": {
+                  "definition": "badge",
+                  "kind": "component",
+                  "pin": "7f782f839fed39097dc838c6d71bd688d91760af7ee35e361f7ab1883209ee9a",
+                  "props": {
+                    "level": {
+                      "type": "number",
+                      "value": 0.4
+                    }
+                  }
+                },
+                "flow": {
+                  "kind": "overlay"
+                },
+                "frame": {
+                  "height": 60.0,
+                  "width": 280.0,
+                  "x": 680.0,
+                  "y": 180.0
+                },
+                "id": "second-badge"
+              }
+            ],
+            "content": {
+              "kind": "group"
+            },
+            "flow": {
+              "kind": "overlay"
+            },
+            "frame": {
+              "height": 1920.0,
+              "width": 1080.0,
+              "x": 0.0,
+              "y": 0.0
+            },
+            "id": "root"
+          },
+          "width": 1080
+        },
+        "wide": {
+          "height": 1080,
+          "orientation": "landscape",
+          "root": {
+            "bindings": [],
+            "children": [
+              {
+                "bindings": [],
+                "children": [],
+                "content": {
+                  "fit": "cover",
+                  "kind": "source",
+                  "source": "host"
+                },
+                "flow": {
+                  "kind": "overlay"
+                },
+                "frame": {
+                  "height": 640.0,
+                  "width": 600.0,
+                  "x": 32.0,
+                  "y": 80.0
+                },
+                "id": "host"
+              },
+              {
+                "bindings": [],
+                "children": [],
+                "content": {
+                  "fit": "contain",
+                  "kind": "source",
+                  "source": "screen"
+                },
+                "flow": {
+                  "kind": "overlay"
+                },
+                "frame": {
+                  "height": 280.0,
+                  "width": 1000.0,
+                  "x": 32.0,
+                  "y": 760.0
+                },
+                "id": "screen"
+              },
+              {
+                "bindings": [],
+                "children": [],
+                "content": {
+                  "definition": "badge",
+                  "kind": "component",
+                  "pin": "7f782f839fed39097dc838c6d71bd688d91760af7ee35e361f7ab1883209ee9a",
+                  "props": {
+                    "level": {
+                      "type": "number",
+                      "value": 0.8
+                    }
+                  }
+                },
+                "flow": {
+                  "kind": "overlay"
+                },
+                "frame": {
+                  "height": 60.0,
+                  "width": 280.0,
+                  "x": 680.0,
+                  "y": 80.0
+                },
+                "id": "first-badge"
+              },
+              {
+                "bindings": [],
+                "children": [],
+                "content": {
+                  "definition": "badge",
+                  "kind": "component",
+                  "pin": "7f782f839fed39097dc838c6d71bd688d91760af7ee35e361f7ab1883209ee9a",
+                  "props": {
+                    "level": {
+                      "type": "number",
+                      "value": 0.4
+                    }
+                  }
+                },
+                "flow": {
+                  "kind": "overlay"
+                },
+                "frame": {
+                  "height": 60.0,
+                  "width": 280.0,
+                  "x": 680.0,
+                  "y": 180.0
+                },
+                "id": "second-badge"
+              }
+            ],
+            "content": {
+              "kind": "group"
+            },
+            "flow": {
+              "kind": "overlay"
+            },
+            "frame": {
+              "height": 1080.0,
+              "width": 1920.0,
+              "x": 0.0,
+              "y": 0.0
+            },
+            "id": "root"
+          },
+          "width": 1920
+        }
+      },
+      "theme": {
+        "accent": "#83d9ba",
+        "surface": "#10141c"
+      }
+    }
+  },
+  "shows": {
+    "pilot": {
+      "authority": "local",
+      "segments": [
+        {
+          "id": "opening",
+          "landscape": "wide",
+          "sequence": "opener",
+          "title": "Your first signal",
+          "vertical": "tall"
+        }
+      ],
+      "set": "classic"
+    }
+  },
+  "sources": {
+    "host": {
+      "kind": "live",
+      "role": "hostCamera"
+    },
+    "player-a": {
+      "asset": "movie",
+      "kind": "player"
+    },
+    "player-b": {
+      "asset": "movie",
+      "kind": "player"
+    },
+    "screen": {
+      "kind": "live",
+      "role": "screen"
+    },
+    "stage": {
+      "kind": "graphics",
+      "scene": {
+        "analytic": true,
+        "batches": [
+          {
+            "geometry": "geometry",
+            "id": "lights",
+            "instances": 1000,
+            "material": "material"
+          }
+        ],
+        "parameters": {
+          "accent": {
+            "initial": {
+              "type": "color",
+              "value": "#83d9ba"
+            },
+            "property": "materialColor"
+          },
+          "camera": {
+            "initial": {
+              "type": "vec3",
+              "value": [
+                0.0,
+                0.0,
+                5.0
+              ]
+            },
+            "property": "cameraPosition"
+          },
+          "key-light": {
+            "initial": {
+              "type": "number",
+              "value": 1.0
+            },
+            "property": "lightIntensity"
+          }
+        }
+      }
+    }
+  },
+  "title": "Classic · production core proof"
+}

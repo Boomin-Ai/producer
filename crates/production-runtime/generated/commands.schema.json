@@ -1,0 +1,2112 @@
+{
+  "$defs": {
+    "Action": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "setParameter",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "target": {
+              "$ref": "#/$defs/Target"
+            },
+            "value": {
+              "$ref": "#/$defs/Value"
+            }
+          },
+          "required": [
+            "kind",
+            "target",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "cue": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "kind": {
+              "const": "emitCue",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind",
+            "cue"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Asset": {
+      "additionalProperties": false,
+      "properties": {
+        "available": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Range"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "hash": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "kind": {
+          "$ref": "#/$defs/AssetKind"
+        }
+      },
+      "required": [
+        "hash",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "AssetKind": {
+      "enum": [
+        "video",
+        "audio",
+        "image",
+        "geometry",
+        "material",
+        "font"
+      ],
+      "type": "string",
+      "x-maxUtf8Bytes": 65536
+    },
+    "AudioRoute": {
+      "additionalProperties": false,
+      "properties": {
+        "bus": {
+          "$ref": "#/$defs/Bus"
+        },
+        "id": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "source": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "bus"
+      ],
+      "type": "object"
+    },
+    "Authority": {
+      "enum": [
+        "local",
+        "hosted"
+      ],
+      "type": "string",
+      "x-maxUtf8Bytes": 65536
+    },
+    "Batch": {
+      "additionalProperties": false,
+      "properties": {
+        "geometry": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "id": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "instances": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "material": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        }
+      },
+      "required": [
+        "id",
+        "geometry",
+        "material",
+        "instances"
+      ],
+      "type": "object"
+    },
+    "Binding": {
+      "additionalProperties": false,
+      "properties": {
+        "expression": {
+          "$ref": "#/$defs/Expr"
+        },
+        "property": {
+          "$ref": "#/$defs/Property"
+        }
+      },
+      "required": [
+        "property",
+        "expression"
+      ],
+      "type": "object"
+    },
+    "Bus": {
+      "enum": [
+        "program",
+        "monitor"
+      ],
+      "type": "string",
+      "x-maxUtf8Bytes": 65536
+    },
+    "Component": {
+      "additionalProperties": false,
+      "properties": {
+        "authority": {
+          "$ref": "#/$defs/Authority"
+        },
+        "props": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Value"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "root": {
+          "$ref": "#/$defs/Node"
+        },
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "authority",
+        "root"
+      ],
+      "type": "object"
+    },
+    "Content": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "group",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "font": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "kind": {
+              "const": "text",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "value": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind",
+            "value",
+            "font"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "fit": {
+              "$ref": "#/$defs/Fit"
+            },
+            "kind": {
+              "const": "source",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "source": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind",
+            "source",
+            "fit"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "definition": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "kind": {
+              "const": "component",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "pin": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "props": {
+              "additionalProperties": {
+                "$ref": "#/$defs/Value"
+              },
+              "default": {},
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "definition",
+            "pin"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Control": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "compact": {
+          "default": false,
+          "type": "boolean"
+        },
+        "equalWidth": {
+          "default": false,
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "label": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "primary": {
+          "default": false,
+          "type": "boolean"
+        },
+        "scope": {
+          "$ref": "#/$defs/ControlScope"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "action",
+        "scope"
+      ],
+      "type": "object"
+    },
+    "ControlScope": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "entireSet",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "layout",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "layout": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind",
+            "layout"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Counter": {
+      "pattern": "^(0|[1-9][0-9]{0,19})$",
+      "type": "string",
+      "x-nativeRange": "u64",
+      "x-maxUtf8Bytes": 65536
+    },
+    "Cue": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "$ref": "#/$defs/Time"
+        },
+        "atStart": {
+          "default": false,
+          "type": "boolean"
+        },
+        "eachLoop": {
+          "default": false,
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        }
+      },
+      "required": [
+        "id",
+        "at"
+      ],
+      "type": "object"
+    },
+    "Document": {
+      "additionalProperties": false,
+      "properties": {
+        "assets": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Asset"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "components": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Component"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "id": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "default": {},
+          "type": "object"
+        },
+        "schema": {
+          "$ref": "#/$defs/Version"
+        },
+        "sequences": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Sequence"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "sets": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Set"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "shows": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Show"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "sources": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Source"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "title": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        }
+      },
+      "required": [
+        "schema",
+        "id",
+        "title"
+      ],
+      "type": "object"
+    },
+    "Expr": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "literal",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "value": {
+              "$ref": "#/$defs/Value"
+            }
+          },
+          "required": [
+            "op",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "input",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "op",
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "a": {
+              "$ref": "#/$defs/Expr"
+            },
+            "b": {
+              "$ref": "#/$defs/Expr"
+            },
+            "op": {
+              "const": "add",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "op",
+            "a",
+            "b"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "a": {
+              "$ref": "#/$defs/Expr"
+            },
+            "b": {
+              "$ref": "#/$defs/Expr"
+            },
+            "op": {
+              "const": "subtract",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "op",
+            "a",
+            "b"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "a": {
+              "$ref": "#/$defs/Expr"
+            },
+            "b": {
+              "$ref": "#/$defs/Expr"
+            },
+            "op": {
+              "const": "multiply",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "op",
+            "a",
+            "b"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "a": {
+              "$ref": "#/$defs/Expr"
+            },
+            "b": {
+              "$ref": "#/$defs/Expr"
+            },
+            "op": {
+              "const": "divide",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "op",
+            "a",
+            "b"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "a": {
+              "$ref": "#/$defs/Expr"
+            },
+            "b": {
+              "$ref": "#/$defs/Expr"
+            },
+            "op": {
+              "const": "less",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "op",
+            "a",
+            "b"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "a": {
+              "$ref": "#/$defs/Expr"
+            },
+            "b": {
+              "$ref": "#/$defs/Expr"
+            },
+            "op": {
+              "const": "equal",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "op",
+            "a",
+            "b"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "condition": {
+              "$ref": "#/$defs/Expr"
+            },
+            "no": {
+              "$ref": "#/$defs/Expr"
+            },
+            "op": {
+              "const": "select",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "yes": {
+              "$ref": "#/$defs/Expr"
+            }
+          },
+          "required": [
+            "op",
+            "condition",
+            "yes",
+            "no"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "max": {
+              "$ref": "#/$defs/Expr"
+            },
+            "min": {
+              "$ref": "#/$defs/Expr"
+            },
+            "op": {
+              "const": "clamp",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "value": {
+              "$ref": "#/$defs/Expr"
+            }
+          },
+          "required": [
+            "op",
+            "value",
+            "min",
+            "max"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Fit": {
+      "enum": [
+        "contain",
+        "cover",
+        "stretch"
+      ],
+      "type": "string",
+      "x-maxUtf8Bytes": 65536
+    },
+    "Flow": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "overlay",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "gap": {
+              "format": "double",
+              "type": "number"
+            },
+            "kind": {
+              "const": "row",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "sizes": {
+              "items": {
+                "$ref": "#/$defs/Size"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "gap",
+            "sizes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "gap": {
+              "format": "double",
+              "type": "number"
+            },
+            "kind": {
+              "const": "column",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "sizes": {
+              "items": {
+                "$ref": "#/$defs/Size"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "gap",
+            "sizes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "columns": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "gap": {
+              "format": "double",
+              "type": "number"
+            },
+            "kind": {
+              "const": "grid",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind",
+            "gap",
+            "columns"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Interpolation": {
+      "enum": [
+        "step",
+        "linear"
+      ],
+      "type": "string",
+      "x-maxUtf8Bytes": 65536
+    },
+    "Key": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "$ref": "#/$defs/Time"
+        },
+        "value": {
+          "$ref": "#/$defs/Value"
+        }
+      },
+      "required": [
+        "at",
+        "value"
+      ],
+      "type": "object"
+    },
+    "Layout": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "orientation": {
+          "$ref": "#/$defs/Orientation"
+        },
+        "root": {
+          "$ref": "#/$defs/Node"
+        },
+        "width": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "orientation",
+        "width",
+        "height",
+        "root"
+      ],
+      "type": "object"
+    },
+    "Node": {
+      "additionalProperties": false,
+      "properties": {
+        "bindings": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Binding"
+          },
+          "type": "array"
+        },
+        "children": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Node"
+          },
+          "type": "array"
+        },
+        "content": {
+          "$ref": "#/$defs/Content"
+        },
+        "flow": {
+          "$ref": "#/$defs/Flow",
+          "default": {
+            "kind": "overlay"
+          }
+        },
+        "frame": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rect"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "id": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        }
+      },
+      "required": [
+        "id",
+        "content"
+      ],
+      "type": "object"
+    },
+    "Operation": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "setTitle",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "title": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "op",
+            "title"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "addAsset",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "value": {
+              "$ref": "#/$defs/Asset"
+            }
+          },
+          "required": [
+            "op",
+            "id",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "removeAsset",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "op",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "addSource",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "value": {
+              "$ref": "#/$defs/Source"
+            }
+          },
+          "required": [
+            "op",
+            "id",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "removeSource",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "op",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "addComponent",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "value": {
+              "$ref": "#/$defs/Component"
+            }
+          },
+          "required": [
+            "op",
+            "id",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "replaceComponent",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "value": {
+              "$ref": "#/$defs/Component"
+            }
+          },
+          "required": [
+            "op",
+            "id",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "removeComponent",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "op",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "addSet",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "value": {
+              "$ref": "#/$defs/Set"
+            }
+          },
+          "required": [
+            "op",
+            "id",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "replaceSet",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "value": {
+              "$ref": "#/$defs/Set"
+            }
+          },
+          "required": [
+            "op",
+            "id",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "removeSet",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "op",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "addSequence",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "value": {
+              "$ref": "#/$defs/Sequence"
+            }
+          },
+          "required": [
+            "op",
+            "id",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "replaceSequence",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "value": {
+              "$ref": "#/$defs/Sequence"
+            }
+          },
+          "required": [
+            "op",
+            "id",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "removeSequence",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "op",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "addShow",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "value": {
+              "$ref": "#/$defs/Show"
+            }
+          },
+          "required": [
+            "op",
+            "id",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "replaceShow",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "value": {
+              "$ref": "#/$defs/Show"
+            }
+          },
+          "required": [
+            "op",
+            "id",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "removeShow",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "op",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "color": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "setThemeToken",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "set": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "token": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "op",
+            "set",
+            "token",
+            "color"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "control": {
+              "$ref": "#/$defs/Control"
+            },
+            "op": {
+              "const": "setControl",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "set": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "op",
+            "set",
+            "control"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "layout": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "setText",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "path": {
+              "items": {
+                "type": "string",
+                "x-maxUtf8Bytes": 65536
+              },
+              "type": "array"
+            },
+            "set": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "text": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "op",
+            "set",
+            "layout",
+            "path",
+            "text"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "frame": {
+              "$ref": "#/$defs/Rect"
+            },
+            "layout": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "setFrame",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "path": {
+              "items": {
+                "type": "string",
+                "x-maxUtf8Bytes": 65536
+              },
+              "type": "array"
+            },
+            "set": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "op",
+            "set",
+            "layout",
+            "path",
+            "frame"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "layout": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "op": {
+              "const": "setComponentProp",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "path": {
+              "items": {
+                "type": "string",
+                "x-maxUtf8Bytes": 65536
+              },
+              "type": "array"
+            },
+            "prop": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "set": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "value": {
+              "$ref": "#/$defs/Value"
+            }
+          },
+          "required": [
+            "op",
+            "set",
+            "layout",
+            "path",
+            "prop",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Orientation": {
+      "enum": [
+        "landscape",
+        "vertical"
+      ],
+      "type": "string",
+      "x-maxUtf8Bytes": 65536
+    },
+    "Placement": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "looping": {
+          "default": false,
+          "type": "boolean"
+        },
+        "range": {
+          "$ref": "#/$defs/Range"
+        },
+        "source": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "sourceIn": {
+          "$ref": "#/$defs/Time"
+        },
+        "speed": {
+          "$ref": "#/$defs/Speed",
+          "default": {
+            "denominator": 1,
+            "numerator": 1
+          }
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "range",
+        "sourceIn"
+      ],
+      "type": "object"
+    },
+    "Property": {
+      "enum": [
+        "opacity",
+        "translateX",
+        "translateY",
+        "scale",
+        "rotation",
+        "visibility",
+        "cameraPosition",
+        "cameraTarget",
+        "cameraFov",
+        "materialColor",
+        "materialRoughness",
+        "lightIntensity",
+        "uniform",
+        "instanceOffset"
+      ],
+      "type": "string",
+      "x-maxUtf8Bytes": 65536
+    },
+    "Range": {
+      "additionalProperties": false,
+      "properties": {
+        "duration": {
+          "$ref": "#/$defs/Time"
+        },
+        "start": {
+          "$ref": "#/$defs/Time"
+        }
+      },
+      "required": [
+        "start",
+        "duration"
+      ],
+      "type": "object"
+    },
+    "Rect": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "format": "double",
+          "type": "number"
+        },
+        "width": {
+          "format": "double",
+          "type": "number"
+        },
+        "x": {
+          "format": "double",
+          "type": "number"
+        },
+        "y": {
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "type": "object"
+    },
+    "Role": {
+      "enum": [
+        "hostCamera",
+        "screen",
+        "guest"
+      ],
+      "type": "string",
+      "x-maxUtf8Bytes": 65536
+    },
+    "Scene3d": {
+      "additionalProperties": false,
+      "properties": {
+        "analytic": {
+          "type": "boolean"
+        },
+        "batches": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Batch"
+          },
+          "type": "array"
+        },
+        "parameters": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SceneParameter"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "parameters",
+        "analytic"
+      ],
+      "type": "object"
+    },
+    "SceneParameter": {
+      "additionalProperties": false,
+      "properties": {
+        "initial": {
+          "$ref": "#/$defs/Value"
+        },
+        "property": {
+          "$ref": "#/$defs/Property"
+        }
+      },
+      "required": [
+        "property",
+        "initial"
+      ],
+      "type": "object"
+    },
+    "Segment": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "landscape": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "sequence": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "vertical": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "landscape",
+        "vertical"
+      ],
+      "type": "object"
+    },
+    "Sequence": {
+      "additionalProperties": false,
+      "properties": {
+        "audioRoutes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AudioRoute"
+          },
+          "type": "array"
+        },
+        "cues": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Cue"
+          },
+          "type": "array"
+        },
+        "duration": {
+          "$ref": "#/$defs/Time"
+        },
+        "placements": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Placement"
+          },
+          "type": "array"
+        },
+        "tracks": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Track"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "duration"
+      ],
+      "type": "object"
+    },
+    "Set": {
+      "additionalProperties": false,
+      "properties": {
+        "actions": {
+          "additionalProperties": {
+            "items": {
+              "$ref": "#/$defs/Action"
+            },
+            "type": "array"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "controls": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Control"
+          },
+          "type": "array"
+        },
+        "layouts": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Layout"
+          },
+          "type": "object"
+        },
+        "theme": {
+          "additionalProperties": {
+            "type": "string",
+            "x-maxUtf8Bytes": 65536
+          },
+          "default": {},
+          "type": "object"
+        }
+      },
+      "required": [
+        "layouts"
+      ],
+      "type": "object"
+    },
+    "Show": {
+      "additionalProperties": false,
+      "properties": {
+        "authority": {
+          "$ref": "#/$defs/Authority"
+        },
+        "segments": {
+          "items": {
+            "$ref": "#/$defs/Segment"
+          },
+          "type": "array"
+        },
+        "set": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        }
+      },
+      "required": [
+        "set",
+        "authority",
+        "segments"
+      ],
+      "type": "object"
+    },
+    "Size": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "fixed",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "pixels": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          "required": [
+            "kind",
+            "pixels"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "weight",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "max": {
+              "format": "double",
+              "type": "number"
+            },
+            "min": {
+              "format": "double",
+              "type": "number"
+            },
+            "weight": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          "required": [
+            "kind",
+            "weight",
+            "min",
+            "max"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Source": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "live",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "role": {
+              "$ref": "#/$defs/Role"
+            }
+          },
+          "required": [
+            "kind",
+            "role"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "asset": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "kind": {
+              "const": "player",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "kind",
+            "asset"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "graphics",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "scene": {
+              "$ref": "#/$defs/Scene3d"
+            }
+          },
+          "required": [
+            "kind",
+            "scene"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Speed": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "numerator": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
+    "Target": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "property": {
+          "$ref": "#/$defs/Property"
+        }
+      },
+      "required": [
+        "path",
+        "property"
+      ],
+      "type": "object"
+    },
+    "Time": {
+      "additionalProperties": false,
+      "properties": {
+        "rate": {
+          "format": "uint32",
+          "maximum": 1000000000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ticks": {
+          "pattern": "^(0|-?[1-9][0-9]{0,18})$",
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        }
+      },
+      "required": [
+        "ticks",
+        "rate"
+      ],
+      "type": "object"
+    },
+    "Track": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "interpolation": {
+          "$ref": "#/$defs/Interpolation"
+        },
+        "keys": {
+          "items": {
+            "$ref": "#/$defs/Key"
+          },
+          "type": "array"
+        },
+        "range": {
+          "$ref": "#/$defs/Range"
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        }
+      },
+      "required": [
+        "id",
+        "target",
+        "range",
+        "keys",
+        "interpolation"
+      ],
+      "type": "object"
+    },
+    "Value": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "number",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "value": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "bool",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "text",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "value": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "color",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "value": {
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "vec3",
+              "type": "string",
+              "x-maxUtf8Bytes": 65536
+            },
+            "value": {
+              "items": {
+                "format": "double",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Version": {
+      "enum": [
+        "producer.production/1"
+      ],
+      "type": "string",
+      "x-maxUtf8Bytes": 65536
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "additionalProperties": false,
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/Document"
+        },
+        "kind": {
+          "const": "import",
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        }
+      },
+      "required": [
+        "kind",
+        "document"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/Document"
+        },
+        "historyEntry": {
+          "$ref": "#/$defs/Counter"
+        },
+        "kind": {
+          "const": "restore",
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        }
+      },
+      "required": [
+        "kind",
+        "document",
+        "historyEntry"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "transaction",
+          "type": "string",
+          "x-maxUtf8Bytes": 65536
+        },
+        "operations": {
+          "items": {
+            "$ref": "#/$defs/Operation"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "operations"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "Command",
+  "x-nativeSemanticValidationRequired": true,
+  "x-documentProfile": "producer.production/1"
+}

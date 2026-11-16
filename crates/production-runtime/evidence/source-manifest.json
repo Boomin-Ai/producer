@@ -1,0 +1,162 @@
+[
+  {
+    "path": ".github/workflows/production-core.yml",
+    "sha256": "f704b6518657174c23b67729bef92339b5c380beea38947a2af8f409a9e5fb5b"
+  },
+  {
+    "path": "crates/production-runtime/Cargo.lock",
+    "sha256": "7ab5c17943004da9321cef2c44c3031e87d70d42b9bd14d6b9d38993524ffeb6"
+  },
+  {
+    "path": "crates/production-runtime/Cargo.toml",
+    "sha256": "21d95b80dac72bfe1d1e18b2fb27c29b8e5a558910dc62233b8155efc11fbc72"
+  },
+  {
+    "path": "crates/production-runtime/cli/Cargo.toml",
+    "sha256": "43dcacec7b8c9163974c647c6ef80cb0357ff63c561247d5ff6c84a7fe1f8b0f"
+  },
+  {
+    "path": "crates/production-runtime/cli/src/main.rs",
+    "sha256": "def622623dff6599101ed6bd8508331cd2f7f32786515e7cd61f6df388567b76"
+  },
+  {
+    "path": "crates/production-runtime/contract/Cargo.toml",
+    "sha256": "2cbee410744fb254b33ffa46d323c08ad45959a8cbc7c907b6f6322fec2edeb8"
+  },
+  {
+    "path": "crates/production-runtime/contract/src/fixture.rs",
+    "sha256": "dfeece2bd3084415d36127dc38a625f833cf0c8c367ac2150d26ae5826b70d86"
+  },
+  {
+    "path": "crates/production-runtime/contract/src/ingress.rs",
+    "sha256": "0beaa50164e938ca1f2c27d04bd2040d90cf1ef9e1b793da32725fb87fa0dd1f"
+  },
+  {
+    "path": "crates/production-runtime/contract/src/lib.rs",
+    "sha256": "66c18598c1ac00247ac606d748566422477bbecdc0df289c342eaf31b3737289"
+  },
+  {
+    "path": "crates/production-runtime/contract/src/model.rs",
+    "sha256": "a847a1474f9291d020269e5f77e7092271f3e60a79f159330b0121e1fc3cdf38"
+  },
+  {
+    "path": "crates/production-runtime/contract/src/time.rs",
+    "sha256": "d237fa55c32545b96405dabdf7ac8af908ed27b550d11801f1f59b2b4fccb5e5"
+  },
+  {
+    "path": "crates/production-runtime/contract/src/validate.rs",
+    "sha256": "7e3eeba098d55648a9d1f98223ea7c5d5920b3d5c7518ff888fc1b1940e77417"
+  },
+  {
+    "path": "crates/production-runtime/contract/tests/conformance.rs",
+    "sha256": "47595a4c154c2dc191bf89b524fac0ce21ae0b8248bd94ea70e64c01dea4ef7e"
+  },
+  {
+    "path": "crates/production-runtime/contract/tests/mutations.rs",
+    "sha256": "a915027f62d1a6f4a232d89a7d1801d4c2325f3ad9c477a76b86b0ef0a3fd0fc"
+  },
+  {
+    "path": "crates/production-runtime/core/Cargo.toml",
+    "sha256": "36c2764cd94981c79b184c6421a0626c7acaf0c32d19e1de5feaeb0efcdb206b"
+  },
+  {
+    "path": "crates/production-runtime/core/examples/profile.rs",
+    "sha256": "ddf2a5ca83532d45a3b814e183224e7bc94438cea1767e5eaeae865c42c9d94e"
+  },
+  {
+    "path": "crates/production-runtime/core/src/bounded.rs",
+    "sha256": "df7320198b577640322f5d60b5540c3075d54c86a7e35b848ac566fa9d67e8d8"
+  },
+  {
+    "path": "crates/production-runtime/core/src/commands.rs",
+    "sha256": "613ddcd0f9a0eabb57c31628e5a88639916d74d47485ffe362bb610256a38551"
+  },
+  {
+    "path": "crates/production-runtime/core/src/compile.rs",
+    "sha256": "71b3e278be3a82bf9a38f4c792f8d0b98e5912e55a4614d53c0064c47f6af997"
+  },
+  {
+    "path": "crates/production-runtime/core/src/coordinator.rs",
+    "sha256": "1de9d7705c97358d89e06eb8afc7dc59d8c018fde4b2293cf53e79ed06144238"
+  },
+  {
+    "path": "crates/production-runtime/core/src/drivers.rs",
+    "sha256": "7967e966b8a6910e8d0d98fea61bcc684159be3f53b78d418d32a495b71d0814"
+  },
+  {
+    "path": "crates/production-runtime/core/src/lib.rs",
+    "sha256": "f21d9e7cf29a4572131b4bc219c1f112e06db926b29707603751255a9b087542"
+  },
+  {
+    "path": "crates/production-runtime/core/src/lifecycle.rs",
+    "sha256": "8eec03427fd50204571c95f591721e73428d890f291cfac9475d79b65d744a40"
+  },
+  {
+    "path": "crates/production-runtime/core/src/storage.rs",
+    "sha256": "67ed9b08b43c675eef5cc5edeb5b58f375dc5d3fe4eafa07f1884db47a4d64d0"
+  },
+  {
+    "path": "crates/production-runtime/core/src/transport.rs",
+    "sha256": "78bcd51806c720ca40fe638497f8e9158d6c6d52e0bfcaf4cad8e129f105df15"
+  },
+  {
+    "path": "crates/production-runtime/core/tests/foundation.rs",
+    "sha256": "766170f690273f47aac0fbd7c2abb0a8131d0d8f8f024464eb917cfe51968a06"
+  },
+  {
+    "path": "crates/production-runtime/core/tests/lifecycle.rs",
+    "sha256": "a60b717722f14bb57261cbc009192e60587a5b17eeaf9985c80b0dacd7fbea65"
+  },
+  {
+    "path": "crates/production-runtime/core/tests/review_regressions.rs",
+    "sha256": "62f349bffba9f570565e95e5bd360819ce5c5fe84a5c6dbe3ebf3c3a6e87b3dc"
+  },
+  {
+    "path": "crates/production-runtime/generated/classic-like.json",
+    "sha256": "15039e363c673da1eaa44d95cff4d03f39b14873c14e3f0b8ca678633a6bdb9d"
+  },
+  {
+    "path": "crates/production-runtime/generated/commands.schema.json",
+    "sha256": "f6c78fe91bc4b7779f84ce08d8d34a974f540c31d6757eb6d3b50fe18e98316c"
+  },
+  {
+    "path": "crates/production-runtime/generated/contract.d.ts",
+    "sha256": "dcc0f75ba06c2391185dd24e1bce34c6f812c71ea9905588f5b1c1f6461d8ece"
+  },
+  {
+    "path": "crates/production-runtime/generated/document.schema.json",
+    "sha256": "17d509b8c42779e9698726cd1efc88fc0f7bcf2ea9802989e052748016a41944"
+  },
+  {
+    "path": "crates/production-runtime/generated/tools.schema.json",
+    "sha256": "5a0d72a3a400b30fd6515453c5f6f9b7bd19ce4772a342a668b6208938e986ab"
+  },
+  {
+    "path": "crates/production-runtime/scripts/canonical-check.mjs",
+    "sha256": "7095b362a0d2e96430ed94f7a34c2df5948c65cde5a5f167caf5a1510cd46e87"
+  },
+  {
+    "path": "crates/production-runtime/scripts/generate.py",
+    "sha256": "bb579a8bd92301bae44d937830cd46e22713bb1a6470e4c4e5024341f9caab6b"
+  },
+  {
+    "path": "crates/production-runtime/scripts/package-lock.json",
+    "sha256": "134f41640e8092fc380eec8d1359e29b32fbc17e70e1cbdd1f1654a9bc5e7be9"
+  },
+  {
+    "path": "crates/production-runtime/scripts/package.json",
+    "sha256": "2006bbbc4c0a33faaf74b01625bf31aee44b61250b4f5260b9f07ed5fcfb5c64"
+  },
+  {
+    "path": "crates/production-runtime/scripts/prove.py",
+    "sha256": "077598c5e3538e4e74eba0ae8d81463c4012fdbfcf7d9133c51fa536a9a2fb30"
+  },
+  {
+    "path": "crates/production-runtime/scripts/schema-check.mjs",
+    "sha256": "00ee582f946732829b6b7e4b329c7d8b158df5fd4eeb3d7831498a6e0ac3086f"
+  },
+  {
+    "path": "crates/production-runtime/scripts/tsconfig.json",
+    "sha256": "98fcff414639a51c6dd1e50013cfdc29e57d86c54c390e9866de8ea9d73210cc"
+  }
+]
