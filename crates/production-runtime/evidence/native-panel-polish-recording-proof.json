@@ -1,0 +1,1004 @@
+{
+  "scope": "Native workspace and public MOV recording; no physical camera/mic or mouse automation qualification",
+  "candidateSha256": "b75c015b5d8fc54379fb54f4e36287437c8f50392828bbc1735e2ec719ff74c1",
+  "workspaceCommandsDuringRecording": 77,
+  "commandRoundtripP50Ms": 62.47412500000049,
+  "commandRoundtripP99Ms": 106.05400000000031,
+  "sameRenderRevision": true,
+  "zeroNewMissingMoviePresentations": true,
+  "zeroNewGpuRefusals": true,
+  "reopenedLayoutMatchesDisk": false,
+  "recording": "/Users/kleveland/Documents/Codex/2026-11-03/ques/outputs/native-room/visual-qa/recordings/take-1795043909673200000",
+  "outputsBefore": [
+    687,
+    686
+  ],
+  "outputsAfter": [
+    1178,
+    1178
+  ],
+  "cpuP99Ms": 1.5665,
+  "rows": [
+    {
+      "action": {
+        "action": "move",
+        "panel": "sources",
+        "edge": "top"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        690,
+        690
+      ]
+    },
+    {
+      "action": {
+        "action": "resize",
+        "edge": "top",
+        "size": 220
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        693,
+        693
+      ]
+    },
+    {
+      "action": {
+        "action": "collapse",
+        "edge": "top",
+        "collapsed": true
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        699,
+        699
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "sources"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        699,
+        699
+      ]
+    },
+    {
+      "action": {
+        "action": "move",
+        "panel": "sources",
+        "edge": "right"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        702,
+        702
+      ]
+    },
+    {
+      "action": {
+        "action": "resize",
+        "edge": "right",
+        "size": 300
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        705,
+        705
+      ]
+    },
+    {
+      "action": {
+        "action": "collapse",
+        "edge": "right",
+        "collapsed": true
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        708,
+        708
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "sources"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        708,
+        708
+      ]
+    },
+    {
+      "action": {
+        "action": "move",
+        "panel": "sources",
+        "edge": "bottom"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        711,
+        711
+      ]
+    },
+    {
+      "action": {
+        "action": "resize",
+        "edge": "bottom",
+        "size": 220
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        714,
+        714
+      ]
+    },
+    {
+      "action": {
+        "action": "collapse",
+        "edge": "bottom",
+        "collapsed": true
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        718,
+        717
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "sources"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        718,
+        717
+      ]
+    },
+    {
+      "action": {
+        "action": "move",
+        "panel": "sources",
+        "edge": "left"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        724,
+        724
+      ]
+    },
+    {
+      "action": {
+        "action": "resize",
+        "edge": "left",
+        "size": 300
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        724,
+        724
+      ]
+    },
+    {
+      "action": {
+        "action": "collapse",
+        "edge": "left",
+        "collapsed": true
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        727,
+        727
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "sources"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        730,
+        730
+      ]
+    },
+    {
+      "action": {
+        "action": "visibility",
+        "panel": "sources",
+        "visible": false
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        733,
+        733
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "sources"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        733,
+        733
+      ]
+    },
+    {
+      "action": {
+        "action": "move",
+        "panel": "controls",
+        "edge": "top"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        736,
+        736
+      ]
+    },
+    {
+      "action": {
+        "action": "resize",
+        "edge": "top",
+        "size": 220
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        739,
+        739
+      ]
+    },
+    {
+      "action": {
+        "action": "collapse",
+        "edge": "top",
+        "collapsed": true
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        742,
+        742
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "controls"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        742,
+        742
+      ]
+    },
+    {
+      "action": {
+        "action": "move",
+        "panel": "controls",
+        "edge": "right"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        746,
+        745
+      ]
+    },
+    {
+      "action": {
+        "action": "resize",
+        "edge": "right",
+        "size": 300
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        749,
+        748
+      ]
+    },
+    {
+      "action": {
+        "action": "collapse",
+        "edge": "right",
+        "collapsed": true
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        752,
+        751
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "controls"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        755,
+        754
+      ]
+    },
+    {
+      "action": {
+        "action": "move",
+        "panel": "controls",
+        "edge": "bottom"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        755,
+        754
+      ]
+    },
+    {
+      "action": {
+        "action": "resize",
+        "edge": "bottom",
+        "size": 220
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        758,
+        758
+      ]
+    },
+    {
+      "action": {
+        "action": "collapse",
+        "edge": "bottom",
+        "collapsed": true
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        761,
+        761
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "controls"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        764,
+        764
+      ]
+    },
+    {
+      "action": {
+        "action": "move",
+        "panel": "controls",
+        "edge": "left"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        764,
+        764
+      ]
+    },
+    {
+      "action": {
+        "action": "resize",
+        "edge": "left",
+        "size": 300
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        767,
+        767
+      ]
+    },
+    {
+      "action": {
+        "action": "collapse",
+        "edge": "left",
+        "collapsed": true
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        770,
+        770
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "controls"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        773,
+        773
+      ]
+    },
+    {
+      "action": {
+        "action": "visibility",
+        "panel": "controls",
+        "visible": false
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        773,
+        773
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "controls"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        776,
+        776
+      ]
+    },
+    {
+      "action": {
+        "action": "move",
+        "panel": "mixer",
+        "edge": "top"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        780,
+        779
+      ]
+    },
+    {
+      "action": {
+        "action": "resize",
+        "edge": "top",
+        "size": 220
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        783,
+        783
+      ]
+    },
+    {
+      "action": {
+        "action": "collapse",
+        "edge": "top",
+        "collapsed": true
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        783,
+        783
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "mixer"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        786,
+        786
+      ]
+    },
+    {
+      "action": {
+        "action": "move",
+        "panel": "mixer",
+        "edge": "right"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        789,
+        789
+      ]
+    },
+    {
+      "action": {
+        "action": "resize",
+        "edge": "right",
+        "size": 300
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        792,
+        792
+      ]
+    },
+    {
+      "action": {
+        "action": "collapse",
+        "edge": "right",
+        "collapsed": true
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        795,
+        795
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "mixer"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        795,
+        795
+      ]
+    },
+    {
+      "action": {
+        "action": "move",
+        "panel": "mixer",
+        "edge": "bottom"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        798,
+        798
+      ]
+    },
+    {
+      "action": {
+        "action": "resize",
+        "edge": "bottom",
+        "size": 220
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        801,
+        801
+      ]
+    },
+    {
+      "action": {
+        "action": "collapse",
+        "edge": "bottom",
+        "collapsed": true
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        804,
+        804
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "mixer"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        804,
+        804
+      ]
+    },
+    {
+      "action": {
+        "action": "move",
+        "panel": "mixer",
+        "edge": "left"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        807,
+        807
+      ]
+    },
+    {
+      "action": {
+        "action": "resize",
+        "edge": "left",
+        "size": 300
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        810,
+        810
+      ]
+    },
+    {
+      "action": {
+        "action": "collapse",
+        "edge": "left",
+        "collapsed": true
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        813,
+        813
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "mixer"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        816,
+        816
+      ]
+    },
+    {
+      "action": {
+        "action": "visibility",
+        "panel": "mixer",
+        "visible": false
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        819,
+        819
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "mixer"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        819,
+        819
+      ]
+    },
+    {
+      "action": {
+        "action": "move",
+        "panel": "scenes",
+        "edge": "top"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        822,
+        822
+      ]
+    },
+    {
+      "action": {
+        "action": "resize",
+        "edge": "top",
+        "size": 220
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        825,
+        825
+      ]
+    },
+    {
+      "action": {
+        "action": "collapse",
+        "edge": "top",
+        "collapsed": true
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        829,
+        828
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "scenes"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        832,
+        832
+      ]
+    },
+    {
+      "action": {
+        "action": "move",
+        "panel": "scenes",
+        "edge": "right"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        832,
+        832
+      ]
+    },
+    {
+      "action": {
+        "action": "resize",
+        "edge": "right",
+        "size": 300
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        835,
+        835
+      ]
+    },
+    {
+      "action": {
+        "action": "collapse",
+        "edge": "right",
+        "collapsed": true
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        838,
+        838
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "scenes"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        841,
+        841
+      ]
+    },
+    {
+      "action": {
+        "action": "move",
+        "panel": "scenes",
+        "edge": "bottom"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        841,
+        841
+      ]
+    },
+    {
+      "action": {
+        "action": "resize",
+        "edge": "bottom",
+        "size": 220
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        844,
+        844
+      ]
+    },
+    {
+      "action": {
+        "action": "collapse",
+        "edge": "bottom",
+        "collapsed": true
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        847,
+        847
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "scenes"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        850,
+        850
+      ]
+    },
+    {
+      "action": {
+        "action": "move",
+        "panel": "scenes",
+        "edge": "left"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        850,
+        850
+      ]
+    },
+    {
+      "action": {
+        "action": "resize",
+        "edge": "left",
+        "size": 300
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        853,
+        853
+      ]
+    },
+    {
+      "action": {
+        "action": "collapse",
+        "edge": "left",
+        "collapsed": true
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        856,
+        856
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "scenes"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        860,
+        859
+      ]
+    },
+    {
+      "action": {
+        "action": "visibility",
+        "panel": "scenes",
+        "visible": false
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        863,
+        862
+      ]
+    },
+    {
+      "action": {
+        "action": "activate",
+        "panel": "scenes"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        863,
+        862
+      ]
+    },
+    {
+      "action": {
+        "action": "move",
+        "panel": "timeline",
+        "edge": "top"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        866,
+        866
+      ]
+    },
+    {
+      "action": {
+        "action": "move",
+        "panel": "timeline",
+        "edge": "bottom"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        869,
+        869
+      ]
+    },
+    {
+      "action": {
+        "action": "move",
+        "panel": "timeline",
+        "edge": "left"
+      },
+      "accepted": false,
+      "revision": 1,
+      "outputFrames": [
+        869,
+        869
+      ]
+    },
+    {
+      "action": {
+        "action": "resize",
+        "edge": "bottom",
+        "size": 9000
+      },
+      "accepted": false,
+      "revision": 1,
+      "outputFrames": [
+        872,
+        872
+      ]
+    },
+    {
+      "action": {
+        "action": "reset"
+      },
+      "accepted": true,
+      "revision": 1,
+      "outputFrames": [
+        875,
+        875
+      ]
+    }
+  ],
+  "testMediaRemovedAfterVerification": true,
+  "testMediaRemovedBytes": 41902903
+}

@@ -1,10 +1,14 @@
 //! Experimental production document contract. No app, device or renderer linkage.
 pub mod fixture;
 pub mod ingress;
+pub mod layout;
 pub mod model;
+mod shared;
+pub use shared::SharedMap;
 pub mod temporal;
 pub mod time;
 pub mod validate;
+pub mod wire;
 
 pub use model::*;
 use schemars::JsonSchema;
@@ -97,12 +101,5 @@ pub fn schema() -> serde_json::Value {
 }
 
 pub fn digest<T: Serialize>(value: &T) -> Result<String> {
-    use sha2::{Digest, Sha256};
-    let raw =
-        serde_json::to_value(value).map_err(|e| Error::new("SERIALIZE", "$", e.to_string()))?;
-    let bytes = ingress::canonical(&raw)?;
-    let mut h = Sha256::new();
-    h.update(b"producer.production/1\0");
-    h.update(bytes);
-    Ok(format!("{:x}", h.finalize()))
+    wire::Scratch::default().digest(value)
 }

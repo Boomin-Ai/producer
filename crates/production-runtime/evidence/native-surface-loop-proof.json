@@ -1,0 +1,70 @@
+{
+  "date": "2026-11-18",
+  "scope": "Isolated macOS Native Dev public-video repeat-loop visual/recording check; not full Classic/beta or camera/mic qualification",
+  "executableSha256": "41504c3820bbb96ca01344fdfef2dade0e0faecd533e5ab7b7fa661e37272de5",
+  "sources": {
+    "contract/src/model.rs": "b65144075423a573a6bbb4ac6376636921db421390bc8c47ec6266ee3a0ddf10",
+    "contract/src/validate.rs": "08254b9632b92cdfbceeaedefcec364e9975208baaa7baf78a4ee1a7557e6ee1",
+    "contract/src/temporal.rs": "3ec2dbccc9d562ca2ee94dd0217a6233bc15b267b06f558dbfbff35d83bfc400",
+    "core/src/compile.rs": "17af2299db5e516e9033f5e0541409e65be6dfca635fecfeca7cd7041bde9482",
+    "core/tests/nested_timeline.rs": "cc6f2b5aa6a63b6502003b2b3248b0599ba0c70869db94d2e94380c3a8273f5a",
+    "desktop/src/engine.rs": "be507562845915e0970a552f667ffc6c2f6c233b0d8d9d92a32c89e513b398cd",
+    "desktop/src/platform.rs": "88bbbf66b09f562e3ae635272c541dee58449d19e632afce16685d5bfcf728b8",
+    "desktop/src/presentation.rs": "8313bcc2778f1f1616e6c3136302f8c34204eb0af21efd858b602205f4c3c18a",
+    "desktop/src/visuals.rs": "823086832f5998ced4a99a24fb10a4113d06c6d91ebd08acd00142b281910e2a",
+    "desktop/src/visual_fixture.rs": "2b65539f5345a015812c53ff134605af0aa1fccb5c2cecc184fcd9a82c2b4ee1",
+    "desktop/src/model.rs": "4bd9affe061bf635fa3e92564595f75d18ea0d79b31f71e720ebad7969e97875",
+    "desktop/native/room.h": "7c3b39bba7f43b9ab5ac5518e196a17ecfaf19adcf076d536b5c6585499ab257",
+    "desktop/native/macos.m": "8520a7d2c9628f2f88db3d660d84a4e5ae513d2a6572605752db0632c31d9ad4",
+    "desktop/scripts/check-visuals.py": "70cd026040f29996ed203382117b8b2ca822d5a4f1126f75c185f471c0397f7b",
+    "desktop/scripts/check-video-presence.swift": "f3493cea744cab0bdf9c08e11a784fa921c800da25c864b2a4ff5db5d4a38695"
+  },
+  "baseline": {
+    "landscapeFrames": 590,
+    "absentVideoFrames": 192,
+    "durationSeconds": 20,
+    "sixSecondCheckWasInsufficient": true
+  },
+  "tests": {
+    "pureWorkspace": 222,
+    "desktopWithMetal": 22
+  },
+  "runs": [
+    {
+      "mode": "dark",
+      "requestedSeconds": 35.0,
+      "programFrames": 2110,
+      "absentVideoFrames": 0,
+      "maxIdenticalSampleRun": 0,
+      "missingPresentationsDelta": 0,
+      "gpuSubmissionRefusalsDelta": 0,
+      "maxSampledCpuEvaluationBuildSubmissionP99Ms": 1.68175,
+      "surfaceEditAndDockRoundtrip": true,
+      "allCommittedChunksHashCheckedAndDecoded": true,
+      "committedChunks": 36,
+      "committedMediaGaps": 0
+    },
+    {
+      "mode": "light",
+      "requestedSeconds": 35.0,
+      "programFrames": 2098,
+      "absentVideoFrames": 0,
+      "maxIdenticalSampleRun": 0,
+      "missingPresentationsDelta": 0,
+      "gpuSubmissionRefusalsDelta": 0,
+      "maxSampledCpuEvaluationBuildSubmissionP99Ms": 1.1475840000000002,
+      "surfaceEditAndDockRoundtrip": true,
+      "allCommittedChunksHashCheckedAndDecoded": true,
+      "committedChunks": 36,
+      "committedMediaGaps": 0
+    }
+  ],
+  "limits": [
+    "Fixture-specific pixel detector; not arbitrary dark-media analysis",
+    "CPU p99 excludes GPU execution and end-to-end latency",
+    "No new camera, screen or mic physical qualification",
+    "No full Classic layouts/controls or actual ChatGPT adapter qualification",
+    "Long-session memory, arbitrary codec/IO and cross-platform tests remain open"
+  ],
+  "productionDesktopUnchanged": true
+}

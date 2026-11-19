@@ -237,6 +237,81 @@ impl Walker<'_> {
                 return Err(err(&path, "invalid box"));
             }
         }
+        crate::layout::validate_placement(self.d, n, &path)?;
+        if let Some(s) = &n.style {
+            let ink = |i: &Ink| {
+                color(&i.color) && i.opacity.is_finite() && (0.0..=1.0).contains(&i.opacity)
+            };
+            let paint_ok = match &s.fill {
+                None => true,
+                Some(Paint::Solid { ink: i }) => ink(i),
+                Some(Paint::Linear { from, to, angle }) => {
+                    ink(from) && ink(to) && angle.is_finite() && (-360.0..=360.0).contains(angle)
+                }
+                Some(Paint::Veil {
+                    from,
+                    to,
+                    glow,
+                    cell,
+                    motion,
+                }) => {
+                    ink(from)
+                        && ink(to)
+                        && ink(glow)
+                        && cell.is_finite()
+                        && (2.0..=24.0).contains(cell)
+                        && motion.is_finite()
+                        && (0.0..=1.0).contains(motion)
+                }
+            };
+            if !paint_ok
+                || !s.radius.is_finite()
+                || !(0.0..=2048.0).contains(&s.radius)
+                || !s.grain.is_finite()
+                || !(0.0..=0.15).contains(&s.grain)
+                || s.border.as_ref().is_some_and(|b| {
+                    !ink(&b.ink) || !b.width.is_finite() || !(0.0..=32.0).contains(&b.width)
+                })
+                || s.text.as_ref().is_some_and(|t| {
+                    !ink(&t.ink)
+                        || !t.font_size.is_finite()
+                        || !(6.0..=512.0).contains(&t.font_size)
+                        || !(100..=900).contains(&t.weight)
+                        || !matches!(n.content, Content::Text { .. })
+                })
+            {
+                return Err(err(
+                    &path,
+                    "invalid surface paint, typography or pixel range",
+                ));
+            }
+        }
+        if !matches!(n.flow, Flow::Overlay) {
+            for (i, child) in n.children.iter().enumerate() {
+                if let Some(p) = &child.placement {
+                    if child.frame.is_some() {
+                        return Err(err(
+                            &path,
+                            "flow placement cannot also declare an ignored frame",
+                        ));
+                    }
+                    if let Some(a) = &p.aspect {
+                        let aspect_item = match &n.flow {
+                            Flow::Row { sizes, .. } | Flow::Column { sizes, .. } => {
+                                matches!(sizes.get(i), Some(Size::Aspect))
+                            }
+                            _ => false,
+                        };
+                        if !aspect_item && a.mode != AspectMode::Contain {
+                            return Err(err(
+                                &path,
+                                "flow children need contain mode or an aspect-sized item",
+                            ));
+                        }
+                    }
+                }
+            }
+        }
         match &n.flow {
             Flow::Overlay => {
                 if n.children.iter().any(|c| c.frame.is_none()) {
@@ -252,7 +327,7 @@ impl Walker<'_> {
                 if !finite(*gap) || *gap < 0.0 || sizes.len() != n.children.len() {
                     return Err(err(&path, "invalid weighted allocation"));
                 }
-                for size in sizes {
+                for (i, size) in sizes.iter().enumerate() {
                     match size {
                         Size::Fixed { pixels } => {
                             if !finite(*pixels) || *pixels <= 0.0 {
@@ -268,6 +343,21 @@ impl Walker<'_> {
                                 || *max < *min
                             {
                                 return Err(err(&path, "invalid weight/min/max"));
+                            }
+                        }
+                        Size::Aspect => {
+                            let mode = n.children[i]
+                                .placement
+                                .as_ref()
+                                .and_then(|p| p.aspect.as_ref())
+                                .map(|a| a.mode);
+                            let expected = if matches!(n.flow, Flow::Row { .. }) {
+                                AspectMode::Height
+                            } else {
+                                AspectMode::Width
+                            };
+                            if mode != Some(expected) {
+                                return Err(err(&path, "aspect-sized child needs height mode in a row or width mode in a column"));
                             }
                         }
                     }
@@ -348,8 +438,13 @@ impl Walker<'_> {
     }
 }
 pub fn validate_document(d: &Document) -> Result<Inventory> {
-    let bytes = serde_json::to_vec(d).map_err(|e| err("$", &e.to_string()))?;
-    crate::ingress::parse(&bytes, DOCUMENT_BYTES)?;
+    validate_with_scratch(d, &mut crate::wire::Scratch::default())
+}
+pub fn validate_with_scratch(
+    d: &Document,
+    scratch: &mut crate::wire::Scratch,
+) -> Result<Inventory> {
+    crate::ingress::check(scratch.serialize(d, DOCUMENT_BYTES)?, DOCUMENT_BYTES)?;
     if !valid_id(&d.id) || d.title.trim().is_empty() {
         return Err(err("$", "document id/title required"));
     }
@@ -424,6 +519,11 @@ pub fn validate_document(d: &Document) -> Result<Inventory> {
                 }
             }
             Source::Graphics { scene } => {
+                if scene.reconstruction.is_some_and(|r| {
+                    r.period < Time::new(1, 1000).unwrap() || r.period > Time::seconds(86_400)
+                }) {
+                    return Err(err(id, "analytic period must be between 1 ms and 24 h"));
+                }
                 if !scene.analytic {
                     return Err(Error::new(
                         "UNSUPPORTED",
@@ -491,13 +591,7 @@ pub fn validate_document(d: &Document) -> Result<Inventory> {
             return Err(err(id, "theme token must be a hex color"));
         }
         for (lid, l) in &set.layouts {
-            if l.width == 0
-                || l.height == 0
-                || l.width > 7680
-                || l.height > 7680
-                || (l.orientation == Orientation::Vertical && l.width >= l.height)
-                || (l.orientation == Orientation::Landscape && l.width <= l.height)
-            {
+            if l.width == 0 || l.height == 0 || l.width > 7680 || l.height > 7680 {
                 return Err(err(lid, "canvas dimensions/orientation invalid"));
             }
             if l.root.frame.is_none() {

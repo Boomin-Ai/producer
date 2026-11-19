@@ -2,6 +2,8 @@
 
 Reviewed against released source `667147951452931ebbc7f26db6dec02616aee74d` (0.4.93). This is an ownership map for the isolated laboratory, not a claim that the application has been migrated. The existing app continues to execute all product behavior.
 
+The [selected native refactor](GPUI-REFACTOR.md) replaces the desktop with GPUI and required browser/Three.js Set rendering with Rust-native graphics. Existing Tauri paths below identify behavior to extract or replace, not the future application shell. Qualified media/network bridges may be retained independently of Tauri. The native plan explicitly includes Set/Show quality, selected-original/program take capture, live editorial playback and one shared Assistant/CLI authoring contract.
+
 | Concern | Existing product entry points | Laboratory ownership and boundary |
 | --- | --- | --- |
 | Set document, controls, layouts | `src/features/presentation/schema.ts`, `SetControlsPanel.tsx` | `contract/src/model.rs`: typed Set, layout, actions, controls and scoped component references. Compact/equal-width/primary intent is semantic data; no new controls UI is mounted. |
@@ -23,6 +25,41 @@ The application has used Serde already. Using Serde here does not by itself acce
 
 ## Features deliberately not advertised yet
 
-The current implementation supports fixed boxes, row/column/grid allocation, nested positive-speed temporal placements, local numeric tracks, bounded cue-intent rehearsal and analytic 3D declarations. Anchors/aspect constraints, general Show occurrence ownership/cleanup, process-wide admission beyond the two-document lifecycle/compile host, segment-owned live override cleanup, native media/GPU execution and physical-platform qualification remain open. See `READINESS.md` for the acceptance ledger. A future capability must reject clearly until implemented; a model-readable schema must not silently promise it.
+The current implementation supports fixed boxes, row/column/grid allocation, nested positive-speed temporal placements, local numeric tracks, bounded cue-intent rehearsal, manual Show occurrence/scoped cleanup, compiled component/source/player/graphics/audio dependency lifetimes and analytic 3D declarations. Native capture-incarnation/font inputs, actual app/native allocation/callback/destruction wiring, effect reconstruction and physical media/GPU execution/qualification remain open. GPUI UI, native Set rendering, automatic Show advancement and growing original/program take editing are targets, not implemented capabilities. See `READINESS.md` for the acceptance ledger. A future capability must reject clearly until implemented; a model-readable schema must not silently promise it.
 
-The isolated [workspace/compilation host](WORKSPACE-COMPILATION.md) now owns bounded workers, latest-intent coalescing, immutable fragment reuse and shared synthetic lifecycle/cache accounting. It has not replaced the production document authority or native allocation path.
+The isolated [workspace/compilation host](WORKSPACE-COMPILATION.md) now owns bounded workers, latest-intent coalescing, immutable fragment reuse and shared synthetic lifecycle/cache accounting. Graphics have distinct scene/pipeline/pass/texture/buffer/instance budgets, independent of optional browsers; this is a preparation model, not physical GPU admission. It has not replaced the production document authority or native allocation path.
+
+## Production geometry slice
+
+`contract/src/layout.rs` qualifies definition-bound display ratios; `core/src/layout.rs` resolves anchors/pivots/aspects and reflow off callback. `setPlacement` edits one node; paged CLI `layout` rehearsal exposes compiled geometry and consumed-source identities. This is production output geometry, separate from GPUI/Taffy application layout, actual capture discovery and font metrics. See [geometry contract](LAYOUT-CONSTRAINTS.md).
+
+## Process service ownership
+
+`core/src/host.rs::ProductionHost` unifies shared document/session/observer/storage admission and owns the compile workspace. Concurrent submit handles share in-flight results and one writer per document. The real stdio CLI now uses it; production Assistant/auth/native adapters do not. See [process services](PROCESS-HOST.md) for exact limits, encoded versus physical-memory qualifications and close/panic ordering.
+
+## Immutable authored versions and durable retention
+
+Document root maps now share immutable backing allocations across clones and detach the changed map before mutation; authored JSON and native validation stay unchanged. Undo is capped by entries, serialized bytes and structural units; a known durable save transfers the previous version into history. Authenticated inspection exposes the current adaptive horizon. See [durable memory qualification](DURABLE-MEMORY.md), which distinguishes logical limits, requested heap and self RSS from native/media memory.
+
+## Bounded wire admission
+
+The coordinator and FileStore now reuse explicitly owned wire buffers for strict admission, canonical hashing, compilation, checkpoint preflight and observer publication. They are capped at 48 MiB each, separately reserved by the process host and dropped with the writer. Canonical object values borrow serialized slices; duplicate/unsafe raw ingress still uses the same bounded visitor in collecting or discard mode. Metadata preserves ordinary JSON keys literally even when they match serde_json's private raw-value sentinel. No authored schema or canonical digest change is intended. Current behavior, real durable-workload attempts and core-only timings are linked from [readiness](READINESS.md); these buffers are neither a native memory cap nor zero-allocation authoring.
+
+## Bounded control executor and local transport
+
+`service` sits outside the pure contract/core: a single control owner, up to two fixed document writers and the existing two compile workers. Native-granted connection scopes bind all sessions; raw JSON cannot choose roles, documents or filesystem paths. Requests and unread replies share bounded reservations. Priority stop and atomic disconnect remain available under queue/storage pressure. The CLI now exercises the same executor, including near-byte-limit import/read and checkpoint/restart. See [control service](CONTROL-SERVICE.md). No app/GPUI hookup, listening socket, remote identity, native media or complete expanded-memory qualification is supplied by this slice.
+
+## Analytic reconstruction inputs
+
+`Scene3d.reconstruction` adds an explicit version/seed/scope/period descriptor. `core/src/analytic.rs` owns compiled seed domains, off-frame substreams, exact cycle/Q32 sampling and ordered integer noise. `SequencePlan`, `Timeline` and `ShowRun` expose caller-allocated effect slots; `Plan.analytic_sources` exposes off-frame static binding definitions. Source/cache incarnation changes include reconstruction identity. `setAnalyticReconstruction` is a narrow typed authoring operation.
+
+`core/tests/analytic.rs`, `scripts/prove-analytic.py`, `core/examples/analytic_profile.rs` and `generated/analytic-effects.json` qualify the headless input protocol. See [contract and limits](ANALYTIC-RECONSTRUCTION.md). No renderer, device, adapter clock, production Assistant or GPUI view is integrated by this slice.
+
+## Combined service/recovery pressure
+
+`core/examples/support/pressure.rs` defines the admitted flat/nested graph shapes. `core/tests/pressure.rs` covers expansion boundaries and durable corruption/recovery. `service/examples/pressure_proof.rs` measures real executor/FileStore ownership, retained replies, recovery, live requested heap, self RSS and calling-thread frame allocations. `scripts/prove-pressure.py` binds results to source and binary hashes and preserves failures. The current service exposes idle reply capacity separately while keeping the same sixteen-buffer population; store and inspection digest scratch remain owner-scoped. This adds no room, GPUI, GPU or physical media integration.
+
+
+## Isolated N1 adapter
+
+`media` is an optional Rust/FFmpeg leaf crate outside `contract`/`core`, with persistent admitted file decoders and a raw/PCM growing-take proof. It is not linked into the desktop or its Assistant. Native media feature tests require the separately pinned lab SDK; ordinary workspace/platform CI stays codec-free. See [implemented boundary, measurements and adoption gaps](NATIVE-MEDIA.md). Live capture/audio, GPU surfaces and actual room/timeline wiring remain owned by the existing product until separately replaced and qualified.

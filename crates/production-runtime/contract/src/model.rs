@@ -1,3 +1,4 @@
+use crate::SharedMap;
 use crate::{Range, Speed, Time};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -11,21 +12,28 @@ pub struct Document {
     pub schema: Version,
     pub id: Id,
     pub title: String,
+    #[serde(default, deserialize_with = "crate::ingress::metadata")]
+    #[schemars(with = "BTreeMap<String, serde_json::Value>")]
+    pub metadata: SharedMap<serde_json::Value>,
     #[serde(default)]
-    pub metadata: BTreeMap<String, serde_json::Value>,
+    #[schemars(with = "BTreeMap<Id, Asset>")]
+    pub assets: SharedMap<Asset>,
     #[serde(default)]
-    pub assets: BTreeMap<Id, Asset>,
+    #[schemars(with = "BTreeMap<Id, Source>")]
+    pub sources: SharedMap<Source>,
     #[serde(default)]
-    pub sources: BTreeMap<Id, Source>,
+    #[schemars(with = "BTreeMap<Id, Component>")]
+    pub components: SharedMap<Component>,
     #[serde(default)]
-    pub components: BTreeMap<Id, Component>,
+    #[schemars(with = "BTreeMap<Id, Set>")]
+    pub sets: SharedMap<Set>,
     #[serde(default)]
-    pub sets: BTreeMap<Id, Set>,
-    #[serde(default)]
-    pub sequences: BTreeMap<Id, Sequence>,
+    #[schemars(with = "BTreeMap<Id, Sequence>")]
+    pub sequences: SharedMap<Sequence>,
     #[serde(default)]
     #[schemars(length(max = 64))]
-    pub shows: BTreeMap<Id, Show>,
+    #[schemars(with = "BTreeMap<Id, Show>")]
+    pub shows: SharedMap<Show>,
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq)]
 pub enum Version {
@@ -38,13 +46,13 @@ impl Document {
             schema: Version::V1,
             id: id.into(),
             title: title.into(),
-            metadata: BTreeMap::new(),
-            assets: BTreeMap::new(),
-            sources: BTreeMap::new(),
-            components: BTreeMap::new(),
-            sets: BTreeMap::new(),
-            sequences: BTreeMap::new(),
-            shows: BTreeMap::new(),
+            metadata: SharedMap::default(),
+            assets: SharedMap::default(),
+            sources: SharedMap::default(),
+            components: SharedMap::default(),
+            sets: SharedMap::default(),
+            sequences: SharedMap::default(),
+            shows: SharedMap::default(),
         }
     }
 }
@@ -79,6 +87,7 @@ pub enum Role {
     HostCamera,
     Screen,
     Guest,
+    Microphone,
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -108,6 +117,8 @@ pub struct Set {
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
+/// Composition/output role; dimensions may be custom, including square.
+/// Shows pair roles, while the room independently chooses each output size.
 pub enum Orientation {
     Landscape,
     Vertical,
@@ -127,6 +138,90 @@ pub struct Rect {
     pub y: f64,
     pub width: f64,
     pub height: f64,
+}
+/// Normalized parent anchor or local transform pivot, in [0, 1] on each axis.
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct UnitPoint {
+    #[schemars(range(min = 0.0, max = 1.0))]
+    pub x: f64,
+    #[schemars(range(min = 0.0, max = 1.0))]
+    pub y: f64,
+}
+/// Integer display ratio. Pixel aspect and rotation must already be normalized
+/// by the source adapter; these are not raw encoded dimensions.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct Ratio {
+    #[schemars(range(min = 1, max = 65536))]
+    pub width: u32,
+    #[schemars(range(min = 1, max = 65536))]
+    pub height: u32,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(tag = "kind", deny_unknown_fields, rename_all = "camelCase")]
+pub enum AspectRatio {
+    Fixed {
+        ratio: Ratio,
+    },
+    /// Use a qualified control-lane input, or the explicit portable fallback.
+    Source {
+        source: Id,
+        fallback: Ratio,
+    },
+}
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum AspectMode {
+    /// Preserve width and derive height. Column aspect items use this mode.
+    Width,
+    /// Preserve height and derive width. Row aspect items use this mode.
+    Height,
+    /// Fit inside the allocated box without changing sibling allocation.
+    Contain,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct AspectConstraint {
+    pub ratio: AspectRatio,
+    pub mode: AspectMode,
+}
+/// Frame offsets are measured from the parent anchor to this node's pivot.
+/// For flow items, the allocated cell is the parent box and offsets are zero.
+#[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct NodePlacement {
+    #[serde(default)]
+    pub anchor: UnitPoint,
+    #[serde(default)]
+    pub pivot: UnitPoint,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aspect: Option<AspectConstraint>,
+}
+/// Observed geometry is a compile input, not a document edit or frame callback.
+/// Native adapters must fence document/source incarnation before supplying it.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct LayoutInputs {
+    pub document: Id,
+    #[serde(default)]
+    #[schemars(length(max = 256))]
+    pub sources: BTreeMap<Id, SourceDimensions>,
+}
+impl LayoutInputs {
+    pub fn empty(document: &str) -> Self {
+        Self {
+            document: document.into(),
+            sources: BTreeMap::new(),
+        }
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct SourceDimensions {
+    /// Hash of document/source/resolved asset definition, not an authority grant.
+    pub identity: Digest,
+    pub display: Ratio,
 }
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(tag = "kind", deny_unknown_fields, rename_all = "camelCase")]
@@ -149,15 +244,30 @@ pub enum Flow {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(tag = "kind", deny_unknown_fields, rename_all = "camelCase")]
 pub enum Size {
-    Fixed { pixels: f64 },
-    Weight { weight: f64, min: f64, max: f64 },
+    Fixed {
+        pixels: f64,
+    },
+    Weight {
+        weight: f64,
+        min: f64,
+        max: f64,
+    },
+    /// Derive the main-axis length from this child's aspect constraint and the
+    /// parent's cross-axis extent. The following siblings reflow accordingly.
+    Aspect,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Node {
     pub id: Id,
+    /// Local surface/typography. Missing style preserves the original contract.
+    /// Coordinates and radii are authored canvas pixels, not CSS or UI points.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub style: Option<SurfaceStyle>,
     #[serde(default)]
     pub frame: Option<Rect>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placement: Option<NodePlacement>,
     #[serde(default)]
     pub flow: Flow,
     pub content: Content,
@@ -165,6 +275,81 @@ pub struct Node {
     pub children: Vec<Node>,
     #[serde(default)]
     pub bindings: Vec<Binding>,
+}
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct SurfaceStyle {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fill: Option<Paint>,
+    #[serde(default)]
+    #[schemars(range(min = 0.0, max = 2048.0))]
+    pub radius: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border: Option<SurfaceBorder>,
+    /// Static fine luminance texture. No random allocations or animation clock.
+    #[serde(default)]
+    #[schemars(range(min = 0.0, max = 0.15))]
+    pub grain: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<TextStyle>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Ink {
+    /// sRGB RGB hex, exactly #RRGGBB. Alpha is the separate opacity field.
+    #[schemars(regex(pattern = "^#[0-9A-Fa-f]{6}$"))]
+    pub color: String,
+    #[schemars(range(min = 0.0, max = 1.0))]
+    pub opacity: f64,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(tag = "kind", deny_unknown_fields, rename_all = "camelCase")]
+pub enum Paint {
+    Solid {
+        ink: Ink,
+    },
+    /// Interpolate straight RGBA over a line across this surface. Alpha is real
+    /// compositing alpha: lower video layers remain visible through the paint.
+    Linear {
+        from: Ink,
+        to: Ink,
+        angle: f64,
+    },
+    /// Spatially varied translucent ink with a fine halftone. Evaluated on the
+    /// GPU against production time; no generated images or frame uploads.
+    Veil {
+        from: Ink,
+        to: Ink,
+        glow: Ink,
+        #[schemars(range(min = 2.0, max = 24.0))]
+        cell: f64,
+        #[schemars(range(min = 0.0, max = 1.0))]
+        motion: f64,
+    },
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct SurfaceBorder {
+    pub ink: Ink,
+    #[schemars(range(min = 0.0, max = 32.0))]
+    pub width: f64,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct TextStyle {
+    #[schemars(range(min = 6.0, max = 512.0))]
+    pub font_size: f64,
+    #[schemars(range(min = 100, max = 900))]
+    pub weight: u16,
+    pub ink: Ink,
+    pub align: TextAlign,
+}
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum TextAlign {
+    Left,
+    Center,
+    Right,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(tag = "kind", deny_unknown_fields, rename_all = "camelCase")]
@@ -464,6 +649,31 @@ pub struct Scene3d {
     #[serde(default)]
     pub batches: Vec<Batch>,
     pub analytic: bool,
+    /// Opt-in reconstruction inputs. Omitted legacy scenes make no promise
+    /// about an effect clock/seed; admission never invents either one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reconstruction: Option<AnalyticReconstruction>,
+}
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct AnalyticReconstruction {
+    pub version: AnalyticVersion,
+    pub seed: crate::Counter,
+    pub scope: SeedScope,
+    /// Positive cycle length, between 1 ms and 24 h. This is an effect period,
+    /// not a decoder range or a second transport.
+    pub period: Time,
+}
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub enum AnalyticVersion {
+    #[serde(rename = "producer.analytic/1")]
+    V1,
+}
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SeedScope {
+    Source,
+    Placement,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]

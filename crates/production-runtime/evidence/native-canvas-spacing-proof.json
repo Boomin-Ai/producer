@@ -1,0 +1,13 @@
+{
+  "candidateSha256": "1820b2de8ea72ef695352799f2e65a1d203adb40cb0d9c53d7b0048424f1a155",
+  "build": "passed",
+  "verifiedVisually": [
+    "Canvas format and resolution captions removed",
+    "4 logical px canvas inset; top aligned",
+    "Landscape, vertical and Both aspect ratios fit without cropping",
+    "Single divider click collapses left dock"
+  ],
+  "resizeBehavior": "3 px movement threshold differentiates resize from click",
+  "productionUnchanged": true,
+  "scope": "UI only"
+}

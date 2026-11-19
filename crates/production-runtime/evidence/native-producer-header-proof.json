@@ -1,0 +1,15 @@
+{
+  "candidateSha256": "91f5e83a781f3e3076a492704393e9b55d24fc7125221dbc1852ba3cbedc05d8",
+  "checks": {
+    "nativeBuild": true,
+    "normalToolbarIconsVisible": true,
+    "activitySheetOpaqueAndAnchored": true,
+    "editPlaceholdersAndPanelPickerVerified": true,
+    "outputVerticalThenBothVerified": true,
+    "recordConfirmationVerifiedWithoutStartingRecording": true,
+    "productionHashesUnchangedOnInstall": true
+  },
+  "recording": false,
+  "refusedFrames": 0,
+  "limits": "UI qualification only. Network, streaming, Studio presentation and virtual camera toolbar controls are unavailable until their native adapters are connected."
+}

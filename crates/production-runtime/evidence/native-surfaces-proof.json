@@ -1,0 +1,97 @@
+{
+  "date": "2026-11-18",
+  "scope": "Apple Silicon native 2D surfaces and cached system-font text over a public H.264 video; not the full Classic or beta",
+  "tests": {
+    "pureWorkspacePassed": 220,
+    "desktopPassed": 20,
+    "desktopTestsRequireMetalAccess": true
+  },
+  "sourceSha256": {
+    "contract/src/model.rs": "cc54d3780c5e782d69df6a4d2c894077ff7bfb259ac1d39a95f313759af4f521",
+    "contract/src/validate.rs": "987ec90d35a7a49f9a912974b7bdb83b9534816173ebfcf6fbba3dcbbeaa13ae",
+    "core/src/compile.rs": "a37286d54b4b3a623f3e911afdab25f6d2ae517449d7b897febabad17b72ab23",
+    "core/src/commands.rs": "f03d6f6e0a6fb2d4b3376a0fd8812f8091d04cd4b970242cfec38fa79b047f6d",
+    "desktop/src/engine.rs": "f5ec15789c7539ec18d23e55a3fe913281103d0bb0caa4cc5aa3ab63efd917c4",
+    "desktop/src/platform.rs": "7e8eb140611b0e02805147eefb49444699c9f465d182023315577d6eb0f78fbd",
+    "desktop/src/visuals.rs": "1bb86498f8345b18dd35e14aacdb9642b136bbb046280867e2bff2e784752eab",
+    "desktop/src/visual_fixture.rs": "3e0e776ed0bcd87a7667439c2274187bf6ac72de88843cbdabb3fca7530178d4",
+    "desktop/native/macos.m": "e28f45d8682224bf0ee48e1037027d00266c18ad59140c0496cefa95145b0c08",
+    "desktop/native/room.h": "f63a3e43bfa38f8bfe948f5d575b51e759311791ae12b39aa12992074773d82c"
+  },
+  "executableSha256": "397b7f51a6f3e85d86b529a933613e8a59a430b9c5effb47180cf3306926c186",
+  "runs": [
+    {
+      "mode": "dark",
+      "decodedFragments": 8,
+      "allDecoded": true,
+      "tracks": [
+        {
+          "orientation": "landscape",
+          "frames": 181,
+          "videoDurationSeconds": 6.075,
+          "framesPerSecond": 29.79423868312757,
+          "gaps": []
+        },
+        {
+          "orientation": "vertical",
+          "frames": 182,
+          "videoDurationSeconds": 6.103333333333333,
+          "framesPerSecond": 29.819770617149103,
+          "gaps": []
+        }
+      ],
+      "newGpuSubmissionRefusals": 0,
+      "maxObservedCpuEvaluateBuildSubmitP99Ms": 1.8133750000000002,
+      "surfaceEditAndDockRoundtrip": true
+    },
+    {
+      "mode": "light",
+      "decodedFragments": 8,
+      "allDecoded": true,
+      "tracks": [
+        {
+          "orientation": "landscape",
+          "frames": 184,
+          "videoDurationSeconds": 6.1416666666666675,
+          "framesPerSecond": 29.959294436906372,
+          "gaps": []
+        },
+        {
+          "orientation": "vertical",
+          "frames": 184,
+          "videoDurationSeconds": 6.1416666666666675,
+          "framesPerSecond": 29.959294436906372,
+          "gaps": []
+        }
+      ],
+      "newGpuSubmissionRefusals": 0,
+      "maxObservedCpuEvaluateBuildSubmitP99Ms": 1.7953750000000002,
+      "surfaceEditAndDockRoundtrip": true
+    }
+  ],
+  "publicVideo": {
+    "title": "Train through a mountain forest",
+    "author": "Chanaka Herath",
+    "source": "https://www.pexels.com/video/train-4k-20198201/",
+    "download": "https://videos.pexels.com/video-files/20198201/20198201-uhd_3840_2160_60fps.mp4",
+    "license": "https://www.pexels.com/license/",
+    "downloadedAt": "2026-11-18",
+    "sha256": "cd7c8040f3333364442c87569967b8fb54ab6f0c91660e5aa4a543aedaa505d9",
+    "bytes": 11728376,
+    "decodedMetadata": {
+      "codec": "h264",
+      "width": 2560,
+      "height": 1440,
+      "frameRate": "60000/1001",
+      "duration": 6.441667
+    },
+    "distribution": "Downloaded local fixture only; original not committed, bundled or published."
+  },
+  "limits": [
+    "CPU submission measurement excludes GPU duration and end-to-end latency",
+    "No camera/mic/screen or guest requalification in this visual check",
+    "No long-session/memory or Windows/Intel/Linux claim",
+    "No actual ChatGPT adapter; style command and schema available to future authoring integration",
+    "Eight-layout Classic and full control surface remain to be completed"
+  ]
+}

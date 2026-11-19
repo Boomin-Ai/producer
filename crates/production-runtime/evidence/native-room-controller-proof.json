@@ -1,0 +1,16 @@
+{
+  "candidateSha256": "6a2102cc26692d253816d6cdcffa6a2fa26c965871f4e345be9ee54b746c0129",
+  "checks": {
+    "build": true,
+    "roomControllerVisible": true,
+    "canvasPlaybackButtonsRemoved": true,
+    "headerOutputSelectorRemoved": true,
+    "controllerDimensionsAndOrientationVisuallyVerified": true,
+    "verticalThenBothVerified": true,
+    "timelinePlayClickAdvancedNativePlayhead": true,
+    "pausedAfterCheck": true,
+    "productionUnchanged": true
+  },
+  "scope": "UI-only. Independent Program and Preview playheads are not introduced by this change.",
+  "refusedFrames": 0
+}

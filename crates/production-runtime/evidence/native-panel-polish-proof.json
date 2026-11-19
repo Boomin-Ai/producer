@@ -1,0 +1,18 @@
+{
+  "candidateSha256": "b75c015b5d8fc54379fb54f4e36287437c8f50392828bbc1735e2ec719ff74c1",
+  "scope": "Native GPUI Sources, Scenes, Audio mixer, Set Controls, Timeline; dev QA profile only",
+  "desktopTestsPassed": 35,
+  "sandboxNote": "Three native text-cache tests require macOS graphics services; complete suite passes outside filesystem sandbox.",
+  "visibleChecks": [
+    "190/240/260 logical-pixel side panels",
+    "Expanded top and bottom docks with multiple weighted panels",
+    "Compact Scenes and Timeline actions",
+    "Mixer drag changes gain while preserving muted=true",
+    "Shared Timeline midpoint pointer seek reached 14.972729s on a 30s sequence"
+  ],
+  "recordingProof": "native-panel-polish-recording-proof.json",
+  "productionUnchanged": true,
+  "signature": "Ad-hoc local dev; deep/strict verified",
+  "cleanup": "Removed obsolete Tauri target, rebuildable Cargo executable copies, Chrome HTTP/code caches and unreferenced public-fixture QA takes; user recordings and source assets preserved.",
+  "limitations": "No physical camera/microphone or production release qualification rerun for this UI pass."
+}

@@ -2,7 +2,7 @@
 //! These are synthetic reservations, not measurements of physical RSS or VRAM.
 use crate::{
     contract::*,
-    lifecycle::{Cost, CAP},
+    lifecycle::{Cost, CAP, RETIREMENT_SLOTS},
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -130,7 +130,7 @@ impl Ledger {
             .try_fold(Cost::default(), |a, (_, b)| a.checked_add(*b))?;
         let total = used.checked_add(cost)?;
         // Check component caps before summing arbitrary caller-supplied u32s.
-        if !total.fits(CAP) || total.retire_slots() > 152 {
+        if !total.fits(CAP) || total.retire_slots() > RETIREMENT_SLOTS {
             return Err(fail(
                 "document includes active, incoming, cached, uncertain and retiring allocations",
             ));
@@ -145,7 +145,9 @@ impl Ledger {
         } else {
             CAP
         };
-        if !global.fits(cap) || global.retire_slots() > 152 * self.budget.documents as u64 {
+        if !global.fits(cap)
+            || global.retire_slots() > RETIREMENT_SLOTS * self.budget.documents as u64
+        {
             return Err(fail(
                 "workspace capacity includes closing documents and unfinished work",
             ));
@@ -173,5 +175,43 @@ impl Ledger {
         }
         s.scopes.remove(&self.scope);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lifecycle::GraphicsCost;
+
+    #[test]
+    fn native_caps_are_per_document_and_shared_charges_wait_for_each_owner() {
+        let budget = Budget::new(2);
+        let mut a = budget.ledger().unwrap();
+        let mut b = budget.ledger().unwrap();
+        let first = a.lease(CAP).unwrap();
+        assert!(a
+            .reserve(Cost {
+                graphics: GraphicsCost {
+                    scenes: 1,
+                    ..GraphicsCost::default()
+                },
+                ..Cost::default()
+            })
+            .is_err());
+        assert_eq!(budget.used(), CAP);
+        let second = b.lease(CAP).unwrap();
+        assert_eq!(budget.used(), CAP.checked_add(CAP).unwrap());
+        assert_eq!(budget.count(), 2);
+        assert!(a.close().is_err());
+        assert!(b.close().is_err());
+        drop(first);
+        a.close().unwrap();
+        assert_eq!(budget.used(), CAP);
+        assert_eq!(b.used(), CAP);
+        assert!(b.close().is_err());
+        drop(second);
+        b.close().unwrap();
+        assert_eq!(budget.used(), Cost::default());
+        assert_eq!(budget.count(), 0);
     }
 }

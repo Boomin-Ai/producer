@@ -41,7 +41,9 @@ fn fixture(nested: bool) -> Document {
         .root;
     for i in n..1000 {
         root.children.push(Node {
+            style: None,
             id: format!("node-{i}"),
+            placement: None,
             frame: Some(Rect {
                 x: (i % 50) as f64 * 20.0,
                 y: (i / 50) as f64 * 20.0,
@@ -141,6 +143,52 @@ fn fixture(nested: bool) -> Document {
 fn percentile(ns: &mut [u128], percent: usize) -> f64 {
     ns.sort_unstable();
     ns[(ns.len() - 1) * percent / 100] as f64 / 1_000_000.0
+}
+fn boundary_profile(d: &Document) -> serde_json::Value {
+    // These are independent, overlapping public boundaries, not an additive
+    // breakdown of compile(). Validation itself includes serialization/ingress.
+    let bytes = serde_json::to_vec(d).unwrap();
+    let names = [
+        "typedClone",
+        "serializeDocument",
+        "rawIngress",
+        "semanticAdmission",
+        "canonicalDigest",
+    ];
+    let mut samples: [Vec<u128>; 5] = std::array::from_fn(|_| Vec::with_capacity(30));
+    for i in 0..30 {
+        // Rotate sample order; do not pretend this isolates OS/thermal load.
+        for offset in 0..5 {
+            let stage = (i + offset) % 5;
+            let begin = Instant::now();
+            match stage {
+                0 => {
+                    std::hint::black_box(d.clone());
+                }
+                1 => {
+                    std::hint::black_box(serde_json::to_vec(d).unwrap());
+                }
+                2 => {
+                    std::hint::black_box(ingress::parse(&bytes, DOCUMENT_BYTES).unwrap());
+                }
+                3 => {
+                    std::hint::black_box(validate_document(d).unwrap());
+                }
+                4 => {
+                    std::hint::black_box(digest(d).unwrap());
+                }
+                _ => unreachable!(),
+            }
+            samples[stage].push(begin.elapsed().as_nanos());
+        }
+    }
+    let mut result = serde_json::Map::new();
+    for (name, mut values) in names.into_iter().zip(samples) {
+        let p50 = percentile(&mut values, 50);
+        let p95 = percentile(&mut values, 95);
+        result.insert(name.into(), serde_json::json!({"samples":30,"p50Ms":p50,"p95Ms":p95,"maxMs":values.last().unwrap().to_owned() as f64/1_000_000.0}));
+    }
+    serde_json::json!({"standaloneOverlappingBoundaries":true,"notAdditive":true,"hostLoadIsolated":false,"encodedDocumentBytes":bytes.len(),"measurements":result})
 }
 fn main() {
     let nested = std::env::args().any(|a| a == "--nested");
@@ -270,7 +318,10 @@ fn main() {
     }
     let incremental_p95 = percentile(&mut incremental, 95);
     let controls_p95 = percentile(&mut controls, 95);
-    let result = serde_json::json!({"nested":nested,"temporalDepth":if nested {2} else {0},"fixtureDigest":digest(&d).unwrap(),"nodes":p.nodes.len(),"tracks":sequence.tracks.len(),"evaluationSamples":samples.len(),"evaluationP99Ms":p99,"evaluationAllocations":allocations,"showEvaluationSamples":show_samples.len(),"showEvaluationP99Ms":show_p99,"showEvaluationAllocations":show_allocations,"showOverrides":sequence.tracks.len(),"showEvaluationGate1Ms":show_p99<=1.0,"firstCompileMs":cold,"repeatedFullCompileP95Ms":p95,"evaluationGate1Ms":p99<=1.0,"coldCompileGate250Ms":cold<=250.0,"fullCompileReference50Ms":p95<=50.0,"dirtyLayoutCompileP95Ms":incremental_p95,"authoringOnlyCompileP95Ms":controls_p95,"dirtyCompileGate50Ms":incremental_p95<=50.0,"admission":"full validation and canonical digest on every build","nativeGpu":"not measured"});
+    let mut result = serde_json::json!({"nested":nested,"temporalDepth":if nested {2} else {0},"fixtureDigest":digest(&d).unwrap(),"nodes":p.nodes.len(),"tracks":sequence.tracks.len(),"evaluationSamples":samples.len(),"evaluationP99Ms":p99,"evaluationAllocations":allocations,"showEvaluationSamples":show_samples.len(),"showEvaluationP99Ms":show_p99,"showEvaluationAllocations":show_allocations,"showOverrides":sequence.tracks.len(),"showEvaluationGate1Ms":show_p99<=1.0,"firstCompileMs":cold,"repeatedFullCompileP95Ms":p95,"evaluationGate1Ms":p99<=1.0,"coldCompileGate250Ms":cold<=250.0,"fullCompileReference50Ms":p95<=50.0,"dirtyLayoutCompileP95Ms":incremental_p95,"authoringOnlyCompileP95Ms":controls_p95,"dirtyCompileGate50Ms":incremental_p95<=50.0,"admission":"full validation and canonical digest on every build","nativeGpu":"not measured"});
+    if std::env::args().any(|a| a == "--boundaries") {
+        result["compileBoundaries"] = boundary_profile(&d);
+    }
     println!("{}", serde_json::to_string_pretty(&result).unwrap());
     assert!(
         p99 <= 1.0 && show_p99 <= 1.0 && cold <= 250.0,

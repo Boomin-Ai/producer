@@ -1,0 +1,35 @@
+{
+  "candidate": "67fe0da54e8c080fd1d87a6185763f30f3bc89a5e90e58b511f97856da274f29",
+  "isolatedProfile": true,
+  "checks": [
+    "Add does not change program; select/remove active scene stays rendering; final scene protected",
+    "Removed camera-2; both output clocks continue",
+    "Removed camera; both output clocks continue",
+    "Removed microphone; both output clocks continue",
+    "Removed screen; both output clocks continue",
+    "Removed movie; both output clocks continue",
+    "Re-added primary camera, received new frames, removed again without exiting"
+  ],
+  "captureBeforeRemoval": {
+    "cameraFrames": 1,
+    "audioFrames": 122600
+  },
+  "persistedRemoval": true,
+  "final": {
+    "outputFrames": [
+      273,
+      273
+    ],
+    "programRevision": 10,
+    "cpuP99Ms": 3.914333,
+    "error": null
+  },
+  "cleanShutdown": true,
+  "installedSignedBinary": "ef8cc8d5f24a0012bcf1fb880797c2d45813ea107d0b44feba233a00203a3235",
+  "uiChecks": [
+    "Compact Add scene creates a new scene without changing active scene",
+    "Scene ellipsis exposes Remove scene; click removes the test scene and app remains responsive",
+    "Far-right compact chevron replaced by Add scene"
+  ],
+  "productionUnchanged": true
+}

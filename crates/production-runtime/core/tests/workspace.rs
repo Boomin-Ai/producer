@@ -14,10 +14,132 @@ fn grant() -> RevokeFence {
     .unwrap()
     .1
 }
+fn dispose_show(w: &mut Workspace, id: &str) {
+    while w.show_status(id).unwrap().ownership.resources > 0 {
+        let ready = w.show_disposal_ready(id).unwrap();
+        assert!(!ready.is_empty(), "unfinished reads or dependency cycle");
+        for ack in ready {
+            w.show_disposed(id, ack.resource, ack.lane).unwrap();
+        }
+    }
+}
+
+#[test]
+fn cancelling_a_preparation_cannot_uncharge_its_borrowing_show_or_late_reads() {
+    use producer_production_core::{show::ShowEvent, transport::OutputInstant};
+    let mut w = Workspace::new().unwrap();
+    let d = fixture::classic_like();
+    w.open(&d.id).unwrap();
+    let token = prepare(&mut w, d.clone(), 0);
+    w.load_show(&d.id, token, "pilot", 1, OutputInstant(Counter(0)), grant())
+        .unwrap();
+    w.show_event(
+        &d.id,
+        ShowEvent::Start {
+            at: Counter(0),
+            segment: None,
+        },
+    )
+    .unwrap();
+    let read = w
+        .show_begin_read(&d.id, "sets/classic/layouts/wide")
+        .unwrap();
+    let before = w.status().used;
+    w.cancel(&d.id, token).unwrap();
+    assert_eq!(w.status().used, before);
+    w.close(&d.id).unwrap();
+    assert!(w
+        .show_begin_read(&d.id, "sets/classic/layouts/wide")
+        .is_err());
+    for _ in 0..1024 {
+        let ready = w.show_disposal_ready(&d.id).unwrap();
+        if ready.is_empty() {
+            break;
+        }
+        for ack in ready {
+            w.show_disposed(&d.id, ack.resource, ack.lane).unwrap();
+        }
+    }
+    assert!(w.show_status(&d.id).unwrap().ownership.resources > 0);
+    assert_eq!(w.status().used.graphics, before.graphics);
+    assert!(w.finish_close(&d.id).is_err());
+    w.show_finish_read(&d.id, read).unwrap();
+    dispose_show(&mut w, &d.id);
+    w.finish_close(&d.id).unwrap();
+    assert_eq!(w.status().used, Cost::default());
+}
+
+#[test]
+fn preparation_disposal_waits_for_show_dependency_disposal() {
+    use producer_production_core::{show::ShowEvent, transport::OutputInstant};
+    let mut w = Workspace::new().unwrap();
+    let d = fixture::classic_like();
+    w.open(&d.id).unwrap();
+    let token = prepare(&mut w, d.clone(), 0);
+    ready(&mut w, &d.id, token, &d);
+    take(&mut w, &d.id, token, Swap::Confirmed).unwrap();
+    w.load_show(&d.id, token, "pilot", 1, OutputInstant(Counter(0)), grant())
+        .unwrap();
+    w.show_event(
+        &d.id,
+        ShowEvent::Start {
+            at: Counter(0),
+            segment: None,
+        },
+    )
+    .unwrap();
+    w.close(&d.id).unwrap();
+    assert_eq!(
+        w.disposal_complete(&d.id, token).unwrap_err().code,
+        "DISPOSAL_FENCE"
+    );
+    dispose_show(&mut w, &d.id);
+    assert_eq!(w.status().used.graphics.scenes, 1); // Still owned by retiring output.
+    assert!(w.finish_close(&d.id).is_err());
+    w.disposal_complete(&d.id, token).unwrap();
+    w.finish_close(&d.id).unwrap();
+    assert_eq!(w.status().used, Cost::default());
+}
+
+#[test]
+fn another_take_cannot_silently_retarget_an_immutable_show_execution() {
+    use producer_production_core::{show::ShowEvent, transport::OutputInstant};
+    let mut w = Workspace::new().unwrap();
+    let mut d = fixture::classic_like();
+    w.open(&d.id).unwrap();
+    let old = prepare(&mut w, d.clone(), 0);
+    ready(&mut w, &d.id, old, &d);
+    take(&mut w, &d.id, old, Swap::Confirmed).unwrap();
+    w.load_show(&d.id, old, "pilot", 1, OutputInstant(Counter(0)), grant())
+        .unwrap();
+    d.title = "new preparation".into();
+    let new = prepare(&mut w, d.clone(), 1);
+    ready(&mut w, &d.id, new, &d);
+    assert_eq!(
+        take(&mut w, &d.id, new, Swap::Confirmed).unwrap_err().code,
+        "SHOW_PLAN_PINNED"
+    );
+    assert_eq!(
+        w.presentation(&d.id, Output::Landscape)
+            .unwrap()
+            .unwrap()
+            .token,
+        old
+    );
+    w.show_event(&d.id, ShowEvent::Close { at: Counter(0) })
+        .unwrap();
+    dispose_show(&mut w, &d.id);
+    take(&mut w, &d.id, new, Swap::Confirmed).unwrap();
+    w.disposal_complete(&d.id, old).unwrap();
+    w.close(&d.id).unwrap();
+    w.disposal_complete(&d.id, new).unwrap();
+    w.finish_close(&d.id).unwrap();
+    assert_eq!(w.status().used, Cost::default());
+}
 
 #[test]
 fn never_started_show_can_be_inspected_and_disposed_after_close() {
-    use producer_production_core::{ownership::Lane, transport::OutputInstant};
+    use producer_production_core::transport::OutputInstant;
     let mut w = Workspace::new().unwrap();
     let d = fixture::classic_like();
     w.open(&d.id).unwrap();
@@ -27,9 +149,9 @@ fn never_started_show_can_be_inspected_and_disposed_after_close() {
     w.close(&d.id).unwrap();
     let status = w.show_status(&d.id).unwrap();
     assert!(status.closed && !status.active);
-    assert_eq!(status.ownership.retiring, 1);
-    w.show_disposed(&d.id, status.set_resource, Lane::Video)
-        .unwrap();
+    assert_eq!(status.ownership.retiring, status.ownership.resources);
+    assert!(status.ownership.resources > 1);
+    dispose_show(&mut w, &d.id);
     w.finish_close(&d.id).unwrap();
     assert_eq!(w.status().used, Cost::default());
 }
@@ -63,12 +185,17 @@ fn show_plan_stays_charged_until_logical_close_and_exact_disposal_ack() {
     );
     w.close(&d.id).unwrap();
     assert!(w.finish_close(&d.id).is_err());
-    assert_eq!(w.status().used.cpu, 64 << 20);
+    assert!(w.status().used.cpu > 64 << 20);
+    assert_eq!(w.status().used.graphics.scenes, 1);
     assert!(w
         .show_disposed(&d.id, start.set_resource, Lane::Audio)
         .is_err());
-    w.show_disposed(&d.id, start.set_resource, Lane::Video)
-        .unwrap();
+    assert!(w
+        .show_disposed(&d.id, start.set_resource, Lane::Video)
+        .is_err());
+    dispose_show(&mut w, &d.id);
+    assert_eq!(w.status().used.cpu, 64 << 20);
+    assert_eq!(w.status().used.graphics, GraphicsCost::default());
     w.finish_close(&d.id).unwrap();
     assert_eq!(w.status().reservations, 0);
     assert_eq!(w.status().documents, 0);
@@ -114,10 +241,8 @@ fn shows_in_two_documents_never_share_component_or_disposal_identity() {
     assert!(w
         .show_disposed(&b.id, sa.set_resource, Lane::Video)
         .is_err());
-    w.show_disposed(&a.id, sa.set_resource, Lane::Video)
-        .unwrap();
-    w.show_disposed(&b.id, sb.set_resource, Lane::Video)
-        .unwrap();
+    dispose_show(&mut w, &a.id);
+    dispose_show(&mut w, &b.id);
     w.finish_close(&a.id).unwrap();
     w.finish_close(&b.id).unwrap();
     assert_eq!(w.status().reservations, 0);
@@ -208,6 +333,8 @@ fn two_documents_share_global_ledger_but_never_tokens_or_presentation() {
     let delta = serde_json::to_vec(&a).unwrap().len() - serde_json::to_vec(&b).unwrap().len();
     assert_eq!(all.cpu, first.cpu * 2 - 2 * delta as u64);
     assert_eq!(all.gpu, first.gpu * 2);
+    assert_eq!(all.graphics.scenes, first.graphics.scenes * 2);
+    assert_eq!(all.graphics.instances, first.graphics.instances * 2);
     assert!(w.fence(&b.id, t1, "host", Counter(1), Counter(1)).is_err());
     ready(&mut w, &a.id, t1, &a);
     take(&mut w, &a.id, t1, Swap::Confirmed).unwrap();
@@ -324,6 +451,7 @@ fn uncertain_retiring_and_cache_allocations_are_charged_until_exact_cleanup() {
     ready(&mut w, id, a, &d);
     take(&mut w, id, a, Swap::Confirmed).unwrap();
     let active = w.status().used;
+    assert_eq!(active.graphics.scenes, 1);
     let b = prepare(&mut w, d.clone(), 1);
     ready(&mut w, id, b, &d);
     assert_eq!(
@@ -332,12 +460,16 @@ fn uncertain_retiring_and_cache_allocations_are_charged_until_exact_cleanup() {
     );
     let uncertain = w.status().used;
     assert!(uncertain.cpu > active.cpu);
+    assert_eq!(uncertain.graphics.scenes, 2);
+    assert_eq!(uncertain.graphics.instances, 2000);
     assert!(w.cancel(id, b).is_err());
     w.close(id).unwrap();
     assert!(w.finish_close(id).is_err());
     assert!(w.open(id).is_err());
     assert!(w.status().used.gpu > 0);
+    assert_eq!(w.status().used.graphics, uncertain.graphics);
     w.disposal_complete(id, a).unwrap();
+    assert_eq!(w.status().used.graphics, active.graphics);
     assert!(w.finish_close(id).is_err());
     w.reconcile(id, b, true).unwrap();
     assert!(w.presentation(id, Output::Landscape).unwrap().is_none());
@@ -462,4 +594,96 @@ fn closing_a_warm_document_does_not_uncharge_the_workers_base_cache() {
     wait(&mut w, 1);
     w.finish_close(id).unwrap();
     assert_eq!(w.status().used, Cost::default());
+}
+
+#[test]
+fn geometry_inputs_get_fresh_preparations_without_accepting_old_frame_receipts() {
+    let mut w = Workspace::new().unwrap();
+    let d = fixture::responsive_layout();
+    w.open(&d.id).unwrap();
+    let old = prepare(&mut w, d.clone(), 0);
+    let old_frame = w
+        .fence(&d.id, old, "screen", Counter(1), Counter(1))
+        .unwrap();
+    ready(&mut w, &d.id, old, &d);
+    take(&mut w, &d.id, old, Swap::Confirmed).unwrap();
+    let inputs = LayoutInputs {
+        document: d.id.clone(),
+        sources: std::collections::BTreeMap::from([(
+            "screen".into(),
+            SourceDimensions {
+                identity: layout::source_layout_identity(&d, "screen").unwrap(),
+                display: Ratio {
+                    width: 4,
+                    height: 3,
+                },
+            },
+        )]),
+    };
+    w.submit_with_layout_inputs(d.clone(), inputs.clone(), Counter(0), 0, grant())
+        .unwrap();
+    let out = wait(&mut w, 1);
+    let new = match &out[0] {
+        CompileOutcome::Prepared {
+            token,
+            geometry_digest,
+            stats,
+            ..
+        } => {
+            assert_eq!(
+                *geometry_digest,
+                producer_production_core::compile::compile_with_layout_inputs(&d, &inputs)
+                    .unwrap()
+                    .geometry_digest
+            );
+            assert_eq!(stats.layouts_built, 2);
+            *token
+        }
+        other => panic!("{other:?}"),
+    };
+    assert_ne!(old, new);
+    assert!(w
+        .ready(&d.id, new, "screen", old_frame, Counter(1), Counter(1))
+        .is_err());
+    assert_eq!(
+        w.presentation(&d.id, Output::Landscape)
+            .unwrap()
+            .unwrap()
+            .token,
+        old
+    );
+    ready(&mut w, &d.id, new, &d);
+    take(&mut w, &d.id, new, Swap::Confirmed).unwrap();
+    assert_eq!(
+        w.presentation(&d.id, Output::Landscape)
+            .unwrap()
+            .unwrap()
+            .token,
+        new
+    );
+    let mut invalid = inputs.clone();
+    // The old output remains charged until its adapter's disposal receipt.
+    w.disposal_complete(&d.id, old).unwrap();
+    invalid.sources.get_mut("screen").unwrap().display = Ratio {
+        width: 1,
+        height: 2,
+    };
+    w.submit_with_layout_inputs(d.clone(), invalid, Counter(0), 0, grant())
+        .unwrap();
+    assert!(
+        matches!(&wait(&mut w, 1)[0], CompileOutcome::Rejected { error, .. } if error.code == "LAYOUT")
+    );
+    assert_eq!(
+        w.presentation(&d.id, Output::Landscape)
+            .unwrap()
+            .unwrap()
+            .token,
+        new
+    );
+    w.submit_with_layout_inputs(d.clone(), inputs, Counter(0), 0, grant())
+        .unwrap();
+    assert!(
+        matches!(&wait(&mut w, 1)[0], CompileOutcome::Prepared { stats, .. } if stats.layouts_reused == 2)
+    );
+    w.stop(&d.id).unwrap();
 }

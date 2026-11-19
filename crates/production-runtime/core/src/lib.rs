@@ -1,14 +1,19 @@
 //! Isolated headless runtime. Never linked into the production app in Phase 1.
 pub use producer_production_contract as contract;
+pub mod analytic;
 pub mod bounded;
 pub mod commands;
 pub mod compile;
 pub mod coordinator;
+pub mod dependencies;
 pub mod drivers;
+pub mod host;
 pub mod incremental;
+pub mod layout;
 pub mod lifecycle;
 pub mod ownership;
 pub mod resources;
+pub mod retention;
 pub mod show;
 pub mod storage;
 pub mod timeline;

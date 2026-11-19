@@ -1,5 +1,8 @@
 //! Off-callback compilation; frame evaluation consumes only numeric handles/keys.
-use crate::contract::*;
+use crate::{
+    contract::*,
+    layout::{self, Geometry, ResolvedAspect},
+};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -43,9 +46,15 @@ impl CompactValue {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodePlan {
     pub path: String,
+    pub style: Option<SurfaceStyle>,
     pub frame: Rect,
+    pub pivot: UnitPoint,
+    pub aspect: Option<ResolvedAspect>,
     pub kind: String,
     pub source: Option<String>,
+    pub fit: Option<Fit>,
+    pub font: Option<Digest>,
+    pub text: Option<String>,
     pub bound: Vec<(Property, CompactValue)>,
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
@@ -83,14 +92,19 @@ pub struct SequencePlan {
     pub players: Vec<PlayerPlan>,
     pub cues: Vec<CuePlan>,
     pub routes: Vec<AudioRoute>,
+    pub effects: Vec<crate::analytic::EffectPlan>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Plan {
+    pub analytic_sources: BTreeMap<String, crate::analytic::AnalyticSourcePlan>,
+    pub geometry_digest: Digest,
+    pub layout_inputs: Arc<LayoutInputs>,
     pub digest: String,
     pub nodes: Vec<Arc<NodePlan>>,
     pub targets: Vec<Target>,
     pub sequences: BTreeMap<String, Arc<SequencePlan>>,
     pub inventory: Inventory,
+    pub dependencies: Arc<crate::dependencies::DependencyPlan>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,6 +113,25 @@ pub enum EvalError {
     TimeRange,
 }
 impl SequencePlan {
+    /// Slots follow compiled placement order. A failed frame must be discarded
+    /// as a whole, just like numeric evaluation. No cue/action is dispatched.
+    pub fn evaluate_effects_into(
+        &self,
+        t: Time,
+        out: &mut [Option<crate::analytic::EffectInputs>],
+    ) -> std::result::Result<(), EvalError> {
+        if out.len() < self.effects.len() {
+            return Err(EvalError::ScratchTooSmall);
+        }
+        if t < Time::ZERO || t > self.duration {
+            return Err(EvalError::TimeRange);
+        }
+        out.fill(None);
+        for (slot, effect) in out.iter_mut().zip(&self.effects) {
+            *slot = effect.sample(t)?;
+        }
+        Ok(())
+    }
     /// Caller allocates scratch off-callback. No strings, JSON, IO, locks or allocations here.
     pub fn evaluate_into(
         &self,
@@ -146,6 +179,15 @@ impl SequencePlan {
     }
 }
 impl PlayerPlan {
+    /// Floating-point conversion happens only at the external decoder boundary;
+    /// all mapping and source visibility decisions are evaluated exactly first.
+    pub fn media_seconds(&self, root: Time) -> std::result::Result<Option<f64>, EvalError> {
+        if self.available.is_none() {
+            return self.sample(root).map(|v| v.map(|t| t.as_f64()));
+        }
+        temporal::map_chain_media_seconds(&self.maps, root).map_err(|_| EvalError::TimeRange)
+    }
+
     /// Live capture remains live; None available means this is only a visibility
     /// gate. A file's returned time is source PTS, not the parent's content clock.
     pub fn sample(&self, root: Time) -> std::result::Result<Option<Time>, EvalError> {
@@ -166,7 +208,7 @@ impl PlayerPlan {
 fn bad(p: &str, m: &str) -> Error {
     Error::new("LAYOUT", p, m)
 }
-fn allocation(sizes: &[Size], available: f64) -> Result<Vec<f64>> {
+pub(crate) fn allocation(sizes: &[Size], available: f64) -> Result<Vec<f64>> {
     if !available.is_finite() || available < 0.0 {
         return Err(bad("allocation", "negative/nonfinite available space"));
     }
@@ -180,6 +222,12 @@ fn allocation(sizes: &[Size], available: f64) -> Result<Vec<f64>> {
                 remaining -= pixels;
             }
             Size::Weight { .. } => pending.push(i),
+            Size::Aspect => {
+                return Err(bad(
+                    "allocation",
+                    "aspect sizes must resolve before allocation",
+                ))
+            }
         }
     }
     if remaining < 0.0 {
@@ -237,88 +285,13 @@ fn allocation(sizes: &[Size], available: f64) -> Result<Vec<f64>> {
     }
     Err(bad("allocation", "bounded redistribution exhausted"))
 }
-fn children(n: &Node, r: Rect) -> Result<Vec<Rect>> {
-    let count = n.children.len();
-    if count == 0 {
-        return Ok(vec![]);
-    }
-    match &n.flow {
-        Flow::Overlay => n
-            .children
-            .iter()
-            .map(|c| {
-                let f = c.frame.ok_or_else(|| bad(&n.id, "child frame missing"))?;
-                Ok(Rect {
-                    x: r.x + f.x,
-                    y: r.y + f.y,
-                    ..f
-                })
-            })
-            .collect(),
-        Flow::Row { gap, sizes } | Flow::Column { gap, sizes } => {
-            let row = matches!(n.flow, Flow::Row { .. });
-            let available = (if row { r.width } else { r.height }) - gap * (count - 1) as f64;
-            let lengths = allocation(sizes, available)?;
-            let mut offset = 0.0;
-            let mut out = Vec::with_capacity(count);
-            for size in lengths {
-                if size <= 0.0 {
-                    return Err(bad(&n.id, "empty allocated child"));
-                }
-                out.push(if row {
-                    Rect {
-                        x: r.x + offset,
-                        y: r.y,
-                        width: size,
-                        height: r.height,
-                    }
-                } else {
-                    Rect {
-                        x: r.x,
-                        y: r.y + offset,
-                        width: r.width,
-                        height: size,
-                    }
-                });
-                offset += size + gap;
-            }
-            Ok(out)
-        }
-        Flow::Grid { gap, columns } => {
-            let cols = *columns as usize;
-            let rows = count.div_ceil(cols);
-            let width = (r.width - gap * (cols - 1) as f64) / cols as f64;
-            let height = (r.height - gap * (rows - 1) as f64) / rows as f64;
-            if width <= 0.0 || height <= 0.0 {
-                return Err(bad(&n.id, "grid gaps exceed parent"));
-            }
-            Ok((0..count)
-                .map(|i| Rect {
-                    x: r.x + (i % cols) as f64 * (width + gap),
-                    y: r.y + (i / cols) as f64 * (height + gap),
-                    width,
-                    height,
-                })
-                .collect())
-        }
-    }
-}
-fn raster(r: Rect) -> Rect {
-    let x = r.x.round_ties_even();
-    let y = r.y.round_ties_even();
-    Rect {
-        x,
-        y,
-        width: (r.x + r.width).round_ties_even() - x,
-        height: (r.y + r.height).round_ties_even() - y,
-    }
-}
 fn expand(
     d: &Document,
     n: &Node,
     path: &str,
-    r: Rect,
+    geometry: Geometry,
     props: &BTreeMap<String, Value>,
+    inputs: &LayoutInputs,
     out: &mut Vec<Arc<NodePlan>>,
 ) -> Result<()> {
     let path = format!("{path}/{}", n.id);
@@ -328,7 +301,8 @@ fn expand(
         Content::Source { .. } => "source",
         Content::Component { .. } => "component",
     };
-    let snapped = raster(r);
+    let r = geometry.frame;
+    let snapped = layout::raster(r);
     if snapped.width <= 0.0 || snapped.height <= 0.0 {
         return Err(bad(&path, "subpixel box has no raster footprint"));
     }
@@ -344,10 +318,28 @@ fn expand(
         .collect::<Result<_>>()?;
     out.push(Arc::new(NodePlan {
         path: path.clone(),
+        style: n.style.clone(),
         frame: snapped,
+        pivot: geometry.pivot,
+        aspect: geometry.aspect,
         kind: kind.into(),
         source: if let Content::Source { source, .. } = &n.content {
             Some(source.clone())
+        } else {
+            None
+        },
+        fit: if let Content::Source { fit, .. } = &n.content {
+            Some(*fit)
+        } else {
+            None
+        },
+        font: if let Content::Text { font, .. } = &n.content {
+            Some(font.clone())
+        } else {
+            None
+        },
+        text: if let Content::Text { value, .. } = &n.content {
+            Some(value.clone())
         } else {
             None
         },
@@ -362,15 +354,30 @@ fn expand(
         let component = &d.components[definition];
         let mut p = component.props.clone();
         p.extend(overrides.clone());
-        expand(d, &component.root, &path, r, &p, out)?;
+        let child = layout::fill(&component.root, r, inputs)?;
+        expand(d, &component.root, &path, child, &p, inputs, out)?;
     }
-    for (child, rect) in n.children.iter().zip(children(n, r)?) {
-        expand(d, child, &path, rect, props, out)?;
+    for (child, rect) in n.children.iter().zip(layout::children(n, r, inputs)?) {
+        expand(d, child, &path, rect, props, inputs, out)?;
     }
     Ok(())
 }
 pub fn compile(d: &Document) -> Result<Plan> {
-    let inventory = validate_document(d)?;
+    compile_with_layout_inputs(d, &LayoutInputs::empty(&d.id))
+}
+pub fn compile_with_layout_inputs(d: &Document, inputs: &LayoutInputs) -> Result<Plan> {
+    compile_with_inputs_and_scratch(d, inputs, &mut wire::Scratch::default())
+}
+pub fn compile_with_scratch(d: &Document, scratch: &mut wire::Scratch) -> Result<Plan> {
+    compile_with_inputs_and_scratch(d, &LayoutInputs::empty(&d.id), scratch)
+}
+fn compile_with_inputs_and_scratch(
+    d: &Document,
+    inputs: &LayoutInputs,
+    scratch: &mut wire::Scratch,
+) -> Result<Plan> {
+    let inventory = validate::validate_with_scratch(d, scratch)?;
+    crate::contract::layout::validate_inputs(d, inputs)?;
     let targets: Vec<_> = inventory.targets.iter().cloned().collect();
     let handles: BTreeMap<_, _> = targets
         .iter()
@@ -380,15 +387,8 @@ pub fn compile(d: &Document) -> Result<Plan> {
         .collect();
     let mut nodes = Vec::with_capacity(inventory.expanded_nodes);
     for (sid, set) in &d.sets {
-        for (lid, l) in &set.layouts {
-            expand(
-                d,
-                &l.root,
-                &format!("sets/{sid}/layouts/{lid}"),
-                l.root.frame.unwrap(),
-                &BTreeMap::new(),
-                &mut nodes,
-            )?;
+        for lid in set.layouts.keys() {
+            nodes.extend(layout(d, sid, lid, inputs)?);
         }
     }
     let mut sequences = BTreeMap::new();
@@ -399,24 +399,51 @@ pub fn compile(d: &Document) -> Result<Plan> {
             Arc::new(sequence(d, id, &handles, &mut temporal_work)?),
         );
     }
+    let dependencies = Arc::new(crate::dependencies::compile(
+        d, &nodes, &sequences, &targets,
+    )?);
+    let document_digest = scratch.digest(d)?;
     Ok(Plan {
-        digest: digest(d)?,
+        analytic_sources: crate::analytic::sources(d),
+        geometry_digest: geometry_digest(&document_digest, inputs)?,
+        layout_inputs: Arc::new(inputs.clone()),
+        digest: document_digest,
         nodes,
         targets,
         sequences,
         inventory,
+        dependencies,
     })
 }
 
-pub(crate) fn layout(d: &Document, sid: &str, lid: &str) -> Result<Vec<Arc<NodePlan>>> {
+pub(crate) fn geometry_digest(document_digest: &str, inputs: &LayoutInputs) -> Result<Digest> {
+    digest(&(document_digest, inputs))
+}
+pub(crate) fn layout(
+    d: &Document,
+    sid: &str,
+    lid: &str,
+    inputs: &LayoutInputs,
+) -> Result<Vec<Arc<NodePlan>>> {
     let l = &d.sets[sid].layouts[lid];
     let mut nodes = vec![];
     expand(
         d,
         &l.root,
         &format!("sets/{sid}/layouts/{lid}"),
-        l.root.frame.unwrap(),
+        layout::place(
+            &l.root,
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: f64::from(l.width),
+                height: f64::from(l.height),
+            },
+            l.root.frame.unwrap(),
+            inputs,
+        )?,
         &BTreeMap::new(),
+        inputs,
         &mut nodes,
     )?;
     Ok(nodes)
@@ -445,7 +472,30 @@ pub(crate) fn sequence(
         });
     }
     let mut players = Vec::new();
+    let mut effects = Vec::new();
+    let analytic_sources = crate::analytic::sources(d);
     for p in expanded.players {
+        if let Some(source) = analytic_sources.get(&p.source) {
+            let mut maps = p.maps.clone();
+            // Graphics have no file playhead. Their content clock starts at the
+            // placement's entry, after exact ancestor trim/speed/loop mapping.
+            maps.push(temporal::TimeMap {
+                range: p.template.range,
+                source_range: Range {
+                    start: Time::ZERO,
+                    duration: p.template.range.duration,
+                },
+                source_in: Time::ZERO,
+                speed: Speed::default(),
+                looping: false,
+            });
+            effects.push(crate::analytic::EffectPlan {
+                path: p.path.clone(),
+                source: p.source.clone(),
+                clock: source.bind(&p.path)?,
+                maps,
+            });
+        }
         let mut maps = p.maps;
         let available = if let Source::Player { asset } = &d.sources[&p.source] {
             d.assets[asset].available
@@ -477,6 +527,7 @@ pub(crate) fn sequence(
         }
     }
     Ok(SequencePlan {
+        effects,
         duration: d.sequences[id].duration,
         tracks,
         players,

@@ -1,0 +1,22 @@
+{
+  "scope": "Native GPUI workspace visual/interaction follow-up",
+  "candidateSha256": "4e7d4ed376dbb8880c36117843e5945bd0905359f4051f6c469d79e73f13b73e",
+  "normalModeManagementHeaders": false,
+  "normalModeOuterBorders": false,
+  "gutterLogicalPixels": 4,
+  "editModeHeaderVisibilityVerified": true,
+  "doneRestoresCleanWorkspaceVerified": true,
+  "realPointerResize": {
+    "before": 240,
+    "after": 312,
+    "exactReleasePosition": true
+  },
+  "realPointerPanelMove": {
+    "panel": "sources",
+    "from": "left",
+    "to": "top",
+    "restored": true
+  },
+  "productionUnchanged": true,
+  "recordingQualification": "Prior recording proof retained separately; no new recording claimed for this UI-only follow-up."
+}

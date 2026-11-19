@@ -7,6 +7,52 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::sync::Arc;
+
+/// Native graphics admission dimensions. These describe a synthetic preparation
+/// profile, not physical allocations or a browser/WebGL context.
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct GraphicsCost {
+    pub scenes: u32,
+    pub pipelines: u32,
+    pub render_passes: u32,
+    pub textures: u32,
+    pub buffers: u32,
+    pub instances: u32,
+}
+impl GraphicsCost {
+    fn checked_add(self, b: Self) -> Result<Self> {
+        macro_rules! sum {
+            ($f:ident) => {
+                self.$f
+                    .checked_add(b.$f)
+                    .ok_or_else(|| fail("RESOURCE_LIMIT", "graphics reservation overflow"))?
+            };
+        }
+        Ok(Self {
+            scenes: sum!(scenes),
+            pipelines: sum!(pipelines),
+            render_passes: sum!(render_passes),
+            textures: sum!(textures),
+            buffers: sum!(buffers),
+            instances: sum!(instances),
+        })
+    }
+    fn fits(self, cap: Self) -> bool {
+        self.scenes <= cap.scenes
+            && self.pipelines <= cap.pipelines
+            && self.render_passes <= cap.render_passes
+            && self.textures <= cap.textures
+            && self.buffers <= cap.buffers
+            && self.instances <= cap.instances
+    }
+    /// Passes are bounded work and instances are buffer contents, rather than
+    /// separately disposable resources. Their admission limits still apply.
+    const fn retire_slots(self) -> u64 {
+        self.scenes as u64 + self.pipelines as u64 + self.textures as u64 + self.buffers as u64
+    }
+}
 
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -18,6 +64,8 @@ pub struct Cost {
     pub browsers: u32,
     pub surfaces: u32,
     pub voices: u32,
+    #[serde(default)]
+    pub graphics: GraphicsCost,
 }
 pub const CAP: Cost = Cost {
     cpu: 256 << 20,
@@ -27,7 +75,18 @@ pub const CAP: Cost = Cost {
     browsers: 4,
     surfaces: 64,
     voices: 64,
+    graphics: GraphicsCost {
+        scenes: 16,
+        pipelines: 64,
+        render_passes: 128,
+        textures: 128,
+        buffers: 128,
+        // A validated document allows 4,096 instances. Active and incoming
+        // plans are charged together, even when they share asset hashes.
+        instances: 8192,
+    },
 };
+pub const RETIREMENT_SLOTS: u64 = CAP.retire_slots();
 impl Cost {
     pub(crate) fn checked_add(self, b: Self) -> Result<Self> {
         macro_rules! sum {
@@ -45,6 +104,7 @@ impl Cost {
             browsers: sum!(browsers),
             surfaces: sum!(surfaces),
             voices: sum!(voices),
+            graphics: self.graphics.checked_add(b.graphics)?,
         })
     }
     pub(crate) fn fits(self, cap: Self) -> bool {
@@ -55,18 +115,15 @@ impl Cost {
             && self.browsers <= cap.browsers
             && self.surfaces <= cap.surfaces
             && self.voices <= cap.voices
+            && self.graphics.fits(cap.graphics)
     }
-    pub fn retire_slots(self) -> u64 {
-        [
-            self.players,
-            self.captures,
-            self.browsers,
-            self.surfaces,
-            self.voices,
-        ]
-        .into_iter()
-        .map(u64::from)
-        .sum()
+    pub const fn retire_slots(self) -> u64 {
+        self.players as u64
+            + self.captures as u64
+            + self.browsers as u64
+            + self.surfaces as u64
+            + self.voices as u64
+            + self.graphics.retire_slots()
     }
 }
 fn fail(code: &str, m: &str) -> Error {
@@ -93,44 +150,98 @@ fn source_identity(d: &Document, s: &Source) -> Result<String> {
                     )
                 })
                 .collect();
-            digest(&(parameters, batches, scene.analytic))
+            match scene.reconstruction {
+                None => digest(&(parameters, batches, scene.analytic)),
+                Some(r) => digest(&(&d.id, parameters, batches, scene.analytic, r)),
+            }
         }
         Source::Live { .. } => digest(s),
     }
 }
 
 pub use crate::resources::Ledger;
-/// Conservative fake costs, intentionally distinct from future native probe costs.
+/// Synthetic all-declared-source/all-layout preparation profile. No resource
+/// sharing is assumed. Opaque mesh/material/decode sizes are not known here;
+/// future native probes must qualify physical memory separately.
 pub(crate) fn estimate(d: &Document) -> Result<Cost> {
     let inventory = validate_document(d)?;
-    let mut c = Cost {
-        cpu: ((inventory.expanded_nodes * 4096 + inventory.targets.len() * 256) as u64)
-            + serde_json::to_vec(d).unwrap().len() as u64,
-        ..Cost::default()
-    };
-    for source in d.sources.values() {
-        match source {
-            Source::Player { .. } => {
-                c.players += 1;
-                c.cpu += 3 * 1280 * 720 * 4;
-                c.voices += 1;
-            }
-            Source::Live { .. } => c.captures += 1,
-            Source::Graphics { scene } => {
-                c.browsers += 1;
-                c.gpu += scene
-                    .batches
-                    .iter()
-                    .map(|b| b.instances as u64 * 64)
-                    .sum::<u64>();
-            }
+    let overflow = || fail("RESOURCE_LIMIT", "preparation estimate overflow");
+    let encoded_bytes = serde_json::to_vec(d)
+        .map_err(|_| fail("INVALID_DOCUMENT", "could not encode validated document"))?
+        .len() as u64;
+    let cpu = (inventory.expanded_nodes as u64)
+        .checked_mul(4096)
+        .and_then(|n| n.checked_add((inventory.targets.len() as u64).checked_mul(256)?))
+        .and_then(|n| n.checked_add(encoded_bytes))
+        .ok_or_else(overflow)?;
+    let mut outputs = Cost::default();
+    for set in d.sets.values() {
+        for layout in set.layouts.values() {
+            let bytes = u64::from(layout.width)
+                .checked_mul(u64::from(layout.height))
+                .and_then(|n| n.checked_mul(4))
+                .ok_or_else(overflow)?;
+            outputs = outputs.checked_add(Cost {
+                gpu: bytes,
+                surfaces: 1,
+                graphics: GraphicsCost {
+                    pipelines: 1,
+                    render_passes: 1,
+                    textures: 1,
+                    ..GraphicsCost::default()
+                },
+                ..Cost::default()
+            })?;
         }
     }
-    for s in d.sets.values() {
-        for l in s.layouts.values() {
-            c.surfaces += 1;
-            c.gpu += l.width as u64 * l.height as u64 * 4;
-        }
+    let mut c = outputs.checked_add(Cost {
+        cpu,
+        ..Cost::default()
+    })?;
+    for source in d.sources.values() {
+        let source_cost = match source {
+            Source::Player { .. } => Cost {
+                cpu: 3 * 1280 * 720 * 4,
+                players: 1,
+                voices: 1,
+                ..Cost::default()
+            },
+            Source::Live { .. } => Cost {
+                captures: 1,
+                ..Cost::default()
+            },
+            Source::Graphics { scene } => {
+                // One scene state/uniform buffer, projected independently into
+                // every prepared layout. Paired outputs are not free. Geometry,
+                // index and instance buffers/pipelines are reserved per batch;
+                // equal asset hashes do not imply shared mutable instances.
+                let mut graphics = Cost {
+                    gpu: outputs.gpu,
+                    graphics: GraphicsCost {
+                        scenes: 1,
+                        render_passes: outputs.surfaces,
+                        textures: outputs.surfaces,
+                        buffers: 1,
+                        ..GraphicsCost::default()
+                    },
+                    ..Cost::default()
+                };
+                for batch in &scene.batches {
+                    graphics = graphics.checked_add(Cost {
+                        gpu: u64::from(batch.instances) * 64,
+                        graphics: GraphicsCost {
+                            pipelines: 1,
+                            buffers: 3,
+                            instances: batch.instances,
+                            ..GraphicsCost::default()
+                        },
+                        ..Cost::default()
+                    })?;
+                }
+                graphics
+            }
+        };
+        c = c.checked_add(source_cost)?;
     }
     Ok(c)
 }
@@ -168,7 +279,7 @@ struct Slot {
     revision: Counter,
     plan: Plan,
     document: Document,
-    _cost: crate::resources::Reservation,
+    cost: Arc<crate::resources::Reservation>,
     expires: u64,
     state: TakeState,
     outputs: Vec<Output>,
@@ -226,7 +337,7 @@ impl Runtime {
             revision,
             plan,
             document: d.clone(),
-            _cost: cost,
+            cost: Arc::new(cost),
             expires,
             state: TakeState::Prepared,
             outputs: vec![],
@@ -271,7 +382,13 @@ impl Runtime {
                 "Show must pin the current admitted document",
             ));
         }
-        crate::show::ShowRun::from_plan(&slot.document, slot.plan.clone(), show, grant, at)
+        let mut execution =
+            crate::show::ShowRun::from_plan(&slot.document, slot.plan.clone(), show, grant, at)?;
+        // The Show borrows this admitted bundle rather than manufacturing a
+        // second allocation. Cancelling/retiring its preparation cannot uncharge
+        // it while the Show or its in-flight reads still retain the resources.
+        execution.pin_preparation(slot.cost.clone());
+        Ok(execution)
     }
     pub(crate) fn pending_count(&self) -> usize {
         self.slots
@@ -568,6 +685,12 @@ impl Runtime {
     pub fn disposal_complete(&mut self, t: Counter) -> Result<()> {
         if self.state(t) != Some(TakeState::Retiring) {
             return Err(fail("RETIRE_STATE", "not retiring"));
+        }
+        if Arc::strong_count(&self.slots[&t.0].cost) != 1 {
+            return Err(fail(
+                "DISPOSAL_FENCE",
+                "a Show still borrows this preparation",
+            ));
         }
         let slot = self.slots.remove(&t.0).unwrap();
         drop(slot);

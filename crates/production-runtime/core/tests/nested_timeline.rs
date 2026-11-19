@@ -621,3 +621,49 @@ fn unrepresentable_inverse_boundary_rejects_instead_of_approximating_collision_p
         "TIME_UNREPRESENTABLE"
     );
 }
+
+#[test]
+fn media_decoder_clock_does_not_blink_after_fractional_loops() {
+    let available = Range {
+        start: Time::ZERO,
+        duration: t(3833, 600),
+    };
+    let player = PlayerPlan {
+        path: "main/movie".into(),
+        source: "movie".into(),
+        range: Range {
+            start: Time::ZERO,
+            duration: Time::seconds(60),
+        },
+        available: Some(available),
+        maps: vec![temporal::TimeMap {
+            range: Range {
+                start: Time::ZERO,
+                duration: Time::seconds(60),
+            },
+            source_range: available,
+            source_in: Time::ZERO,
+            speed: Speed::default(),
+            looping: true,
+        }],
+    };
+    let at = t(7_000_000_001, 1_000_000_000);
+    assert!(
+        player.sample(at).is_err(),
+        "Exact document profile still refuses lossy coercion"
+    );
+    for ns in (1..60_000_000_000i64).step_by(13_333_333) {
+        let root = t(ns, 1_000_000_000);
+        let actual = player.media_seconds(root).unwrap().unwrap();
+        let expected = (ns as f64 / 1e9) % (3833. / 600.);
+        assert!(
+            (actual - expected).abs() < 1e-12,
+            "{ns}: {actual} vs {expected}"
+        );
+    }
+    assert_eq!(player.media_seconds(Time::seconds(60)).unwrap(), None);
+    // Preserve actual structural failure; it must never look like no source.
+    let mut bad = player;
+    bad.maps = vec![bad.maps[0]; TEMPORAL_DEPTH + 2];
+    assert!(bad.media_seconds(at).is_err());
+}

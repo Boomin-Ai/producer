@@ -1,0 +1,533 @@
+{
+  "recordedAt": "2026-11-16T13:15:50.072467+00:00",
+  "scope": "Isolated Rust bounded wire admission, canonical identity, metadata compatibility and durable save-path memory. Local Apple Silicon only; uncontrolled host load. No desktop, GPUI, native GPU/media, remote platforms, native executor or broad Phase 1 readiness.",
+  "baseCommit": "f33fc0aa2635c1abab5e15bed35cd425d4cd88a7",
+  "branch": "feat/production-core-phase1",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: aarch64-apple-darwin\nrelease: 1.99.1\nLLVM version: 23.1.1",
+  "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)",
+  "allocatorEnvironment": {
+    "MallocNanoZone": "0"
+  },
+  "sourceSha256": {
+    ".github/workflows/production-core.yml": "033021064b258b42483d165cc6627d971fcd019d3a0233c9ae69560440a87fc6",
+    "crates/production-runtime/Cargo.lock": "804050cf357f53f4b49732e307a7bafa5904d51731ba80797dbd8e0de8c58a51",
+    "crates/production-runtime/Cargo.toml": "4676794d6b41b2936a6d0c4efd0fac15df33bbfff3cdf2f7691c94335f48c150",
+    "crates/production-runtime/cli/Cargo.toml": "43dcacec7b8c9163974c647c6ef80cb0357ff63c561247d5ff6c84a7fe1f8b0f",
+    "crates/production-runtime/cli/src/main.rs": "c3aebebc4cf849dfcec745fb53ac516826c24e05ba36a56d80ced5fd4157ef74",
+    "crates/production-runtime/contract/Cargo.toml": "2cbee410744fb254b33ffa46d323c08ad45959a8cbc7c907b6f6322fec2edeb8",
+    "crates/production-runtime/contract/src/fixture.rs": "757da702001a5216de42ff36e14a6ac312abae5e552434e07b3633f5f9708e9d",
+    "crates/production-runtime/contract/src/ingress.rs": "9923f85cfbead38f9a5db32222a239884218f89bd665d598e355d94f790050bd",
+    "crates/production-runtime/contract/src/layout.rs": "8f6e3d5b05419e4099c907c760a3926a35c95819fa8db5fab8382bd8fbc0cb96",
+    "crates/production-runtime/contract/src/lib.rs": "7b107424de95a794027df6a571d328a50100bef05de55d860ac4219423a3b742",
+    "crates/production-runtime/contract/src/model.rs": "867f2e7220df1f322cdb39dcb2654cf6deb3bbc315850c25ffeb19e66fb876bb",
+    "crates/production-runtime/contract/src/shared.rs": "2bc99aa6816042402e1e2a0decdc4244e747ef520cec1a4e1e8c634be5ff520c",
+    "crates/production-runtime/contract/src/temporal.rs": "bc85e66fe6514b07fff04f245bf1e572b4ff450ec3ab74d9828bcc5a57c054ad",
+    "crates/production-runtime/contract/src/time.rs": "f47312a746a635be4b496a2cd4c09ea86244ead072ee244a8a5d1e3617474a4f",
+    "crates/production-runtime/contract/src/validate.rs": "bbb53f64dfd080b8dce98ddce80138aa58c58b8af66d4c3d6b1cd1c80e9f7a26",
+    "crates/production-runtime/contract/src/wire.rs": "ab620e2a031263870ce009eb69b979df87befed8e2b6130cd3b4ef3924c06813",
+    "crates/production-runtime/contract/tests/conformance.rs": "3274c933a058962a0187fde3325e4be37986deb3140e130cc06c8bfb83715502",
+    "crates/production-runtime/contract/tests/mutations.rs": "a915027f62d1a6f4a232d89a7d1801d4c2325f3ad9c477a76b86b0ef0a3fd0fc",
+    "crates/production-runtime/core/Cargo.toml": "3b2b0fae270f8a1d5712d20739ae7d2ac906b73f6619e1d76b8a4ff668a3f3a3",
+    "crates/production-runtime/core/examples/durable_memory_proof.rs": "0409c4156cd56dedfefe4985f82afc8d811a7b5be343798405ae7b5955a0fb97",
+    "crates/production-runtime/core/examples/profile.rs": "db3ee98e1604d72e429569cfec22ef09183d62f04e82ae4bc3d027ddbe4b8e81",
+    "crates/production-runtime/core/examples/support/memory.rs": "9dde0739edec0c644d33a64fbff37e7780e785711ba616dffde6b5ae5d137cec",
+    "crates/production-runtime/core/examples/workspace_proof.rs": "3dd86aa811a7b6fbe909b5e607541536881eab5219c26eeb6a2da4c5815214a5",
+    "crates/production-runtime/core/src/bounded.rs": "43bc11df0b812e9bb4ca895ed49ba959852ef934e5e47e8490fea84931756161",
+    "crates/production-runtime/core/src/commands.rs": "1a4337b6dd28f97f31a4e63d0faff0b2b28720ee1f39ce2a7f5ebeb183bb3206",
+    "crates/production-runtime/core/src/compile.rs": "db2820cd8d79d4b9961b2fb4d85fbcb9bc98f3b25e8b6740b1e625821fa83630",
+    "crates/production-runtime/core/src/coordinator.rs": "d06c1e0714d9e1fd42ff4f0e2a9262a3c0eda57ef88f830714d41e11683f5ab4",
+    "crates/production-runtime/core/src/dependencies.rs": "0894f29367a6d64a710e499c85df9eb571cdebfee71ecbc6fc925203781192b3",
+    "crates/production-runtime/core/src/drivers.rs": "f02b41f4323bfecd9dc0ef44b18bfef3aea4ca25861b647b971d5411539f5e6e",
+    "crates/production-runtime/core/src/host.rs": "aece45c2c2b388e245b40b17c7ee53f452ad0a9ecac76d42e89da864d06b7839",
+    "crates/production-runtime/core/src/incremental.rs": "8756b672d16d38933713461714420029744b0ca5a0962d69daa915e6718cb839",
+    "crates/production-runtime/core/src/layout.rs": "65ecc58d654a3022b6603ae9d7b088c74423adeabaf39987601cb2a9779e5166",
+    "crates/production-runtime/core/src/lib.rs": "7f8f63ad53a86f105cb58ff418d9bdfdca7ea3907e510aea29506f3f0476dc08",
+    "crates/production-runtime/core/src/lifecycle.rs": "d2b4919f4a2486710bf002d5b9f5e14d2dd12c0d588e891ea3b436fb39947a4c",
+    "crates/production-runtime/core/src/ownership.rs": "36de262217f3f51fa79091d3297b81021a9b9e817490234db0765aa35d38ca0f",
+    "crates/production-runtime/core/src/resources.rs": "bd9e8700f1a8b52dbc2bea0aa247290217aac863c8f3785b5308d7e120bc1d2f",
+    "crates/production-runtime/core/src/retention.rs": "0a34efca0752648f61778745e94f540b5c71cf98bf31ca87f02e50711332c26c",
+    "crates/production-runtime/core/src/show.rs": "2a921041347fcadd2fd00aa4dd1bdae7ea9ce8b03c34cdb045e5e7a2d50719c4",
+    "crates/production-runtime/core/src/storage.rs": "2c35f1177e5e50fd426adbebfd8df0d737aa15a59391118a993d7517a4558b74",
+    "crates/production-runtime/core/src/timeline.rs": "a846199cf0e8d45666158430ea5b3f92040ac9ab7dafcb429d2e9904086a4797",
+    "crates/production-runtime/core/src/transport.rs": "5c2f3f97d62dcc727b11d24318fa886a6d3b0ff7ca57fe8c950d16afdc88375d",
+    "crates/production-runtime/core/src/workspace.rs": "6cef95d948bb5a176f1b4806a3891d0a852099716212847beb77bc4cea2887c4",
+    "crates/production-runtime/core/tests/dependencies.rs": "bb11c2fb4e4465642e9312c6652a1a6f647899c0b421cf6185b8744b5460985c",
+    "crates/production-runtime/core/tests/foundation.rs": "6b8392d101d72b580f801f3a5189848a16dfe3cdb2bfb08db137b09338bc906d",
+    "crates/production-runtime/core/tests/host.rs": "61bdabec281c9ff3ff94942cef5c27d5931c5e52f30aa4224732ced60d614739",
+    "crates/production-runtime/core/tests/incremental.rs": "cd72caa3065eeec74c1815ee318a27144183c609276ad47aae9c5efbcc6a5bd1",
+    "crates/production-runtime/core/tests/layout.rs": "82cb6687d00f735cad08b59addc35768e0fd297defcf859284cf9378874c4038",
+    "crates/production-runtime/core/tests/lifecycle.rs": "f572ff77e84fb1a1cfafdb68389f4b15e59ec98d93e5eaf9b4f12c7e8b336aea",
+    "crates/production-runtime/core/tests/native_graphics.rs": "d89b873e13e13fc46b88a242a637dde9361e9851a74771e8e5faf1e0b965fe75",
+    "crates/production-runtime/core/tests/nested_timeline.rs": "22e8897ffc088279ca631e88af0b7a246f29b3b3b68ce2a3b02b8b9e4922b1b5",
+    "crates/production-runtime/core/tests/ownership.rs": "480b53bdd680e61778eb259f583d9097b1a4a12399c60ff6012dbb5c301a8590",
+    "crates/production-runtime/core/tests/retention.rs": "d2332419f0e4842cb0d2e9daf8daf8ed7fedcc9e75d5dcb0cc29a425d79734d5",
+    "crates/production-runtime/core/tests/review_regressions.rs": "bde47572a5eeab96bb46f7c4358ba07e90b8ccef42d4f8cd8c01a650848b9e15",
+    "crates/production-runtime/core/tests/show.rs": "8a45155d3e6d2e0afa5b605309acbb96590eb36eb978eb648575c8bd993483e5",
+    "crates/production-runtime/core/tests/workspace.rs": "35bdc52390e786f8fcdba164b3ce41913bc7118f5004ed0bef35febaac9478cd",
+    "crates/production-runtime/generated/classic-like.json": "f5f67e9429d2c1fe27b2d92102cdc48a166c2296a7569115e68e49e03a1dbe64",
+    "crates/production-runtime/generated/commands.schema.json": "2cafe7a88aecfd9da2a9f5fd925aeb5ef458184ed1a8569d19f24568fa6d927b",
+    "crates/production-runtime/generated/contract.d.ts": "b46caf62d428ec2b9d4e9334e6d4137051155118f1f87e84903ef516085fb221",
+    "crates/production-runtime/generated/document.schema.json": "ca853a98f6b84748e6e59212a454890afc2840fbcf7eebebbb6f16f0ac3a4267",
+    "crates/production-runtime/generated/nested-timeline.json": "fc97d1a32d8857794301af9e2cb6ed33955d4cbfb71b113b3d261c91e8c8c9a9",
+    "crates/production-runtime/generated/responsive-layout.json": "99ecad9153860b6a7f15d4ac1ae3a02ac9d1e5e9a1ed1908144727faed560ef6",
+    "crates/production-runtime/generated/tools.schema.json": "5b38b4cccf643a3590a18b32fff85d00c9f275c96ab1f7c576cb4f8cab77087d",
+    "crates/production-runtime/scripts/canonical-check.mjs": "7095b362a0d2e96430ed94f7a34c2df5948c65cde5a5f167caf5a1510cd46e87",
+    "crates/production-runtime/scripts/generate.py": "e91408852f5c3ce23dd281ea16f245fb739a50fd281545e72cc410d6b35dd7e1",
+    "crates/production-runtime/scripts/package-lock.json": "134f41640e8092fc380eec8d1359e29b32fbc17e70e1cbdd1f1654a9bc5e7be9",
+    "crates/production-runtime/scripts/package.json": "2006bbbc4c0a33faaf74b01625bf31aee44b61250b4f5260b9f07ed5fcfb5c64",
+    "crates/production-runtime/scripts/prove-durable-memory.py": "00f0f0e6a2ff4379f54990099b7581ff6f8d5f335b1b3f632afb16043ee09a82",
+    "crates/production-runtime/scripts/prove-host.py": "907abd11eb846eb85e659138353266987f097a2afa73f69a2867086cb4ff301a",
+    "crates/production-runtime/scripts/prove-layout.py": "6cd0b964c7323011cb77d23ec47a01d3b004eb070642291a1015a91386eaa06a",
+    "crates/production-runtime/scripts/prove-nested.py": "c005b80154b8435bd99d6d75b216d8c66653d14d209053a7d5fd95afdfe8c0de",
+    "crates/production-runtime/scripts/prove-show.py": "5b2d9775dec54f4017f4873f5790c53b3cd4201a2546cd056fdc558d564eda13",
+    "crates/production-runtime/scripts/prove.py": "077598c5e3538e4e74eba0ae8d81463c4012fdbfcf7d9133c51fa536a9a2fb30",
+    "crates/production-runtime/scripts/schema-check.mjs": "d868b362b5b06a136a1dc408a1f2abc9c358f84d3515434133e05df9e534563b",
+    "crates/production-runtime/scripts/tsconfig.json": "98fcff414639a51c6dd1e50013cfdc29e57d86c54c390e9866de8ea9d73210cc"
+  },
+  "passedTests": 165,
+  "checks": [
+    {
+      "argv": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/crates/production-runtime/Cargo.toml",
+        "--all"
+      ],
+      "exitCode": 0
+    },
+    {
+      "argv": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/crates/production-runtime/Cargo.toml",
+        "--all",
+        "--check"
+      ],
+      "exitCode": 0
+    },
+    {
+      "argv": [
+        "cargo",
+        "clippy",
+        "--offline",
+        "--manifest-path",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/crates/production-runtime/Cargo.toml",
+        "--all-targets",
+        "--locked",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exitCode": 0
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "--offline",
+        "--manifest-path",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/crates/production-runtime/Cargo.toml",
+        "--locked"
+      ],
+      "exitCode": 0,
+      "passedTests": 165,
+      "tests": [
+        "shared::tests::clones_share_storage_until_mutated_and_wire_remains_a_plain_object",
+        "half_open_mapping_modulo_and_ties_even",
+        "bounded_binding_evaluation_rejects_hidden_division_by_zero",
+        "jcs_uses_ecmascript_numbers_and_utf16_key_order",
+        "exact_counters_and_time_normalization",
+        "metadata_private_serde_keys_remain_literal_across_document_decoding",
+        "independent_media_player_and_audio_routes",
+        "raw_ingress_rejects_duplicate_decoded_keys_and_dangerous_keys",
+        "pins_cycles_driver_conflicts_and_3d_caps",
+        "paired_component_player_show_fixture_roundtrips",
+        "utf8_bytes_and_nested_work_are_bounded",
+        "exact_24h_and_seeded_roundtrip_time_properties",
+        "streamed_canonical_hash_preserves_rfc_bytes_and_propagates_sink_failures",
+        "shows_and_segment_collections_have_explicit_boundary_limits",
+        "discard_ingress_preserves_collecting_parser_admission_and_errors",
+        "borrowed_wire_hash_matches_value_oracle_across_serde_representations",
+        "owned_wire_scratch_is_bounded_and_reuses_its_high_water_capacity",
+        "discard_ingress_enforces_exact_work_ceiling_inside_envelopes_too",
+        "seeded_malformed_ingress_never_panics",
+        "near_valid_graph_mutations_reject_at_the_native_boundary",
+        "many_tiny_json_values_are_work_bounded",
+        "resources::tests::native_caps_are_per_document_and_shared_charges_wait_for_each_owner",
+        "retention::tests::retained_shape_matches_independent_json_tree_for_all_fixtures",
+        "reads_retain_transitive_inputs_through_logical_close_and_lane_disposal",
+        "dependency_cycles_and_surviving_owners_reject_atomically",
+        "layout_use_and_audio_contribution_have_independent_segment_relations",
+        "a_late_read_cannot_alias_after_show_reentry_or_new_execution",
+        "compiled_graph_separates_component_instances_players_and_shared_inputs",
+        "changed_resolved_assets_update_dependencies_despite_reused_layouts",
+        "dependency_capacity_failure_cannot_publish_an_incremental_cache",
+        "transitive_read_holds_and_combined_dependency_relations_are_bounded",
+        "recording_clock_cannot_follow_content_backwards_or_pause",
+        "cue_cursor_dedupes_crossing_and_silent_seek",
+        "existing_product_folder_is_never_adopted",
+        "deterministic_row_allocation_and_infeasible_limits",
+        "compiled_numeric_tracks_seek_without_history_or_scene_side_effects",
+        "lost_response_retries_have_one_durable_effect",
+        "unknown_flush_fails_closed_then_recovers_the_exact_commit",
+        "stale_revision_rejection_is_terminal_and_does_not_partially_apply",
+        "revoke_fences_queued_work_but_not_already_ordered_commit",
+        "disk_full_retains_previous_state_and_undo_is_a_fresh_revision",
+        "one_writer_crash_tail_checkpoint_and_corrupt_middle",
+        "global_sessions_and_observers_are_bounded_and_reusable_across_documents",
+        "immutable_read_leases_remain_charged_across_close_and_cannot_be_used_as_authority",
+        "dropping_host_revokes_handles_but_preserves_an_admitted_writer_until_completion",
+        "admitted_observer_snapshots_are_redacted_and_track_durable_receipts",
+        "process_admission_precedes_store_open_and_rolls_back_failed_factories",
+        "in_flight_payload_or_session_mismatch_does_not_wait_on_storage",
+        "known_and_uncertain_io_failures_have_distinct_retry_behavior",
+        "concurrent_identical_retries_share_exactly_one_durable_append",
+        "writer_scratch_allowance_follows_document_ownership",
+        "waiter_saturation_is_fail_fast_and_disconnect_revokes_while_write_is_blocked",
+        "both_documents_share_one_eight_flight_pool",
+        "saturated_document_cannot_block_another_document_or_stop_and_close",
+        "writer_panic_wakes_followers_and_recovery_returns_saved_receipt_without_reexecution",
+        "rejected_payloads_and_oversized_storage_errors_do_not_leak_admission",
+        "host_owned_compile_is_fenced_by_close_and_reader_cannot_prepare",
+        "stale_handles_do_not_retain_the_file_writer_after_exact_close",
+        "removed_fragments_do_not_accumulate_and_old_readers_keep_valid_plans",
+        "one_layout_edit_preserves_other_layout_and_sequence_handles",
+        "no_op_and_controls_reuse_actual_immutable_allocations",
+        "invalid_or_cancelled_candidate_cannot_poison_cache_or_bypass_validation",
+        "transitive_component_and_nested_sequence_dependencies_invalidate",
+        "source_asset_time_maps_and_sorted_target_manifest_are_dependencies",
+        "derived_overflow_and_zero_raster_footprint_fail_explicitly",
+        "anchor_offsets_and_pivots_use_continuous_parent_geometry",
+        "contain_centers_in_grid_and_shared_edges_snap_once",
+        "mixed_fixed_aspect_and_weighted_items_keep_gaps_and_minimums",
+        "row_aspect_item_uses_cross_axis_before_weighted_allocation",
+        "ignored_flow_frames_and_invalid_constraint_combinations_are_rejected",
+        "infeasible_geometry_and_stale_inputs_do_not_poison_incremental_cache",
+        "screen_height_reflows_host_without_mutating_authored_document",
+        "minimal_placement_command_is_validated_and_does_not_change_other_layouts",
+        "aspect_inside_reusable_component_tracks_inputs_and_ownership",
+        "source_inputs_require_matching_document_visual_definition_and_dimensions",
+        "changed_inputs_only_rebuild_consuming_layouts_and_preserve_sequences",
+        "seeded_anchor_geometry_matches_independent_integer_quarter_oracle",
+        "renderer_coalescing_requires_full_state_and_fences_stale_ack",
+        "resource_and_queue_saturation_have_independent_stop_path",
+        "component_bindings_compile_per_instance_and_large_loop_cues_stay_exact",
+        "hosted_authority_is_not_minted_or_changed_by_local_commands",
+        "leased_override_restores_current_driver_and_rejects_stale_incarnations",
+        "unknown_and_retiring_resources_remain_charged_until_exact_reconciliation",
+        "cold_frames_revoke_and_timeout_never_claim_presentation",
+        "identity_survives_prop_layout_edit_but_not_removal_or_definition_change",
+        "observer_snapshot_is_redacted_chunked_and_recovers_a_history_gap",
+        "retirement_capacity_counts_objects_instead_of_work_or_buffer_contents",
+        "every_graphics_dimension_rejects_excess_and_overflow_without_partial_admission",
+        "native_scenes_do_not_consume_optional_browser_capacity",
+        "failed_preparation_leaves_existing_graphics_and_token_budget_intact",
+        "equal_asset_hashes_do_not_erase_independent_batch_reservations",
+        "additional_prepared_views_charge_targets_and_passes_without_duplicating_scene_state",
+        "exact_trim_speed_and_negative_source_origin_are_not_wall_time",
+        "nested_cues_have_root_times_scoped_identity_and_loop_ancestry",
+        "independent_pause_owners_preserve_unwrapped_loop_progress",
+        "failed_clock_catchup_or_pause_event_does_not_partially_advance_transport",
+        "finite_end_releases_drivers_without_stopping_live_capture_or_external_effects",
+        "nested_cue_projection_matches_independent_discrete_oracle_at_different_speeds",
+        "nested_property_collision_is_rejected_after_rebinding",
+        "rebound_file_availability_is_checked_after_player_binding",
+        "seeks_consume_effect_history_and_only_explicit_new_run_rearms",
+        "nonoverlapping_rebound_property_drivers_are_valid_half_open",
+        "speed_cancellation_keeps_wide_exact_intermediates_and_rejects_final_overflow",
+        "loops_do_not_unroll_the_numeric_plan_and_preflight_work_is_bounded",
+        "unrepresentable_inverse_boundary_rejects_instead_of_approximating_collision_proof",
+        "rebound_hosted_authority_and_expansion_exhaustion_fail_closed",
+        "projected_intervals_match_dense_independent_membership_and_mapping_roundtrips",
+        "temporal_cycles_unused_bindings_and_kind_changes_reject",
+        "shared_definitions_have_independent_scoped_targets_trims_and_players",
+        "wire_roundtrip_and_unknown_nested_keys_use_native_admission",
+        "shared_file_with_different_nested_playheads_requires_separate_player",
+        "nested_depth_boundary_is_explicit_and_stopped_cursors_cannot_revive",
+        "control_and_contributions_are_separate_from_lifetime_and_reads",
+        "handles_from_another_document_execution_cannot_alias_after_reopen",
+        "borrowed_set_survives_run_and_segment_exit_without_owner_transfer",
+        "closed_reader_can_finish_its_read_but_cannot_admit_more_work",
+        "owner_removal_rejects_surviving_users_atomically_but_joint_removal_works",
+        "all_owner_graph_collections_are_bounded_including_retirement",
+        "title_edits_share_unchanged_maps_and_mutations_detach_without_changing_prior_versions",
+        "value_encoded_checkpoint_and_journal_still_recover_with_borrowed_hashing",
+        "history_entry_cap_and_complete_undo_release_all_accounting",
+        "recovered_checkpoint_and_host_factory_reject_over_profile_receipts",
+        "maximum_work_document_with_full_receipt_history_fits_store_envelope",
+        "history_byte_budget_evicts_oldest_only_after_successful_save",
+        "finite_source_loops_wrap_from_negative_preroll_exactly",
+        "renderer_rejects_unknown_duplicate_and_wrong_type_targets_atomically",
+        "reusable_scratch_does_not_leak_drivers_from_a_longer_sequence",
+        "stale_override_release_cannot_clear_a_newer_acquisition",
+        "mixed_min_max_layout_constraints_find_the_feasible_allocation",
+        "stop_fences_old_preparations_and_unknown_reconciliation",
+        "partial_output_take_cannot_retire_an_unreplaced_output",
+        "resolved_file_identity_resets_player_even_when_asset_alias_is_unchanged",
+        "repeated_undo_traverses_history_and_failed_save_does_not_consume_it",
+        "finite_sequence_end_does_not_dispose_the_segment_or_restart_on_pause",
+        "reentry_restart_and_seek_fence_old_occurrences_and_keep_the_borrowed_set",
+        "failed_events_are_atomic_and_do_not_advance_clock_or_consume_occurrences",
+        "native_disconnect_lease_uses_exact_expiry_and_cannot_renew_without_a_grant",
+        "segment_visibility_pause_cannot_remove_an_operator_run_pause",
+        "release_exposes_current_underlying_sample_and_stale_tokens_cannot_release_again",
+        "static_segment_has_independent_controls_without_an_invented_timeline",
+        "readonly_hosted_revoked_and_disconnected_authority_are_distinct",
+        "stopped_and_closed_executions_cannot_resurrect_or_dispose_the_wrong_resource",
+        "static_and_inactive_properties_are_driven_without_a_timeline_track",
+        "segment_exit_clears_only_segment_overrides_stop_also_clears_set_and_run_leases",
+        "repeated_segment_entries_do_not_accumulate_scopes_resources_or_effect_history",
+        "expired_pending_work_is_not_dispatched_or_retained",
+        "closing_workers_hold_document_slot_and_resource_charge",
+        "four_preparations_backpressure_does_not_block_stop_or_forge_frame_readiness",
+        "cancelling_a_preparation_cannot_uncharge_its_borrowing_show_or_late_reads",
+        "resource_overflow_is_rejected_without_partial_reservation",
+        "never_started_show_can_be_inspected_and_disposed_after_close",
+        "closing_a_warm_document_does_not_uncharge_the_workers_base_cache",
+        "another_take_cannot_silently_retarget_an_immutable_show_execution",
+        "preparation_disposal_waits_for_show_dependency_disposal",
+        "old_or_expired_preparations_cannot_open_a_show_or_leak_reservations",
+        "geometry_inputs_get_fresh_preparations_without_accepting_old_frame_receipts",
+        "show_plan_stays_charged_until_logical_close_and_exact_disposal_ack",
+        "unopened_descriptors_are_bounded_and_paged",
+        "two_worker_slots_remain_occupied_until_results_are_consumed",
+        "stop_and_supersession_fence_already_completed_but_unpolled_workers",
+        "two_documents_share_global_ledger_but_never_tokens_or_presentation",
+        "shows_in_two_documents_never_share_component_or_disposal_identity",
+        "uncertain_retiring_and_cache_allocations_are_charged_until_exact_cleanup",
+        "revocation_expiry_and_invalid_submissions_leave_previous_cache_usable",
+        "latest_pending_intent_coalesces_without_retaining_every_document"
+      ]
+    },
+    {
+      "argv": [
+        "cargo",
+        "build",
+        "--offline",
+        "--manifest-path",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/crates/production-runtime/Cargo.toml",
+        "--locked"
+      ],
+      "exitCode": 0
+    },
+    {
+      "argv": [
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/crates/production-runtime/scripts/generate.py",
+        "--binary",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/target/production-core/debug/producer-core"
+      ],
+      "exitCode": 0
+    },
+    {
+      "argv": [
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/crates/production-runtime/scripts/generate.py",
+        "--binary",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/target/production-core/debug/producer-core",
+        "--check"
+      ],
+      "exitCode": 0
+    },
+    {
+      "argv": [
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/crates/production-runtime/scripts/prove.py",
+        "--binary",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/target/production-core/debug/producer-core"
+      ],
+      "exitCode": 0,
+      "output": "{\n  \"incrementalCommits\": 14,\n  \"retryEffectsPerTicket\": 1,\n  \"restarted\": true,\n  \"pairedLayouts\": 2,\n  \"independentPlayers\": 2,\n  \"analyticInstances\": 1000,\n  \"fixtureDigest\": \"750427415bdb4bca0ea0946b34febe70a0eddc4d020b0f5b300d87274f28e7de\"\n}"
+    },
+    {
+      "argv": [
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/crates/production-runtime/scripts/prove-nested.py",
+        "--binary",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/target/production-core/debug/producer-core"
+      ],
+      "exitCode": 0,
+      "output": "{\n  \"incrementalCommits\": 17,\n  \"nestedDepth\": 2,\n  \"independentPlayers\": 2,\n  \"simulationEvents\": 11,\n  \"replayedIdenticalAfterRestart\": true,\n  \"rejectedConflictingEditAtomically\": true,\n  \"skippedEffectsStaySilent\": true,\n  \"responseBudgetRejected\": true,\n  \"compiledResourceBudgetRejected\": true,\n  \"showDependencyWorkRejected\": true,\n  \"fixtureDigest\": \"6957ba2605cb9697d72f1bcbc026b96a86d89ba344c584127eb5cd1f18f6863e\"\n}"
+    },
+    {
+      "argv": [
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/crates/production-runtime/scripts/prove-show.py",
+        "--binary",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/target/production-core/debug/producer-core"
+      ],
+      "exitCode": 0,
+      "output": "{\n  \"incrementalCommits\": 16,\n  \"simulationEvents\": 14,\n  \"segmentOverridesReleased\": true,\n  \"operatorPausePreserved\": true,\n  \"setLifetimePreserved\": true,\n  \"newOccurrenceOnReentry\": true,\n  \"replayedIdenticalAfterRestart\": true,\n  \"silentSeek\": true,\n  \"freshExecutionAfterRestart\": true,\n  \"effectsDispatched\": false,\n  \"fixtureDigest\": \"abb353fc2049bc2c75036a9d5808a10b209ca80d78d29cd0ff72d92aa7a520a6\"\n}"
+    },
+    {
+      "argv": [
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/crates/production-runtime/scripts/prove-layout.py",
+        "--binary",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/target/production-core/debug/producer-core"
+      ],
+      "exitCode": 0,
+      "output": "{\n  \"incrementalCommits\": 5,\n  \"dimensions\": \"synthetic 16:9 fallback -> 4:3 input\",\n  \"screenHeights\": [\n    608,\n    810\n  ],\n  \"hostReflowY\": 826,\n  \"paginatedNodes\": 3,\n  \"staleInputsRejected\": true,\n  \"rehearsalReadOnly\": true,\n  \"replayEffectsPerTicket\": 1,\n  \"restarted\": true\n}"
+    },
+    {
+      "argv": [
+        "/Library/Developer/CommandLineTools/usr/bin/python3",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/crates/production-runtime/scripts/prove-host.py",
+        "--binary",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/target/production-core/debug/producer-core"
+      ],
+      "exitCode": 0,
+      "output": "{\n  \"singleProcessHost\": true,\n  \"sessionLimit\": 4,\n  \"observerLimit\": 4,\n  \"observerOwnership\": true,\n  \"redactedProjection\": true,\n  \"savedRevisions\": 1,\n  \"restartReceiptReused\": true,\n  \"disconnectedCapacityReused\": true\n}"
+    },
+    {
+      "argv": [
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/cli/node-v24.11.0-darwin-arm64/bin/node",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/crates/production-runtime/scripts/canonical-check.mjs",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/target/production-core/debug/producer-core"
+      ],
+      "exitCode": 0,
+      "output": "JavaScript/Rust canonical hash agrees: 750427415bdb4bca0ea0946b34febe70a0eddc4d020b0f5b300d87274f28e7de"
+    },
+    {
+      "argv": [
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/cli/node-v24.11.0-darwin-arm64/bin/node",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/crates/production-runtime/scripts/node_modules/typescript/bin/tsc",
+        "-p",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/crates/production-runtime/scripts/tsconfig.json"
+      ],
+      "exitCode": 0
+    },
+    {
+      "argv": [
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/cli/node-v24.11.0-darwin-arm64/bin/node",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/crates/production-runtime/scripts/schema-check.mjs",
+        "/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/target/production-core/debug/producer-core"
+      ],
+      "exitCode": 0,
+      "output": "JS structural / native companion conformance: 18 cases passed"
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exitCode": 0
+    }
+  ],
+  "releaseBuild": {
+    "argv": [
+      "cargo",
+      "build",
+      "--offline",
+      "--manifest-path",
+      "crates/production-runtime/Cargo.toml",
+      "--locked",
+      "--release",
+      "-p",
+      "producer-production-core",
+      "--example",
+      "durable_memory_proof",
+      "--example",
+      "profile"
+    ],
+    "exitCode": 0
+  },
+  "binarySha256": {
+    "target/production-core/debug/producer-core": "871fa76a730f24ad6652d639d66a42e0ed6bb70057904d1d1f903596fb061178",
+    "target/production-core/release/examples/profile": "ebe45095c66702696f222cdb46511d5f287487251e12befedfe0bcbe5964b0ff",
+    "target/production-core/release/examples/durable_memory_proof": "510fa9d52dd22cc62254f1bb658d8e67af7364943084c1fb3e17116e27c4f15b"
+  },
+  "memoryAttemptNumbers": [
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27
+  ],
+  "priorMemoryAttemptsRetained": true,
+  "priorCoreProfilesRetained": "admission-core-profile-initial.json",
+  "evidenceSha256": {
+    "admission-memory-profile.json": "4a8fb5d84132fa43693a3ae6c4b16a8b07dbefee5db3873fefc97f8fc613c587",
+    "admission-core-profile.json": "817484688a09afa34f10e973a75c87e5fdf1e52a21301b162cabb693f584f1e0",
+    "admission-core-profile-initial.json": "d2605d160ba2c182e38fd20e5e917153417bb2a7cee1307a5e0b02a04cbf4dff",
+    "durable-memory-profile.json": "04f7e3d6cdadbfec816eef75e438333e406dcfc88143be78dab17ef1c917f8e9",
+    "durable-memory-checks.json": "8e03f39b9ba6bf9915902a69ce47dc96f171117683c5664a3571cdc204658787"
+  },
+  "gates": {
+    "behaviorChecksPassed": true,
+    "qualifiedRequestedHeapPlateauPassed": true,
+    "qualifiedResidentPlateauPassed": true,
+    "ownerAndReadReleasePassed": true,
+    "journalPressurePassed": true,
+    "numericAndCompileTargetsPassed": true,
+    "nativeIntegrationReady": false,
+    "broadPhaseOneReady": false,
+    "exhaustiveMemoryMatrixQualified": false,
+    "remotePlatformRunsCompleted": false
+  },
+  "summary": {
+    "largeDocumentRuns": 6,
+    "journalPressureRuns": 3,
+    "requestedHeapSpanBytes": {
+      "min": 26293,
+      "max": 26293
+    },
+    "residentSpanBytes": {
+      "min": 212992,
+      "max": 17399808
+    },
+    "postRoundFourLargeAllocationCalls": 0,
+    "liveHeapIncludesOwnedScratch": true,
+    "peakRequestedHeapBytes": {
+      "min": 64083488,
+      "max": 133273117
+    },
+    "postHostDropHeapBytes": {
+      "min": 18753,
+      "max": 18753
+    },
+    "baselineHeapBytes": 727,
+    "numericEvaluationP99Ms": {
+      "min": 0.007209,
+      "max": 0.031542
+    },
+    "showNumericEvaluationP99Ms": {
+      "min": 0.008333,
+      "max": 0.066541
+    },
+    "numericAllocations": 0,
+    "coldCompileMs": {
+      "min": 13.285875,
+      "max": 16.91675
+    },
+    "fullCompileP95Ms": {
+      "min": 13.345417,
+      "max": 14.544125
+    },
+    "dirtyLayoutCompileP95Ms": {
+      "min": 13.46875,
+      "max": 13.654583
+    },
+    "authoringOnlyCompileP95Ms": {
+      "min": 13.26225,
+      "max": 13.521416
+    }
+  },
+  "documentationSha256": {
+    "crates/production-runtime/DURABLE-MEMORY.md": "1a7da0d1f48759c0ffffe396d3a66ce74ac31abb4369accb4363cb94d4c3e008",
+    "crates/production-runtime/READINESS.md": "70cb984c7a36c6fee7fcb41c336107937758a0cfec6e3030002c1a6994836310",
+    "crates/production-runtime/PROCESS-HOST.md": "eeefa208387b9fcaf6152591cf088d1ead2ef83a161dd10968906fe392618e9c",
+    "crates/production-runtime/GPUI-REFACTOR.md": "81efbd9a864440e8457c229aeb393ae50391501b15063f457c0a55dde3abdb64",
+    "crates/production-runtime/INVENTORY.md": "35749596668435c6fa4969d506f26ed0a7e262c015b5821afd45e689e8a9e603",
+    "crates/production-runtime/REVIEW.md": "ac5352927aba655dda38282f048d0e92d02dbb0acb94762f59ffffb4b48dca75",
+    "crates/production-runtime/README.md": "25bd1e4911630b221f272a1ad6daaf7fe3e6f611898c94359a31f0bc0bc83ac3"
+  },
+  "finalDiffCheckPassed": true
+}

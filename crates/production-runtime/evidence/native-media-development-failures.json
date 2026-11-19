@@ -1,0 +1,11 @@
+{
+  "scope": "retained development counterexamples, not production incidents",
+  "failures": [
+    {"case": "inclusive seek range did not compile", "resolution": "use the wrapper's supported RangeTo form"},
+    {"case": "raw PCM fixture input unavailable", "resolution": "pin the actual pcm_s16le demuxer/muxer component names in the isolated SDK"},
+    {"case": "B-frame seek landed after requested display PTS", "resolution": "detect future first PTS and perform bounded earlier-anchor preroll; all displayed frames compared to reference"},
+    {"case": "MOV trailer wrapper rejected positive mfra size", "resolution": "native trailer call accepts nonnegative return, then AVIO flush/error/fsync checks; finalized video/audio decode verified"},
+    {"case": "removing SDK build tree broke noncanonical dylib install path", "resolution": "retain empty path component for the initial local SDK; reproducible build script now uses canonical install prefix and tests for configure, not directory existence"},
+    {"case": "remuxed offset did not produce negative display PTS", "resolution": "do not count it as negative-origin qualification; retain that gate separately from tested negative B-frame DTS"}
+  ]
+}

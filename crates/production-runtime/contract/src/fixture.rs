@@ -3,8 +3,10 @@ use crate::*;
 use std::collections::BTreeMap;
 fn node(id: &str, frame: Option<Rect>, content: Content) -> Node {
     Node {
+        style: None,
         id: id.into(),
         frame,
+        placement: None,
         flow: Flow::Overlay,
         content,
         children: vec![],
@@ -18,6 +20,114 @@ fn box_at(x: f64, y: f64, width: f64, height: f64) -> Option<Rect> {
         width,
         height,
     })
+}
+/// Synthetic paired composition demonstrating intrinsic screen height and reflow.
+/// No device lookup, media or native renderer is involved.
+pub fn responsive_layout() -> Document {
+    let mut d = Document::empty("layout-lab", "Responsive teaching · core proof");
+    d.sources.insert(
+        "host".into(),
+        Source::Live {
+            role: Role::HostCamera,
+        },
+    );
+    d.sources
+        .insert("screen".into(), Source::Live { role: Role::Screen });
+    let mut layouts = BTreeMap::new();
+    for (id, orientation, width, height) in [
+        ("wide", Orientation::Landscape, 1920, 1080),
+        ("tall", Orientation::Vertical, 1080, 1920),
+    ] {
+        let mut screen = node(
+            "screen",
+            None,
+            Content::Source {
+                source: "screen".into(),
+                fit: Fit::Contain,
+            },
+        );
+        screen.placement = Some(NodePlacement {
+            aspect: Some(AspectConstraint {
+                ratio: AspectRatio::Source {
+                    source: "screen".into(),
+                    fallback: Ratio {
+                        width: 16,
+                        height: 9,
+                    },
+                },
+                mode: if id == "tall" {
+                    AspectMode::Width
+                } else {
+                    AspectMode::Contain
+                },
+            }),
+            ..NodePlacement::default()
+        });
+        let host = node(
+            "host",
+            None,
+            Content::Source {
+                source: "host".into(),
+                fit: Fit::Cover,
+            },
+        );
+        let mut root = node(
+            "root",
+            box_at(0.0, 0.0, f64::from(width), f64::from(height)),
+            Content::Group,
+        );
+        root.flow = if id == "tall" {
+            Flow::Column {
+                gap: 16.0,
+                sizes: vec![
+                    Size::Aspect,
+                    Size::Weight {
+                        weight: 1.0,
+                        min: 200.0,
+                        max: 1920.0,
+                    },
+                ],
+            }
+        } else {
+            screen.placement.as_mut().unwrap().anchor = UnitPoint { x: 0.5, y: 0.5 };
+            screen.placement.as_mut().unwrap().pivot = UnitPoint { x: 0.5, y: 0.5 };
+            Flow::Row {
+                gap: 24.0,
+                sizes: vec![
+                    Size::Weight {
+                        weight: 3.0,
+                        min: 100.0,
+                        max: 1920.0,
+                    },
+                    Size::Weight {
+                        weight: 1.0,
+                        min: 100.0,
+                        max: 1920.0,
+                    },
+                ],
+            }
+        };
+        root.children = vec![screen, host];
+        layouts.insert(
+            id.into(),
+            Layout {
+                orientation,
+                width,
+                height,
+                root,
+            },
+        );
+    }
+    d.sets.insert(
+        "teaching".into(),
+        Set {
+            layouts,
+            theme: BTreeMap::new(),
+            actions: BTreeMap::new(),
+            controls: vec![],
+        },
+    );
+    d
 }
 pub fn classic_like() -> Document {
     let mut d = Document::empty("classic-lab", "Classic · production core proof");
@@ -62,6 +172,7 @@ pub fn classic_like() -> Document {
         "stage".into(),
         Source::Graphics {
             scene: Scene3d {
+                reconstruction: None,
                 analytic: true,
                 parameters: BTreeMap::from([
                     (
@@ -290,6 +401,47 @@ pub fn classic_like() -> Document {
             }],
         },
     );
+    d
+}
+
+/// Explicit reconstruction inputs for nested effects. This fixture does not
+/// contain renderer code; native adapters must qualify the eventual visuals.
+pub fn analytic_reconstruction() -> Document {
+    let mut d = nested_timeline();
+    d.id = "analytic-lab".into();
+    d.title = "Deterministic effect inputs".into();
+    let Source::Graphics { scene } = d.sources.get_mut("stage").unwrap() else {
+        unreachable!()
+    };
+    scene.reconstruction = Some(AnalyticReconstruction {
+        version: AnalyticVersion::V1,
+        seed: crate::Counter(u64::MAX),
+        scope: SeedScope::Placement,
+        period: Time::new(3, 2).unwrap(),
+    });
+    let mut shared = d.sources["stage"].clone();
+    let Source::Graphics { scene } = &mut shared else {
+        unreachable!()
+    };
+    scene.reconstruction.as_mut().unwrap().scope = SeedScope::Source;
+    d.sources.insert("stage-shared".into(), shared);
+    for source in ["stage", "stage-shared"] {
+        d.sequences
+            .get_mut("pulse")
+            .unwrap()
+            .placements
+            .push(Placement {
+                id: source.into(),
+                source: source.into(),
+                range: Range {
+                    start: Time::ZERO,
+                    duration: Time::seconds(2),
+                },
+                source_in: Time::ZERO,
+                speed: Speed::default(),
+                looping: false,
+            });
+    }
     d
 }
 

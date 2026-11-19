@@ -1,0 +1,21 @@
+{
+  "candidateSha256": "070666c656d87b64be7609ad85f5b956eed094606e4d7b409fadb124a25557dd",
+  "scope": "Isolated Native Dev QA; Sources, Scenes and microphone mixer presentation",
+  "productionReference": [
+    "src/views/Live.tsx panelBody(sources/scenes/audio)",
+    "src/App.css compact rm-row, rm-scene-row and rm-strip layouts"
+  ],
+  "verified": [
+    "Compact top dock displays actual source names and current scene together; no generic panel tabs",
+    "Compact bottom dock displays Sources, scene On badge and microphone mute/fader together",
+    "Expanded source shelf scrolls horizontally within its own panel",
+    "Source chip click selected camera-clip through RoomCommand::Select",
+    "Vertical fader gain 1.0 to 1.555556 preserved muted=true",
+    "Compact horizontal fader gain 1.0 to 1.416667 preserved muted=true",
+    "Mute/gain restored to true/1.0; original dock locations restored",
+    "No changes to engine rendering, encoding or output transport"
+  ],
+  "signature": "Ad-hoc dev deep/strict verified",
+  "productionUnchanged": true,
+  "limitations": "One native active scene and one supported microphone gain path; no new scene creation or additional mixer audio paths claimed."
+}

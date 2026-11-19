@@ -1,0 +1,14 @@
+{
+  "candidateSha256": "d94b3466f0e208da4c22a1788510d3d48676cd52d5f2c53cc77b53874ec2dd5a",
+  "checks": {
+    "nativeBuild": true,
+    "installedInExistingIsolatedDevBundle": true,
+    "productionHashesUnchanged": true,
+    "centeredSourcesControlsTimelineLabelsVisuallyVerified": true,
+    "editModePanelContentsHidden": true,
+    "placeholderDragLeftToTopVerified": true,
+    "workspaceRestored": true,
+    "doneRestoresPanelContentsVerified": true
+  },
+  "scope": "UI-only change; no new media recording qualification claimed."
+}

@@ -1,0 +1,200 @@
+{
+  "assets": {},
+  "components": {},
+  "id": "layout-lab",
+  "metadata": {},
+  "schema": "producer.production/1",
+  "sequences": {},
+  "sets": {
+    "teaching": {
+      "actions": {},
+      "controls": [],
+      "layouts": {
+        "tall": {
+          "height": 1920,
+          "orientation": "vertical",
+          "root": {
+            "bindings": [],
+            "children": [
+              {
+                "bindings": [],
+                "children": [],
+                "content": {
+                  "fit": "contain",
+                  "kind": "source",
+                  "source": "screen"
+                },
+                "flow": {
+                  "kind": "overlay"
+                },
+                "frame": null,
+                "id": "screen",
+                "placement": {
+                  "anchor": {
+                    "x": 0.0,
+                    "y": 0.0
+                  },
+                  "aspect": {
+                    "mode": "width",
+                    "ratio": {
+                      "fallback": {
+                        "height": 9,
+                        "width": 16
+                      },
+                      "kind": "source",
+                      "source": "screen"
+                    }
+                  },
+                  "pivot": {
+                    "x": 0.0,
+                    "y": 0.0
+                  }
+                }
+              },
+              {
+                "bindings": [],
+                "children": [],
+                "content": {
+                  "fit": "cover",
+                  "kind": "source",
+                  "source": "host"
+                },
+                "flow": {
+                  "kind": "overlay"
+                },
+                "frame": null,
+                "id": "host"
+              }
+            ],
+            "content": {
+              "kind": "group"
+            },
+            "flow": {
+              "gap": 16.0,
+              "kind": "column",
+              "sizes": [
+                {
+                  "kind": "aspect"
+                },
+                {
+                  "kind": "weight",
+                  "max": 1920.0,
+                  "min": 200.0,
+                  "weight": 1.0
+                }
+              ]
+            },
+            "frame": {
+              "height": 1920.0,
+              "width": 1080.0,
+              "x": 0.0,
+              "y": 0.0
+            },
+            "id": "root"
+          },
+          "width": 1080
+        },
+        "wide": {
+          "height": 1080,
+          "orientation": "landscape",
+          "root": {
+            "bindings": [],
+            "children": [
+              {
+                "bindings": [],
+                "children": [],
+                "content": {
+                  "fit": "contain",
+                  "kind": "source",
+                  "source": "screen"
+                },
+                "flow": {
+                  "kind": "overlay"
+                },
+                "frame": null,
+                "id": "screen",
+                "placement": {
+                  "anchor": {
+                    "x": 0.5,
+                    "y": 0.5
+                  },
+                  "aspect": {
+                    "mode": "contain",
+                    "ratio": {
+                      "fallback": {
+                        "height": 9,
+                        "width": 16
+                      },
+                      "kind": "source",
+                      "source": "screen"
+                    }
+                  },
+                  "pivot": {
+                    "x": 0.5,
+                    "y": 0.5
+                  }
+                }
+              },
+              {
+                "bindings": [],
+                "children": [],
+                "content": {
+                  "fit": "cover",
+                  "kind": "source",
+                  "source": "host"
+                },
+                "flow": {
+                  "kind": "overlay"
+                },
+                "frame": null,
+                "id": "host"
+              }
+            ],
+            "content": {
+              "kind": "group"
+            },
+            "flow": {
+              "gap": 24.0,
+              "kind": "row",
+              "sizes": [
+                {
+                  "kind": "weight",
+                  "max": 1920.0,
+                  "min": 100.0,
+                  "weight": 3.0
+                },
+                {
+                  "kind": "weight",
+                  "max": 1920.0,
+                  "min": 100.0,
+                  "weight": 1.0
+                }
+              ]
+            },
+            "frame": {
+              "height": 1080.0,
+              "width": 1920.0,
+              "x": 0.0,
+              "y": 0.0
+            },
+            "id": "root"
+          },
+          "width": 1920
+        }
+      },
+      "theme": {}
+    }
+  },
+  "shows": {},
+  "sources": {
+    "host": {
+      "kind": "live",
+      "role": "hostCamera"
+    },
+    "screen": {
+      "kind": "live",
+      "role": "screen"
+    }
+  },
+  "title": "Responsive teaching · core proof"
+}

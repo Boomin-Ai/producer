@@ -1,0 +1,174 @@
+{
+  "scope": "Isolated Native Dev; production app and profile unchanged",
+  "candidateSha256": "0985134fd1bd62e514915e85fc88d5398a34e479045d376c9394fdf8856ba115",
+  "testsPassed": 43,
+  "actualMouseReorder": {
+    "top": "between adjacent panels passed",
+    "bottom": "between adjacent panels passed",
+    "left": "between adjacent panels passed",
+    "right": "between adjacent panels passed"
+  },
+  "capture": {
+    "physicalCamera": "FaceTime HD Camera",
+    "secondCamera": "Elgato Virtual Camera (placeholder feed, not a second physical camera)",
+    "microphone": "MacBook Air Microphone",
+    "multipleMicrophoneHardware": "not tested: only one device available",
+    "firstPairedCaptureFullDecode": [
+      {
+        "name": "track-00-00000000.mp4",
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1920,
+            "height": 1080
+          },
+          {
+            "codec_name": "aac"
+          }
+        ],
+        "fullDecode": true
+      },
+      {
+        "name": "track-00-00000001.mp4",
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1920,
+            "height": 1080
+          },
+          {
+            "codec_name": "aac"
+          }
+        ],
+        "fullDecode": true
+      },
+      {
+        "name": "track-00-00000002.mp4",
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1920,
+            "height": 1080
+          },
+          {
+            "codec_name": "aac"
+          }
+        ],
+        "fullDecode": true
+      },
+      {
+        "name": "track-01-00000000.mp4",
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1080,
+            "height": 1920
+          },
+          {
+            "codec_name": "aac"
+          }
+        ],
+        "fullDecode": true
+      },
+      {
+        "name": "track-01-00000001.mp4",
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1080,
+            "height": 1920
+          },
+          {
+            "codec_name": "aac"
+          }
+        ],
+        "fullDecode": true
+      },
+      {
+        "name": "track-01-00000002.mp4",
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1080,
+            "height": 1920
+          },
+          {
+            "codec_name": "aac"
+          }
+        ],
+        "fullDecode": true
+      }
+    ]
+  },
+  "mixer": {
+    "singleRailMeterAndHandle": true,
+    "greenYellowRedHeadroom": true,
+    "logarithmicMeterUnitTest": true,
+    "actualVerticalAndHorizontalMouseDrags": true,
+    "coalescedUiUpdatesMs": 50,
+    "gainBypassesVisualCompilation": true,
+    "gainDuringRecordingPassed": true,
+    "mutedStatePreserved": true,
+    "finalPairedCaptureFullDecode": [
+      {
+        "fragment": "track-00-00000000.mp4",
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1920,
+            "height": 1080
+          },
+          {
+            "codec_name": "aac"
+          }
+        ],
+        "fullVideoAndAudioDecode": true
+      },
+      {
+        "fragment": "track-00-00000001.mp4",
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1920,
+            "height": 1080
+          },
+          {
+            "codec_name": "aac"
+          }
+        ],
+        "fullVideoAndAudioDecode": true
+      },
+      {
+        "fragment": "track-01-00000000.mp4",
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1080,
+            "height": 1920
+          },
+          {
+            "codec_name": "aac"
+          }
+        ],
+        "fullVideoAndAudioDecode": true
+      },
+      {
+        "fragment": "track-01-00000001.mp4",
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1080,
+            "height": 1920
+          },
+          {
+            "codec_name": "aac"
+          }
+        ],
+        "fullVideoAndAudioDecode": true
+      }
+    ],
+    "cpuSubmitP99Ms": 2.380208,
+    "timingLimit": "CPU submission only, not GPU duration or end-to-end audio latency"
+  },
+  "productionUnchanged": true
+}

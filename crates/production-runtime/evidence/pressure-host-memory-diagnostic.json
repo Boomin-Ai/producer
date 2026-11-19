@@ -1,0 +1,60 @@
+{
+  "scope": "System-wide VM counters during the local investigation; not process attribution or a qualification pass. No applications were stopped and no allocator or VM settings changed.",
+  "pageBytes": 16384,
+  "samples": [
+    {
+      "time": "2026-11-16T14:51:39.635082+00:00",
+      "values": {
+        "Pages free": 4286,
+        "Pages active": 77839,
+        "Pages inactive": 74155,
+        "Pages speculative": 3117,
+        "Pages throttled": 0,
+        "Pages wired down": 132424,
+        "Pages purgeable": 2,
+        "\"Translation faults\"": 105497948,
+        "Pages copy-on-write": 1791483,
+        "Pages zero filled": 69254167,
+        "Pages reactivated": 42163625,
+        "Pages purged": 3398610,
+        "File-backed pages": 57071,
+        "Anonymous pages": 98040,
+        "Pages stored in compressor": 442793,
+        "Pages occupied by compressor": 196841,
+        "Decompressions": 31947883,
+        "Compressions": 38530378,
+        "Pageins": 15460514,
+        "Pageouts": 1646320,
+        "Swapins": 164913,
+        "Swapouts": 335688
+      }
+    },
+    {
+      "time": "2026-11-16T14:51:49.902872+00:00",
+      "values": {
+        "Pages free": 3899,
+        "Pages active": 75712,
+        "Pages inactive": 68774,
+        "Pages speculative": 6098,
+        "Pages throttled": 0,
+        "Pages wired down": 134724,
+        "Pages purgeable": 2,
+        "\"Translation faults\"": 105945132,
+        "Pages copy-on-write": 1792434,
+        "Pages zero filled": 69395061,
+        "Pages reactivated": 42484268,
+        "Pages purged": 3407187,
+        "File-backed pages": 57015,
+        "Anonymous pages": 93569,
+        "Pages stored in compressor": 416487,
+        "Pages occupied by compressor": 199453,
+        "Decompressions": 32187008,
+        "Compressions": 38850324,
+        "Pageins": 15492896,
+        "Pageouts": 1646445,
+        "Swapins": 166907,
+        "Swapouts": 360988
+      }
+    }
+  ]
+}

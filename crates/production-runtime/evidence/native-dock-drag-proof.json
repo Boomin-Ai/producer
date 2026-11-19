@@ -1,0 +1,93 @@
+{
+  "candidateSha256": "7e20b65819af0a42221ee7662461250a99c4356aee8b032ef8ca3be3cd6006cb",
+  "tests": {
+    "workspacePassed": 13,
+    "build": "pass",
+    "signature": "ad-hoc deep/strict verified",
+    "pickerGeometry": "All four dock edges, normal and small viewport bounds passed"
+  },
+  "visibleChecks": [
+    "Edit Layout empty top target and add buttons",
+    "Add Scenes to Sources dock preserves Sources",
+    "Drag Scenes to empty top dock",
+    "Drop over canvas cancels",
+    "Drag Sources into occupied top dock preserves Scenes",
+    "Drag Sources back to empty left dock",
+    "Top snaps to minimum then compact",
+    "Pull compact top open",
+    "Bottom snaps compact and pulls open in regular room",
+    "Quieter unfilled empty dock surfaces with centered plus",
+    "Bottom divider click hides all dock UI",
+    "Top divider click hides all dock UI",
+    "Collapsed side remains a named edit-mode placeholder",
+    "Hidden bottom remains a named edit-mode placeholder",
+    "Each visible panel has its own edit placeholder; peers remain visible in an occupied dock",
+    "Outer dock collapse and resize are disabled in Edit Layout",
+    "Internal horizontal panel divider resizes width; side divider resizes height; saved weights confirmed by CLI",
+    "Add panel lives in the trailing slot inside the panel container",
+    "Opaque icon-and-location picker opens below top, above bottom, rightward from left and leftward from right",
+    "Picker X and outside-click dismissal verified in native app"
+  ],
+  "workspace": {
+    "panels": {
+      "sources": {
+        "edge": "right",
+        "visible": true
+      },
+      "scenes": {
+        "edge": "top",
+        "visible": true
+      },
+      "mixer": {
+        "edge": "right",
+        "visible": true
+      },
+      "controls": {
+        "edge": "right",
+        "visible": true
+      },
+      "timeline": {
+        "edge": "bottom",
+        "visible": true
+      }
+    },
+    "docks": {
+      "left": {
+        "size": 160.0,
+        "collapsed": false,
+        "hidden": false,
+        "active": null
+      },
+      "right": {
+        "size": 183.24609375,
+        "collapsed": true,
+        "hidden": false,
+        "active": "sources"
+      },
+      "top": {
+        "size": 280.0,
+        "collapsed": false,
+        "hidden": true,
+        "active": "scenes"
+      },
+      "bottom": {
+        "size": 160.0,
+        "collapsed": true,
+        "hidden": true,
+        "active": "timeline"
+      }
+    },
+    "order": [
+      "sources",
+      "scenes",
+      "mixer",
+      "controls",
+      "timeline"
+    ],
+    "selected": null
+  },
+  "recordingTest": "Not required or rerun for this workspace-only patch",
+  "productionUnchanged": true,
+  "priorCandidateSha256": "52744a0bcfb52f337f13898d3995554d43c694233408547ecf1c9c7ba9d24497",
+  "workspaceSnapshotNote": "Historical snapshot below predates the latest interactive checks; user layout preserved."
+}

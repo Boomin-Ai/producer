@@ -1,0 +1,20 @@
+{
+  "candidateSha256": "ddee113796afea00f3def9f7b26a93ebda6c37c081ce5310776d2405b2fa949f",
+  "desktopTestsPassed": 36,
+  "compactDividerNativeTest": {
+    "edge": "top",
+    "sourcesWeight": 1.1436781883239746,
+    "scenesWeight": 0.8563218116760254,
+    "dockStayedCompact": true
+  },
+  "hiddenDockNativeClickChecks": [
+    "top",
+    "right",
+    "bottom"
+  ],
+  "restoreBoundsTests": "all four edges at 1440x900 and 480x360; no toolbar/status overlap",
+  "editPlaceholders": "occupied horizontal docks capped at 112 logical pixels; sides at 200; saved live sizes untouched",
+  "error": null,
+  "productionUnchanged": true,
+  "signature": "Ad-hoc dev deep/strict verified"
+}

@@ -77,8 +77,8 @@ def run(binary):
         for rows in [before,after]:
             for row in rows:del row['execution']
         assert before==after
-        # A legal source-only document can still produce an oversized multi-
-        # sample response. Reject that response without emitting partial output.
+        # Structural limits and compiled resource admission are independent.
+        # Too many independent readers must reject without replacing the draft.
         large=copy.deepcopy(fixture)
         large['sequences']={'opener':copy.deepcopy(fixture['sequences']['opener'])}
         large['shows']['pilot']['segments'][0]['sequence']='opener'
@@ -87,23 +87,29 @@ def run(binary):
         q['placements']=[dict(template,id=f'placement-{i:04d}-'+('x'*40)) for i in range(4096)]
         command={'kind':'import','document':large}
         ticket=rpc('issue',session=session,expected=str(revision),command=command)['ticket']
-        assert rpc('submit',session=session,ticket=ticket,command=command)['outcome']['status']=='saved'
+        rejected=rpc('submit',session=session,ticket=ticket,command=command)['outcome']
+        assert rejected['status']=='rejected' and rejected['error']['code']=='RESOURCE_LIMIT',rejected
+        assert rpc('inspect',session=session)['digest']==inspected['digest']
+        q['placements']=q['placements'][:900]
+        command={'kind':'import','document':large}
+        ticket=rpc('issue',session=session,expected=str(revision),command=command)['ticket']
+        admitted=rpc('submit',session=session,ticket=ticket,command=command)
+        assert admitted['outcome']['status']=='saved',admitted
+        revision+=1
         before_guard=rpc('inspect',session=session)['digest']
-        oversized=raw('simulateTimeline',session=session,sequence='opener',events=[{'kind':'start','at':'0'}]*15)
+        oversized=raw('simulateTimeline',session=session,sequence='opener',events=[{'kind':'start','at':'0'}]*70)
         assert not oversized['ok'] and oversized['error']['code']=='TIMELINE_LIMIT',oversized
         assert 'response' in oversized['error']['message']
-        overwork=raw('simulateTimeline',session=session,sequence='opener',events=[{'kind':'start','at':'0'}]*16)
+        overwork=raw('simulateTimeline',session=session,sequence='opener',events=[{'kind':'start','at':'0'}]*73)
         assert not overwork['ok'] and overwork['error']['code']=='TIMELINE_LIMIT'
         assert 'aggregate' in overwork['error']['message']
-        for method, limit_code, fields in [('simulateShow', 'SHOW_LIMIT', {'show':'pilot'})]:
-            oversized=raw(method,session=session,**fields,events=[{'kind':'start','at':'0'}]*15)
-            assert not oversized['ok'] and oversized['error']['code']==limit_code,oversized
-            assert 'response' in oversized['error']['message']
-            overwork=raw(method,session=session,**fields,events=[{'kind':'start','at':'0'}]*16)
-            assert not overwork['ok'] and overwork['error']['code']==limit_code,overwork
-            assert 'aggregate' in overwork['error']['message']
+        overwork=raw('simulateShow',session=session,show='pilot',events=[{'kind':'start','at':'0'}]*128)
+        assert not overwork['ok'] and overwork['error']['code']=='SHOW_LIMIT',overwork
+        assert 'aggregate' in overwork['error']['message']
         assert rpc('inspect',session=session)['digest']==before_guard
+        # Show's dependency-work preflight now rejects this response-heavy case
+        # earlier; the independent byte writer is exercised above by Timeline.
         rpc('disconnect',session=session);process.stdin.close();assert process.wait(timeout=30)==0
-        print(json.dumps({'incrementalCommits':revision,'nestedDepth':2,'independentPlayers':2,'simulationEvents':len(events),'replayedIdenticalAfterRestart':True,'rejectedConflictingEditAtomically':True,'skippedEffectsStaySilent':True,'responseBudgetRejected':True,'fixtureDigest':inspected['digest']},indent=2))
+        print(json.dumps({'incrementalCommits':revision,'nestedDepth':2,'independentPlayers':2,'simulationEvents':len(events),'replayedIdenticalAfterRestart':True,'rejectedConflictingEditAtomically':True,'skippedEffectsStaySilent':True,'responseBudgetRejected':True,'compiledResourceBudgetRejected':True,'showDependencyWorkRejected':True,'fixtureDigest':inspected['digest']},indent=2))
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--binary',required=True);run(p.parse_args().binary)

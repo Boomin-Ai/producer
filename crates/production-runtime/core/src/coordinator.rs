@@ -2,6 +2,7 @@
 use crate::{
     commands::{self, Command},
     contract::*,
+    retention::{self, Weight},
     storage::*,
 };
 use serde::Serialize;
@@ -25,7 +26,7 @@ impl RevokeFence {
     pub fn is_revoked(&self) -> bool {
         self.0.load(Ordering::SeqCst) >= 3
     }
-    fn disconnect(&self) {
+    pub(crate) fn disconnect(&self) {
         let _ = self
             .0
             .compare_exchange(1, 2, Ordering::SeqCst, Ordering::SeqCst);
@@ -51,6 +52,24 @@ pub enum Status {
     Unknown,
 }
 
+pub const HISTORY_ENTRIES: usize = 16;
+pub const HISTORY_BYTES: usize = 32 * 1024 * 1024;
+pub const HISTORY_UNITS: usize = RAW_VALUES * 2;
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryStatus {
+    pub entries: usize,
+    pub encoded_bytes: usize,
+    pub structural_units: usize,
+    pub max_entries: usize,
+    pub max_encoded_bytes: usize,
+    pub max_structural_units: usize,
+}
+struct HistoryEntry {
+    cursor: Counter,
+    document: Document,
+    weight: Weight,
+}
 pub struct Coordinator<S: Storage> {
     pub state: Snapshot,
     pub storage: S,
@@ -58,11 +77,28 @@ pub struct Coordinator<S: Storage> {
     sessions: BTreeMap<String, Session>,
     tickets: BTreeMap<String, Ticket>,
     volatile: VecDeque<Receipt>,
-    undo: VecDeque<(Counter, Document)>,
+    undo: VecDeque<HistoryEntry>,
+    history_weight: Weight,
+    pub(crate) scratch: wire::Scratch,
     pub read_only: bool,
 }
 fn fail(code: &str, message: &str) -> Error {
     Error::new(code, "coordinator", message)
+}
+fn bounded_storage_error(mut e: Error) -> Error {
+    // A trusted IO adapter can still return an unexpectedly large diagnostic.
+    // Terminal retries retain it, so cap it before entering the receipt cache.
+    fn trim(s: &mut String, max: usize) {
+        let mut end = s.len().min(max);
+        while !s.is_char_boundary(end) {
+            end -= 1;
+        }
+        s.truncate(end);
+    }
+    trim(&mut e.code, 256);
+    trim(&mut e.path, 1024);
+    trim(&mut e.message, 8192);
+    e
 }
 impl<S: Storage> Coordinator<S> {
     pub fn new(state: Snapshot, storage: S) -> Self {
@@ -74,6 +110,8 @@ impl<S: Storage> Coordinator<S> {
             tickets: BTreeMap::new(),
             volatile: VecDeque::new(),
             undo: VecDeque::new(),
+            history_weight: Weight::default(),
+            scratch: wire::Scratch::default(),
             read_only: false,
         }
     }
@@ -139,24 +177,22 @@ impl<S: Storage> Coordinator<S> {
         if self.tickets.len() >= 256 {
             return Err(fail("TICKET_LIMIT", "ticket capacity exhausted"));
         }
+        let fence = s.fence.0.load(Ordering::SeqCst);
         // Bound and validate raw payload before retaining even a hash/ticket.
-        let bytes = serde_json::to_vec(command).map_err(|e| fail("STRUCTURE", &e.to_string()))?;
-        ingress::parse_envelope(
-            &bytes,
-            if matches!(command, Command::Import { .. } | Command::Restore { .. }) {
-                DOCUMENT_BYTES + 1024
-            } else {
-                COMMAND_BYTES
-            },
-        )?;
+        let limit = if matches!(command, Command::Import { .. } | Command::Restore { .. }) {
+            DOCUMENT_BYTES + 1024
+        } else {
+            COMMAND_BYTES
+        };
+        ingress::check_envelope(self.scratch.serialize(command, limit)?, limit)?;
         let t = Ticket {
             session: session.into(),
             expected,
-            hash: digest(command)?,
+            hash: self.scratch.digest(command)?,
             expires: now_ms
                 .checked_add(120_000)
                 .ok_or_else(|| fail("TIME_UNREPRESENTABLE", "ticket deadline overflow"))?,
-            fence: s.fence.0.load(Ordering::SeqCst),
+            fence,
         };
         let id = uuid::Uuid::new_v4().to_string();
         self.tickets.insert(id.clone(), t);
@@ -188,7 +224,7 @@ impl<S: Storage> Coordinator<S> {
         now_ms: u64,
     ) -> Result<Receipt> {
         self.reader(session)?;
-        let payload_hash = digest(command)?;
+        let payload_hash = self.scratch.digest(command)?;
         // Historical outcomes precede current revision/grant checks, but require read access.
         if let Some(r) = self.receipt(id) {
             if r.payload_hash != payload_hash {
@@ -228,7 +264,7 @@ impl<S: Storage> Coordinator<S> {
             } => self
                 .undo
                 .back()
-                .is_some_and(|(cursor, d)| cursor == history_entry && d == document),
+                .is_some_and(|e| &e.cursor == history_entry && &e.document == document),
             _ => true,
         };
         let candidate = if !history_ok {
@@ -242,7 +278,7 @@ impl<S: Storage> Coordinator<S> {
                 "inspect current state and issue a fresh command",
             ))
         } else {
-            commands::apply(&self.state.document, command)
+            commands::apply_with_scratch(&self.state.document, command, &mut self.scratch)
         };
         // This SeqCst load is the commit authorization point. Revocation ordered
         // after it cannot undo the authored commit, but still fences later takes.
@@ -274,7 +310,7 @@ impl<S: Storage> Coordinator<S> {
             ticket: id.into(),
             payload_hash,
             revision,
-            digest: digest(&document)?,
+            digest: self.scratch.digest(&document)?,
             outcome,
             completed_at_ms: Counter(wall_time_ms()),
         };
@@ -294,25 +330,54 @@ impl<S: Storage> Coordinator<S> {
             },
             receipt: receipt.clone(),
         };
-        let mut next = self.state.clone();
-        next.document = document;
-        next.revision = revision;
-        next.cursor = record.cursor;
-        next.retain(receipt.clone())?;
+        // Admission/accounting must be complete before durable append. No fallible
+        // history work is allowed after ACK, and failed IO cannot evict undo.
+        let previous_weight =
+            if receipt.outcome == Outcome::Saved && !matches!(command, Command::Restore { .. }) {
+                Some(retention::measure(&self.state.document)?)
+            } else {
+                None
+            };
+        let mut next = Snapshot {
+            schema: self.state.schema.clone(),
+            cursor: record.cursor,
+            revision,
+            document,
+            receipts: self.state.receipts.clone(),
+        };
+        next.retain_with_scratch(receipt.clone(), &mut self.scratch)?;
         match self.storage.append(&record) {
             Ok(()) => {
+                let previous = std::mem::replace(&mut self.state, next);
                 if receipt.outcome == Outcome::Saved {
                     if matches!(command, Command::Restore { .. }) {
-                        self.undo.pop_back();
-                    } else {
-                        self.undo
-                            .push_back((self.state.cursor, self.state.document.clone()));
-                    }
-                    while self.undo.len() > 16 {
-                        self.undo.pop_front();
+                        if let Some(e) = self.undo.pop_back() {
+                            self.release_history(e.weight);
+                        }
+                    } else if let Some(weight) = previous_weight {
+                        // Evict before retaining the previous document. Move its
+                        // allocation into history instead of making another copy.
+                        while self.undo.len() >= HISTORY_ENTRIES
+                            || self.history_weight.encoded_bytes + weight.encoded_bytes
+                                > HISTORY_BYTES
+                            || self.history_weight.structural_units + weight.structural_units
+                                > HISTORY_UNITS
+                        {
+                            let e = self
+                                .undo
+                                .pop_front()
+                                .expect("single admitted document fits history");
+                            self.release_history(e.weight);
+                        }
+                        self.history_weight.encoded_bytes += weight.encoded_bytes;
+                        self.history_weight.structural_units += weight.structural_units;
+                        self.undo.push_back(HistoryEntry {
+                            cursor: previous.cursor,
+                            document: previous.document,
+                            weight,
+                        });
                     }
                 }
-                self.state = next;
                 self.tickets.remove(id);
                 Ok(receipt)
             }
@@ -320,8 +385,8 @@ impl<S: Storage> Coordinator<S> {
                 self.tickets.remove(id);
                 let r = Receipt {
                     revision: self.state.revision,
-                    digest: digest(&self.state.document)?,
-                    outcome: Outcome::Rejected(e),
+                    digest: self.scratch.digest(&self.state.document)?,
+                    outcome: Outcome::Rejected(bounded_storage_error(e)),
                     ..receipt
                 };
                 self.volatile.push_back(r.clone());
@@ -332,21 +397,39 @@ impl<S: Storage> Coordinator<S> {
             }
             Err(AppendError::Unknown(e)) => {
                 self.read_only = true;
-                Err(fail("SAVE_OUTCOME_UNKNOWN", &e.message))
+                Err(fail(
+                    "SAVE_OUTCOME_UNKNOWN",
+                    &bounded_storage_error(e).message,
+                ))
             }
         }
     }
+    fn release_history(&mut self, weight: Weight) {
+        self.history_weight.encoded_bytes -= weight.encoded_bytes;
+        self.history_weight.structural_units -= weight.structural_units;
+    }
+    pub fn history_status(&self, session: &str) -> Result<HistoryStatus> {
+        self.reader(session)?;
+        Ok(HistoryStatus {
+            entries: self.undo.len(),
+            encoded_bytes: self.history_weight.encoded_bytes,
+            structural_units: self.history_weight.structural_units,
+            max_entries: HISTORY_ENTRIES,
+            max_encoded_bytes: HISTORY_BYTES,
+            max_structural_units: HISTORY_UNITS,
+        })
+    }
     pub fn undo_command(&self, session: &str) -> Result<Command> {
         self.reader(session)?;
-        let (history_entry, d) = self.undo.back().cloned().ok_or_else(|| {
+        let e = self.undo.back().ok_or_else(|| {
             fail(
                 "UNDO_UNAVAILABLE",
                 "bounded current-session history unavailable",
             )
         })?;
         Ok(Command::Restore {
-            document: d,
-            history_entry,
+            document: e.document.clone(),
+            history_entry: e.cursor,
         })
     }
     pub fn checkpoint(&mut self, session: &str) -> Result<()> {

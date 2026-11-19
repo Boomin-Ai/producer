@@ -53,7 +53,10 @@ pub struct Snapshot {
 }
 impl Snapshot {
     pub fn new(document: Document) -> Result<Self> {
-        validate_document(&document)?;
+        Self::new_with_scratch(document, &mut wire::Scratch::default())
+    }
+    fn new_with_scratch(document: Document, scratch: &mut wire::Scratch) -> Result<Self> {
+        validate::validate_with_scratch(&document, scratch)?;
         Ok(Self {
             schema: "producer.production-store/1".into(),
             cursor: Counter(0),
@@ -62,9 +65,29 @@ impl Snapshot {
             receipts: VecDeque::new(),
         })
     }
+    /// Store recovery must reject over-profile history rather than admitting
+    /// an oversized receipt collection until the next mutation prunes it.
+    pub fn validate_receipts(&self) -> Result<()> {
+        if self.receipts.len() > RECEIPTS
+            || encoded_size(&self.receipts, RECEIPT_BYTES).is_err()
+            || self
+                .receipts
+                .iter()
+                .any(|r| encoded_size(r, 64 * 1024).is_err())
+        {
+            return Err(Error::new(
+                "RECEIPT_LIMIT",
+                "store.receipts",
+                "receipt history exceeds store profile",
+            ));
+        }
+        Ok(())
+    }
     pub fn retain(&mut self, r: Receipt) -> Result<()> {
-        let size = serde_json::to_vec(&r).map_err(|e| ioerr(&e))?.len();
-        if size > 64 * 1024 {
+        self.retain_with_scratch(r, &mut wire::Scratch::default())
+    }
+    pub fn retain_with_scratch(&mut self, r: Receipt, scratch: &mut wire::Scratch) -> Result<()> {
+        if encoded_size(&r, 64 * 1024).is_err() {
             return Err(Error::new(
                 "RECEIPT_LIMIT",
                 "receipt",
@@ -74,15 +97,11 @@ impl Snapshot {
         self.receipts.push_back(r);
         let cutoff = wall_time_ms().saturating_sub(RECEIPT_TTL_MS);
         self.receipts.retain(|r| r.completed_at_ms.0 >= cutoff);
-        while self.receipts.len() > RECEIPTS
-            || serde_json::to_vec(&self.receipts)
-                .map_err(|e| ioerr(&e))?
-                .len()
-                > RECEIPT_BYTES
+        while self.receipts.len() > RECEIPTS || encoded_size(&self.receipts, RECEIPT_BYTES).is_err()
         {
             self.receipts.pop_front();
         }
-        let encoded = encode(self)?;
+        let encoded = encode_into(self, scratch)?;
         if encoded.len() > CHECKPOINT_BYTES {
             return Err(Error::new(
                 "CHECKPOINT_LIMIT",
@@ -90,7 +109,7 @@ impl Snapshot {
                 "complete checkpoint cannot fit",
             ));
         }
-        ingress::parse_envelope(&encoded, CHECKPOINT_BYTES)?;
+        ingress::check_envelope(encoded, CHECKPOINT_BYTES)?;
         Ok(())
     }
 }
@@ -108,27 +127,53 @@ struct Envelope<T> {
     body: T,
     checksum: String,
 }
+fn encoded_size(value: &impl Serialize, limit: usize) -> Result<usize> {
+    struct Count {
+        bytes: usize,
+        limit: usize,
+    }
+    impl Write for Count {
+        fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+            self.bytes = self
+                .bytes
+                .checked_add(data.len())
+                .filter(|n| *n <= self.limit)
+                .ok_or_else(|| std::io::Error::other("encoded byte limit exceeded"))?;
+            Ok(data.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut count = Count { bytes: 0, limit };
+    serde_json::to_writer(&mut count, value).map_err(|e| ioerr(&e))?;
+    Ok(count.bytes)
+}
 fn ioerr(e: &impl std::fmt::Display) -> Error {
     Error::new("STORE_IO", "store", e.to_string())
 }
 fn encode<T: Serialize>(body: &T) -> Result<Vec<u8>> {
-    serde_json::to_vec(&Envelope {
-        body,
-        checksum: digest(body)?,
-    })
-    .map_err(|e| ioerr(&e))
+    Ok(encode_into(body, &mut wire::Scratch::default())?.to_vec())
 }
-fn decode<T: serde::de::DeserializeOwned + Serialize>(bytes: &[u8], max: usize) -> Result<T> {
+fn encode_into<'a, T: Serialize>(body: &T, scratch: &'a mut wire::Scratch) -> Result<&'a [u8]> {
+    let checksum = scratch.digest(body)?;
+    scratch.serialize(&Envelope { body, checksum }, CHECKPOINT_BYTES)
+}
+fn decode<T: serde::de::DeserializeOwned + Serialize>(
+    bytes: &[u8],
+    max: usize,
+    scratch: &mut wire::Scratch,
+) -> Result<T> {
     // Store ingress has the same duplicate/number/UTF8 guarantees. Checkpoints may
     // contain a full 8MiB document plus bounded historical receipts.
-    let v = ingress::parse_envelope(bytes, max)?;
-    let e: Envelope<T> = serde_json::from_value(v).map_err(|e| ioerr(&e))?;
-    if digest(&e.body)? != e.checksum {
+    ingress::check_envelope(bytes, max)?;
+    let e: Envelope<T> = serde_json::from_slice(bytes).map_err(|e| ioerr(&e))?;
+    if scratch.digest(&e.body)? != e.checksum {
         return Err(Error::new("CHECKSUM", "store", "record checksum mismatch"));
     }
     Ok(e.body)
 }
-fn advance(s: &mut Snapshot, r: &Record) -> Result<()> {
+fn advance(s: &mut Snapshot, r: &Record, scratch: &mut wire::Scratch) -> Result<()> {
     if r.cursor.0
         != s.cursor
             .0
@@ -148,16 +193,16 @@ fn advance(s: &mut Snapshot, r: &Record) -> Result<()> {
                 .command
                 .as_ref()
                 .ok_or_else(|| ioerr(&"saved record lacks command"))?;
-            if digest(command)? != r.receipt.payload_hash {
+            if scratch.digest(command)? != r.receipt.payload_hash {
                 return Err(ioerr(&"command hash mismatch"));
             }
-            let d = commands::apply(&s.document, command)?;
+            let d = commands::apply_with_scratch(&s.document, command, scratch)?;
             if r.receipt.revision.0
                 != s.revision
                     .0
                     .checked_add(1)
                     .ok_or_else(|| ioerr(&"revision exhausted"))?
-                || digest(&d)? != r.receipt.digest
+                || scratch.digest(&d)? != r.receipt.digest
             {
                 return Err(ioerr(&"replay outcome mismatch"));
             }
@@ -167,14 +212,14 @@ fn advance(s: &mut Snapshot, r: &Record) -> Result<()> {
         Outcome::Rejected(_) => {
             if r.command.is_some()
                 || r.receipt.revision != s.revision
-                || r.receipt.digest != digest(&s.document)?
+                || r.receipt.digest != scratch.digest(&s.document)?
             {
                 return Err(ioerr(&"rejected record changed document"));
             }
         }
     }
     s.cursor = r.cursor;
-    s.retain(r.receipt.clone())?;
+    s.retain_with_scratch(r.receipt.clone(), scratch)?;
     Ok(())
 }
 #[derive(Debug, Clone)]
@@ -227,9 +272,10 @@ impl Storage for MemoryStore {
 }
 impl MemoryStore {
     pub fn recover(initial: Document, records: &[Record]) -> Result<Snapshot> {
-        let mut s = Snapshot::new(initial)?;
+        let mut scratch = wire::Scratch::default();
+        let mut s = Snapshot::new_with_scratch(initial, &mut scratch)?;
         for r in records {
-            advance(&mut s, r)?;
+            advance(&mut s, r, &mut scratch)?;
         }
         Ok(s)
     }
@@ -240,6 +286,7 @@ pub struct FileStore {
     _lock: File,
     journal: File,
     pub diagnostics: Vec<String>,
+    scratch: wire::Scratch,
 }
 #[cfg(unix)]
 fn sync_dir(dir: &Path) -> Result<()> {
@@ -299,6 +346,7 @@ impl FileStore {
                 "one writer already owns this namespace",
             )
         })?;
+        let mut scratch = wire::Scratch::default();
         let mut checkpoints = Vec::new();
         let mut diagnostics = Vec::new();
         for name in ["checkpoint-a.json", "checkpoint-b.json"] {
@@ -308,16 +356,19 @@ impl FileStore {
                     return Err(ioerr(&"checkpoint exceeds profile"));
                 }
                 let bytes = fs::read(p).map_err(|e| ioerr(&e))?;
-                let s: Snapshot = decode(&bytes, CHECKPOINT_BYTES)?;
+                let s: Snapshot = decode(&bytes, CHECKPOINT_BYTES, &mut scratch)?;
                 if s.schema != "producer.production-store/1" {
                     return Err(ioerr(&"unsupported store version; recovery-only"));
                 }
-                validate_document(&s.document)?;
+                validate::validate_with_scratch(&s.document, &mut scratch)?;
+                s.validate_receipts()?;
                 checkpoints.push(s);
             }
         }
         checkpoints.sort_by_key(|s| s.cursor);
-        let mut state = checkpoints.pop().unwrap_or(Snapshot::new(initial)?);
+        let mut state = checkpoints
+            .pop()
+            .unwrap_or(Snapshot::new_with_scratch(initial, &mut scratch)?);
         let journal_path = dir.join("journal.jsonl");
         let mut journal = OpenOptions::new()
             .read(true)
@@ -340,9 +391,9 @@ impl FileStore {
             .split(|b| *b == b'\n')
             .filter(|l| !l.is_empty())
         {
-            let r: Record = decode(line, DOCUMENT_BYTES + 64 * 1024)?;
+            let r: Record = decode(line, DOCUMENT_BYTES + 64 * 1024, &mut scratch)?;
             if r.cursor > state.cursor {
-                advance(&mut state, &r)?;
+                advance(&mut state, &r, &mut scratch)?;
             }
         }
         if complete < bytes.len() {
@@ -366,6 +417,7 @@ impl FileStore {
             _lock: lock,
             journal,
             diagnostics,
+            scratch,
         };
         if !store.dir.join("checkpoint-a.json").exists()
             && !store.dir.join("checkpoint-b.json").exists()
@@ -378,33 +430,34 @@ impl FileStore {
 }
 impl Storage for FileStore {
     fn append(&mut self, r: &Record) -> std::result::Result<(), AppendError> {
-        let mut bytes = encode(r).map_err(AppendError::NotWritten)?;
-        bytes.push(b'\n');
+        let bytes = encode_into(r, &mut self.scratch).map_err(AppendError::NotWritten)?;
         let len = self
             .journal
             .metadata()
             .map_err(|e| AppendError::NotWritten(ioerr(&e)))?
             .len();
-        if len + bytes.len() as u64 > JOURNAL_BYTES {
+        if len + bytes.len() as u64 + 1 > JOURNAL_BYTES {
             return Err(AppendError::NotWritten(ioerr(
                 &"journal full: checkpoint required",
             )));
         }
         // Reserve space for both bounded checkpoints plus this record before ACK.
         if fs2::available_space(&self.dir).map_err(|e| AppendError::NotWritten(ioerr(&e)))?
-            < 2 * CHECKPOINT_BYTES as u64 + bytes.len() as u64
+            < 2 * CHECKPOINT_BYTES as u64 + bytes.len() as u64 + 1
         {
             return Err(AppendError::NotWritten(ioerr(
                 &"insufficient checkpoint/journal disk reserve",
             )));
         }
         self.journal
-            .write_all(&bytes)
+            .write_all(bytes)
+            .and_then(|_| self.journal.write_all(b"\n"))
             .and_then(|_| self.journal.sync_all())
             .map_err(|e| AppendError::Unknown(ioerr(&e)))
     }
     fn checkpoint(&mut self, s: &Snapshot) -> Result<()> {
-        let bytes = encode(s)?;
+        s.validate_receipts()?;
+        let bytes = encode_into(s, &mut self.scratch)?;
         if bytes.len() > CHECKPOINT_BYTES {
             return Err(ioerr(&"aggregate checkpoint exceeds profile"));
         }
@@ -413,7 +466,7 @@ impl Storage for FileStore {
         }
         let tmp = self.dir.join("checkpoint-next.json");
         let mut f = File::create(&tmp).map_err(|e| ioerr(&e))?;
-        f.write_all(&bytes)
+        f.write_all(bytes)
             .and_then(|_| f.sync_all())
             .map_err(|e| ioerr(&e))?;
         let name = if s.cursor.0.is_multiple_of(2) {
@@ -428,5 +481,58 @@ impl Storage for FileStore {
             .and_then(|_| self.journal.sync_all())
             .map_err(|e| ioerr(&e))?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn typed_store_decode_keeps_strict_raw_checks_literal_metadata_and_checksums() {
+        let mut d = Document::empty("codec", "Before");
+        d.metadata.insert(
+            "literal".into(),
+            serde_json::json!({"$serde_json::private::RawValue":"{\"constructor\":0}","extra":true}),
+        );
+        let snapshot = Snapshot::new(d).unwrap();
+        let bytes = encode(&snapshot).unwrap();
+        let text = std::str::from_utf8(&bytes).unwrap();
+        let mut scratch = wire::Scratch::default();
+        let decoded: Snapshot = decode(&bytes, CHECKPOINT_BYTES, &mut scratch).unwrap();
+        assert_eq!(decoded.document, snapshot.document);
+        let invalid = [
+            (
+                text.replace("\"title\":", "\"ti\\u0074le\":\"duplicate\",\"title\":"),
+                "RAW_JSON",
+            ),
+            (
+                text.replace("\"metadata\":{", "\"metadata\":{\"__proto__\":null,"),
+                "RAW_JSON",
+            ),
+            (
+                text.replace("\"metadata\":{", "\"metadata\":{\"number\":1e999,"),
+                "RAW_JSON",
+            ),
+            (text.replace("Before", "After"), "CHECKSUM"),
+            (format!("{text} null"), "RAW_JSON"),
+        ];
+        for (bad, code) in invalid {
+            assert_eq!(
+                decode::<Snapshot>(bad.as_bytes(), CHECKPOINT_BYTES, &mut scratch)
+                    .unwrap_err()
+                    .code,
+                code
+            );
+            let retry: Snapshot = decode(&bytes, CHECKPOINT_BYTES, &mut scratch).unwrap();
+            assert_eq!(retry.document, snapshot.document);
+        }
+        assert_eq!(
+            decode::<Snapshot>(&bytes, bytes.len() - 1, &mut scratch)
+                .unwrap_err()
+                .code,
+            "RAW_LIMIT"
+        );
+        assert!(scratch.capacity() <= wire::SCRATCH_BYTES);
     }
 }

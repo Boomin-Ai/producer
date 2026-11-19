@@ -4,9 +4,10 @@ use crate::{
     compile::Plan,
     contract::*,
     coordinator::RevokeFence,
+    dependencies::ResourceBinding,
     incremental::{CompileStats, Compiler},
     lifecycle::*,
-    ownership::{Lane, ResourceId},
+    ownership::{Disposal, Lane, ReadId, ResourceId},
     resources::{Budget, Reservation},
     show::{ShowEvent, ShowRun, ShowSample},
     transport::OutputInstant,
@@ -35,6 +36,7 @@ struct Job {
     revision: Counter,
     expires: u64,
     document: Document,
+    inputs: LayoutInputs,
     compiler: Compiler,
     cost: Reservation,
     cache_cost: Cost,
@@ -71,6 +73,7 @@ pub enum CompileOutcome {
         revision: Counter,
         token: Counter,
         digest: String,
+        geometry_digest: String,
         stats: CompileStats,
     },
     Rejected {
@@ -122,7 +125,11 @@ impl Workspace {
                         break;
                     };
                     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        job.compiler.compile_cancellable(&job.document, &job.cancel)
+                        job.compiler.compile_cancellable_with_layout_inputs(
+                            &job.document,
+                            &job.inputs,
+                            &job.cancel,
+                        )
                     }))
                     .unwrap_or_else(|_| {
                         Err(fail(
@@ -210,6 +217,19 @@ impl Workspace {
         now_ms: u64,
         grant: RevokeFence,
     ) -> Result<Counter> {
+        let inputs = LayoutInputs::empty(&document.id);
+        self.submit_with_layout_inputs(document, inputs, revision, now_ms, grant)
+    }
+    /// Geometry updates use normal bounded workers and fresh preparation tokens,
+    /// not document mutations or synchronous capture-thread layout work.
+    pub fn submit_with_layout_inputs(
+        &mut self,
+        document: Document,
+        inputs: LayoutInputs,
+        revision: Counter,
+        now_ms: u64,
+        grant: RevokeFence,
+    ) -> Result<Counter> {
         if !grant.is_current() {
             return Err(fail("FORBIDDEN", "current native grant required"));
         }
@@ -222,6 +242,7 @@ impl Workspace {
             ));
         }
         entry.runtime.check_prepare(&document)?;
+        crate::contract::layout::validate_inputs(&document, &inputs)?;
         let running = self.running.values().filter(|r| r.document == id).count();
         if entry.runtime.pending_count() + running >= 4 {
             return Err(fail(
@@ -235,7 +256,16 @@ impl Workspace {
         let expires = now_ms
             .checked_add(30_000)
             .ok_or_else(|| fail("TIME_UNREPRESENTABLE", "deadline overflow"))?;
-        let cost = crate::lifecycle::estimate(&document)?;
+        let mut cost = crate::lifecycle::estimate(&document)?;
+        if !inputs.sources.is_empty() {
+            let bytes = serde_json::to_vec(&inputs)
+                .map_err(|_| fail("LAYOUT_INPUT", "could not encode inputs"))?
+                .len();
+            cost = cost.checked_add(Cost {
+                cpu: bytes as u64,
+                ..Cost::default()
+            })?;
+        }
         let digest = digest(&document)?;
         if let Some((old, hash)) = &entry.desired {
             if revision < *old || (revision == *old && hash != &digest) {
@@ -265,6 +295,7 @@ impl Workspace {
             revision,
             expires,
             document,
+            inputs,
             compiler,
             cost: lease,
             cache_cost,
@@ -338,6 +369,7 @@ impl Workspace {
                 }
                 let (plan, stats) = result?;
                 let digest = plan.digest.clone();
+                let geometry_digest = plan.geometry_digest.clone();
                 let cache = Arc::new(entry.runtime.ledger.lease(job.cache_cost)?);
                 let token = entry.runtime.install(
                     &job.document,
@@ -354,6 +386,7 @@ impl Workspace {
                     revision: job.revision,
                     token,
                     digest,
+                    geometry_digest,
                     stats,
                 })
             })();
@@ -496,6 +529,53 @@ impl Workspace {
             .0
             .disposed(resource, lane)
     }
+    pub fn show_disposal_ready(&self, id: &str) -> Result<Vec<Disposal>> {
+        Ok(self
+            .entry(id)?
+            .show
+            .as_ref()
+            .ok_or_else(|| fail("SHOW_MISSING", "Show execution absent"))?
+            .0
+            .disposal_ready())
+    }
+    pub fn show_resources(
+        &self,
+        id: &str,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<&ResourceBinding>> {
+        Ok(self
+            .entry(id)?
+            .show
+            .as_ref()
+            .ok_or_else(|| fail("SHOW_MISSING", "Show execution absent"))?
+            .0
+            .resources()
+            .values()
+            .skip(offset)
+            .take(limit.min(64))
+            .collect())
+    }
+    pub fn show_begin_read(&mut self, id: &str, path: &str) -> Result<ReadId> {
+        let entry = self.entry_mut(id)?;
+        if entry.closing {
+            return Err(fail("DOCUMENT_CLOSING", "no new reads while closing"));
+        }
+        entry
+            .show
+            .as_mut()
+            .ok_or_else(|| fail("SHOW_MISSING", "Show execution absent"))?
+            .0
+            .begin_read(path)
+    }
+    pub fn show_finish_read(&mut self, id: &str, read: ReadId) -> Result<()> {
+        self.entry_mut(id)?
+            .show
+            .as_mut()
+            .ok_or_else(|| fail("SHOW_MISSING", "Show execution absent"))?
+            .0
+            .finish_read(read)
+    }
     pub fn show_status(&self, id: &str) -> Result<ShowSample> {
         self.entry(id)?
             .show
@@ -562,6 +642,16 @@ impl Workspace {
         let e = self.entry_mut(id)?;
         if e.closing {
             return Err(fail("DOCUMENT_CLOSING", "no new output while closing"));
+        }
+        if e.show
+            .as_ref()
+            .and_then(|(show, _)| show.preparation_token())
+            .is_some_and(|pinned| pinned != token)
+        {
+            return Err(fail(
+                "SHOW_PLAN_PINNED",
+                "close and dispose the pinned Show before taking another preparation",
+            ));
         }
         let revision = e
             .desired

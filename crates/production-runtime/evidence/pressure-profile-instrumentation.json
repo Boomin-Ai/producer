@@ -1,0 +1,164 @@
+{
+  "recordedAt": "2026-11-16T14:24:49.335830+00:00",
+  "scope": "Isolated Rust service, real temporary FileStores, self-process requested heap/RSS. No GPU/media/GPUI/app result.",
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "allocatorEnv": {
+    "MallocNanoZone": "0"
+  },
+  "hostLoadIsolated": false,
+  "sourceSha256": {
+    ".github/workflows/production-core.yml": "5d12eb5e3d0142b2144d82a9f723e0f1ef08807fcb351164c77ac30a45af7217",
+    "crates/production-runtime/Cargo.lock": "61f90f1029115f7e6b5f4efc94448fab774386a0a4f5b890361f972787d7d868",
+    "crates/production-runtime/Cargo.toml": "e348cf2b52c49b2df0fa202ed046e66634b024943fb69e4fa419342ed4dcd67a",
+    "crates/production-runtime/cli/Cargo.toml": "040637520824cae634922de8d8f94985893e2331cbdc588fc237c7a3be374af0",
+    "crates/production-runtime/cli/src/main.rs": "d2339c69de4288948e11ebcf01e63cfaaaddec44c54c638a3009fcba28483a21",
+    "crates/production-runtime/contract/Cargo.toml": "2cbee410744fb254b33ffa46d323c08ad45959a8cbc7c907b6f6322fec2edeb8",
+    "crates/production-runtime/contract/src/fixture.rs": "919b8e109054ca49ae6bc8ec386ccd8ca042a731402cf5f656a5a1e160da8368",
+    "crates/production-runtime/contract/src/ingress.rs": "9923f85cfbead38f9a5db32222a239884218f89bd665d598e355d94f790050bd",
+    "crates/production-runtime/contract/src/layout.rs": "8f6e3d5b05419e4099c907c760a3926a35c95819fa8db5fab8382bd8fbc0cb96",
+    "crates/production-runtime/contract/src/lib.rs": "7b107424de95a794027df6a571d328a50100bef05de55d860ac4219423a3b742",
+    "crates/production-runtime/contract/src/model.rs": "29977ac9dd87b477aabda5bb0422550c983d4442e18439637dd9a8914d26124f",
+    "crates/production-runtime/contract/src/shared.rs": "2bc99aa6816042402e1e2a0decdc4244e747ef520cec1a4e1e8c634be5ff520c",
+    "crates/production-runtime/contract/src/temporal.rs": "bc85e66fe6514b07fff04f245bf1e572b4ff450ec3ab74d9828bcc5a57c054ad",
+    "crates/production-runtime/contract/src/time.rs": "f47312a746a635be4b496a2cd4c09ea86244ead072ee244a8a5d1e3617474a4f",
+    "crates/production-runtime/contract/src/validate.rs": "f7bb51ca437b601c607415ff6b4fe2438585575fdde2165352230baece96059a",
+    "crates/production-runtime/contract/src/wire.rs": "ab620e2a031263870ce009eb69b979df87befed8e2b6130cd3b4ef3924c06813",
+    "crates/production-runtime/contract/tests/conformance.rs": "3274c933a058962a0187fde3325e4be37986deb3140e130cc06c8bfb83715502",
+    "crates/production-runtime/contract/tests/mutations.rs": "a915027f62d1a6f4a232d89a7d1801d4c2325f3ad9c477a76b86b0ef0a3fd0fc",
+    "crates/production-runtime/core/Cargo.toml": "3b2b0fae270f8a1d5712d20739ae7d2ac906b73f6619e1d76b8a4ff668a3f3a3",
+    "crates/production-runtime/core/examples/analytic_profile.rs": "b454d0eff6cf27bbe4b7d9e623d8610f6d68167cd5507af766c5a2f88238ca86",
+    "crates/production-runtime/core/examples/durable_memory_proof.rs": "5c0e60d0dcc032fd2ab705bbc0a52cf44accd6062461ae279ca526b54d7201ee",
+    "crates/production-runtime/core/examples/profile.rs": "db3ee98e1604d72e429569cfec22ef09183d62f04e82ae4bc3d027ddbe4b8e81",
+    "crates/production-runtime/core/examples/support/memory.rs": "8d1f43d1c569ef95fefbb014af5db63e3dd72de299268b6e134f0bc0c7c5ac6a",
+    "crates/production-runtime/core/examples/support/pressure.rs": "546c6847cfc32eea8b06ec41103271d7d55ce8c33558077a75d27aad2dbe7407",
+    "crates/production-runtime/core/examples/workspace_proof.rs": "3dd86aa811a7b6fbe909b5e607541536881eab5219c26eeb6a2da4c5815214a5",
+    "crates/production-runtime/core/src/analytic.rs": "0d84e2d6a05a27b38fbfce553db250f013c13633267cf6ec648faabf0532e37a",
+    "crates/production-runtime/core/src/bounded.rs": "43bc11df0b812e9bb4ca895ed49ba959852ef934e5e47e8490fea84931756161",
+    "crates/production-runtime/core/src/commands.rs": "0defdb23b9c0a5ace960f80e244022ab5cff95c12158ceeb4c702e2e762b73e1",
+    "crates/production-runtime/core/src/compile.rs": "1bcb1f5dd6c59538724f90cf99b640a792ed40d4cf5f6c059f93e290a6f06735",
+    "crates/production-runtime/core/src/coordinator.rs": "d06c1e0714d9e1fd42ff4f0e2a9262a3c0eda57ef88f830714d41e11683f5ab4",
+    "crates/production-runtime/core/src/dependencies.rs": "0894f29367a6d64a710e499c85df9eb571cdebfee71ecbc6fc925203781192b3",
+    "crates/production-runtime/core/src/drivers.rs": "f02b41f4323bfecd9dc0ef44b18bfef3aea4ca25861b647b971d5411539f5e6e",
+    "crates/production-runtime/core/src/host.rs": "d782c4a65e288e2ddff4763f34781c6e8aaa7b190915709073be846b2f1303d1",
+    "crates/production-runtime/core/src/incremental.rs": "b23a83316b571e8beccf31444d97798431d1914edbb5bcc0fa2390bf89ae7c91",
+    "crates/production-runtime/core/src/layout.rs": "65ecc58d654a3022b6603ae9d7b088c74423adeabaf39987601cb2a9779e5166",
+    "crates/production-runtime/core/src/lib.rs": "d7bdf5ef0c067d925706dd68cff5e8e474bbeedb9bc4f7ebd1e277caf5ced9fc",
+    "crates/production-runtime/core/src/lifecycle.rs": "3bf0de4d359fa358ff4205d5d7ed7a7649aa1181cc86656818d483fb6d32683f",
+    "crates/production-runtime/core/src/ownership.rs": "36de262217f3f51fa79091d3297b81021a9b9e817490234db0765aa35d38ca0f",
+    "crates/production-runtime/core/src/resources.rs": "bd9e8700f1a8b52dbc2bea0aa247290217aac863c8f3785b5308d7e120bc1d2f",
+    "crates/production-runtime/core/src/retention.rs": "0a34efca0752648f61778745e94f540b5c71cf98bf31ca87f02e50711332c26c",
+    "crates/production-runtime/core/src/show.rs": "18a3308d9e67f8c46cf49b719ab463313da3a5b94b37dc91f9cbad560d201463",
+    "crates/production-runtime/core/src/storage.rs": "2c35f1177e5e50fd426adbebfd8df0d737aa15a59391118a993d7517a4558b74",
+    "crates/production-runtime/core/src/timeline.rs": "6af27a50387e52a5eff7fb4471abd3412c62c782cc72709fb38e33e56f423de8",
+    "crates/production-runtime/core/src/transport.rs": "5c2f3f97d62dcc727b11d24318fa886a6d3b0ff7ca57fe8c950d16afdc88375d",
+    "crates/production-runtime/core/src/workspace.rs": "6cef95d948bb5a176f1b4806a3891d0a852099716212847beb77bc4cea2887c4",
+    "crates/production-runtime/core/tests/analytic.rs": "2db26c4d461752cf1319d11bace37088177899d639c5e1b59f52782d6236129d",
+    "crates/production-runtime/core/tests/dependencies.rs": "bb11c2fb4e4465642e9312c6652a1a6f647899c0b421cf6185b8744b5460985c",
+    "crates/production-runtime/core/tests/foundation.rs": "6b8392d101d72b580f801f3a5189848a16dfe3cdb2bfb08db137b09338bc906d",
+    "crates/production-runtime/core/tests/host.rs": "61bdabec281c9ff3ff94942cef5c27d5931c5e52f30aa4224732ced60d614739",
+    "crates/production-runtime/core/tests/incremental.rs": "cd72caa3065eeec74c1815ee318a27144183c609276ad47aae9c5efbcc6a5bd1",
+    "crates/production-runtime/core/tests/layout.rs": "82cb6687d00f735cad08b59addc35768e0fd297defcf859284cf9378874c4038",
+    "crates/production-runtime/core/tests/lifecycle.rs": "f572ff77e84fb1a1cfafdb68389f4b15e59ec98d93e5eaf9b4f12c7e8b336aea",
+    "crates/production-runtime/core/tests/native_graphics.rs": "d89b873e13e13fc46b88a242a637dde9361e9851a74771e8e5faf1e0b965fe75",
+    "crates/production-runtime/core/tests/nested_timeline.rs": "22e8897ffc088279ca631e88af0b7a246f29b3b3b68ce2a3b02b8b9e4922b1b5",
+    "crates/production-runtime/core/tests/ownership.rs": "480b53bdd680e61778eb259f583d9097b1a4a12399c60ff6012dbb5c301a8590",
+    "crates/production-runtime/core/tests/pressure.rs": "bdcb4aafcd60272c07a2addc5baabc5ca39d55dddf1bf9cfefff0feead2f2b9a",
+    "crates/production-runtime/core/tests/retention.rs": "d2332419f0e4842cb0d2e9daf8daf8ed7fedcc9e75d5dcb0cc29a425d79734d5",
+    "crates/production-runtime/core/tests/review_regressions.rs": "bde47572a5eeab96bb46f7c4358ba07e90b8ccef42d4f8cd8c01a650848b9e15",
+    "crates/production-runtime/core/tests/show.rs": "8a45155d3e6d2e0afa5b605309acbb96590eb36eb978eb648575c8bd993483e5",
+    "crates/production-runtime/core/tests/workspace.rs": "35bdc52390e786f8fcdba164b3ce41913bc7118f5004ed0bef35febaac9478cd",
+    "crates/production-runtime/generated/analytic-effects.json": "4c569c67ac7f20d86d6d60c2ef9f320c18f7418a1440ce0ca5d56aa0e3eb2033",
+    "crates/production-runtime/generated/classic-like.json": "f5f67e9429d2c1fe27b2d92102cdc48a166c2296a7569115e68e49e03a1dbe64",
+    "crates/production-runtime/generated/commands.schema.json": "0dacab761973c16585e670db3e622c582e80dad885f1d8c2a8fe4d513c75ee00",
+    "crates/production-runtime/generated/contract.d.ts": "645c6438d1d2b4d50a197e21b1736368fa55ca9baa7ada6e96ae26924fdfc97d",
+    "crates/production-runtime/generated/document.schema.json": "b7bd1e9c855c2115c35fe4a14baa1ea5b02219c6a9eab88445c91bc756c61683",
+    "crates/production-runtime/generated/nested-timeline.json": "fc97d1a32d8857794301af9e2cb6ed33955d4cbfb71b113b3d261c91e8c8c9a9",
+    "crates/production-runtime/generated/responsive-layout.json": "99ecad9153860b6a7f15d4ac1ae3a02ac9d1e5e9a1ed1908144727faed560ef6",
+    "crates/production-runtime/generated/tools.schema.json": "e8c75396d4a2cb8e9d02552b60a91d8c679f40dcebd8374d0ec66fd1d487d7ef",
+    "crates/production-runtime/scripts/canonical-check.mjs": "7095b362a0d2e96430ed94f7a34c2df5948c65cde5a5f167caf5a1510cd46e87",
+    "crates/production-runtime/scripts/generate.py": "b25f21dd17765ca30698fd619539509663fcdf30415747d8746973aa0805e4c4",
+    "crates/production-runtime/scripts/prove-analytic.py": "73d9b94fa9d521b4cc869fac8171cb05daefbeb2f4a740344a175467fc7c3380",
+    "crates/production-runtime/scripts/prove-durable-memory.py": "00f0f0e6a2ff4379f54990099b7581ff6f8d5f335b1b3f632afb16043ee09a82",
+    "crates/production-runtime/scripts/prove-host.py": "907abd11eb846eb85e659138353266987f097a2afa73f69a2867086cb4ff301a",
+    "crates/production-runtime/scripts/prove-layout.py": "6cd0b964c7323011cb77d23ec47a01d3b004eb070642291a1015a91386eaa06a",
+    "crates/production-runtime/scripts/prove-nested.py": "c005b80154b8435bd99d6d75b216d8c66653d14d209053a7d5fd95afdfe8c0de",
+    "crates/production-runtime/scripts/prove-pressure.py": "94f597b2c6eb137941783736ce286046d1b96c5808ace37112ec7d35b98490a4",
+    "crates/production-runtime/scripts/prove-service.py": "55afd08efc5da39a1cede78cdf2e1a0316a9f5672fce83edba598a2a2eb605b5",
+    "crates/production-runtime/scripts/prove-show.py": "5b2d9775dec54f4017f4873f5790c53b3cd4201a2546cd056fdc558d564eda13",
+    "crates/production-runtime/scripts/prove.py": "077598c5e3538e4e74eba0ae8d81463c4012fdbfcf7d9133c51fa536a9a2fb30",
+    "crates/production-runtime/scripts/schema-check.mjs": "7bd2dfa64f53fb0aa38932c5fbde99eaadcda62bf3e00636241e100f30628d78",
+    "crates/production-runtime/service/Cargo.toml": "90289314b12c466359109e8f8f940b3e59b646239451437d883741bf8440180d",
+    "crates/production-runtime/service/examples/pressure_proof.rs": "54cbe586ad1ac4860eee00ba9b0fa82fb862d101ae4b552bfd345fbdfec690af",
+    "crates/production-runtime/service/src/frame.rs": "99e6488323d392041e3769fe1ac0cd264b56ccc5f8ebf5f6d69c75116485d61a",
+    "crates/production-runtime/service/src/lib.rs": "37996e985573e8082b2fa5625aebd5b66a02ea36853dfadab5621dda448da7c4",
+    "crates/production-runtime/service/src/protocol.rs": "0500ad49216821db12e7b61738df3d27b9c8128d0645fe5342eb9af6a9900fce",
+    "crates/production-runtime/service/tests/executor.rs": "8aaee4d4971ba91379b13ab28566ced32809d79b0328ce2a928ac9367cb82245"
+  },
+  "sourceSnapshotCapturedBeforeVerification": true,
+  "binarySha256": "4f89fd885d05e1a95d00b7ad9998702e3d2755da8a45d2689515279fa93f8a52",
+  "gates": {
+    "warmupRounds": 4,
+    "requestedHeapSpanLessThanBytes": 1048576,
+    "residentSpanLessThanBytes": 67108864,
+    "ownerReleaseLessThanBytesAboveBaseline": 1048576,
+    "numericAndEffectInputsP99LessThanMs": 1
+  },
+  "runs": [
+    {
+      "repeat": 1,
+      "shape": "--flat",
+      "exitCode": 101,
+      "result": {
+        "rawStdout": ""
+      },
+      "stderr": "\nthread 'main' (135634) panicked at service/examples/pressure_proof.rs:164:5:\nassertion `left == right` failed\n  left: 40\n right: 0\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "repeat": 1,
+      "shape": "--nested",
+      "exitCode": 101,
+      "result": {
+        "rawStdout": ""
+      },
+      "stderr": "\nthread 'main' (135698) panicked at service/examples/pressure_proof.rs:164:5:\nassertion `left == right` failed\n  left: 17\n right: 0\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "repeat": 2,
+      "shape": "--flat",
+      "exitCode": 101,
+      "result": {
+        "rawStdout": ""
+      },
+      "stderr": "\nthread 'main' (135744) panicked at service/examples/pressure_proof.rs:164:5:\nassertion `left == right` failed\n  left: 40\n right: 0\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "repeat": 2,
+      "shape": "--nested",
+      "exitCode": 101,
+      "result": {
+        "rawStdout": ""
+      },
+      "stderr": "\nthread 'main' (135784) panicked at service/examples/pressure_proof.rs:164:5:\nassertion `left == right` failed\n  left: 18\n right: 0\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "repeat": 3,
+      "shape": "--flat",
+      "exitCode": 101,
+      "result": {
+        "rawStdout": ""
+      },
+      "stderr": "\nthread 'main' (135877) panicked at service/examples/pressure_proof.rs:164:5:\nassertion `left == right` failed\n  left: 43\n right: 0\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "repeat": 3,
+      "shape": "--nested",
+      "exitCode": 101,
+      "result": {
+        "rawStdout": ""
+      },
+      "stderr": "\nthread 'main' (135930) panicked at service/examples/pressure_proof.rs:164:5:\nassertion `left == right` failed\n  left: 17\n right: 0\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    }
+  ],
+  "sourceUnchangedAfterVerification": false,
+  "allRunsPassed": false
+}

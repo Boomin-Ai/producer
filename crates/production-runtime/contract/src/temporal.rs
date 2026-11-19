@@ -314,6 +314,30 @@ pub fn map_chain(maps: &[TimeMap], time: Time) -> std::result::Result<Option<Tim
     }
     Ok(Some(wide.time().ok_or(MapError::Unrepresentable)?))
 }
+/// Decoder boundary only: perform every visibility/loop/speed operation exactly,
+/// then convert the final wide rational to the decoder's seconds interface.
+/// Do not narrow it back to serialized Time: subtracting e.g. 3833/600 from a
+/// nanosecond clock can legitimately require a rate above the document profile.
+/// Document edits, animation evaluation and exact sample() keep their contract.
+pub fn map_chain_media_seconds(
+    maps: &[TimeMap],
+    time: Time,
+) -> std::result::Result<Option<f64>, MapError> {
+    match map_chain(maps, time) {
+        Ok(value) => Ok(value.map(|t| t.as_f64())),
+        Err(MapError::Depth) => Err(MapError::Depth),
+        Err(MapError::Unrepresentable) => {
+            let mut wide = Rational::from(time);
+            for map in maps {
+                match map.map_wide(wide)? {
+                    Some((mapped, _)) => wide = mapped,
+                    None => return Ok(None),
+                }
+            }
+            Ok(Some(wide.n as f64 / wide.d as f64))
+        }
+    }
+}
 /// Exact active intervals in root time, with loop seams preserved. This is
 /// bounded control-lane work, used only where competing drivers need proof.
 pub fn project_ranges(maps: &[TimeMap], leaf: Range, work: &mut usize) -> Result<Vec<Range>> {

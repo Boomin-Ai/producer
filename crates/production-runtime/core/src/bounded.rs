@@ -89,6 +89,15 @@ pub struct Observers {
 impl Observers {
     /// Whitelisted metadata only: no document metadata, source props, auth or media.
     pub fn publish(&mut self, d: &Document, revision: Counter, changed: Vec<String>) -> Result<()> {
+        self.publish_with_scratch(d, revision, changed, &mut wire::Scratch::default())
+    }
+    pub(crate) fn publish_with_scratch(
+        &mut self,
+        d: &Document,
+        revision: Counter,
+        changed: Vec<String>,
+        scratch: &mut wire::Scratch,
+    ) -> Result<()> {
         if changed.len() > 256 || changed.iter().any(|s| s.len() > 256) {
             return Err(err("DELTA_LIMIT", "bounded operation paths required"));
         }
@@ -98,7 +107,7 @@ impl Observers {
                 .checked_add(1)
                 .ok_or_else(|| err("CURSOR_EXHAUSTED", "new observer lineage required"))?,
         );
-        let digest = digest(d)?;
+        let digest = scratch.digest(d)?;
         let snapshot=serde_json::to_vec(&serde_json::json!({"documentId":d.id,"revision":revision,"digest":digest,"sets":d.sets.keys().collect::<Vec<_>>(),"shows":d.shows.keys().collect::<Vec<_>>(),"sourceCount":d.sources.len()})).unwrap();
         if snapshot.len() > DOCUMENT_BYTES {
             return Err(err("SNAPSHOT_LIMIT", "redacted snapshot too large"));

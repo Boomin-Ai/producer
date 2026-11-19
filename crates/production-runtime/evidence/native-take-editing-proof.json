@@ -1,0 +1,231 @@
+{
+  "date": "2026-11-18",
+  "scope": "isolated macOS arm64 Native Dev committed-take editing; not production",
+  "baseCommit": "f33fc0aa2635c1abab5e15bed35cd425d4cd88a7",
+  "sourceSha256": {
+    "crates/production-runtime/media/src/committed.rs": "2826bd4faff6fcc57d1a730b87e173996d49a021ff8e345144b5cdc143c92f04",
+    "crates/production-runtime/media/src/recording.rs": "e197c8697d502ce4c1e37d718048aac4aec92e33026e787babfbfc1b9e9d721e",
+    "crates/production-runtime/media/tests/recording.rs": "2adab6f4da2159d61254f6ee34cadd989213f709f685102dfe78ac62b455a277",
+    "crates/production-runtime/desktop/src/take_playback.rs": "abcb36ad8a18b3d5514a2bb328baf6aa397421049c0e7ee5f9842f9e32b04960",
+    "crates/production-runtime/desktop/src/engine.rs": "035b512e5d4bc86234e6be237e000d753e4c4fa88fce01debf562d528f262541",
+    "crates/production-runtime/desktop/src/model.rs": "7d5785c5fc60b0bb90f0318fe1a0abe151cf6e132125e9c4f617b1c0bab92387",
+    "crates/production-runtime/desktop/src/platform.rs": "428f34f6dcae7cf4df823d170b1d5193ec47d10ff320ea386cd88228aa87b887",
+    "crates/production-runtime/desktop/src/main.rs": "e3dfccb1c8dc7dbfafb10a992c48220cffa97b7ca526b1f12e7eb2c066fd5e61",
+    "crates/production-runtime/desktop/src/ui.rs": "4af746d4e88690eb604786e148b6b6d7bb7313163fcab134e56b2e9ea046a4e6",
+    "crates/production-runtime/desktop/src/recording.rs": "633870066edfd26e3c037183a9282911156d88e199e98275d962cb9f8509d878",
+    "crates/production-runtime/desktop/native/macos.m": "22b5466a51c74b63b015962d49d0706abaac229bb64272e49cd58fa63d4fca8a",
+    "crates/production-runtime/desktop/native/recording.inc": "f46a7065bea755eed1aa56c289366c8b902df55766a5e0528a822161a73fe334",
+    "crates/production-runtime/desktop/native/room.h": "970286e3e7cd938f09f2c7651c1384b514e1eae4295d1638a8126e83700e4580",
+    "crates/production-runtime/desktop/scripts/check-edit-take.py": "26fc3e27b6c9918a7b342ac295aebdb5aa848f27ce7f9e3bfb9d2fb465fa9004",
+    "crates/production-runtime/desktop/scripts/check-take.py": "365578cb1b9d7f6178d66525d7c0db52d8669eb981afd60379f1fd1590443ce9"
+  },
+  "installedUuid": "8406CEF2-17ED-3857-909E-17B186700177",
+  "pureTestsPassed": 217,
+  "desktopTestsPassed": 14,
+  "implemented": [
+    "immutable committed-track snapshots and explicit refresh",
+    "native fragment-local to recording-clock timestamp mapping",
+    "separate bounded video/audio availability indexes",
+    "ordinary player asset/placement/trim DSL and a take lane",
+    "generation and source-time frame fences",
+    "new recording session protected from prior terminal snapshots",
+    "partial final fragment support without inventing absent audio"
+  ],
+  "nativeReadChecks": {
+    "tracks": [
+      "landscape program",
+      "portrait program",
+      "camera original"
+    ],
+    "sampleTimesSeconds": [
+      0.3,
+      1.9,
+      2.1,
+      3.9,
+      4.1,
+      8.1,
+      16.1,
+      30.1,
+      32.5
+    ],
+    "framesBeforeCommittedEnd": 24,
+    "unavailableBeyondEnd": 3,
+    "physicalDevicesStarted": false,
+    "earlierReaderCandidate": true
+  },
+  "finalCandidateDeviceFreeRecording": {
+    "savedSessions": 2,
+    "committedFragmentsHashCheckedAndFullyDecoded": 8,
+    "dimensions": [
+      [
+        1920,
+        1080
+      ],
+      [
+        1080,
+        1920
+      ]
+    ],
+    "realTimeQualification": false
+  },
+  "counterexamples": [
+    {
+      "case": "earlier candidate retained prior Saved snapshot across a new recording",
+      "disposition": "session fence and Stop busy-state check plus regression test"
+    },
+    {
+      "case": "AVFoundation final audio report had zero duration",
+      "disposition": "omit absent reports; validate sparse declared media and require every declared stream before Saved"
+    },
+    {
+      "case": "continuous playback readiness below 75 percent during locked-host attempt",
+      "disposition": "failure and local stack retained; unchanged 75% threshold passed on unlocked exact installed candidate (19/19 sampled frames ready); this does not prove all locked-host failure causes resolved"
+    },
+    {
+      "case": "later locked-host attempt timed out before both tracks committed and hit bounded handoff on stop",
+      "disposition": "failed take and its published head retained; subsequent unlocked five-track record/edit/finalize run passed; exact earlier handoff cause remains unproven"
+    },
+    {
+      "case": "enabled stale ad-hoc Screen Recording grant rejected the current executable",
+      "disposition": "only Native Dev grant refreshed through normal System Settings and Quit & Reopen; same executable then passed; stable signing remains open"
+    }
+  ],
+  "remaining": [
+    "longer playback and quiet-host memory qualification",
+    "audio listening, lip sync, audio-only take editing and more simultaneous players",
+    "larger paged take indexes",
+    "real drive loss/full/power loss and hung codec/IO termination",
+    "full room revision/seek/cue provenance",
+    "actual ChatGPT/MCP adapter for GPUI",
+    "Windows/Linux/Intel physical testing"
+  ],
+  "productionModified": false,
+  "privateEvidence": "Kept outside repository; no media or account/profile paths included",
+  "finalCandidateStaticCuts": {
+    "seeks": 4,
+    "frameReadyAfterGenerationChange": true,
+    "takeDrawsPerOutput": [
+      1,
+      1
+    ],
+    "recordingAndCaptureOff": true
+  },
+  "devLeftRunning": {
+    "recording": false,
+    "capture": true,
+    "timeline": "bottom with committed take selected",
+    "physicalVerification": "unlocked live test complete; Mac subsequently relocked before final screenshot"
+  },
+  "finalCandidateLiveEditing": {
+    "passed": true,
+    "physicalSources": [
+      "FaceTime HD camera",
+      "ScreenCaptureKit display",
+      "microphone"
+    ],
+    "fileSource": "native H.264 MOV",
+    "outputs": [
+      [
+        1920,
+        1080
+      ],
+      [
+        1080,
+        1920
+      ]
+    ],
+    "tracks": [
+      {
+        "source": "program-landscape",
+        "size": [
+          1920,
+          1080
+        ],
+        "chunks": 11,
+        "videoFrames": 595,
+        "duration": 19.84,
+        "fps": 29.989919354838708,
+        "gaps": 0
+      },
+      {
+        "source": "program-vertical",
+        "size": [
+          1080,
+          1920
+        ],
+        "chunks": 11,
+        "videoFrames": 595,
+        "duration": 19.84,
+        "fps": 29.989919354838708,
+        "gaps": 0
+      },
+      {
+        "source": "camera",
+        "size": [
+          1280,
+          720
+        ],
+        "chunks": 11,
+        "videoFrames": 595,
+        "duration": 19.825000000000003,
+        "fps": 30.01261034047919,
+        "gaps": 0
+      },
+      {
+        "source": "screen",
+        "size": [
+          1920,
+          1080
+        ],
+        "chunks": 11,
+        "videoFrames": 560,
+        "duration": 19.8,
+        "fps": 28.28282828282828,
+        "gaps": 0
+      },
+      {
+        "source": "microphone",
+        "size": [
+          0,
+          0
+        ],
+        "chunks": 11,
+        "videoFrames": 0,
+        "duration": 0,
+        "fps": null,
+        "gaps": 0
+      }
+    ],
+    "committedFragmentsHashCheckedAndFullyDecoded": 55,
+    "recordingContinuedDuring": [
+      "place frozen program snapshot",
+      "trim with source-in",
+      "reject invalid trim",
+      "explicit refresh preserving trims and source bindings",
+      "add second cut via document transaction",
+      "seek and rapid generation-fenced seek",
+      "continuous playback across two fragment boundaries"
+    ],
+    "continuousInterval": {
+      "firstEditorialSeconds": 0.083287916,
+      "lastEditorialSeconds": 4.591417583,
+      "samples": 19,
+      "samplesFrameReady": 19,
+      "takeDrawsEachSample": [
+        1,
+        1
+      ],
+      "newMicRejectedSampleFrames": 0,
+      "newMixerMissingSampleFrames": 0,
+      "newClockSkippedSampleFrames": 0,
+      "newTimestampDiscontinuities": 0,
+      "newGpuSubmissionRefusals": 0,
+      "cpuEvaluationBuildSubmissionP99MsMax": 2.699917,
+      "cpuTimingExcludes": "GPU execution, encoder duration and end-to-end latency"
+    },
+    "programAudioNonSilentInPlaybackFragments": true,
+    "audioListeningAndLipSyncQualified": false,
+    "capturePermission": "same ad-hoc dev bundle re-added through normal System Settings; no OS bypass",
+    "productionExecutableHashRechecked": true
+  }
+}

@@ -1,0 +1,520 @@
+{
+  "checkedAtUtc": "2026-11-16T06:55:32.803944+00:00",
+  "baseCommit": "f33fc0aa2635c1abab5e15bed35cd425d4cd88a7",
+  "scope": "Local isolated synthetic native graphics accounting; not GPUI, GPU execution, physical memory or desktop performance qualification.",
+  "platform": {
+    "os": "Darwin",
+    "architecture": "arm64"
+  },
+  "toolchain": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: aarch64-apple-darwin\nrelease: 1.99.1\nLLVM version: 23.1.1",
+  "cliBinarySha256": "55932fd7f24dd3d95618040a2be0623bcd7c99588a2d69cfc6c2b2c31a98e9d9",
+  "checks": [
+    {
+      "name": "format",
+      "exitCode": 0,
+      "command": [
+        "cargo",
+        "fmt",
+        "--manifest-path",
+        "crates/production-runtime/Cargo.toml",
+        "--all",
+        "--check"
+      ],
+      "outputSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "clippy",
+      "exitCode": 0,
+      "command": [
+        "cargo",
+        "clippy",
+        "--manifest-path",
+        "crates/production-runtime/Cargo.toml",
+        "--locked",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "outputSha256": "28a6f3d37cf90a7b4882c1d9c37f8cc06abe21655dbc9dda5f38f0ad52d73a54",
+      "summary": "Finished `dev` profile [unoptimized] target(s) in 0.29s"
+    },
+    {
+      "name": "tests",
+      "exitCode": 0,
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "crates/production-runtime/Cargo.toml",
+        "--locked"
+      ],
+      "outputSha256": "0eb13729fbee594ab7c2ff9ac8d13e232ab1b6a86386423948f17797f3b2a87e",
+      "passed": 110,
+      "failed": 0,
+      "tests": [
+        "half_open_mapping_modulo_and_ties_even",
+        "bounded_binding_evaluation_rejects_hidden_division_by_zero",
+        "raw_ingress_rejects_duplicate_decoded_keys_and_dangerous_keys",
+        "jcs_uses_ecmascript_numbers_and_utf16_key_order",
+        "exact_counters_and_time_normalization",
+        "utf8_bytes_and_nested_work_are_bounded",
+        "independent_media_player_and_audio_routes",
+        "pins_cycles_driver_conflicts_and_3d_caps",
+        "paired_component_player_show_fixture_roundtrips",
+        "exact_24h_and_seeded_roundtrip_time_properties",
+        "shows_and_segment_collections_have_explicit_boundary_limits",
+        "seeded_malformed_ingress_never_panics",
+        "near_valid_graph_mutations_reject_at_the_native_boundary",
+        "many_tiny_json_values_are_work_bounded",
+        "resources::tests::native_caps_are_per_document_and_shared_charges_wait_for_each_owner",
+        "recording_clock_cannot_follow_content_backwards_or_pause",
+        "cue_cursor_dedupes_crossing_and_silent_seek",
+        "existing_product_folder_is_never_adopted",
+        "compiled_numeric_tracks_seek_without_history_or_scene_side_effects",
+        "deterministic_row_allocation_and_infeasible_limits",
+        "lost_response_retries_have_one_durable_effect",
+        "unknown_flush_fails_closed_then_recovers_the_exact_commit",
+        "revoke_fences_queued_work_but_not_already_ordered_commit",
+        "stale_revision_rejection_is_terminal_and_does_not_partially_apply",
+        "disk_full_retains_previous_state_and_undo_is_a_fresh_revision",
+        "one_writer_crash_tail_checkpoint_and_corrupt_middle",
+        "removed_fragments_do_not_accumulate_and_old_readers_keep_valid_plans",
+        "no_op_and_controls_reuse_actual_immutable_allocations",
+        "invalid_or_cancelled_candidate_cannot_poison_cache_or_bypass_validation",
+        "one_layout_edit_preserves_other_layout_and_sequence_handles",
+        "transitive_component_and_nested_sequence_dependencies_invalidate",
+        "source_asset_time_maps_and_sorted_target_manifest_are_dependencies",
+        "renderer_coalescing_requires_full_state_and_fences_stale_ack",
+        "resource_and_queue_saturation_have_independent_stop_path",
+        "hosted_authority_is_not_minted_or_changed_by_local_commands",
+        "leased_override_restores_current_driver_and_rejects_stale_incarnations",
+        "component_bindings_compile_per_instance_and_large_loop_cues_stay_exact",
+        "unknown_and_retiring_resources_remain_charged_until_exact_reconciliation",
+        "cold_frames_revoke_and_timeout_never_claim_presentation",
+        "identity_survives_prop_layout_edit_but_not_removal_or_definition_change",
+        "observer_snapshot_is_redacted_chunked_and_recovers_a_history_gap",
+        "retirement_capacity_counts_objects_instead_of_work_or_buffer_contents",
+        "every_graphics_dimension_rejects_excess_and_overflow_without_partial_admission",
+        "native_scenes_do_not_consume_optional_browser_capacity",
+        "failed_preparation_leaves_existing_graphics_and_token_budget_intact",
+        "equal_asset_hashes_do_not_erase_independent_batch_reservations",
+        "additional_prepared_views_charge_targets_and_passes_without_duplicating_scene_state",
+        "exact_trim_speed_and_negative_source_origin_are_not_wall_time",
+        "nested_property_collision_is_rejected_after_rebinding",
+        "independent_pause_owners_preserve_unwrapped_loop_progress",
+        "failed_clock_catchup_or_pause_event_does_not_partially_advance_transport",
+        "nested_cue_projection_matches_independent_discrete_oracle_at_different_speeds",
+        "nonoverlapping_rebound_property_drivers_are_valid_half_open",
+        "finite_end_releases_drivers_without_stopping_live_capture_or_external_effects",
+        "nested_cues_have_root_times_scoped_identity_and_loop_ancestry",
+        "rebound_file_availability_is_checked_after_player_binding",
+        "speed_cancellation_keeps_wide_exact_intermediates_and_rejects_final_overflow",
+        "projected_intervals_match_dense_independent_membership_and_mapping_roundtrips",
+        "unrepresentable_inverse_boundary_rejects_instead_of_approximating_collision_proof",
+        "seeks_consume_effect_history_and_only_explicit_new_run_rearms",
+        "shared_definitions_have_independent_scoped_targets_trims_and_players",
+        "rebound_hosted_authority_and_expansion_exhaustion_fail_closed",
+        "shared_file_with_different_nested_playheads_requires_separate_player",
+        "wire_roundtrip_and_unknown_nested_keys_use_native_admission",
+        "temporal_cycles_unused_bindings_and_kind_changes_reject",
+        "loops_do_not_unroll_the_numeric_plan_and_preflight_work_is_bounded",
+        "nested_depth_boundary_is_explicit_and_stopped_cursors_cannot_revive",
+        "closed_reader_can_finish_its_read_but_cannot_admit_more_work",
+        "owner_removal_rejects_surviving_users_atomically_but_joint_removal_works",
+        "borrowed_set_survives_run_and_segment_exit_without_owner_transfer",
+        "control_and_contributions_are_separate_from_lifetime_and_reads",
+        "handles_from_another_document_execution_cannot_alias_after_reopen",
+        "all_owner_graph_collections_are_bounded_including_retirement",
+        "finite_source_loops_wrap_from_negative_preroll_exactly",
+        "renderer_rejects_unknown_duplicate_and_wrong_type_targets_atomically",
+        "mixed_min_max_layout_constraints_find_the_feasible_allocation",
+        "reusable_scratch_does_not_leak_drivers_from_a_longer_sequence",
+        "stale_override_release_cannot_clear_a_newer_acquisition",
+        "partial_output_take_cannot_retire_an_unreplaced_output",
+        "stop_fences_old_preparations_and_unknown_reconciliation",
+        "resolved_file_identity_resets_player_even_when_asset_alias_is_unchanged",
+        "repeated_undo_traverses_history_and_failed_save_does_not_consume_it",
+        "finite_sequence_end_does_not_dispose_the_segment_or_restart_on_pause",
+        "reentry_restart_and_seek_fence_old_occurrences_and_keep_the_borrowed_set",
+        "failed_events_are_atomic_and_do_not_advance_clock_or_consume_occurrences",
+        "release_exposes_current_underlying_sample_and_stale_tokens_cannot_release_again",
+        "native_disconnect_lease_uses_exact_expiry_and_cannot_renew_without_a_grant",
+        "stopped_and_closed_executions_cannot_resurrect_or_dispose_the_wrong_resource",
+        "segment_visibility_pause_cannot_remove_an_operator_run_pause",
+        "readonly_hosted_revoked_and_disconnected_authority_are_distinct",
+        "static_segment_has_independent_controls_without_an_invented_timeline",
+        "segment_exit_clears_only_segment_overrides_stop_also_clears_set_and_run_leases",
+        "static_and_inactive_properties_are_driven_without_a_timeline_track",
+        "repeated_segment_entries_do_not_accumulate_scopes_resources_or_effect_history",
+        "resource_overflow_is_rejected_without_partial_reservation",
+        "expired_pending_work_is_not_dispatched_or_retained",
+        "closing_workers_hold_document_slot_and_resource_charge",
+        "never_started_show_can_be_inspected_and_disposed_after_close",
+        "show_plan_stays_charged_until_logical_close_and_exact_disposal_ack",
+        "closing_a_warm_document_does_not_uncharge_the_workers_base_cache",
+        "four_preparations_backpressure_does_not_block_stop_or_forge_frame_readiness",
+        "shows_in_two_documents_never_share_component_or_disposal_identity",
+        "two_worker_slots_remain_occupied_until_results_are_consumed",
+        "old_or_expired_preparations_cannot_open_a_show_or_leak_reservations",
+        "unopened_descriptors_are_bounded_and_paged",
+        "stop_and_supersession_fence_already_completed_but_unpolled_workers",
+        "two_documents_share_global_ledger_but_never_tokens_or_presentation",
+        "uncertain_retiring_and_cache_allocations_are_charged_until_exact_cleanup",
+        "revocation_expiry_and_invalid_submissions_leave_previous_cache_usable",
+        "latest_pending_intent_coalesces_without_retaining_every_document"
+      ]
+    },
+    {
+      "name": "build",
+      "exitCode": 0,
+      "command": [
+        "cargo",
+        "build",
+        "--manifest-path",
+        "crates/production-runtime/Cargo.toml",
+        "--locked"
+      ],
+      "outputSha256": "492249c9f550482a9a491739745144c5a474b15b27fd7de5717f8cd83c68916d",
+      "summary": "Finished `dev` profile [unoptimized] target(s) in 0.03s"
+    },
+    {
+      "name": "generatedArtifacts",
+      "exitCode": 0,
+      "command": [
+        "python3",
+        "crates/production-runtime/scripts/generate.py",
+        "--binary",
+        "target/production-core/debug/producer-core",
+        "--check"
+      ],
+      "outputSha256": "aa22b8986f5fa783b4e8acf99d249b7f2f9cb7cd96f6b33acd257e4488d6e9f9",
+      "summary": "Verified 6 Rust-derived artifacts"
+    },
+    {
+      "name": "flatCli",
+      "exitCode": 0,
+      "command": [
+        "python3",
+        "crates/production-runtime/scripts/prove.py",
+        "--binary",
+        "target/production-core/debug/producer-core"
+      ],
+      "outputSha256": "83235e71a43f85ac8cefe31b84bcbf3c6be8a0bd919759c5df16599d85abbeef",
+      "result": {
+        "incrementalCommits": 14,
+        "retryEffectsPerTicket": 1,
+        "restarted": true,
+        "pairedLayouts": 2,
+        "independentPlayers": 2,
+        "analyticInstances": 1000,
+        "fixtureDigest": "750427415bdb4bca0ea0946b34febe70a0eddc4d020b0f5b300d87274f28e7de"
+      }
+    },
+    {
+      "name": "nestedCli",
+      "exitCode": 0,
+      "command": [
+        "python3",
+        "crates/production-runtime/scripts/prove-nested.py",
+        "--binary",
+        "target/production-core/debug/producer-core"
+      ],
+      "outputSha256": "3515289eb6f83a7a6222b299a3ee7f948d64d107a48cb4bd79fcbc0fc23b1e6a",
+      "result": {
+        "incrementalCommits": 16,
+        "nestedDepth": 2,
+        "independentPlayers": 2,
+        "simulationEvents": 11,
+        "replayedIdenticalAfterRestart": true,
+        "rejectedConflictingEditAtomically": true,
+        "skippedEffectsStaySilent": true,
+        "responseBudgetRejected": true,
+        "fixtureDigest": "6957ba2605cb9697d72f1bcbc026b96a86d89ba344c584127eb5cd1f18f6863e"
+      }
+    },
+    {
+      "name": "showCli",
+      "exitCode": 0,
+      "command": [
+        "python3",
+        "crates/production-runtime/scripts/prove-show.py",
+        "--binary",
+        "target/production-core/debug/producer-core"
+      ],
+      "outputSha256": "1cc1d283256c2ee8b4bf39f7258b5adadbcf02c85b86623bc2d831d99b89bbc2",
+      "result": {
+        "incrementalCommits": 16,
+        "simulationEvents": 14,
+        "segmentOverridesReleased": true,
+        "operatorPausePreserved": true,
+        "setLifetimePreserved": true,
+        "newOccurrenceOnReentry": true,
+        "replayedIdenticalAfterRestart": true,
+        "silentSeek": true,
+        "freshExecutionAfterRestart": true,
+        "effectsDispatched": false,
+        "fixtureDigest": "abb353fc2049bc2c75036a9d5808a10b209ca80d78d29cd0ff72d92aa7a520a6"
+      }
+    },
+    {
+      "name": "canonicalParity",
+      "exitCode": 0,
+      "command": [
+        "node",
+        "crates/production-runtime/scripts/canonical-check.mjs",
+        "target/production-core/debug/producer-core"
+      ],
+      "outputSha256": "88c8e2256b94e5a4f77e096b832422a3f519bc283cc7560e0c3fd048c6a295b3",
+      "summary": "JavaScript/Rust canonical hash agrees: 750427415bdb4bca0ea0946b34febe70a0eddc4d020b0f5b300d87274f28e7de"
+    },
+    {
+      "name": "typescript",
+      "exitCode": 0,
+      "command": [
+        "node",
+        "crates/production-runtime/scripts/node_modules/typescript/bin/tsc",
+        "-p",
+        "crates/production-runtime/scripts/tsconfig.json"
+      ],
+      "outputSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "schemaParity",
+      "exitCode": 0,
+      "command": [
+        "node",
+        "crates/production-runtime/scripts/schema-check.mjs",
+        "target/production-core/debug/producer-core"
+      ],
+      "outputSha256": "a38e0ae877813348dfebe0b1cf0babe8fceb7e41fa2b0f6da963c8dbd8ce0d0f",
+      "summary": "JS structural / native companion conformance: 12 cases passed"
+    }
+  ],
+  "sourceManifest": [
+    {
+      "path": "crates/production-runtime/Cargo.lock",
+      "sha256": "804050cf357f53f4b49732e307a7bafa5904d51731ba80797dbd8e0de8c58a51"
+    },
+    {
+      "path": "crates/production-runtime/Cargo.toml",
+      "sha256": "57916b57d099743ba2693a794c93957321db8db1c87c049f3ef713edabc184bd"
+    },
+    {
+      "path": "crates/production-runtime/cli/Cargo.toml",
+      "sha256": "43dcacec7b8c9163974c647c6ef80cb0357ff63c561247d5ff6c84a7fe1f8b0f"
+    },
+    {
+      "path": "crates/production-runtime/cli/src/main.rs",
+      "sha256": "02365fe6e1f84484093332e614a16c98ddcb13cb26123e42799e58782f37ddf3"
+    },
+    {
+      "path": "crates/production-runtime/contract/Cargo.toml",
+      "sha256": "2cbee410744fb254b33ffa46d323c08ad45959a8cbc7c907b6f6322fec2edeb8"
+    },
+    {
+      "path": "crates/production-runtime/contract/src/fixture.rs",
+      "sha256": "624a70df49fb5dcb94769dd57b9a1f06876751514d577d76ee5a737ca6f56744"
+    },
+    {
+      "path": "crates/production-runtime/contract/src/ingress.rs",
+      "sha256": "0beaa50164e938ca1f2c27d04bd2040d90cf1ef9e1b793da32725fb87fa0dd1f"
+    },
+    {
+      "path": "crates/production-runtime/contract/src/lib.rs",
+      "sha256": "2aa48dc16e2fb4bb649d7d87ee2bb53b9a0f59a927387cd34df710a448e0d7e7"
+    },
+    {
+      "path": "crates/production-runtime/contract/src/model.rs",
+      "sha256": "d10ebc7bffb30353d4a6a095f06523b57d8c82925b4ea256896d900f9b5c26f7"
+    },
+    {
+      "path": "crates/production-runtime/contract/src/temporal.rs",
+      "sha256": "bc85e66fe6514b07fff04f245bf1e572b4ff450ec3ab74d9828bcc5a57c054ad"
+    },
+    {
+      "path": "crates/production-runtime/contract/src/time.rs",
+      "sha256": "f47312a746a635be4b496a2cd4c09ea86244ead072ee244a8a5d1e3617474a4f"
+    },
+    {
+      "path": "crates/production-runtime/contract/src/validate.rs",
+      "sha256": "736f02ae6dcf0de2b80ebf7b151e367dc5c0956c2ac46f6fb19e1a82561063e5"
+    },
+    {
+      "path": "crates/production-runtime/contract/tests/conformance.rs",
+      "sha256": "bfc8b3e5d5644c73d6d4379b25c5c17a65a31cfc5588f0e7d3854350254ff23a"
+    },
+    {
+      "path": "crates/production-runtime/contract/tests/mutations.rs",
+      "sha256": "a915027f62d1a6f4a232d89a7d1801d4c2325f3ad9c477a76b86b0ef0a3fd0fc"
+    },
+    {
+      "path": "crates/production-runtime/core/Cargo.toml",
+      "sha256": "3b2b0fae270f8a1d5712d20739ae7d2ac906b73f6619e1d76b8a4ff668a3f3a3"
+    },
+    {
+      "path": "crates/production-runtime/core/examples/profile.rs",
+      "sha256": "3e78fead642cac99ae464037a40902ef752eacede8e9958055c7cd78343b557a"
+    },
+    {
+      "path": "crates/production-runtime/core/examples/workspace_proof.rs",
+      "sha256": "3dd86aa811a7b6fbe909b5e607541536881eab5219c26eeb6a2da4c5815214a5"
+    },
+    {
+      "path": "crates/production-runtime/core/src/bounded.rs",
+      "sha256": "df7320198b577640322f5d60b5540c3075d54c86a7e35b848ac566fa9d67e8d8"
+    },
+    {
+      "path": "crates/production-runtime/core/src/commands.rs",
+      "sha256": "613ddcd0f9a0eabb57c31628e5a88639916d74d47485ffe362bb610256a38551"
+    },
+    {
+      "path": "crates/production-runtime/core/src/compile.rs",
+      "sha256": "f2cd80450c6003e51a37c413e6e5ea048cc5e49f7174956f8b559bf319d9cd16"
+    },
+    {
+      "path": "crates/production-runtime/core/src/coordinator.rs",
+      "sha256": "bc42c33f803b91da7c7d6cb9629ad44c36d0235a546d76fe6d82adb4dbe10bd4"
+    },
+    {
+      "path": "crates/production-runtime/core/src/drivers.rs",
+      "sha256": "f02b41f4323bfecd9dc0ef44b18bfef3aea4ca25861b647b971d5411539f5e6e"
+    },
+    {
+      "path": "crates/production-runtime/core/src/incremental.rs",
+      "sha256": "2f3013da73621c6102e6894a67bcad4f13796f0562aaebef99833fe84f69e8c2"
+    },
+    {
+      "path": "crates/production-runtime/core/src/lib.rs",
+      "sha256": "02b50f22790ef1c8a51b53dd3de110f9b17675105d08f16cf10638aaea50cb1f"
+    },
+    {
+      "path": "crates/production-runtime/core/src/lifecycle.rs",
+      "sha256": "78523a3083299da7ecaad1c49574a230b6e72f7262eb61ed3842142ebe44c31b"
+    },
+    {
+      "path": "crates/production-runtime/core/src/ownership.rs",
+      "sha256": "2c39fa882d6ce4ff9ac561d50d728b4a8a146ef53e674ee1153ae0265891ccec"
+    },
+    {
+      "path": "crates/production-runtime/core/src/resources.rs",
+      "sha256": "bd9e8700f1a8b52dbc2bea0aa247290217aac863c8f3785b5308d7e120bc1d2f"
+    },
+    {
+      "path": "crates/production-runtime/core/src/show.rs",
+      "sha256": "8be916d79624d7ab4c190166d0fefa90ed8d004754b07fa4fe4d3fcba80a5809"
+    },
+    {
+      "path": "crates/production-runtime/core/src/storage.rs",
+      "sha256": "67ed9b08b43c675eef5cc5edeb5b58f375dc5d3fe4eafa07f1884db47a4d64d0"
+    },
+    {
+      "path": "crates/production-runtime/core/src/timeline.rs",
+      "sha256": "a846199cf0e8d45666158430ea5b3f92040ac9ab7dafcb429d2e9904086a4797"
+    },
+    {
+      "path": "crates/production-runtime/core/src/transport.rs",
+      "sha256": "5c2f3f97d62dcc727b11d24318fa886a6d3b0ff7ca57fe8c950d16afdc88375d"
+    },
+    {
+      "path": "crates/production-runtime/core/src/workspace.rs",
+      "sha256": "bff67dba670422b1d374a4472256288bfc0aef6ce4b04dac48829f898b5d394d"
+    },
+    {
+      "path": "crates/production-runtime/core/tests/foundation.rs",
+      "sha256": "6b8392d101d72b580f801f3a5189848a16dfe3cdb2bfb08db137b09338bc906d"
+    },
+    {
+      "path": "crates/production-runtime/core/tests/incremental.rs",
+      "sha256": "cd72caa3065eeec74c1815ee318a27144183c609276ad47aae9c5efbcc6a5bd1"
+    },
+    {
+      "path": "crates/production-runtime/core/tests/lifecycle.rs",
+      "sha256": "f572ff77e84fb1a1cfafdb68389f4b15e59ec98d93e5eaf9b4f12c7e8b336aea"
+    },
+    {
+      "path": "crates/production-runtime/core/tests/native_graphics.rs",
+      "sha256": "d89b873e13e13fc46b88a242a637dde9361e9851a74771e8e5faf1e0b965fe75"
+    },
+    {
+      "path": "crates/production-runtime/core/tests/nested_timeline.rs",
+      "sha256": "22e8897ffc088279ca631e88af0b7a246f29b3b3b68ce2a3b02b8b9e4922b1b5"
+    },
+    {
+      "path": "crates/production-runtime/core/tests/ownership.rs",
+      "sha256": "480b53bdd680e61778eb259f583d9097b1a4a12399c60ff6012dbb5c301a8590"
+    },
+    {
+      "path": "crates/production-runtime/core/tests/review_regressions.rs",
+      "sha256": "bde47572a5eeab96bb46f7c4358ba07e90b8ccef42d4f8cd8c01a650848b9e15"
+    },
+    {
+      "path": "crates/production-runtime/core/tests/show.rs",
+      "sha256": "2f4c24b506f4dcd1f013a711f74f5ae6aeba5a6c650fdc0647b181c03901b259"
+    },
+    {
+      "path": "crates/production-runtime/core/tests/workspace.rs",
+      "sha256": "5e1ec5e035b71c70360d4da3693dd92739411972da572ccdbf3d98eb7bc7fd34"
+    },
+    {
+      "path": "crates/production-runtime/generated/classic-like.json",
+      "sha256": "f5f67e9429d2c1fe27b2d92102cdc48a166c2296a7569115e68e49e03a1dbe64"
+    },
+    {
+      "path": "crates/production-runtime/generated/commands.schema.json",
+      "sha256": "972935836fa950c60bca5acf213756ae7e43bb681af87a65aab3f1685e5ed899"
+    },
+    {
+      "path": "crates/production-runtime/generated/contract.d.ts",
+      "sha256": "fbb28876dbe2f7dce55c6cd6957f37e208a400302b22e6829ceeb4d65253abad"
+    },
+    {
+      "path": "crates/production-runtime/generated/document.schema.json",
+      "sha256": "ad5786c5290e5a4ae10ad36ea9d1e7dd2bcf047e6124fd4fb8117451abddb770"
+    },
+    {
+      "path": "crates/production-runtime/generated/nested-timeline.json",
+      "sha256": "fc97d1a32d8857794301af9e2cb6ed33955d4cbfb71b113b3d261c91e8c8c9a9"
+    },
+    {
+      "path": "crates/production-runtime/generated/tools.schema.json",
+      "sha256": "461e4a068dbb943efc5d4c5bb1814e6ac248b8866396b86b264264c4fb7bab0f"
+    },
+    {
+      "path": "crates/production-runtime/scripts/canonical-check.mjs",
+      "sha256": "7095b362a0d2e96430ed94f7a34c2df5948c65cde5a5f167caf5a1510cd46e87"
+    },
+    {
+      "path": "crates/production-runtime/scripts/generate.py",
+      "sha256": "f57d492ab4aa4be22a58ef51da77c5e692b0e42a006479962e027005fe435d74"
+    },
+    {
+      "path": "crates/production-runtime/scripts/package-lock.json",
+      "sha256": "134f41640e8092fc380eec8d1359e29b32fbc17e70e1cbdd1f1654a9bc5e7be9"
+    },
+    {
+      "path": "crates/production-runtime/scripts/package.json",
+      "sha256": "2006bbbc4c0a33faaf74b01625bf31aee44b61250b4f5260b9f07ed5fcfb5c64"
+    },
+    {
+      "path": "crates/production-runtime/scripts/prove-nested.py",
+      "sha256": "91a2d654b91341724558e764682b1cfc7e3589473ada92d4aa17b71578d132e0"
+    },
+    {
+      "path": "crates/production-runtime/scripts/prove-show.py",
+      "sha256": "6b24f3b4f95dc1014248d3dab450061a5ffdf0a530978eef8de3f55e22611840"
+    },
+    {
+      "path": "crates/production-runtime/scripts/prove.py",
+      "sha256": "077598c5e3538e4e74eba0ae8d81463c4012fdbfcf7d9133c51fa536a9a2fb30"
+    },
+    {
+      "path": "crates/production-runtime/scripts/schema-check.mjs",
+      "sha256": "7284a3fdd1510594dd05b14a682759df1a3a326a547ca92238de4e50224bc94f"
+    },
+    {
+      "path": "crates/production-runtime/scripts/tsconfig.json",
+      "sha256": "98fcff414639a51c6dd1e50013cfdc29e57d86c54c390e9866de8ea9d73210cc"
+    }
+  ]
+}

@@ -2,13 +2,14 @@
 //! exclusive control, presentation/audio contribution and in-flight reads are
 //! separate from lifetime ownership. No native objects are allocated here.
 use crate::contract::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub const SCOPES: usize = 256;
 pub const RESOURCES: usize = 1024;
 pub const RELATIONS: usize = 4096;
 pub const READS: usize = 1024;
+pub const READ_HOLDS: usize = 4096;
 
 macro_rules! handle {
     ($name:ident) => {
@@ -39,7 +40,7 @@ pub enum Relation {
     Presentation,
     Audio,
 }
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Lane {
     Control,
@@ -58,6 +59,12 @@ struct Resource {
     lane: Lane,
     retiring: bool,
     users: BTreeSet<(ScopeId, Relation)>,
+    dependencies: BTreeSet<ResourceId>,
+}
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct Disposal {
+    pub resource: ResourceId,
+    pub lane: Lane,
 }
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -72,7 +79,9 @@ pub struct OwnershipStatus {
     pub resources: usize,
     pub retiring: usize,
     pub relations: usize,
+    pub dependencies: usize,
     pub reads: usize,
+    pub read_holds: usize,
 }
 #[derive(Debug, Clone)]
 pub struct Ownership {
@@ -81,7 +90,7 @@ pub struct Ownership {
     root: ScopeId,
     scopes: BTreeMap<ScopeId, Scope>,
     resources: BTreeMap<ResourceId, Resource>,
-    reads: BTreeMap<ReadId, ResourceId>,
+    reads: BTreeMap<ReadId, BTreeSet<ResourceId>>,
 }
 fn fail(code: &str, message: &str) -> Error {
     Error::new(code, "ownership", message)
@@ -179,6 +188,7 @@ impl Ownership {
                 lane,
                 retiring: false,
                 users: BTreeSet::new(),
+                dependencies: BTreeSet::new(),
             },
         );
         Ok(id)
@@ -213,7 +223,7 @@ impl Ownership {
         if self
             .resources
             .values()
-            .map(|r| r.users.len())
+            .map(|r| r.users.len() + r.dependencies.len())
             .sum::<usize>()
             >= RELATIONS
         {
@@ -225,6 +235,57 @@ impl Ownership {
             .users
             .insert((user, relation));
         Ok(())
+    }
+    /// A dependent must be disposed before the resource it uses. Acyclic,
+    /// bounded edges are separate from user scopes and survive logical close.
+    pub fn depend(&mut self, resource: ResourceId, dependency: ResourceId) -> Result<()> {
+        let r = self
+            .resources
+            .get(&resource)
+            .filter(|r| !r.retiring)
+            .ok_or_else(|| fail("RESOURCE_RETIRED", "dependent is absent or retiring"))?;
+        if r.dependencies.contains(&dependency) {
+            return Ok(());
+        }
+        if !self.resources.get(&dependency).is_some_and(|r| !r.retiring) {
+            return Err(fail("RESOURCE_RETIRED", "dependency is absent or retiring"));
+        }
+        if self.closure(dependency)?.contains(&resource) {
+            return Err(fail(
+                "DEPENDENCY_CYCLE",
+                "resource dependency graph must be acyclic",
+            ));
+        }
+        if self
+            .resources
+            .values()
+            .map(|r| r.users.len() + r.dependencies.len())
+            .sum::<usize>()
+            >= RELATIONS
+        {
+            return Err(fail("RELATION_LIMIT", "dependency and user capacity"));
+        }
+        self.resources
+            .get_mut(&resource)
+            .unwrap()
+            .dependencies
+            .insert(dependency);
+        Ok(())
+    }
+    fn closure(&self, resource: ResourceId) -> Result<BTreeSet<ResourceId>> {
+        let mut pending = vec![resource];
+        let mut visited = BTreeSet::new();
+        while let Some(id) = pending.pop() {
+            if !visited.insert(id) {
+                continue;
+            }
+            let r = self
+                .resources
+                .get(&id)
+                .ok_or_else(|| fail("RESOURCE_RETIRED", "dependency is absent"))?;
+            pending.extend(r.dependencies.iter().copied());
+        }
+        Ok(visited)
     }
     pub fn unrelate(
         &mut self,
@@ -254,11 +315,15 @@ impl Ownership {
         if self.reads.len() >= READS {
             return Err(fail("READ_LIMIT", "in-flight read capacity"));
         }
+        let held = self.closure(resource)?;
+        if held.len() + self.reads.values().map(BTreeSet::len).sum::<usize>() > READ_HOLDS {
+            return Err(fail("READ_LIMIT", "transitive in-flight resource capacity"));
+        }
         let id = ReadId {
             execution: self.execution,
             number: self.issue()?,
         };
-        self.reads.insert(id, resource);
+        self.reads.insert(id, held);
         Ok(id)
     }
     pub fn finish_read(&mut self, read: ReadId) -> Result<()> {
@@ -298,6 +363,18 @@ impl Ownership {
                 "remove surviving logical dependencies in the same transaction",
             ));
         }
+        if self.resources.values().any(|r| {
+            !r.retiring
+                && !closing.contains(&r.owner)
+                && r.dependencies
+                    .iter()
+                    .any(|id| closing.contains(&self.resources[id].owner))
+        }) {
+            return Err(fail(
+                "OWNER_BORROWED",
+                "surviving compiled dependency requires its lifetime owner",
+            ));
+        }
         let mut retiring = vec![];
         for (id, r) in &mut self.resources {
             r.users.retain(|(s, _)| !closing.contains(s));
@@ -320,14 +397,40 @@ impl Ownership {
             .resources
             .get(&resource)
             .ok_or_else(|| fail("STALE_DISPOSAL", "unknown resource"))?;
-        if !r.retiring || r.lane != lane || self.reads.values().any(|id| *id == resource) {
+        if !r.retiring
+            || r.lane != lane
+            || self.reads.values().any(|held| held.contains(&resource))
+            || self
+                .resources
+                .values()
+                .any(|r| r.dependencies.contains(&resource))
+        {
             return Err(fail(
                 "DISPOSAL_FENCE",
-                "owner lane and all in-flight read completions required",
+                "owner lane, dependent disposal and all transitive reads required",
             ));
         }
         self.resources.remove(&resource);
         Ok(())
+    }
+    /// Only eligibility, never a destruction acknowledgment. An adapter must
+    /// complete actual disposal on the matching lane before calling disposed.
+    pub fn disposal_ready(&self) -> Vec<Disposal> {
+        let used: BTreeSet<_> = self
+            .resources
+            .values()
+            .flat_map(|r| &r.dependencies)
+            .chain(self.reads.values().flat_map(|r| r.iter()))
+            .copied()
+            .collect();
+        self.resources
+            .iter()
+            .filter(|(id, r)| r.retiring && !used.contains(id))
+            .map(|(id, r)| Disposal {
+                resource: *id,
+                lane: r.lane,
+            })
+            .collect()
     }
     pub fn status(&self) -> OwnershipStatus {
         OwnershipStatus {
@@ -335,7 +438,9 @@ impl Ownership {
             resources: self.resources.len(),
             retiring: self.resources.values().filter(|r| r.retiring).count(),
             relations: self.resources.values().map(|r| r.users.len()).sum(),
+            dependencies: self.resources.values().map(|r| r.dependencies.len()).sum(),
             reads: self.reads.len(),
+            read_holds: self.reads.values().map(BTreeSet::len).sum(),
         }
     }
 }

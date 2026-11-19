@@ -1,5 +1,5 @@
 [workspace]
-members = ["contract", "core", "cli"]
+members = ["contract", "core", "service", "cli", "media"]
 resolver = "2"
 
 [workspace.package]
@@ -10,7 +10,7 @@ publish = false
 
 [workspace.dependencies]
 serde = { version = "=1.0.229", features = ["derive", "rc"] }
-serde_json = { version = "=1.0.154", features = ["float_roundtrip"] }
+serde_json = { version = "=1.0.154", features = ["float_roundtrip", "raw_value"] }
 schemars = "=1.2.2"
 sha2 = "=0.10.9"
 fs2 = "=0.4.3"

@@ -5,9 +5,11 @@ use crate::{
     compile::{self, CompactValue, EvalError, Plan, Sample},
     contract::*,
     coordinator::RevokeFence,
+    dependencies::{ResourceBinding, ResourceKind},
     drivers::{DriverLease, LeaseScope, Overrides},
     ownership::{
-        Cleanup, Lane, Ownership, OwnershipStatus, Relation, ResourceId, ScopeId, ScopeKind,
+        Cleanup, Disposal, Lane, Ownership, OwnershipStatus, ReadId, Relation, ResourceId, ScopeId,
+        ScopeKind,
     },
     timeline::{Timeline, TimelineEvent, TimelineSample},
     transport::{OutputClock, OutputInstant},
@@ -145,6 +147,8 @@ pub struct ShowRun {
     closed: bool,
     selected: Option<usize>,
     ownership: Ownership,
+    resources: Arc<BTreeMap<String, ResourceBinding>>,
+    preparation: Option<Arc<crate::resources::Reservation>>,
     set_scope: ScopeId,
     set_resource: ResourceId,
     run_scope: Option<ScopeId>,
@@ -153,6 +157,7 @@ pub struct ShowRun {
     overrides: Overrides,
     drivers: Vec<FrameDriver>,
     frame_slots: usize,
+    effect_slots: usize,
     pauses: BTreeMap<(ScopeId, String, String), String>,
     next_pause: u64,
 }
@@ -194,10 +199,10 @@ impl ShowRun {
         if definition.authority != Authority::Local {
             return Err(fail("FORBIDDEN", "hosted Show is read-only"));
         }
-        let mut ownership = Ownership::new();
-        let set_scope = ownership.enter(ownership.root(), ScopeKind::Component)?;
-        // A symbolic Set component, not a native capture/player allocation.
-        let set_resource = ownership.own(set_scope, Lane::Video)?;
+        let installed = plan.dependencies.install()?;
+        let set_path = format!("sets/{}", definition.set);
+        let set_scope = installed.scopes[&set_path];
+        let set_resource = installed.resources[&set_path].resource;
         let frame_slots = definition
             .segments
             .iter()
@@ -206,6 +211,13 @@ impl ShowRun {
             .max()
             .unwrap_or(0)
             + 256;
+        let effect_slots = definition
+            .segments
+            .iter()
+            .filter_map(|s| s.sequence.as_ref())
+            .map(|id| plan.sequences[id].effects.len())
+            .max()
+            .unwrap_or(0);
         Ok(Self {
             execution: uuid::Uuid::new_v4().to_string(),
             document: document.id.clone(),
@@ -213,6 +225,7 @@ impl ShowRun {
             definition,
             drivers: Vec::with_capacity(256),
             frame_slots,
+            effect_slots,
             plan: Arc::new(plan),
             grant,
             output: OutputClock {
@@ -225,7 +238,9 @@ impl ShowRun {
             active: false,
             closed: false,
             selected: None,
-            ownership,
+            ownership: installed.ownership,
+            resources: installed.resources,
+            preparation: None,
             set_scope,
             set_resource,
             run_scope: None,
@@ -299,6 +314,27 @@ impl ShowRun {
         let scope = self.ownership.enter(run, ScopeKind::Segment)?;
         self.ownership
             .relate(scope, self.set_resource, Relation::Borrow)?;
+        let segment = &self.definition.segments[index];
+        for layout in [&segment.landscape, &segment.vertical] {
+            let path = format!("sets/{}/layouts/{layout}", self.definition.set);
+            self.ownership.relate(
+                scope,
+                self.resources[&path].resource,
+                Relation::Presentation,
+            )?;
+        }
+        if let Some(sequence) = &segment.sequence {
+            let path = format!("sequences/{sequence}");
+            self.ownership
+                .relate(scope, self.resources[&path].resource, Relation::Borrow)?;
+            for key in &self.plan.dependencies.resources[&path].dependencies {
+                let binding = &self.resources[key];
+                if binding.kind == ResourceKind::AudioRoute {
+                    self.ownership
+                        .relate(scope, binding.resource, Relation::Audio)?;
+                }
+            }
+        }
         self.segment_scope = Some(scope);
         self.occurrence = bump(self.occurrence)?;
         self.selected = Some(index);
@@ -394,10 +430,11 @@ impl ShowRun {
             .filter_map(|s| s.sequence.as_ref())
             .map(|id| {
                 let s = &self.plan.sequences[id];
-                s.tracks.len() + s.players.len() + s.cues.len() + 1
+                s.tracks.len() + s.players.len() + s.cues.len() + s.effects.len() + 1
             })
             .max()
             .unwrap_or(1)
+            + self.plan.dependencies.work()
     }
     fn apply_inner(&mut self, event: ShowEvent) -> Result<ShowSample> {
         let at = event.at();
@@ -637,6 +674,28 @@ impl ShowRun {
     pub fn scratch_len(&self) -> usize {
         self.frame_slots
     }
+    /// Preallocate for the largest segment; static Set adapters bind their own
+    /// explicit content clock. This method samples only the scheduled sequence.
+    pub fn effect_scratch_len(&self) -> usize {
+        self.effect_slots
+    }
+    pub fn evaluate_effects_into(
+        &self,
+        at: OutputInstant,
+        out: &mut [Option<crate::analytic::EffectInputs>],
+    ) -> std::result::Result<(), EvalError> {
+        if out.len() < self.effect_scratch_len() {
+            return Err(EvalError::ScratchTooSmall);
+        }
+        out.fill(None);
+        if !self.active || self.grant.is_revoked() {
+            return Ok(());
+        }
+        if let Some(t) = &self.timeline {
+            t.evaluate_effects_into(at, out)?;
+        }
+        Ok(())
+    }
     pub fn evaluate_into(
         &self,
         at: OutputInstant,
@@ -701,7 +760,44 @@ impl ShowRun {
             && self.epoch == epoch
     }
     pub fn disposed(&mut self, resource: ResourceId, lane: Lane) -> Result<()> {
-        self.ownership.disposed(resource, lane)
+        self.ownership.disposed(resource, lane)?;
+        if self.closed_and_disposed() {
+            self.preparation = None;
+        }
+        Ok(())
+    }
+    pub(crate) fn pin_preparation(&mut self, reservation: Arc<crate::resources::Reservation>) {
+        self.preparation = Some(reservation);
+    }
+    pub(crate) fn preparation_token(&self) -> Option<Counter> {
+        self.preparation.as_ref().map(|r| Counter(r.id()))
+    }
+    /// Bounded, control-lane catalog. Handles are execution-specific and never
+    /// supplied by the authored document or inferred from a source's asset hash.
+    pub fn resources(&self) -> &BTreeMap<String, ResourceBinding> {
+        &self.resources
+    }
+    pub fn disposal_ready(&self) -> Vec<Disposal> {
+        self.ownership.disposal_ready()
+    }
+    /// Read a current layout/sequence/route and protect its transitive inputs.
+    /// These model acknowledgments are not a real native callback fence yet.
+    pub fn begin_read(&mut self, path: &str) -> Result<ReadId> {
+        if !self.active || self.closed || self.grant.is_revoked() {
+            return Err(fail("RUN_STOPPED", "active unrevoked segment required"));
+        }
+        let scope = self
+            .segment_scope
+            .ok_or_else(|| fail("SEGMENT_MISSING", "segment absent"))?;
+        let resource = self
+            .resources
+            .get(path)
+            .ok_or_else(|| fail("RESOURCE_RETIRED", "unknown compiled resource"))?
+            .resource;
+        self.ownership.read(scope, resource)
+    }
+    pub fn finish_read(&mut self, read: ReadId) -> Result<()> {
+        self.ownership.finish_read(read)
     }
     pub fn closed_and_disposed(&self) -> bool {
         self.closed && self.ownership.status().resources == 0

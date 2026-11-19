@@ -45,6 +45,8 @@ pub struct Transport {
     position: Time,
     playing: bool,
     pauses: BTreeSet<String>,
+    #[serde(default)]
+    host_timebase: Option<u32>,
 }
 impl Transport {
     pub fn is_paused(&self) -> bool {
@@ -66,7 +68,18 @@ impl Transport {
             position: Time::ZERO,
             playing: false,
             pauses: BTreeSet::new(),
+            host_timebase: None,
         })
+    }
+    /// A real-time device host may sample its monotonic clock on an explicit
+    /// grid (e.g. 48 kHz audio). Authored documents remain exact rationals;
+    /// default transports retain nanosecond clock precision unchanged.
+    pub fn with_host_timebase(mut self, rate: u32) -> Result<Self> {
+        if rate == 0 || rate > 1_000_000_000 {
+            return Err(Error::new("RANGE", "transport", "invalid host timebase"));
+        }
+        self.host_timebase = Some(rate);
+        Ok(self)
     }
     fn bump(&mut self) -> Result<()> {
         self.epoch.0 =
@@ -96,15 +109,21 @@ impl Transport {
         if !self.playing || !self.pauses.is_empty() {
             return Ok(self.position);
         }
+        let rate = self.host_timebase.unwrap_or(1_000_000_000);
+        let ticks = if self.host_timebase.is_some() {
+            (elapsed as u128 * rate as u128 + 500_000_000) / 1_000_000_000
+        } else {
+            elapsed as u128
+        };
         let dt = Time::new(
-            i64::try_from(elapsed).map_err(|_| {
+            i64::try_from(ticks).map_err(|_| {
                 Error::new(
                     "TIME_UNREPRESENTABLE",
                     "transport",
                     "output interval too large",
                 )
             })?,
-            1_000_000_000,
+            rate,
         )?;
         let position = self.position.checked_add(dt)?;
         Ok(if self.looping {
@@ -122,7 +141,23 @@ impl Transport {
             ));
         }
         self.bump()?;
-        self.position = to;
+        self.position = if let Some(rate) = self.host_timebase {
+            let ticks =
+                (to.ticks() as i128 * rate as i128 + to.rate() as i128 / 2) / to.rate() as i128;
+            Time::new(
+                i64::try_from(ticks).map_err(|_| {
+                    Error::new(
+                        "TIME_UNREPRESENTABLE",
+                        "transport",
+                        "seek outside host timebase",
+                    )
+                })?,
+                rate,
+            )?
+            .min(self.duration)
+        } else {
+            to
+        };
         self.anchor = now;
         Ok(())
     }

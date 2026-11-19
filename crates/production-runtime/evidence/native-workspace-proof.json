@@ -1,0 +1,23 @@
+{
+  "scope": "Native workspace and public MOV recording; no physical camera/mic or mouse automation qualification",
+  "candidateSha256": "9319cf14497adad31b252fa31d57e1b2c14ad9b4e4f84bce989153b7346571cf",
+  "workspaceCommandsDuringRecording": 77,
+  "sameRenderRevision": true,
+  "zeroNewMissingMoviePresentations": true,
+  "zeroNewGpuRefusals": true,
+  "outputsBefore": [
+    6009,
+    6008
+  ],
+  "outputsAfter": [
+    6502,
+    6501
+  ],
+  "cpuP99Ms": 1.775291,
+  "productionUnchanged": true,
+  "coreTestsPassed": 222,
+  "nativeTestsPassed": 27,
+  "allRecordingFragmentsDecoded": 18,
+  "persistenceReopenQualifiedOnEarlierCandidate": "a3041c23aa75416ffeacb3856dbfd96e7bf37a418189b3df10a7d6f44f85349a",
+  "mouseQualification": "Pointer gesture check interrupted by concurrent pointer activity; release-position handling corrected, full isolated mouse pass pending."
+}

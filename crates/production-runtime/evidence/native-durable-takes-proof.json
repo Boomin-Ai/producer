@@ -1,0 +1,169 @@
+{
+  "date": "2026-11-18",
+  "scope": "Isolated native macOS development recorder, partial qualification",
+  "productionUnchanged": true,
+  "bundleId": "ai.boomin.producer.native-room-dev",
+  "codeUuid": "B297E7BA-AF6A-36DC-8C4D-34C39C10F328",
+  "sourceManifestSha256": "9a22d232ec7992770cb4e9dcae39cc69dfd536e7b633f5990b1f0538c9a5a5d1",
+  "sourceFiles": [
+    {
+      "path": "crates/production-runtime/desktop/Cargo.lock",
+      "sha256": "25654cb1459ec45178435f9cbc84fb42a93bfde6fc5c6b147876c35efc95da52"
+    },
+    {
+      "path": "crates/production-runtime/desktop/Cargo.toml",
+      "sha256": "21f507c863c1d5471d2022e9af9d45e87ffb5b506600e30ac6e7a6383f24e191"
+    },
+    {
+      "path": "crates/production-runtime/desktop/build.rs",
+      "sha256": "8353e5a8ce6012f023e9a12169d048bcc718b46353b9fc120ac7eddc5f637162"
+    },
+    {
+      "path": "crates/production-runtime/desktop/native/macos.m",
+      "sha256": "75cfae2a6cc235edaaa24d9e69100f1c65b04f26485a0940e9f11510f2b3cbeb"
+    },
+    {
+      "path": "crates/production-runtime/desktop/native/recording.inc",
+      "sha256": "0f426833c51e3db3fa2371c3bb3047347cddaf81ad8b2c789986d4a75695ec33"
+    },
+    {
+      "path": "crates/production-runtime/desktop/native/room.h",
+      "sha256": "00ea72c3154b2d5cc72c30cb4719ba632289b1d0401953383efd3765aebbaf8d"
+    },
+    {
+      "path": "crates/production-runtime/desktop/src/assets.rs",
+      "sha256": "ae1e251bdf6a34830b8240bdbae440fa68c9f89912ae83e8f3d40b6d080d5064"
+    },
+    {
+      "path": "crates/production-runtime/desktop/src/engine.rs",
+      "sha256": "47477983681bced99edb2663b4c5bbe64d2986ee823300517605837124cd4593"
+    },
+    {
+      "path": "crates/production-runtime/desktop/src/ipc.rs",
+      "sha256": "256cce69bb610e94d43ab486baa98bb1986f397d9ad49dd50494db760850f954"
+    },
+    {
+      "path": "crates/production-runtime/desktop/src/main.rs",
+      "sha256": "96f634c158378d86f8e30b24e08c716160bba8c8c6aaa22017b1ab4ff30ce6bc"
+    },
+    {
+      "path": "crates/production-runtime/desktop/src/model.rs",
+      "sha256": "eb824dad76078d598dbce0960ad6266a50fe3091b46d2336f15484c8faa29798"
+    },
+    {
+      "path": "crates/production-runtime/desktop/src/platform.rs",
+      "sha256": "a06e67d5db210655299fca20f95b43168e9ba3528c4aef9eb3901a29b900e196"
+    },
+    {
+      "path": "crates/production-runtime/desktop/src/recording.rs",
+      "sha256": "c7d47d275c763c06197ee15f0320fc5b49c79f792ed51a91f5265d879c8c1026"
+    },
+    {
+      "path": "crates/production-runtime/desktop/src/ui.rs",
+      "sha256": "0093e4fe664eab1f975619d4aecf377efab85641d423e145292ccd3d564b9f97"
+    },
+    {
+      "path": "crates/production-runtime/media/src/recording.rs",
+      "sha256": "3a56ccabd3bd9355127a1b2124d7e794c70a296088d53fe2c97c63339b4bcced"
+    },
+    {
+      "path": "crates/production-runtime/media/tests/recording.rs",
+      "sha256": "e8cd2472d58c12dfc16fe85deee04fbe7103c00141b71b2155e9032776b70089"
+    }
+  ],
+  "pureWorkspaceTests": 214,
+  "desktopTests": 11,
+  "programOrientations": [
+    [
+      1920,
+      1080
+    ],
+    [
+      1080,
+      1920
+    ]
+  ],
+  "physicalRun": {
+    "seconds": 30,
+    "tracks": 4,
+    "decodedCommittedFragments": 61,
+    "programVideoFramesEach": 894,
+    "cameraOriginalVideoFrames": 895,
+    "micRejections": 0,
+    "mixerMissingFrames": 0,
+    "clockSkips": 0,
+    "timestampDiscontinuities": 0,
+    "gpuSubmissionRefusals": 0,
+    "compressedQueuePeakBytes": 6932224,
+    "compressedQueueCapBytes": 16777216,
+    "preFaderMicPreserved": true,
+    "mutedProgramDecodedSilence": true
+  },
+  "crashRecovery": {
+    "realDevProcessKilled": true,
+    "capsPreserved": true,
+    "decodedChunks": 4,
+    "noAutomaticCapture": true
+  },
+  "checkpointFailure": {
+    "previousHeadUnchanged": true,
+    "visibleFailure": true,
+    "decodedRecoveredChunks": 2
+  },
+  "roomControls": {
+    "customDimensions": true,
+    "scaffoldSetsAndShow": true,
+    "timelineTopBottom": true,
+    "panelCloseReopen": true,
+    "movImport": true
+  },
+  "counterexample": "First original-mic capture exhausted shared ingress; corrected by combined PCM submission and separate bounded audio/video admission. Failed take retained locally.",
+  "qualificationLimits": [
+    "One final-candidate full five-track physical run, not long-duration or broad device qualification. Earlier four-track and crash-recovery checks are retained as preceding-candidate evidence.",
+    "No physical drive-loss/full/power-loss, hostile IO, 24-hour or RSS pass.",
+    "Static-screen timestamp/heartbeat and capture reconnect/format changes remain open.",
+    "Ad-hoc development signing can require permission renewal after executable changes.",
+    "No listening/lip-sync or Windows/Linux/Intel native pass.",
+    "No take-backed timeline insertion, complete room/transport provenance, or native ChatGPT/MCP adapter yet."
+  ],
+  "previousInstalledCandidateCodeUuid": "FEA8E088-CBB1-3F33-AB23-2C9006DFF0FE",
+  "sourceManifestFormat": "SHA-256 of UTF-8 path + space + file SHA-256 + newline, in sourceFiles order",
+  "finalPhysicalRun": {
+    "measuredSeconds": 30,
+    "programVideoSpanSeconds": 32.1033333333,
+    "tracks": 5,
+    "decodedCommittedFragments": 85,
+    "programVideoFramesEach": 962,
+    "cameraOriginalVideoFrames": 963,
+    "screenOriginalVideoFrames": 934,
+    "cameraOriginalSize": [
+      1280,
+      720
+    ],
+    "screenOriginalSize": [
+      1920,
+      1080
+    ],
+    "micRejections": 0,
+    "mixerMissingFrames": 0,
+    "clockSkips": 0,
+    "timestampDiscontinuities": 0,
+    "gpuSubmissionRefusals": 0,
+    "interFragmentGaps": 0,
+    "compressedQueuePeakBytes": 8479190,
+    "compressedQueueCapBytes": 16777216,
+    "mediaMessageCap": 8,
+    "reservedPayloadFreeCompletions": 5,
+    "cpuEvaluationBuildSubmissionP99MsRange": [
+      2.963125,
+      5.329958
+    ],
+    "recordedProgramFramesInspectedLocally": true,
+    "cameraScene": "dark; no face-quality qualification",
+    "originalsOffAfterRun": true
+  },
+  "additionalCounterexamples": [
+    "First five-track stop exhausted shared media/completion message slots. Retained its committed fragments and failed state; corrected with separately reserved completion slots without increasing media admission or the compressed byte budget.",
+    "Historical frame counts survived a camera restart and incorrectly satisfied the test readiness predicate; the script now requires advancing, recent camera/screen frames."
+  ]
+}

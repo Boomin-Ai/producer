@@ -1,0 +1,15 @@
+{
+  "candidateSha256": "8ee8a5f377823e4193c7e0c5b69888284caff95e4ceca0cdeafa409c0e1c8b42",
+  "build": "passed",
+  "verifiedInNativeUI": [
+    "Command-E enters and exits Edit Layout",
+    "Normal left dock drag 240 to 280 logical px",
+    "Normal top dock drag 240 to 280 logical px",
+    "Double-click bottom divider collapses Timeline",
+    "Bottom compact Play advances native MOV and playhead",
+    "Top compact Sources/Timeline tabs preserve collapsed state",
+    "Top and bottom expand controls restore contents"
+  ],
+  "productionUnchanged": true,
+  "scope": "UI only; no new media-recording qualification"
+}

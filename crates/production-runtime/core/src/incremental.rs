@@ -22,6 +22,7 @@ type LayoutFragments = BTreeMap<(String, String), Arc<Vec<Arc<NodePlan>>>>;
 #[derive(Default, Clone)]
 pub struct Compiler {
     document: Option<Arc<Document>>,
+    inputs: Option<Arc<LayoutInputs>>,
     targets: Arc<Vec<Target>>,
     layouts: LayoutFragments,
     sequences: BTreeMap<String, Arc<SequencePlan>>,
@@ -37,14 +38,26 @@ fn cancelled(cancel: &AtomicBool) -> Result<()> {
         Ok(())
     }
 }
-fn component_dependencies(d: &Document, node: &Node, ids: &mut BTreeSet<String>) {
+fn layout_dependencies(
+    d: &Document,
+    node: &Node,
+    ids: &mut BTreeSet<String>,
+    sources: &mut BTreeSet<String>,
+) {
+    if let Some(AspectConstraint {
+        ratio: AspectRatio::Source { source, .. },
+        ..
+    }) = node.placement.as_ref().and_then(|p| p.aspect.as_ref())
+    {
+        sources.insert(source.clone());
+    }
     if let Content::Component { definition, .. } = &node.content {
         if ids.insert(definition.clone()) {
-            component_dependencies(d, &d.components[definition].root, ids);
+            layout_dependencies(d, &d.components[definition].root, ids, sources);
         }
     }
     for child in &node.children {
-        component_dependencies(d, child, ids);
+        layout_dependencies(d, child, ids, sources);
     }
 }
 fn sequence_dependencies(
@@ -82,15 +95,31 @@ impl Compiler {
     pub fn compile(&mut self, d: &Document) -> Result<(Plan, CompileStats)> {
         self.compile_cancellable(d, &AtomicBool::new(false))
     }
+    pub fn compile_with_layout_inputs(
+        &mut self,
+        d: &Document,
+        inputs: &LayoutInputs,
+    ) -> Result<(Plan, CompileStats)> {
+        self.compile_cancellable_with_layout_inputs(d, inputs, &AtomicBool::new(false))
+    }
     pub fn compile_cancellable(
         &mut self,
         d: &Document,
+        cancel: &AtomicBool,
+    ) -> Result<(Plan, CompileStats)> {
+        self.compile_cancellable_with_layout_inputs(d, &LayoutInputs::empty(&d.id), cancel)
+    }
+    pub fn compile_cancellable_with_layout_inputs(
+        &mut self,
+        d: &Document,
+        inputs: &LayoutInputs,
         cancel: &AtomicBool,
     ) -> Result<(Plan, CompileStats)> {
         cancelled(cancel)?;
         // Never reuse admission: pins, conflicts, bounds and permissions may change
         // even if the layout or numeric fragment itself is byte-identical.
         let inventory = validate_document(d)?;
+        crate::contract::layout::validate_inputs(d, inputs)?;
         cancelled(cancel)?;
         let targets: Vec<_> = inventory.targets.iter().cloned().collect();
         let handles = targets
@@ -103,6 +132,7 @@ impl Compiler {
         let same_targets = *self.targets == targets;
         let mut next = Self {
             document: Some(Arc::new(d.clone())),
+            inputs: Some(Arc::new(inputs.clone())),
             targets: Arc::new(targets.clone()),
             ..Self::default()
         };
@@ -113,19 +143,25 @@ impl Compiler {
                 cancelled(cancel)?;
                 let id = (sid.clone(), lid.clone());
                 let mut ids = BTreeSet::new();
-                component_dependencies(d, &layout.root, &mut ids);
+                let mut sources = BTreeSet::new();
+                layout_dependencies(d, &layout.root, &mut ids, &mut sources);
                 let same = previous.is_some_and(|old| {
                     old.sets.get(sid).and_then(|s| s.layouts.get(lid)) == Some(layout)
                         && ids
                             .iter()
                             .all(|id| old.components.get(id) == d.components.get(id))
+                        && self.inputs.as_ref().is_some_and(|old| {
+                            sources
+                                .iter()
+                                .all(|id| old.sources.get(id) == inputs.sources.get(id))
+                        })
                 });
                 let value = if let Some(old) = self.layouts.get(&id).filter(|_| same) {
                     stats.layouts_reused += 1;
                     old.clone()
                 } else {
                     stats.layouts_built += 1;
-                    Arc::new(crate::compile::layout(d, sid, lid)?)
+                    Arc::new(crate::compile::layout(d, sid, lid, inputs)?)
                 };
                 nodes.extend(value.iter().cloned());
                 next.layouts.insert(id, value);
@@ -165,12 +201,20 @@ impl Compiler {
             sequences.insert(id.clone(), value.clone());
             next.sequences.insert(id.clone(), value);
         }
+        let dependencies = Arc::new(crate::dependencies::compile(
+            d, &nodes, &sequences, &targets,
+        )?);
+        let document_digest = digest(d)?;
         let plan = Plan {
-            digest: digest(d)?,
+            analytic_sources: crate::analytic::sources(d),
+            geometry_digest: geometry_digest(&document_digest, inputs)?,
+            layout_inputs: next.inputs.as_ref().unwrap().clone(),
+            digest: document_digest,
             nodes,
             targets,
             sequences,
             inventory,
+            dependencies,
         };
         cancelled(cancel)?;
         *self = next;

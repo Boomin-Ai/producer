@@ -27,6 +27,20 @@ const largeShow=structuredClone(fixture);largeShow.shows.pilot.segments=Array.fr
 const aggregateShows=structuredClone(fixture);aggregateShows.shows={};
 for(let i=0;i<5;i++)aggregateShows.shows[`show-${i}`]={...fixture.shows.pilot,segments:Array.from({length:i===4?1:256},(_,j)=>({...fixture.shows.pilot.segments[0],id:`s-${j}`}))};
 cases.push(['empty-show',JSON.stringify(emptyShow),false,'SEMANTIC'],['large-show',JSON.stringify(largeShow),false,'SEMANTIC'],['aggregate-shows',JSON.stringify(aggregateShows),true,'SEMANTIC']);
+const responsive=JSON.parse(execFileSync(binary,['layout-fixture'],{encoding:'utf8'}));
+const missingFallback=structuredClone(responsive);delete missingFallback.sets.teaching.layouts.tall.root.children[0].placement.aspect.ratio.fallback;
+const badAnchor=structuredClone(responsive);badAnchor.sets.teaching.layouts.tall.root.children[0].placement.anchor.x=2;
+const unknownPlacement=structuredClone(responsive);unknownPlacement.sets.teaching.layouts.tall.root.children[0].placement.css='absolute';
+const wrongAxis=structuredClone(responsive);wrongAxis.sets.teaching.layouts.tall.root.children[0].placement.aspect.mode='height';
+const zeroRatio=structuredClone(responsive);zeroRatio.sets.teaching.layouts.tall.root.children[0].placement.aspect.ratio.fallback.width=0;
+cases.push(['responsive',JSON.stringify(responsive),true,null],['aspect-fallback',JSON.stringify(missingFallback),false,'STRUCTURE'],['anchor-bounds',JSON.stringify(badAnchor),false,'SEMANTIC'],['placement-shape',JSON.stringify(unknownPlacement),false,'STRUCTURE'],['aspect-axis',JSON.stringify(wrongAxis),true,'SEMANTIC'],['aspect-zero',JSON.stringify(zeroRatio),false,'SEMANTIC']);
+const analytic=JSON.parse(execFileSync(binary,['analytic-fixture'],{encoding:'utf8'}));
+const badVersion=structuredClone(analytic);badVersion.sources.stage.scene.reconstruction.version='producer.analytic/2';
+const badSeed=structuredClone(analytic);badSeed.sources.stage.scene.reconstruction.seed=42;
+const missingSeed=structuredClone(analytic);delete missingSeed.sources.stage.scene.reconstruction.seed;
+const badPeriod=structuredClone(analytic);badPeriod.sources.stage.scene.reconstruction.period={ticks:'0',rate:1};
+const implicitClock=structuredClone(analytic);implicitClock.sources.stage.scene.reconstruction.wallClock=true;
+cases.push(['analytic',JSON.stringify(analytic),true,null],['analytic-version',JSON.stringify(badVersion),false,'STRUCTURE'],['analytic-seed',JSON.stringify(badSeed),false,'STRUCTURE'],['analytic-missing-seed',JSON.stringify(missingSeed),false,'STRUCTURE'],['analytic-period',JSON.stringify(badPeriod),true,'SEMANTIC'],['analytic-implicit-clock',JSON.stringify(implicitClock),false,'STRUCTURE']);
 const directory=mkdtempSync(join(tmpdir(),'producer-schema-'));
 try{for(const[name,raw,shape,code]of cases){if(Boolean(structural(JSON.parse(raw)))!==shape)throw Error(`structural mismatch ${name}: ${JSON.stringify(structural.errors)}`);const path=join(directory,`${name}.json`);writeFileSync(path,raw);const result=spawnSync(binary,['validate',path],{encoding:'utf8'});if(code){if(result.status===0||JSON.parse(result.stderr).code!==code)throw Error(`native stage mismatch ${name}: ${result.stderr}`);}else if(result.status!==0)throw Error(result.stderr);}}
 finally{rmSync(directory,{recursive:true,force:true});}

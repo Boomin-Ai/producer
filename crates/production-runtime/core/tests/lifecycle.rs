@@ -163,8 +163,19 @@ fn unknown_and_retiring_resources_remain_charged_until_exact_reconciliation() {
     let a = prepared(&mut r, &d, 0);
     take(&mut r, a, 0);
     let before = r.ledger.used();
+    assert_eq!(before.graphics.scenes, 1);
+    assert_eq!(before.graphics.instances, 1000);
     let b = prepared(&mut r, &d, 1);
     let reserved = r.ledger.used();
+    assert_eq!(reserved.graphics.scenes, 2);
+    assert_eq!(reserved.graphics.instances, 2000);
+    assert_eq!(reserved.graphics.buffers, before.graphics.buffers * 2);
+    assert_eq!(reserved.graphics.textures, before.graphics.textures * 2);
+    assert_eq!(reserved.graphics.pipelines, before.graphics.pipelines * 2);
+    assert_eq!(
+        reserved.graphics.render_passes,
+        before.graphics.render_passes * 2
+    );
     assert_eq!(
         r.take(
             b,

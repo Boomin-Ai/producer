@@ -37,6 +37,8 @@ pub struct TimelineSample {
     pub cues: Vec<CueIntent>,
     pub values: Vec<Option<Sample>>,
     pub players: Vec<PlayerSample>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<Option<crate::analytic::EffectInputs>>,
 }
 #[derive(Debug, Clone)]
 pub struct Timeline {
@@ -163,7 +165,15 @@ impl Timeline {
                 })
             })
             .collect::<Result<Vec<_>>>()?;
+        let mut effects = vec![None; self.plan.effects.len()];
+        self.evaluate_effects_into(at, &mut effects).map_err(|_| {
+            fail(
+                "TIME_UNREPRESENTABLE",
+                "analytic inputs outside exact time profile",
+            )
+        })?;
         Ok(TimelineSample {
+            effects,
             execution: self.execution.clone(),
             run: self.run,
             epoch: self.transport.epoch,
@@ -202,5 +212,27 @@ impl Timeline {
             && execution == self.execution
             && run == self.run
             && epoch == self.transport.epoch
+    }
+    pub fn effect_scratch_len(&self) -> usize {
+        self.plan.effects.len()
+    }
+    pub fn evaluate_effects_into(
+        &self,
+        at: OutputInstant,
+        out: &mut [Option<crate::analytic::EffectInputs>],
+    ) -> std::result::Result<(), EvalError> {
+        if out.len() < self.effect_scratch_len() {
+            return Err(EvalError::ScratchTooSmall);
+        }
+        if !self.active {
+            out.fill(None);
+            return Ok(());
+        }
+        self.plan.evaluate_effects_into(
+            self.transport
+                .position(at)
+                .map_err(|_| EvalError::TimeRange)?,
+            out,
+        )
     }
 }

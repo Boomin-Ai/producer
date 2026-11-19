@@ -1,0 +1,33 @@
+{
+  "scope": "Development-only harness failures; not performance qualification. Exact historical source snapshots were not captured.",
+  "attempts": [
+    {
+      "attempt": "initial-flat",
+      "classification": "overload fixture: compiled ownership correctly rejected before pressure began",
+      "sourceSnapshotAvailable": false,
+      "logSha256": "aeb7fc785c7b266e7c059110fbc6d8722084d01e6505e76d618bee47f5b806da",
+      "excerpt": "\nthread 'production-control' (129427) panicked at service/examples/../../core/examples/support/pressure.rs:194:34:\ncalled `Result::unwrap()` on an `Err` value: Error { code: \"RESOURCE_LIMIT\", path: \"dependencies\", message: \"compiled scopes must leave run/segment capacity\" }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n"
+    },
+    {
+      "attempt": "flat-2",
+      "classification": "harness incorrectly assumed reply publication had already dropped the control owner reference",
+      "sourceSnapshotAvailable": false,
+      "logSha256": "1cc2abf9dbdc828562557098b34b00a6fdd096e4b512223946b1ab2aa135c117",
+      "excerpt": "\nthread 'main' (131625) panicked at service/examples/pressure_proof.rs:219:13:\nassertion `left == right` failed\n  left: 1\n right: 0"
+    },
+    {
+      "attempt": "flat-3",
+      "classification": "harness compared beta effect seeds against alpha, despite intentional document identity in seeds",
+      "sourceSnapshotAvailable": false,
+      "logSha256": "18f04a9fb588a6690187bf0717c061b6f87ba256e1cb5fa3de99192b9d25e923",
+      "excerpt": "measurement: {\"largeAllocationBytes\":2872424254,\"largeAllocationCalls\":542,\"liveRequestedHeapBytes\":59650652,\"residentBytes\":744341504,\"round\":1,\"storeBytes\":16770454}\nmeasurement: {\"largeAllocationBytes\":4501047806,\"largeAllocationCalls\":846,\"liveRequestedHeapBytes\":59653512,\"residentBytes\":887980032,\"round\":2,\"storeBytes\":16771466}\nmeasurement: {\"largeAllocationBytes\":6129671358,\"largeAllocationCalls\":1150,\"liveRequestedHeapBytes\":59656180,\"residentBytes\":917078016,\"round\":3,\"storeBytes\":16772478}\n\nthread 'main' (132291) panicked at service/examples/pressure_proof.rs:243:21:"
+    },
+    {
+      "attempt": "tests-initial",
+      "classification": "new test syntax error before execution",
+      "sourceSnapshotAvailable": false,
+      "logSha256": "6aaa0f9a227250ccdc6bcfdce0af96078c4d5c189fc0713dc0b8fad70343950e",
+      "excerpt": "   Compiling producer-production-core v0.1.0 (/Users/kleveland/Documents/Codex/2026-11-03/ques/work/producer-studio-dev/crates/production-runtime/core)\nerror: unexpected closing delimiter: `}`\n  --> core/tests/pressure.rs:79:1\n   |\n72 | fn complete_corruption_fails_closed_and_never_silently_uses_an_older_checkpoint() {"
+    }
+  ]
+}

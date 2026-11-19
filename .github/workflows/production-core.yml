@@ -36,6 +36,10 @@ jobs:
       - run: python crates/production-runtime/scripts/prove.py --binary target/production-core/debug/${{ matrix.binary }}
       - run: python crates/production-runtime/scripts/prove-nested.py --binary target/production-core/debug/${{ matrix.binary }}
       - run: python crates/production-runtime/scripts/prove-show.py --binary target/production-core/debug/${{ matrix.binary }}
+      - run: python crates/production-runtime/scripts/prove-layout.py --binary target/production-core/debug/${{ matrix.binary }}
+      - run: python crates/production-runtime/scripts/prove-host.py --binary target/production-core/debug/${{ matrix.binary }}
+      - run: python crates/production-runtime/scripts/prove-service.py --binary target/production-core/debug/${{ matrix.binary }}
+      - run: python crates/production-runtime/scripts/prove-analytic.py --binary target/production-core/debug/${{ matrix.binary }}
       - run: node crates/production-runtime/scripts/canonical-check.mjs target/production-core/debug/${{ matrix.binary }}
       - run: npm ci --ignore-scripts --no-audit --no-fund --prefix crates/production-runtime/scripts
       - run: node crates/production-runtime/scripts/node_modules/typescript/bin/tsc -p crates/production-runtime/scripts/tsconfig.json
@@ -47,7 +51,20 @@ jobs:
           cargo run --manifest-path crates/production-runtime/Cargo.toml --locked --release -p producer-production-core --example profile > core-profile.json
           cargo run --manifest-path crates/production-runtime/Cargo.toml --locked --release -p producer-production-core --example profile -- --nested > core-nested-profile.json
           cargo run --manifest-path crates/production-runtime/Cargo.toml --locked --release -p producer-production-core --example workspace_proof > core-workspace-proof.json
+          cargo run --manifest-path crates/production-runtime/Cargo.toml --locked --release -p producer-production-core --example analytic_profile > core-analytic-profile.json
+          cargo run --manifest-path crates/production-runtime/Cargo.toml --locked --release -p producer-production-core --example analytic_profile -- --nested > core-analytic-nested-profile.json
+      - name: Maximum-document durable memory and journal pressure
+        shell: bash
+        run: |
+          cargo build --manifest-path crates/production-runtime/Cargo.toml --locked --release -p producer-production-core --example durable_memory_proof
+          python crates/production-runtime/scripts/prove-durable-memory.py --binary target/production-core/release/examples/durable_memory_proof${{ runner.os == 'Windows' && '.exe' || '' }} --output core-durable-memory.json
+      - name: Combined graph, bounded service and recovery pressure
+        shell: bash
+        run: |
+          cargo build --manifest-path crates/production-runtime/Cargo.toml --locked --release -p producer-production-service --example pressure_proof
+          python crates/production-runtime/scripts/prove-pressure.py --binary target/production-core/release/examples/pressure_proof${{ runner.os == 'Windows' && '.exe' || '' }} --output core-service-pressure.json
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: isolated-core-${{ matrix.os }}-${{ github.sha }}
           path: |
@@ -55,4 +72,8 @@ jobs:
             core-profile.json
             core-nested-profile.json
             core-workspace-proof.json
+            core-analytic-profile.json
+            core-analytic-nested-profile.json
+            core-durable-memory.json
+            core-service-pressure.json
           retention-days: 14

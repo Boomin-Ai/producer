@@ -37,6 +37,12 @@ pub enum Operation {
     RemoveSource {
         id: Id,
     },
+    /// Edit one procedural source's deterministic inputs without replacing its
+    /// parameters, batches, scene bindings, Set controls or Show definition.
+    SetAnalyticReconstruction {
+        source: Id,
+        value: AnalyticReconstruction,
+    },
     AddComponent {
         id: Id,
         value: Component,
@@ -102,6 +108,20 @@ pub enum Operation {
         path: Vec<Id>,
         frame: Rect,
     },
+    SetPlacement {
+        set: Id,
+        layout: Id,
+        path: Vec<Id>,
+        placement: Option<NodePlacement>,
+    },
+    /// Edit one local surface without replacing its children, source binding,
+    /// controls, Show or timing. None restores the native/default appearance.
+    SetSurface {
+        set: Id,
+        layout: Id,
+        path: Vec<Id>,
+        style: Option<SurfaceStyle>,
+    },
     SetComponentProp {
         set: Id,
         layout: Id,
@@ -156,14 +176,18 @@ fn node<'a>(d: &'a mut Document, s: &str, l: &str, path: &[String]) -> Result<&'
     Ok(n)
 }
 pub fn apply(document: &Document, command: &Command) -> Result<Document> {
-    let bytes = serde_json::to_vec(command).map_err(|e| bad("$", &e.to_string()))?;
-    ingress::parse_envelope(
-        &bytes,
-        match command {
-            Command::Import { .. } | Command::Restore { .. } => DOCUMENT_BYTES + 1024,
-            _ => COMMAND_BYTES,
-        },
-    )?;
+    apply_with_scratch(document, command, &mut wire::Scratch::default())
+}
+pub fn apply_with_scratch(
+    document: &Document,
+    command: &Command,
+    scratch: &mut wire::Scratch,
+) -> Result<Document> {
+    let limit = match command {
+        Command::Import { .. } | Command::Restore { .. } => DOCUMENT_BYTES + 1024,
+        _ => COMMAND_BYTES,
+    };
+    ingress::check_envelope(scratch.serialize(command, limit)?, limit)?;
     let mut d = document.clone();
     match command {
         Command::Import { document } | Command::Restore { document, .. } => {
@@ -186,6 +210,17 @@ pub fn apply(document: &Document, command: &Command) -> Result<Document> {
                     Operation::RemoveAsset { id } => remove(&mut d.assets, id)?,
                     Operation::AddSource { id, value } => add(&mut d.sources, id, value.clone())?,
                     Operation::RemoveSource { id } => remove(&mut d.sources, id)?,
+                    Operation::SetAnalyticReconstruction { source, value } => {
+                        match d.sources.get_mut(source) {
+                            Some(Source::Graphics { scene }) => scene.reconstruction = Some(*value),
+                            _ => {
+                                return Err(bad(
+                                    source,
+                                    "analytic reconstruction requires a graphics source",
+                                ))
+                            }
+                        }
+                    }
                     Operation::AddComponent { id, value } => {
                         add(&mut d.components, id, value.clone())?
                     }
@@ -242,6 +277,22 @@ pub fn apply(document: &Document, command: &Command) -> Result<Document> {
                         path,
                         frame,
                     } => node(&mut d, set, layout, path)?.frame = Some(*frame),
+                    Operation::SetPlacement {
+                        set,
+                        layout,
+                        path,
+                        placement,
+                    } => {
+                        node(&mut d, set, layout, path)?.placement = placement.clone();
+                    }
+                    Operation::SetSurface {
+                        set,
+                        layout,
+                        path,
+                        style,
+                    } => {
+                        node(&mut d, set, layout, path)?.style = style.clone();
+                    }
                     Operation::SetComponentProp {
                         set,
                         layout,
@@ -305,8 +356,9 @@ pub fn apply(document: &Document, command: &Command) -> Result<Document> {
             ));
         }
     }
-    validate_document(&d)?;
-    crate::compile::compile(&d)?;
+    // Compile includes full semantic admission; share the writer's scratch and
+    // avoid a redundant full validation before that same admission.
+    crate::compile::compile_with_scratch(&d, scratch)?;
     Ok(d)
 }
 pub fn schema() -> serde_json::Value {

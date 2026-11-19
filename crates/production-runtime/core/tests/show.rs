@@ -103,12 +103,12 @@ fn reentry_restart_and_seek_fence_old_occurrences_and_keep_the_borrowed_set() {
     let restart = start(&mut s, 3);
     assert!(restart.run > a.run);
     assert!(restart.occurrence > b.occurrence);
-    assert_eq!(restart.ownership.scopes, 4);
-    assert_eq!(restart.ownership.resources, 1);
+    assert_eq!(restart.ownership, a.ownership);
 }
 #[test]
 fn segment_exit_clears_only_segment_overrides_stop_also_clears_set_and_run_leases() {
     let (mut s, _) = run();
+    let baseline = s.status().ownership;
     start(&mut s, 0);
     let (a, b, c) = (target(0), target(1), target(2));
     override_at(&mut s, ExecutionScope::Segment, a.clone(), 0.1, 0);
@@ -130,8 +130,7 @@ fn segment_exit_clears_only_segment_overrides_stop_also_clears_set_and_run_lease
     );
     let stopped = s.apply(ShowEvent::Stop { at: at(1) }).unwrap();
     assert_eq!(stopped.overrides, 0);
-    assert_eq!(stopped.ownership.scopes, 2);
-    assert_eq!(stopped.ownership.resources, 1);
+    assert_eq!(stopped.ownership, baseline);
     assert!(!stopped.active);
     assert_eq!(
         s.resolve(&c, now(1), CompactValue::Number(0.8)),
@@ -242,16 +241,25 @@ fn static_segment_has_independent_controls_without_an_invented_timeline() {
 #[test]
 fn stopped_and_closed_executions_cannot_resurrect_or_dispose_the_wrong_resource() {
     let (mut s, _) = run();
+    let baseline = s.status().ownership;
     let a = start(&mut s, 0);
     s.halt(false);
     assert!(!s.accepts_completion(&a.execution, a.run, a.occurrence, a.epoch));
-    assert_eq!(advance(&mut s, 1).ownership.scopes, 2);
+    assert_eq!(advance(&mut s, 1).ownership, baseline);
     let closed = s.apply(ShowEvent::Close { at: at(2) }).unwrap();
     assert_eq!(closed.ownership.scopes, 0);
-    assert_eq!(closed.ownership.retiring, 1);
+    assert_eq!(closed.ownership.retiring, baseline.resources);
     assert!(!s.closed_and_disposed());
     assert!(s.disposed(a.set_resource, Lane::Audio).is_err());
-    s.disposed(a.set_resource, Lane::Video).unwrap();
+    // A Set cannot be disposed before the compiled layouts which depend on it.
+    assert!(s.disposed(a.set_resource, Lane::Video).is_err());
+    while !s.closed_and_disposed() {
+        let ready = s.disposal_ready();
+        assert!(!ready.is_empty());
+        for ack in ready {
+            s.disposed(ack.resource, ack.lane).unwrap();
+        }
+    }
     assert!(s.closed_and_disposed());
     assert!(s
         .apply(ShowEvent::Start {
@@ -335,6 +343,7 @@ fn native_disconnect_lease_uses_exact_expiry_and_cannot_renew_without_a_grant() 
 #[test]
 fn finite_sequence_end_does_not_dispose_the_segment_or_restart_on_pause() {
     let (mut s, _) = run();
+    let resources = s.status().ownership.resources;
     start(&mut s, 0);
     let ended = advance(&mut s, 8);
     assert!(ended.active);
@@ -344,12 +353,12 @@ fn finite_sequence_end_does_not_dispose_the_segment_or_restart_on_pause() {
     assert!(held.paused);
     assert!(!held.timeline.as_ref().unwrap().active);
     assert!(held.timeline.unwrap().cues.is_empty());
-    assert_eq!(held.ownership.resources, 1);
+    assert_eq!(held.ownership.resources, resources);
 }
 #[test]
 fn repeated_segment_entries_do_not_accumulate_scopes_resources_or_effect_history() {
     let (mut s, _) = run();
-    start(&mut s, 0);
+    let baseline = start(&mut s, 0).ownership;
     for n in 1..1000 {
         let q = s
             .apply(ShowEvent::Enter {
@@ -357,9 +366,7 @@ fn repeated_segment_entries_do_not_accumulate_scopes_resources_or_effect_history
                 segment: "opening".into(),
             })
             .unwrap();
-        assert_eq!(q.ownership.scopes, 4);
-        assert_eq!(q.ownership.resources, 1);
-        assert_eq!(q.ownership.relations, 2);
+        assert_eq!(q.ownership, baseline);
         assert_eq!(q.occurrence, Counter(n + 1));
         assert_eq!(q.timeline.unwrap().cues.len(), 1);
     }

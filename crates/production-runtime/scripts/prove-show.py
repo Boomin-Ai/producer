@@ -80,16 +80,20 @@ def run(binary):
             assert result['synthetic']
             rows = result['samples']
             assert len(rows) == len(events)
-            assert rows[0]['ownership']['scopes'] == 4 and rows[1]['overrides'] == 1
+            assert rows[0]['ownership']['resources'] > 1 and rows[1]['overrides'] == 1
+            assert rows[0]['ownership']['dependencies'] > 0
             assert rows[4]['overrides'] == 0 and rows[4]['paused']
             assert rows[4]['occurrence'] != rows[0]['occurrence']
             assert not rows[4]['cleanup']['retiring']
             assert rows[5]['timeline']['position'] == {'ticks': '0', 'rate': 1}
             assert not rows[8]['timeline']['cues']  # seek is silent, not a cue replay
-            assert not rows[10]['active'] and rows[10]['ownership']['scopes'] == 2
+            assert not rows[10]['active']
+            assert rows[10]['ownership']['scopes'] == rows[0]['ownership']['scopes'] - 2
+            assert rows[10]['ownership']['resources'] == rows[0]['ownership']['resources']
             assert rows[11]['run'] == '2' and rows[11]['occurrence'] != rows[0]['occurrence']
             assert rows[12]['timeline'] is None
-            assert rows[13]['closed'] and rows[13]['ownership']['retiring'] == 1
+            assert rows[13]['closed']
+            assert rows[13]['ownership']['retiring'] == rows[0]['ownership']['resources']
             assert all(row['setResource'] == rows[0]['setResource'] for row in rows)
             assert rpc('inspect', session=session)['digest'] == saved['digest']
             return rows

@@ -1,0 +1,209 @@
+{
+  "previewSeek": {
+    "position": 9.0,
+    "programPosition": 2.208822584,
+    "programRevision": 1,
+    "outputFrames": [
+      2766,
+      2765
+    ]
+  },
+  "independentPlayback": {
+    "position": 9.628504375,
+    "programPosition": 3.12766975,
+    "programRevision": 1
+  },
+  "monitorSwitch": true,
+  "beforeRecording": {
+    "position": 9.628504375,
+    "programPosition": 3.750497042,
+    "programRevision": 1,
+    "cpuP99Ms": 2.402959,
+    "error": null
+  },
+  "privateTrim": true,
+  "recordingPath": "/Users/kleveland/Documents/Codex/2026-11-03/ques/outputs/native-room/visual-qa/recordings/take-1795051054933501000",
+  "recordingWhileScrubbing": [
+    {
+      "position": 20.0,
+      "programPosition": 5.193338,
+      "outputFrames": [
+        2855,
+        2855
+      ],
+      "cpuP99Ms": 2.402959
+    },
+    {
+      "position": 2.0,
+      "programPosition": 5.90701875,
+      "outputFrames": [
+        2877,
+        2876
+      ],
+      "cpuP99Ms": 2.402959
+    },
+    {
+      "position": 18.0,
+      "programPosition": 6.526547833,
+      "outputFrames": [
+        2895,
+        2895
+      ],
+      "cpuP99Ms": 2.402959
+    },
+    {
+      "position": 0.0,
+      "programPosition": 7.25562825,
+      "outputFrames": [
+        2917,
+        2917
+      ],
+      "cpuP99Ms": 2.402959
+    }
+  ],
+  "take": {
+    "session": 1,
+    "phase": "saved",
+    "path": "/Users/kleveland/Documents/Codex/2026-11-03/ques/outputs/native-room/visual-qa/recordings/take-1795051054933501000",
+    "head": {
+      "revision": 6,
+      "state": "saved",
+      "tracks": [
+        {
+          "track": 0,
+          "index": 1,
+          "bytes": 914741,
+          "sha256": "e11e73b2f4b15c22442aaccfc48b28b298cc1de0a3bc79d759383b5749868316",
+          "spans": [
+            {
+              "media": "video",
+              "start": {
+                "ticks": "101",
+                "rate": 50
+              },
+              "duration": {
+                "ticks": "11",
+                "rate": 15
+              }
+            },
+            {
+              "media": "audio",
+              "start": {
+                "ticks": "3137",
+                "rate": 1600
+              },
+              "duration": {
+                "ticks": "96",
+                "rate": 125
+              }
+            }
+          ],
+          "gapBefore": null,
+          "gapsBefore": []
+        },
+        {
+          "track": 1,
+          "index": 1,
+          "bytes": 933787,
+          "sha256": "0ee05e9cfe65f9b876f4051594e0c4f42947cd2877b9ff052aa5b4fd4f1d4048",
+          "spans": [
+            {
+              "media": "video",
+              "start": {
+                "ticks": "101",
+                "rate": 50
+              },
+              "duration": {
+                "ticks": "11",
+                "rate": 15
+              }
+            },
+            {
+              "media": "audio",
+              "start": {
+                "ticks": "3137",
+                "rate": 1600
+              },
+              "duration": {
+                "ticks": "96",
+                "rate": 125
+              }
+            }
+          ],
+          "gapBefore": null,
+          "gapsBefore": []
+        }
+      ],
+      "error": null
+    },
+    "error": null,
+    "queuedBytes": 0,
+    "peakQueuedBytes": 5029277
+  },
+  "independentDecode": [
+    {
+      "track": 0,
+      "decode": "passed",
+      "streams": [
+        {
+          "codec_type": "video",
+          "width": 1920,
+          "height": 1080,
+          "r_frame_rate": "30/1",
+          "duration": "2.753333"
+        },
+        {
+          "codec_type": "audio",
+          "r_frame_rate": "0/0",
+          "duration": "2.728625"
+        }
+      ],
+      "decodedFrames": 80,
+      "audioSamples16bit": 251904,
+      "meanRgb": 142.38
+    },
+    {
+      "track": 1,
+      "decode": "passed",
+      "streams": [
+        {
+          "codec_type": "video",
+          "width": 1080,
+          "height": 1920,
+          "r_frame_rate": "30/1",
+          "duration": "2.753333"
+        },
+        {
+          "codec_type": "audio",
+          "r_frame_rate": "0/0",
+          "duration": "2.728625"
+        }
+      ],
+      "decodedFrames": 80,
+      "audioSamples16bit": 251904,
+      "meanRgb": 150.37
+    }
+  ],
+  "mountRemoveRemount": true,
+  "invalidSetRetainsProgram": true,
+  "explicitCutAndSubsequentSeekIsolation": true,
+  "candidateSha256": "b58d11cc62bd642ca2a36b533ca7e86b6a1e261d88622f803305e05b22ae7aaa",
+  "testsPassed": 45,
+  "productionUnchanged": true,
+  "final": {
+    "programKind": "set",
+    "previewing": false,
+    "programRevision": 5,
+    "cpuP99Ms": 3.7334159999999996,
+    "previewCpuP99Ms": 0.936875,
+    "outputFrames": [
+      4528,
+      4525
+    ],
+    "previewOutputFrames": [
+      222,
+      222
+    ],
+    "error": null
+  }
+}
