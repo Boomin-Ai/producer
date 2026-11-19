@@ -38,7 +38,7 @@ Output research and platform interop spikes can overlap earlier phases. These ar
 
 This plan PR contains documentation, a self-contained visual artifact, its PDF/screenshots and verification. Its source base is `f33fc0aa2635c1abab5e15bed35cd425d4cd88a7`, but the reviewed native prototype also had modified and untracked files. HEAD alone cannot reproduce that prototype.
 
-A separate local checkpoint was created at **`574acac4aef12f61b9ac27aa640b4c3f62a05e29`** on `checkpoint/native-gpui-2026-11-19`. Its public upload is pending explicit authorization. **Do not treat this documentation PR as an off-device backup of that source checkpoint.** See [recovery status](RESUME.md).
+The native/core prototype is backed up separately at **[`574acac4aef12f61b9ac27aa640b4c3f62a05e29`](https://github.com/Boomin-Ai/producer/commit/574acac4aef12f61b9ac27aa640b4c3f62a05e29)** on [checkpoint/native-gpui-2026-11-19](https://github.com/Boomin-Ai/producer/tree/checkpoint/native-gpui-2026-11-19). Its remote commit and complete Git tree were verified. The checkpoint is not merged or released. See [recovery instructions](RESUME.md).
 
 Production remains at its existing release; this plan does not merge the prototype, change the license, deploy a backend, publish installers or demonstrate cross-platform media readiness. Historical measurements retain their original scope. No fresh media benchmark was run for the plan.
 

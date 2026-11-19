@@ -8,13 +8,13 @@ Snapshot date: **19 November 2026**.
 | --- | --- |
 | Visual architecture, phases, follow-up decisions | This documentation directory, preserved in its GitHub plan branch/PR |
 | Source inspection base | `f33fc0aa2635c1abab5e15bed35cd425d4cd88a7`; not sufficient alone to reconstruct the inspected working tree |
-| Native/core prototype checkpoint | `574acac4aef12f61b9ac27aa640b4c3f62a05e29`, local branch `checkpoint/native-gpui-2026-11-19`; public upload pending separate authorization |
+| Native/core prototype checkpoint | [`574acac4aef12f61b9ac27aa640b4c3f62a05e29`](https://github.com/Boomin-Ai/producer/commit/574acac4aef12f61b9ac27aa640b4c3f62a05e29), published branch `checkpoint/native-gpui-2026-11-19`; exact remote commit/tree verified |
 | Checkpoint content | Four existing local core commits plus a snapshot of 186 modified/untracked native/core/workflow files; no application execution changes made while checkpointing |
 | Recovery bundle | `native-gpui-checkpoint-2026-11-19.bundle`, created locally alongside the original HTML; requires main commit `667147951452931ebbc7f26db6dec02616aee74d` |
 | Production baseline | `667147951452931ebbc7f26db6dec02616aee74d`, release 0.4.93; this plan does not alter it |
 | Personal media/profiles/credentials/signing material | Excluded from public GitHub; separate private backup required |
 
-**Do not wipe the only copy of the native prototype.** Its local commit/bundle is not an off-device backup. Either separately authorize publishing the source checkpoint or copy the bundle to storage outside this Mac before deleting the workspace.
+The plan and native/core source checkpoint are now stored off-device on GitHub. Keep the checkpoint branch until the rebuild no longer needs it. Personal media, local libraries, profiles and credentials still need a separate private backup before a wipe.
 
 The plan PR itself is documentation-only. It does not secretly include the prototype or publish a release.
 
@@ -24,7 +24,20 @@ Clone `https://github.com/Boomin-Ai/producer.git` and check out `docs/owned-medi
 
 The HTML is self-contained and does not depend on the original `127.0.0.1` server, this Mac, installed Node modules or a signed-in application. Optional verification setup is in the README.
 
-## Recover the prototype from a copied bundle
+## Recover the prototype from GitHub
+
+In a fresh clone:
+
+```sh
+git fetch origin checkpoint/native-gpui-2026-11-19
+git switch -c dev/owned-media-foundation origin/checkpoint/native-gpui-2026-11-19
+```
+
+Verify HEAD equals `574acac4aef12f61b9ac27aa640b4c3f62a05e29`. The complete checkpoint tree is `12ddb6836cdfd6cbb4175b5a5855c7f21b7c1173`. The local checkout and its uncommitted files were left untouched when this snapshot was made.
+
+The [source archive](https://github.com/Boomin-Ai/producer/archive/574acac4aef12f61b9ac27aa640b4c3f62a05e29.zip) is another way to retrieve the checkpoint, but a Git clone retains the history and is preferred for development.
+
+## Alternative: recover from a copied bundle
 
 Start with a normal clone of the Producer repository so the main prerequisite exists. In that clone:
 
@@ -36,9 +49,9 @@ git fetch /path/to/native-gpui-checkpoint-2026-11-19.bundle \
 git switch -c dev/owned-media-foundation checkpoint/native-gpui-2026-11-19
 ```
 
-Verify HEAD equals `574acac4aef12f61b9ac27aa640b4c3f62a05e29`. Check the 26 source hashes in `source-audit.json` against this checkout before relying on the inspection. The bundle was verified locally; public source publication is still a separate step.
+Verify HEAD equals `574acac4aef12f61b9ac27aa640b4c3f62a05e29`. Check the 26 source hashes in `source-audit.json` against this checkout before relying on the inspection. The bundle was verified locally. It preserves the same source as the published checkpoint branch.
 
-Once the checkpoint has been separately published, a fresh clone can fetch its branch directly instead of using the bundle. Do not claim that route works until the remote branch and exact commit have been verified.
+The remote checkpoint commit and full Git tree were verified on GitHub after upload. The documentation PR and prototype branch can be deleted later if no longer needed; public Git copies and retained commits are not guaranteed erasable.
 
 ## Where to resume work
 

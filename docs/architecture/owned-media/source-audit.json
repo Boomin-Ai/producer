@@ -144,5 +144,8 @@
     }
   ],
   "checkpoint_commit": "574acac4aef12f61b9ac27aa640b4c3f62a05e29",
-  "checkpoint_publication": "Pending separate user authorization; the source checkpoint is local, not yet backed up on GitHub."
+  "checkpoint_publication": "Published with explicit user authorization; exact GitHub commit and complete tree verified.",
+  "checkpoint_branch": "checkpoint/native-gpui-2026-11-19",
+  "checkpoint_tree": "12ddb6836cdfd6cbb4175b5a5855c7f21b7c1173",
+  "checkpoint_url": "https://github.com/Boomin-Ai/producer/tree/checkpoint/native-gpui-2026-11-19"
 }
