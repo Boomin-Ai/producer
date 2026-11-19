@@ -1,0 +1,148 @@
+{
+  "title": "Producer owned media engine plan: source snapshot",
+  "created_utc": "2026-11-19T10:57:05.226884+00:00",
+  "repository": "Boomin-Ai/producer",
+  "head": "f33fc0aa2635c1abab5e15bed35cd425d4cd88a7",
+  "working_tree": "Existing modified and untracked native/core work; these file hashes identify the actual inspected snapshot. HEAD alone does not identify it.",
+  "scope": "Architecture review snapshot. The public plan contains documentation only; source fingerprints refer to the separately preserved local prototype, not application code included in this plan PR.",
+  "sdk_pins": {
+    "livekit": "0.9.4",
+    "webrtc-sys": "0.3.48",
+    "note": "Local vendored bridges must be audited separately; generic latest SDK documentation is not a promise about this pin."
+  },
+  "measurement_status": "Targets in the HTML are proposals; no fresh media or cross-platform qualification was run for this report.",
+  "files": [
+    {
+      "path": "crates/production-runtime/GPUI-REFACTOR.md",
+      "bytes": 30772,
+      "sha256": "a630ee6b3f5242d6ae53f224dad8599e37fca4e15e57737b50d36eff11357b78"
+    },
+    {
+      "path": "crates/production-runtime/desktop/README.md",
+      "bytes": 13938,
+      "sha256": "dfdee8a09e3c5acc45fa223072a2590165f0a160f21ff63bc0c453600197f6d3"
+    },
+    {
+      "path": "crates/production-runtime/desktop/src/engine.rs",
+      "bytes": 98261,
+      "sha256": "f9b6478289feff01759e94322e15e632e2b1452517fdfe6eb433aacb2052bf97"
+    },
+    {
+      "path": "crates/production-runtime/desktop/src/model.rs",
+      "bytes": 48727,
+      "sha256": "268fe2849fc8e6787cb0649f6637e6dac6413ff6cdbcac8e809f069c9944c0a8"
+    },
+    {
+      "path": "crates/production-runtime/desktop/src/platform.rs",
+      "bytes": 29086,
+      "sha256": "7372568233e9e6df8243b5c9befdd97a8c90efd5a587a9e865c53e025306239d"
+    },
+    {
+      "path": "crates/production-runtime/desktop/native/macos.m",
+      "bytes": 37166,
+      "sha256": "fae7f5690c83d2dd05c8270b66b3aaed5384f1abcd55b7f12ceae30298d10038"
+    },
+    {
+      "path": "crates/production-runtime/desktop/native/recording.inc",
+      "bytes": 11910,
+      "sha256": "f46a7065bea755eed1aa56c289366c8b902df55766a5e0528a822161a73fe334"
+    },
+    {
+      "path": "crates/guest-runtime/Cargo.toml",
+      "bytes": 936,
+      "sha256": "97fed1caee72649a9e5dce30633ccaae2fd3d95ac99b50cff98af7cd5f98e273"
+    },
+    {
+      "path": "crates/guest-runtime/src/lib.rs",
+      "bytes": 21757,
+      "sha256": "4412e1a9733ab4ddef088c0c399a94ce270fe60e2be7aeb3ae01ff5f36619ac5"
+    },
+    {
+      "path": "crates/guest-runtime/src/subscriptions.rs",
+      "bytes": 6447,
+      "sha256": "a772a45a5ed7f7646d8851a8b6b86692ad7b3e72b5b593c0e43cc11a41c84f81"
+    },
+    {
+      "path": "crates/guest-runtime/src/media.rs",
+      "bytes": 45201,
+      "sha256": "69ded3e7cf47b5b8f02a5b2564fe40dda3abdbb602a559e749565842388821db"
+    },
+    {
+      "path": "crates/guest-runtime/src/media_routes.rs",
+      "bytes": 6003,
+      "sha256": "563d03037bb471dbe8112f15cd0caf550c7cbf87618aa4652e1d343937196e14"
+    },
+    {
+      "path": "docs/GUEST-AUDIO-SPEAKERPHONE-CONTRACT.md",
+      "bytes": 6711,
+      "sha256": "2957013a4a86e4d87248a9a0f68bdae450fc9b213dce650d14456151004558b6"
+    },
+    {
+      "path": "docs/LIVEKIT-G1-AUDIO-TIMING-EXTENSION.md",
+      "bytes": 19843,
+      "sha256": "b5d4bc6ba0e76409647304c97d1a057062b260d9d4fe321537e32f7e15cacc77"
+    },
+    {
+      "path": "server/src/interactions/schema.ts",
+      "bytes": 8535,
+      "sha256": "df086e1df2c1e6c79786af469731e784e701eba0faa8a696f338f717096122b0"
+    },
+    {
+      "path": "server/src/interactions/project.ts",
+      "bytes": 2211,
+      "sha256": "77471b614c13963e9e9bdd3507a7ff8744afe48244fe70ce9e095c1ae7bcc2b8"
+    },
+    {
+      "path": "server/src/interactions/tally.ts",
+      "bytes": 3063,
+      "sha256": "15dbce3cfc995b80703196d528cc99d5701a22995e7bc0aea859a054fe890d04"
+    },
+    {
+      "path": "src-tauri/src/live/encoders.rs",
+      "bytes": 9133,
+      "sha256": "049ed8c73ea252a1abd3614b735a96eb1837173994f139b0af24a8d47422c8c8"
+    },
+    {
+      "path": "src-tauri/src/live/multi.rs",
+      "bytes": 23923,
+      "sha256": "28c1348c1b4e341630d7b96fcfe66d2abc376eb4b53f018c589d6f0ceb9655fb"
+    },
+    {
+      "path": "src-tauri/src/live/program_audio.rs",
+      "bytes": 4136,
+      "sha256": "fe0e53380e6c56a9cc0614e7e696daaec5003342a3b792e6989591858d22de42"
+    },
+    {
+      "path": "src-tauri/src/live/replay.rs",
+      "bytes": 24585,
+      "sha256": "66e78c4e8c1633164deb438b151bd96f179f00c8f09e717b1611ebc592658357"
+    },
+    {
+      "path": "src-tauri/src/live/soundboard.c",
+      "bytes": 6792,
+      "sha256": "a41d15b2328f047e3ac1e8a33a3f0a2f26e162f65f63a35eb3db2f0a12254ab4"
+    },
+    {
+      "path": "crates/guest-runtime/src/timing/playout_clock.rs",
+      "bytes": 3233,
+      "sha256": "6723b2497c4388b6070a3d86fb939bb77807b160a742857de7606b83f13276d1"
+    },
+    {
+      "path": "crates/guest-runtime/src/timing/presentation.rs",
+      "bytes": 35116,
+      "sha256": "8b369811867db8624d16eaa17389783567910d95491145440ddc92200de934a4"
+    },
+    {
+      "path": "crates/guest-runtime/src/timing/queue.rs",
+      "bytes": 3600,
+      "sha256": "0875713aa10ac97e5a004c62d455425515def0d105b0b386ddd4e1ebf8b00fb6"
+    },
+    {
+      "path": "crates/guest-runtime/src/timing/sender_clock.rs",
+      "bytes": 20523,
+      "sha256": "d35d6b06358097ab02a96afad54ac0bf1a3b1db827dd4a7552d9d353d5e72124"
+    }
+  ],
+  "checkpoint_commit": "574acac4aef12f61b9ac27aa640b4c3f62a05e29",
+  "checkpoint_publication": "Pending separate user authorization; the source checkpoint is local, not yet backed up on GitHub."
+}

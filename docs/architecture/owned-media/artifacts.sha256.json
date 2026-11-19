@@ -1,0 +1,53 @@
+{
+  "snapshot_date": "2026-11-19",
+  "files": {
+    "DECISIONS.md": {
+      "bytes": 8998,
+      "sha256": "f61acaeab1124846a62afbe36b3c689f01d042f191e47b1e03278f9415597e52"
+    },
+    "README.md": {
+      "bytes": 5524,
+      "sha256": "3d9dcc6ac40008cb86b148bf98b0c8e826c584685798ea8db0b0bdaf702da2c9"
+    },
+    "RESUME.md": {
+      "bytes": 5234,
+      "sha256": "45e95134d449237fd25695c65a88c4254f627cb4f357650700580a611881b615"
+    },
+    "plan-architecture.png": {
+      "bytes": 178304,
+      "sha256": "e0dbc6a4291f73ceacde6a06482916ba22c109d3fa766cf0ad9e514de1e76515"
+    },
+    "plan-dark.png": {
+      "bytes": 178400,
+      "sha256": "ee250a08e2bf7c2a436b54c2a68a331772bb801047947e1af73688565ce16fbc"
+    },
+    "plan-light.png": {
+      "bytes": 179021,
+      "sha256": "1adb979151c0e038654178d8a2da045ad426f14b647d3629e70264d1830ce1d4"
+    },
+    "plan-mobile.png": {
+      "bytes": 71330,
+      "sha256": "6ea83cc7b4b39e8d98855e1651ce1e6f6d37ea44311254813d957b4c6d0e78a2"
+    },
+    "producer-owned-media-plan.html": {
+      "bytes": 86321,
+      "sha256": "8526820297d5768d5461f4573c72c25a563ce22324bc4aa56ae63cf401eae23a"
+    },
+    "producer-owned-media-plan.pdf": {
+      "bytes": 998881,
+      "sha256": "90b9b1efb4970be2a9fdff214aa0d828eb7c6bb9e0a4bf3f8038898471fedb75"
+    },
+    "source-audit.json": {
+      "bytes": 5674,
+      "sha256": "9bc221ecd6407a0a1e24a35f48c1f99b050dba085e90eb77f28c36452fb0e98e"
+    },
+    "verification.json": {
+      "bytes": 813,
+      "sha256": "b773c705ce524202725d06e1177421d86d0e0e64347d17955103ee106bed7904"
+    },
+    "verify-plan.cjs": {
+      "bytes": 6049,
+      "sha256": "021d5f5fbe5eb6c46addab83e1d800b55311daa1336fecfebfcbdc510fa618df"
+    }
+  }
+}
