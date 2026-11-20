@@ -228,7 +228,7 @@ export default {
 
     // Public room pages reuse Boomin's dedicated room bundle. Only HTML and
     // assets pass through this site; API/WebSocket/media paths stay unchanged.
-    const branded = /^\/[^/]+\/(?:audience\/[^/]+|guest\/[^/]+\/(?:gr_|gi_)[A-Za-z0-9_-]+)\/?$/.test(url.pathname);
+    const branded = /^\/[^/]+\/(?:audience\/[^/]+|(?:guest|show)\/[^/]+\/(?:gr_|gi_)[A-Za-z0-9_-]+)\/?$/.test(url.pathname);
     const roomAsset = url.pathname.startsWith("/room-assets/");
     const legacy = /^\/audience\/[^/]+\/?$/.test(url.pathname) || /^\/connect\/guest\/(?:room\/)?(?:gr_|gi_)[A-Za-z0-9_-]+\/?$/.test(url.pathname);
     if (branded || roomAsset || legacy) {
@@ -252,7 +252,7 @@ export default {
       headers.delete("content-encoding");
       let html = await upstream.text();
       html = html.replace(/<meta property="og:site_name" content="[^"]*">/, '<meta property="og:site_name" content="Producer">');
-      if (!url.pathname.includes("/guest/")) {
+      if (!["guest","show"].includes(url.pathname.split("/")[2]) && !legacy) {
         const escape = value => value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         html = html.replace(/<meta property="og:url" content="[^"]*">/, `<meta property="og:url" content="${escape(url.origin + url.pathname)}">`);
       }

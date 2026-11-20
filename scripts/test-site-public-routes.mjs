@@ -231,7 +231,7 @@ test('reserved system/static namespaces keep their existing static routing',asyn
 
 test('branded guest/audience and legacy room shells keep precedence and credential isolation',async()=>{
  const html='<html><meta property="og:site_name" content="Boomin"><meta property="og:url" content="https://boomin.ai/original"><body>Room</body></html>';
- for(const path of ['/kleveland/guest/inside/gi_abcdefghijklmnopqrstuvwx','/kleveland/audience/inside',
+ for(const path of ['/kleveland/show/inside/gr_abcdefghijklmnopqrstuvwx','/kleveland/guest/inside/gi_abcdefghijklmnopqrstuvwx','/kleveland/audience/inside',
   '/download/guest/inside/gr_abcdefghijklmnopqrstuvwx','/audience/room-id','/connect/guest/room/gr_abcdefghijklmnopqrstuvwx','/connect/guest/gi_abcdefghijklmnopqrstuvwx']){
   const r=await request(path,{headers:{Authorization:'Bearer PRIVATE',Cookie:'private=x'},upstream:()=>new Response(html,{headers:{'Content-Type':'text/html','Set-Cookie':'private=x'}})});
   assert.equal(r.response.status,200,path);assert.equal(r.calls.length,1,path);assert.equal(r.assets.length,0,path);
