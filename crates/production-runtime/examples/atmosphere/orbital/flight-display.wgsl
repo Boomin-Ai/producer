@@ -1,0 +1,15 @@
+let extent=vec2<f32>(textureDimensions(input0));
+let ratio=extent.y/extent.x;
+let live=textureSample(input0,linear_sampler,.5+(uv-.5)*min(vec2<f32>(ratio,1./ratio),vec2<f32>(1.)));
+let p=2.*uv-1.;
+let r=length(p);
+let a=atan2(p.y,p.x);
+let night=vec3<f32>(.015,.043,.062);
+let aqua=mix(vec3<f32>(.17,.76,.67),vec3<f32>(.94,.57,.24),frame.params.x);
+let band=fract((r+.085*cos(3.*a-1.8*r+.18*frame.info.z)+.033*sin(7.*a+3.*r))*11.);
+let curve=(1.-smoothstep(.015,.075,abs(band-.5)))*smoothstep(.12,.40,r);
+let edge=exp(-65.*abs(r-.83))+exp(-95.*abs(r-.76));
+let ticks=smoothstep(.82,.90,r)*(1.-smoothstep(.94,.98,r))*pow(.5+.5*cos(80.*a),15.);
+let cross=exp(-abs(p.x)*180.)*step(abs(p.y),.11)+exp(-abs(p.y)*180.)*step(abs(p.x),.11);
+let idle=night+aqua*(.06+.65*curve+.6*edge+.45*ticks+.75*cross);
+return vec4<f32>(mix(idle,live.rgb,live.a),1.);

@@ -1,0 +1,27 @@
+[workspace]
+members = ["contract", "core", "service", "cli", "media"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+publish = false
+
+[workspace.dependencies]
+serde = { version = "=1.0.229", features = ["derive", "rc"] }
+serde_json = { version = "=1.0.154", features = ["float_roundtrip", "raw_value"] }
+schemars = "=1.2.2"
+sha2 = "=0.10.9"
+fs2 = "=0.4.3"
+uuid = { version = "=1.29.2", features = ["v4"] }
+ryu-js = "1"
+
+[profile.dev]
+debug = 0
+incremental = false
+strip = "none"
+
+[profile.release]
+overflow-checks = true
+strip = "none"

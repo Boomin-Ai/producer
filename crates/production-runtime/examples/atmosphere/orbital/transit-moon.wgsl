@@ -1,0 +1,26 @@
+// Re-sample the completed scene through the moving optical element.
+let phase=t*.465;
+let depth=sin(phase);
+let moon=rot*(axes*vec2<f32>(cos(phase),depth));
+let size=mix(.138,.285,.5+.5*depth);
+let offset=(p-moon)/size;
+let rad=length(offset);
+let cap=sqrt(max(0.,1.-rad*rad));
+let face=1.-smoothstep(1.-pixel/size,1.+pixel/size,rad);
+let farSide=1.-smoothstep(-.11,.11,depth);
+let occult=(1.-smoothstep(1.-pixel,1.+pixel,r))*farSide;
+let gate=face*(1.-occult);
+let moonUV=C+moon*R/vec2<f32>(aspect,1.);
+let delta=uv-moonUV;
+let bend=.37+.57*rad*rad;
+let warped=moonUV+delta*bend;
+let scene=textureSample(input0,linear_sampler,uv).rgb;
+let red=textureSample(input0,linear_sampler,warped-delta*.065).r;
+let green=textureSample(input0,linear_sampler,warped).g;
+let blue=textureSample(input0,linear_sampler,warped+delta*.065).b;
+let edge=pow(1.-cap,1.65);
+let spec=exp(-dot(offset-vec2<f32>(-.34,-.51),offset-vec2<f32>(-.34,-.51))*63.);
+let reflected=mix(jade,gold,clamp(.52+.48*offset.x,0.,1.));
+let glass=vec3<f32>(red,green,blue)*vec3<f32>(.93,1.,1.)+reflected*(.085+.90*edge)+gold*spec*.8;
+let caustic=exp(-abs(rad-1.13)*10.)*.093*(1.-occult);
+return vec4<f32>(mix(scene,glass,gate)+reflected*caustic,1.);

@@ -246,12 +246,12 @@ fn hex_digest(bytes: &[u8]) -> String {
         .map(|b| format!("{b:02x}"))
         .collect()
 }
+fn provider_code(value: &Value) -> Option<&str> {
+    value.pointer("/error/code").or_else(||value.pointer("/response/error/code"))
+        .and_then(Value::as_str).filter(|code|code.len()<=128 && code.bytes().all(|c|c.is_ascii_alphanumeric() || c==b'_' || c==b'-'))
+}
 fn provider_error(value: &Value) -> String {
-    let code = value
-        .pointer("/error/code")
-        .or_else(|| value.pointer("/response/error/code"))
-        .and_then(Value::as_str)
-        .unwrap_or("request_failed");
+    let code = provider_code(value).unwrap_or("request_failed");
     match code {
         "subscription_sharing_usage_limit_exceeded" | "subscription_sharing_usage_unavailable" => "ChatGPT plan usage is unavailable or its limit was reached. Check usage in ChatGPT settings.".into(),
         "invalid_grant" | "invalid_refresh_token" | "refresh_token_reused" | "token_expired" | "refresh_token_expired" | "refresh_token_invalidated" => "ChatGPT sign-in expired or was revoked. Reconnect this account.".into(),
@@ -260,7 +260,10 @@ fn provider_error(value: &Value) -> String {
         _ => "ChatGPT could not complete the request. Retry or reconnect your account if access was revoked.".into(),
     }
 }
-async fn json_response(mut response: reqwest::Response) -> Result<Value> {
+async fn json_response(response: reqwest::Response) -> Result<Value> {
+    read_json_response(response,&|_|Ok(())).await
+}
+async fn read_json_response(mut response:reqwest::Response,emit:&impl Fn(Value)->Result<()>) -> Result<Value> {
     let status = response.status();
     let mut bytes = Vec::new();
     while let Some(chunk) = response
@@ -276,6 +279,7 @@ async fn json_response(mut response: reqwest::Response) -> Result<Value> {
     let value: Value = serde_json::from_slice(&bytes)
         .map_err(|_| "ChatGPT returned an unreadable response.".to_string())?;
     if !status.is_success() {
+        emit(json!({"type":"provider_error","code":provider_code(&value)}))?;
         return Err(provider_error(&value));
     }
     Ok(value)
@@ -713,7 +717,7 @@ impl Client {
         body: Value,
         emit: &impl Fn(Value) -> Result<()>,
     ) -> Result<Vec<Value>> {
-        let mut response = send_response(
+        let response = send_response(
             &self.http,
             &format!("{RESOURCE}/responses"),
             &token,
@@ -721,31 +725,41 @@ impl Client {
             emit,
         )
         .await?;
+        let request_id=response.headers().get("x-request-id").and_then(|id|id.to_str().ok()).filter(|id|id.len()<=128);
+        emit(json!({"type":"provider_response","httpStatus":response.status().as_u16(),"requestId":request_id}))?;
         if !response.status().is_success() {
-            return Err(json_response(response)
+            return Err(read_json_response(response,emit)
                 .await
                 .err()
                 .unwrap_or_else(|| "ChatGPT request failed.".into()));
         }
+        read_output(response, emit).await
+    }
+}
+async fn read_output(mut response:reqwest::Response, emit:&impl Fn(Value)->Result<()>) -> Result<Vec<Value>> {
         let mut parser = EventStream::default();
-        let mut completed = None;
         while let Some(chunk) = response.chunk().await.map_err(|_| {
             "Assistant stream was interrupted. No unfinished edit was applied.".to_string()
         })? {
             for event in parser.push(&chunk)? {
                 match event.get("type").and_then(Value::as_str) {
                     Some("response.output_text.delta") => emit(json!({"type": "text", "text": event.get("delta").and_then(Value::as_str).unwrap_or("")}))?,
-                    Some("response.completed") => {completed = Some(event.pointer("/response/output").and_then(Value::as_array).cloned().ok_or("ChatGPT returned an invalid completed response.")?);},
-                    Some("response.failed") | Some("error") => return Err(provider_error(&event)),
-                    Some("response.incomplete") => return Err("ChatGPT stopped before completing this turn. No unfinished edit was applied.".into()),
+                    Some("response.completed") => {
+                        emit(json!({"type":"provider_completed","responseId":event.pointer("/response/id"),"usage":event.pointer("/response/usage")}))?;
+                        return event.pointer("/response/output").and_then(Value::as_array).cloned().ok_or_else(|| "ChatGPT returned an invalid completed response.".into());},
+                    Some("response.failed") | Some("error") => {
+                        emit(json!({"type":"provider_error","code":provider_code(&event),"responseId":event.pointer("/response/id")}))?;
+                        return Err(provider_error(&event));
+                    },
+                    Some("response.incomplete") => {
+                        emit(json!({"type":"provider_incomplete","reason":event.pointer("/response/incomplete_details/reason"),"responseId":event.pointer("/response/id")}))?;
+                        return Err("ChatGPT stopped before completing this turn. No unfinished edit was applied.".into());
+                    },
                     _ => {},
                 }
             }
         }
-        completed.ok_or_else(|| {
-            "Assistant stream ended without a completed response. Retry the request.".into()
-        })
-    }
+        Err("Assistant stream ended without a completed response. Retry the request.".into())
 }
 fn check_tokens(tokens: &Tokens) -> Result<()> {
     if !tokens.token_type.eq_ignore_ascii_case("bearer")
@@ -1029,6 +1043,21 @@ mod tests {
         for private in ["synthetic-secret", "synthetic-design", &url] {
             assert!(!diagnostic.contains(private));
         }
+    }
+    #[tokio::test]
+    async fn completed_stream_returns_while_connection_is_open() {
+        let server=TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr=server.local_addr().unwrap();
+        let (release,hold)=tokio::sync::oneshot::channel::<()>();
+        let fixture=tokio::spawn(async move {
+            let (mut stream,_)=server.accept().await.unwrap();
+            read_test_request(&mut stream).await;
+            stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: 9000\r\n\r\ndata: {\"type\":\"response.completed\",\"response\":{\"output\":[]}}\n\n").await.unwrap();
+            let _=hold.await;
+        });
+        let response=reqwest::Client::new().post(format!("http://{addr}/responses")).json(&json!({})).send().await.unwrap();
+        let result=tokio::time::timeout(Duration::from_secs(2),read_output(response,&|_|Ok(()))).await.unwrap().unwrap();
+        assert!(result.is_empty());let _=release.send(());fixture.await.unwrap();
     }
     #[tokio::test]
     async fn send_recovery_is_bounded_and_reports_the_terminal_transport_stage() {

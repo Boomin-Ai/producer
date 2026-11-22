@@ -1,0 +1,41 @@
+name: Native Apple Silicon candidate
+on:
+  push:
+    branches: [release/native-silicon-candidate]
+permissions:
+  contents: read
+jobs:
+  candidate:
+    runs-on: macos-15
+    timeout-minutes: 100
+    env:
+      CARGO_INCREMENTAL: '0'
+      MACOSX_DEPLOYMENT_TARGET: '13.0'
+      VERSION: '0.4.94'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.100.0'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/production-runtime/desktop
+      - name: Build native application and prepare verified dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/native-silicon-candidate.sh build
+      - name: Provision, sign, and notarize
+        env:
+          SIGN_IDENT: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          CERT_B64: ${{ secrets.APPLE_CERTIFICATE }}
+          CERT_PW: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          PROFILE_B64: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+          NOTARY_ID: ${{ secrets.APPLE_ID }}
+          NOTARY_PW: ${{ secrets.APPLE_PASSWORD }}
+          NOTARY_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash scripts/native-silicon-candidate.sh sign
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Producer-Silicon-candidate-${{ github.sha }}
+          path: ${{ runner.temp }}/native-delivery/
+          if-no-files-found: error

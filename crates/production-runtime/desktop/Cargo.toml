@@ -1,0 +1,51 @@
+[package]
+name = "producer-native-room"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+publish = false
+build = "build.rs"
+
+# The desktop is an isolated leaf: GPUI/platform dependencies never enter core.
+[workspace]
+
+[dependencies]
+thiserror = "2"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+uuid = { version = "1", features = ["v4"] }
+raw-window-handle = "0.6"
+producer-assistant-runtime = { path = "../../assistant-runtime" }
+security-framework = "3"
+tokio = { version = "1", features = ["rt-multi-thread", "time"] }
+naga = { git = "https://github.com/gfx-rs/wgpu", rev = "cddb2f5d80dc0009b2ef6767635140cacf90a007", features = ["wgsl-in", "msl-out"] }
+gpui = { git = "https://github.com/longbridge/gpui-fast", rev = "454c29e8f0e36a7794140d32a544d6d37a0693c1", default-features = false }
+gpui_platform = { git = "https://github.com/longbridge/gpui-fast", rev = "454c29e8f0e36a7794140d32a544d6d37a0693c1", default-features = false, features = ["font-kit", "runtime_shaders", "test-support"] }
+producer-production-contract = { path = "../contract" }
+producer-production-core = { path = "../core" }
+producer-native-media = { path = "../media" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
+sha2 = "=0.10.9"
+base64 = "=0.22.1"
+tempfile = "=3.27.0"
+libc = "0.2"
+anyhow = "1"
+url = "=2.5.8"
+image = { version = "=0.25.10", default-features = false, features = ["png","jpeg","webp","gif"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-core-foundation = "=0.3.2"
+objc2-core-video = { version = "=0.3.2", features = ["CVPixelBuffer"] }
+
+[build-dependencies]
+cc = "1"
+
+[profile.dev]
+debug = 0
+incremental = false
+opt-level = 1
+
+[profile.release]
+debug = 0
+incremental = false
+overflow-checks = true

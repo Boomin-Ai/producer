@@ -1,0 +1,27 @@
+// Facade in elevation. Alpha lets the underlying metal and masonry receive shot lighting.
+let floors=12.;
+let cols=9.;
+let bay=uv*vec2<f32>(cols,floors);
+let id=floor(bay);
+let p=fract(bay);
+let noise=fract(sin(dot(id,vec2<f32>(37.134,73.917)))*17485.29);
+let across=abs(p.x-.5);
+let between=abs(p.y-.50);
+let glass=(1.-smoothstep(.333,.353,across))*(1.-smoothstep(.318,.344,between));
+let divider=smoothstep(.020,.035,across);
+let transom=smoothstep(.023,.034,abs(p.y-.35));
+let blind=smoothstep(.19+.19*noise,.232+.19*noise,p.y);
+let lit=step(.47,noise);
+let litCool=step(.86,noise);
+let room=mix(vec3<f32>(.98,.63,.29),vec3<f32>(.64,.87,.91),litCool);
+let gradient=.52+.48*(1.-p.y);
+let darkGlass=mix(vec3<f32>(.055,.095,.16),vec3<f32>(.18,.27,.32),1.-uv.y);
+let mullion=.09*exp(-26.*abs(p.x-.09))+.10*exp(-36.*abs(p.y-.83));
+let wall=vec3<f32>(.12,.145,.172)+mullion;
+let pane=mix(darkGlass,room*gradient,lit*blind)*mix(.65,1.,divider*transom);
+let shop=smoothstep(.905,.922,uv.y);
+let fascia=exp(-abs(uv.y-.908)*290.);
+let storeColor=mix(vec3<f32>(.25,.72,.69),vec3<f32>(1.,.53,.22),step(.38,fract(id.x*.371)));
+let retail=storeColor*(.25+.65*glass)*(.64+.36*divider);
+let rgb=mix(mix(wall,pane,glass),retail,shop)+fascia*storeColor*.8;
+return vec4<f32>(rgb,mix(.30,.93,max(glass*lit,shop))+.04*fascia);
