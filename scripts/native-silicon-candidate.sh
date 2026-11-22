@@ -30,7 +30,21 @@ build)
   chmod 755 "$bin/ffmpeg" "$bin/gh"
   ;;
 test)
-  cargo test --locked --manifest-path "$desktop/Cargo.toml" shell_navigation_and_room_isolation
+  # Separate compilation from execution so a stalled UI test yields a macOS thread sample.
+  tests_json="$RUNNER_TEMP/shell-test-messages.jsonl"
+  cargo test --locked --manifest-path "$desktop/Cargo.toml" --no-run --message-format=json-render-diagnostics > "$tests_json"
+  test_binary=$(jq -rs 'map(select(.profile.test == true and .target.name == "producer-native-room" and .executable != null)) | last.executable' "$tests_json")
+  [[ -x "$test_binary" ]]
+  "$test_binary" --exact ui::shell::tests::shell_navigation_and_room_isolation --nocapture &
+  test_pid=$!
+  for ((n=0; n<60; n++)); do
+    if ! kill -0 "$test_pid" 2>/dev/null; then wait "$test_pid"; exit $?; fi
+    sleep 1
+  done
+  sample "$test_pid" 2 -file "$RUNNER_TEMP/shell-test.sample" || true
+  head -400 "$RUNNER_TEMP/shell-test.sample" || true
+  kill "$test_pid" || true
+  exit 1
   ;;
 compile)
   cargo build --locked --manifest-path "$desktop/Cargo.toml" --release
