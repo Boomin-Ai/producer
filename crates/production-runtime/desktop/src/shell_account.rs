@@ -184,7 +184,7 @@ impl Shell {
 
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     pub(super) fn setup_screen(&self, _window: &mut Window, cx: &mut Context<Self>) -> Div {
-        extern "C" { fn nr_setup_access(kind: i32) -> i32; fn nr_setup_request(kind: i32); }
+        extern "C" { #[cfg(not(test))] fn nr_setup_access(kind: i32) -> i32; fn nr_setup_request(kind: i32); }
         let mut body = stack().w(px(420.)).gap(px(14.)).child(label("Producer · by Boomin"));
         if self.first_light == FirstLight::Welcome {
             body = body.child(div().text_size(px(30.)).child("Your studio starts here."))
@@ -197,6 +197,9 @@ impl Shell {
 
             body = body.child(div().text_size(px(30.)).child("Give your studio access."));
             for (kind, title, pane) in [(0, "Camera", "Camera"), (1, "Microphone", "Microphone"), (2, "Screen recording", "ScreenCapture")] {
+                #[cfg(test)]
+                let access = 0;
+                #[cfg(not(test))]
                 let access = unsafe { nr_setup_access(kind) };
                 let name = if access == 1 { format!("{title} · Allowed") } else { format!("Allow {title}") };
                 let mut row = Room::edit_button(format!("setup-access-{kind}"), name, access == 1);
@@ -211,6 +214,9 @@ impl Shell {
                 }
                 body = body.child(row);
             }
+            #[cfg(test)]
+            let (camera_status, actionable) = (String::from("Install Producer Virtual Camera"), true);
+            #[cfg(not(test))]
             let (camera_status, actionable) = crate::virtual_camera::install_status();
             body = if actionable {
                 body.child(Room::edit_button("setup-install-virtual-camera", camera_status, false)
