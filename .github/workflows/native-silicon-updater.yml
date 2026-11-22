@@ -1,0 +1,42 @@
+name: Sign Apple Silicon 0.4.94 updater
+on:
+  push:
+    branches: [release/native-silicon-updater-094]
+permissions:
+  contents: read
+jobs:
+  sign:
+    runs-on: macos-15
+    steps:
+      - name: Download and verify published installer
+        run: |
+          set -eu
+          curl -fsSL --retry 3 -o Producer.dmg https://github.com/Boomin-Ai/producer/releases/download/native-silicon-0.4.94/Producer_0.4.94_aarch64.dmg
+          echo 'ac2aba1d7dc45426f794f08a4c09de1d633c1fe13f4f0e52fcc35cf49a092539  Producer.dmg' | shasum -a 256 -c -
+          hdiutil attach -readonly -nobrowse -mountpoint "$RUNNER_TEMP/installer" Producer.dmg
+          app="$RUNNER_TEMP/installer/Producer.app"
+          codesign --verify --deep --strict "$app"
+          xcrun stapler validate "$app"
+          test "$(lipo -archs "$app/Contents/MacOS/producer")" = arm64
+          test "$(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist")" = 0.4.94
+          mkdir payload
+          tar -czf payload/Producer_0.4.94_aarch64.app.tar.gz -C "$RUNNER_TEMP/installer" Producer.app
+          mkdir "$RUNNER_TEMP/extracted"
+          tar -xzf payload/*.tar.gz -C "$RUNNER_TEMP/extracted"
+          codesign --verify --deep --strict "$RUNNER_TEMP/extracted/Producer.app"
+          spctl -a -t exec "$RUNNER_TEMP/extracted/Producer.app"
+      - name: Prepare pinned Tauri signer
+        run: npm install --no-save @tauri-apps/cli@2.11.5
+      - name: Sign updater
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -eu
+          ./node_modules/.bin/tauri signer sign payload/*.tar.gz --password "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" >/dev/null
+          test -s payload/Producer_0.4.94_aarch64.app.tar.gz.sig
+      - uses: actions/upload-artifact@v4
+        with:
+          name: producer-094-silicon-updater
+          path: payload/
+          if-no-files-found: error
