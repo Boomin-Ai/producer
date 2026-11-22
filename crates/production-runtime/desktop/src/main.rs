@@ -68,7 +68,7 @@ fn workspace_root() -> PathBuf {
         })
         .unwrap_or_else(|| {
             PathBuf::from(std::env::var_os("HOME").expect("User home directory"))
-                .join("Library/Application Support/Producer Native Dev")
+                .join(if cfg!(debug_assertions) { "Library/Application Support/Producer Native Dev" } else { "Library/Application Support/ai.boomin.producer/native" })
         })
 }
 fn main() -> Result<()> {

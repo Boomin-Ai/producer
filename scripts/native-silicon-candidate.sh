@@ -28,7 +28,11 @@ build)
   verify 3d6999b85fa1e63aadec49b65986280578e8094c394a3776c24c789f0cc73cef "$RUNNER_TEMP/gh_2.85.0_macOS_arm64.zip"
   unzip -p "$RUNNER_TEMP/gh_2.85.0_macOS_arm64.zip" '*/bin/gh' > "$bin/gh"
   chmod 755 "$bin/ffmpeg" "$bin/gh"
+  ;;
+test)
   cargo test --locked --manifest-path "$desktop/Cargo.toml" shell_navigation_and_room_isolation
+  ;;
+compile)
   cargo build --locked --manifest-path "$desktop/Cargo.toml" --release
   cp "$desktop/target/release/producer-native-room" "$bin/producer"
   for exe in producer producer-rtc gh ffmpeg; do [[ "$(lipo -archs "$bin/$exe")" == arm64 ]]; done

@@ -923,7 +923,7 @@ impl Shell {
                                 div()
                                     .text_size(px(11.))
                                     .text_color(rgb(0xbfc8d1))
-                                    .child("Native Dev"),
+                                    .child(if cfg!(debug_assertions) { "Native Dev" } else { env!("CARGO_PKG_VERSION") }),
                             ),
                     )
                     .child(rows),
@@ -986,7 +986,7 @@ impl Shell {
                             })),
                     );
                 }
-                body = body.child(tabs.child(div().flex_1()).child(label("Native Dev")));
+                body = body.child(tabs.child(div().flex_1()).child(label(if cfg!(debug_assertions) { "Native Dev" } else { env!("CARGO_PKG_VERSION") })));
                 if self.shortcuts {
                     body.child(detail_row("Edit room layout", "⌘ E"))
                         .child(detail_row("Dismiss a menu", "Esc"))

@@ -4243,7 +4243,7 @@ impl Render for Room {
                 .justify_between()
                 .text_size(px(10.))
                 .text_color(rgb(MUTED))
-                .child("LOCAL / NATIVE DEVELOPMENT")
+                .child(if cfg!(debug_assertions) { "LOCAL / NATIVE DEVELOPMENT" } else { "PRODUCER" })
                 .child(format!(
                     "{} · 30 fps outputs · CPU submit p99 {:0.2} ms",
                     if self.broadcast_active() {

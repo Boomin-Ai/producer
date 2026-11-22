@@ -20,10 +20,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: crates/production-runtime/desktop
-      - name: Build native application and prepare verified dependencies
+      - name: Prepare signed production bundle and build RTC helper
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/native-silicon-candidate.sh build
+      - name: Verify native shell navigation
+        run: bash scripts/native-silicon-candidate.sh test
+      - name: Compile native release executable
+        run: bash scripts/native-silicon-candidate.sh compile
       - name: Provision, sign, and notarize
         env:
           SIGN_IDENT: ${{ secrets.APPLE_SIGNING_IDENTITY }}

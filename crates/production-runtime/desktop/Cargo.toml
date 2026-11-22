@@ -1,6 +1,6 @@
 [package]
 name = "producer-native-room"
-version = "0.1.0"
+version = "0.4.94"
 edition = "2021"
 license = "AGPL-3.0-only"
 publish = false
