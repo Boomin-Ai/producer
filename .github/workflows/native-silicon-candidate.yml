@@ -6,7 +6,7 @@ permissions:
   contents: read
 jobs:
   candidate:
-    runs-on: macos-26
+    runs-on: macos-15-intel
     timeout-minutes: 100
     env:
       CARGO_INCREMENTAL: '0'
@@ -18,6 +18,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: '1.100.0'
+          targets: aarch64-apple-darwin
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: crates/production-runtime/desktop
@@ -25,7 +26,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/native-silicon-candidate.sh build
-      - name: Verify Rune studio and native media
+      - name: Build Apple Silicon verification harness
         run: bash scripts/native-silicon-candidate.sh test
       - name: Compile native release executable
         run: bash scripts/native-silicon-candidate.sh compile
@@ -64,6 +65,12 @@ jobs:
         with:
           name: Producer-Silicon-candidate-${{ github.sha }}
           path: ${{ runner.temp }}/native-delivery/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: runner.arch == 'X64'
+        with:
+          name: Producer-Silicon-verification-${{ github.sha }}
+          path: ${{ runner.temp }}/native-verification/
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()

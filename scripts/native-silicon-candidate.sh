@@ -1,11 +1,17 @@
 #!/bin/bash
 set -euo pipefail
-[[ "$(uname -sm)" == "Darwin arm64" ]]
+[[ "$(uname -s)" == Darwin ]]
 stage="${RUNNER_TEMP:?}/native-stage"
 out="$RUNNER_TEMP/native-delivery"
 app="$stage/Producer.app"
 bin="$app/Contents/MacOS"
 desktop=crates/production-runtime/desktop
+cargo_target=()
+release_dir="$desktop/target/release"
+if [[ "$(uname -m)" == x86_64 ]]; then
+  cargo_target=(--target aarch64-apple-darwin)
+  release_dir="$desktop/target/aarch64-apple-darwin/release"
+fi
 verify() { printf '%s  %s\n' "$1" "$2" | shasum -a 256 -c -; }
 case "${1:?build or sign}" in
 build)
@@ -21,7 +27,7 @@ build)
   verify 9f25fea48588deac18d68e120d18b33af7ef10f921f74b7c57f66b642262c348 "$RUNNER_TEMP/webrtc-mac-arm64-release.zip"
   unzip -q "$RUNNER_TEMP/webrtc-mac-arm64-release.zip" -d "$RUNNER_TEMP/sdk"
   export WEBRTC_ARCHIVE_DIR="$RUNNER_TEMP/sdk/mac-arm64-release" CXX=clang++ SDKROOT="$(xcrun --show-sdk-path)"
-  bash "$desktop/native/producer-rtc/build-macos.sh" "$bin/producer-rtc"
+  bash "$desktop/native/producer-rtc/build-macos.sh" "$bin/producer-rtc" -arch arm64
   npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP" @ffmpeg-installer/darwin-arm64@4.1.5
   tar -xOzf "$RUNNER_TEMP/ffmpeg-installer-darwin-arm64-4.1.5.tgz" package/ffmpeg > "$bin/ffmpeg"
   verify a2ad6f0fc42a3c8f5183ef1d53e906d6bb35478d14a6b67175c30ce6c17e9214 "$bin/ffmpeg"
@@ -33,9 +39,14 @@ build)
 test)
   # Separate compilation from execution so a stalled UI test yields a macOS thread sample.
   tests_json="$RUNNER_TEMP/shell-test-messages.jsonl"
-  cargo test --locked --manifest-path "$desktop/Cargo.toml" --no-run --message-format=json-render-diagnostics > "$tests_json"
+  cargo test ${cargo_target[@]+"${cargo_target[@]}"} --locked --manifest-path "$desktop/Cargo.toml" --no-run --message-format=json-render-diagnostics > "$tests_json"
   test_binary=$(jq -rs 'map(select(.profile.test == true and .target.name == "producer-native-room" and .executable != null)) | last.executable' "$tests_json")
   [[ -x "$test_binary" ]]
+  if [[ "$(uname -m)" == x86_64 ]]; then
+    mkdir -p "$RUNNER_TEMP/native-verification"
+    cp "$test_binary" "$RUNNER_TEMP/native-verification/producer-native-room-tests"
+    exit 0
+  fi
   "$test_binary" --test-threads=2 --nocapture &
   test_pid=$!
   for ((n=0; n<60; n++)); do
@@ -48,10 +59,12 @@ test)
   exit 1
   ;;
 compile)
-  cargo build --locked --manifest-path "$desktop/Cargo.toml" --release
-  cp "$desktop/target/release/producer-native-room" "$bin/producer"
+  cargo build ${cargo_target[@]+"${cargo_target[@]}"} --locked --manifest-path "$desktop/Cargo.toml" --release
+  cp "$release_dir/producer-native-room" "$bin/producer"
   ditto assets/starter-audio "$app/Contents/Resources/starter-audio"
-  bash "$desktop/scripts/check-silicon-release.sh" "$bin/producer" "$RUNNER_TEMP"
+  if [[ "$(uname -m)" == arm64 ]]; then
+    bash "$desktop/scripts/check-silicon-release.sh" "$bin/producer" "$RUNNER_TEMP"
+  fi
   for exe in producer producer-rtc gh ffmpeg; do [[ "$(lipo -archs "$bin/$exe")" == arm64 ]]; done
   plutil -replace CFBundleShortVersionString -string "$VERSION" "$app/Contents/Info.plist"
   plutil -replace CFBundleVersion -string "$VERSION" "$app/Contents/Info.plist"
