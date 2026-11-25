@@ -5,7 +5,7 @@ use naga::{back::msl, valid, ShaderStage, Statement};
 use std::ffi::CString;
 
 pub const PRELUDE: &str = r#"
-struct Frame { info: vec4<f32>, params: vec4<f32> }
+struct Frame { info: vec4<f32>, params: vec4<f32>, controls: vec4<f32>, screenPan: vec2<f32>, headline: f32, dj: vec4<f32> }
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var input0: texture_2d<f32>;
 @group(0) @binding(2) var input1: texture_2d<f32>;
@@ -186,5 +186,6 @@ mod tests {
         assert!(compile(sample, 0).is_err());
         assert!(compile("loop {} return vec4<f32>(0.);", 0).is_err());
         assert!(compile("return frame.params;", 0).is_ok());
+        assert!(compile("return vec4<f32>(frame.screenPan, 0., 1.);", 0).is_ok());
     }
 }

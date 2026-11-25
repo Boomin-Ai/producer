@@ -8,7 +8,7 @@ typedef struct {
     CMSimpleQueueRef queue;
     CVPixelBufferPoolRef pool;
     VTPixelTransferSessionRef transfer;
-    CMVideoFormatDescriptionRef format;
+    CMVideoFormatDescriptionRef sampleFormat;
     BOOL started;
 } NRVirtualCamera;
 
@@ -43,10 +43,10 @@ void nr_vcam_close(NRVirtualCamera *v) {
     if (v->queue) CFRelease(v->queue);
     if (v->transfer) CFRelease(v->transfer);
     if (v->pool) CFRelease(v->pool);
-    if (v->format) CFRelease(v->format);
+    if (v->sampleFormat) CFRelease(v->sampleFormat);
     free(v);
 }
-static void queueChanged(CMIOStreamID stream,void *token,void *refcon) { }
+static void queueChanged(__unused CMIOStreamID stream, __unused void *token, __unused void *refcon) { }
 NRVirtualCamera *nr_vcam_open(bool portrait, char *error, size_t cap) {
     @autoreleasepool {
         const char *reason="Producer Virtual Camera is unavailable. Install or approve it in setup.";
@@ -61,10 +61,11 @@ NRVirtualCamera *nr_vcam_open(bool portrait, char *error, size_t cap) {
         if (v->stream) {
             reason="The camera rejected this format. Close the receiving camera and retry.";
             a=property(kCMIOStreamPropertyFormatDescription);
-            CMVideoFormatDescriptionRef actual=NULL; UInt32 used=0;
-            BOOL ok=!CMVideoFormatDescriptionCreate(NULL,kCVPixelFormatType_32BGRA,w,h,NULL,&v->format)
-                && !CMIOObjectSetPropertyData(v->stream,&a,0,NULL,sizeof(v->format),&v->format)
+            CMVideoFormatDescriptionRef requested=NULL, actual=NULL; UInt32 used=0;
+            BOOL ok=!CMVideoFormatDescriptionCreate(NULL,kCVPixelFormatType_32BGRA,w,h,NULL,&requested)
+                && !CMIOObjectSetPropertyData(v->stream,&a,0,NULL,sizeof(requested),&requested)
                 && !CMIOObjectGetPropertyData(v->stream,&a,0,NULL,sizeof(actual),&used,&actual) && actual;
+            if (requested) CFRelease(requested);
             if (actual) {
                 CMVideoDimensions dimensions=CMVideoFormatDescriptionGetDimensions(actual);
                 ok=ok && dimensions.width==w && dimensions.height==h && CMFormatDescriptionGetMediaSubType(actual)==kCVPixelFormatType_32BGRA;
@@ -89,22 +90,48 @@ NRVirtualCamera *nr_vcam_open(bool portrait, char *error, size_t cap) {
         nr_vcam_close(v); return NULL;
     }
 }
-int nr_vcam_frame(NRVirtualCamera *v,CVPixelBufferRef source,double pts) {
+int nr_vcam_frame(NRVirtualCamera *v,CVPixelBufferRef source,double pts,char *error,size_t cap) {
     @autoreleasepool {
         if (CMSimpleQueueGetCount(v->queue)>=CMSimpleQueueGetCapacity(v->queue)) return 0;
         CVPixelBufferRef dest=NULL;
         CVReturn alloc=CVPixelBufferPoolCreatePixelBufferWithAuxAttributes(NULL,v->pool,
             (__bridge CFDictionaryRef)@{(id)kCVPixelBufferPoolAllocationThresholdKey:@8},&dest);
         if (alloc==kCVReturnWouldExceedAllocationThreshold) return 0;
-        if (alloc) return -1;
+        if (alloc) {
+            snprintf(error,cap,"Virtual camera buffer allocation failed (OSStatus %d)",(int)alloc);
+            return -1;
+        }
         CMSampleTimingInfo timing={CMTimeMake(1,30),CMTimeMakeWithSeconds(pts,1000000000),kCMTimeInvalid};
         CMSampleBufferRef sample=NULL;
         OSStatus status=VTPixelTransferSessionTransferImage(v->transfer,source,dest);
-        if (!status) status=CMSampleBufferCreateReadyWithImageBuffer(NULL,dest,v->format,&timing,&sample);
+        const char *stage="pixel conversion";
+        if (!status) {
+            // VideoToolbox can propagate color and aperture attachments while
+            // converting. Core Media requires the description to match those
+            // attachments as well as the pixel type and dimensions.
+            stage="format description";
+            if (!v->sampleFormat || !CMVideoFormatDescriptionMatchesImageBuffer(v->sampleFormat,dest)) {
+                CMVideoFormatDescriptionRef format=NULL;
+                status=CMVideoFormatDescriptionCreateForImageBuffer(NULL,dest,&format);
+                if (!status) {
+                    if (v->sampleFormat) CFRelease(v->sampleFormat);
+                    v->sampleFormat=format;
+                }
+            }
+        }
+        if (!status) {
+            stage="sample creation";
+            status=CMSampleBufferCreateReadyWithImageBuffer(NULL,dest,v->sampleFormat,&timing,&sample);
+        }
         CVPixelBufferRelease(dest);
-        if (status) return -1;
-        status=CMSimpleQueueEnqueue(v->queue,sample);
-        if (status) CFRelease(sample);
-        return status ? -1 : 1;
+        if (!status) {
+            status=CMSimpleQueueEnqueue(v->queue,sample);
+            if (!status) return 1;
+            CFRelease(sample);
+            if (status==kCMSimpleQueueError_QueueIsFull) return 0;
+            stage="queue submission";
+        }
+        snprintf(error,cap,"Virtual camera %s failed (OSStatus %d)",stage,(int)status);
+        return -1;
     }
 }

@@ -3,7 +3,7 @@ use std::{ffi::{c_char,c_void,CStr}, sync::{Arc,Mutex,mpsc}, thread, time::Durat
 
 extern "C" {
     fn nr_vcam_open(portrait:bool,error:*mut c_char,cap:usize)->*mut c_void;
-    fn nr_vcam_frame(writer:*mut c_void,pixel:*mut c_void,pts:f64)->i32;
+    fn nr_vcam_frame(writer:*mut c_void,pixel:*mut c_void,pts:f64,error:*mut c_char,cap:usize)->i32;
     fn nr_vcam_close(writer:*mut c_void);
     fn producer_vcam_installed()->i32;
     fn producer_vcam_activate();
@@ -61,7 +61,7 @@ impl Camera {
                 if let Some(f)=frame {
                     if previous==Some(f.at) {continue;}
                     previous=Some(f.at);
-                    match unsafe { nr_vcam_frame(writer,f.ptr.as_ptr(),f.at) } {
+                    match unsafe { nr_vcam_frame(writer,f.ptr.as_ptr(),f.at,error.as_mut_ptr(),error.len()) } {
                         1 => { let mut text=status.lock().unwrap(); if !text.starts_with("Sending") {
                             *text=if portrait {"Sending portrait program"} else {"Sending landscape program"}.into(); } }
                         0 => (),
@@ -70,7 +70,11 @@ impl Camera {
                 }
             }
             unsafe { nr_vcam_close(writer) };
-            *status.lock().unwrap()=if failed {"Virtual camera frame delivery failed. Reconnect the receiver and retry."} else {"Virtual camera stopped"}.into();
+            *status.lock().unwrap()=if failed {
+                unsafe { CStr::from_ptr(error.as_ptr()) }.to_string_lossy().into_owned()
+            } else {
+                "Virtual camera stopped".into()
+            };
         });
         self.worker=Some((tx,job));
     }

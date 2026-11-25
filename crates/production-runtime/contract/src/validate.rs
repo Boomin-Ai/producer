@@ -675,6 +675,16 @@ pub fn validate_with_scratch(
             return Err(err(id, "Set needs at least one layout"));
         }
         if set.layout_transition_ms.unwrap_or(0)>5000 { return Err(err(id,"Layout transition exceeds five seconds")); }
+        for (animated, resting) in &set.reversible_layout_transitions {
+            let valid_pair = set.layouts.get(animated).zip(set.layouts.get(resting))
+                .is_some_and(|(a, b)| a.orientation == b.orientation);
+            if !valid_pair || animated == resting || !set.output_graphs.contains_key(animated)
+                || set.reversible_layout_transitions.contains_key(resting)
+                || set.layout_transition_ms.unwrap_or(0) == 0
+            {
+                return Err(err(id, "Invalid reversible layout transition"));
+            }
+        }
         if set.theme.values().any(|c| !color(c)) {
             return Err(err(id, "theme token must be a hex color"));
         }

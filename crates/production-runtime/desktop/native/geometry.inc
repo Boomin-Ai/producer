@@ -8,10 +8,12 @@ typedef struct { simd_float3 eye,target; float seconds,fov; } NRCameraKey;
 @interface NRGeometry : NSObject {
 @public
     NSData *objects,*keys;
+    NSDictionary<NSNumber *, id<MTLBuffer>> *imported;
     id<MTLRenderPipelineState> pipeline;
     id<MTLDepthStencilState> depthState;
     id<MTLBuffer> grid, indices;
     NSUInteger indexCount, flatIndexOffset;
+    id<MTLTexture> environment;
     NRShot light;
 }
 @end
@@ -72,7 +74,8 @@ static NRGeometry *prepareGeometry(id<MTLDevice> device,const NRGraphSpec *spec,
         geometry->indexCount=shared->indexCount;geometry->flatIndexOffset=shared->flatIndexOffset;
     }
     NSMutableData *objects=[NSMutableData data];
-    NSArray *meshes=@[@"sphere",@"torus",@"panel",@"disc"];
+    NSMutableDictionary *buffers=[NSMutableDictionary new];
+    NSArray *meshes=@[@"sphere",@"torus",@"panel",@"disc",@"glb",@"vertexClip"];
     for(NSDictionary *o in scene[@"objects"]) {
         NRInstance obj={0};
         obj.position=xyz4(vector3(o[@"position"]));obj.size=xyz4(vector3(o[@"scale"]));
@@ -82,12 +85,43 @@ static NRGeometry *prepareGeometry(id<MTLDevice> device,const NRGraphSpec *spec,
         obj.surface=(simd_float4){[o[@"roughness"] floatValue],[o[@"metallic"] floatValue],[o[@"emission"] floatValue],[o[@"tube"] floatValue]};
         NSArray *engrave=o[@"engraving"]; NSNumber *slot=o[@"input"];
         obj.detail=(simd_float4){[engrave[0] floatValue],[engrave[1] floatValue],(float)[meshes indexOfObject:o[@"mesh"]],[slot isKindOfClass:NSNumber.class]?slot.floatValue:-1};
+        BOOL clip=[o[@"mesh"] isEqual:@"vertexClip"];
+        if(clip)obj.position.w=[o[@"phase"] floatValue];
+        NSNumber *sharedBuffer=o[@"sharedBuffer"];
+        if(clip && sharedBuffer){
+            id<MTLBuffer> buffer=buffers[sharedBuffer];
+            if(!buffer)return nil;
+            buffers[@(objects.length/sizeof(obj))]=buffer;
+        } else if (clip || [o[@"mesh"] isEqual:@"glb"]) {
+            NSData *bytes=[[NSData alloc] initWithBase64EncodedString:o[@"vertices"] options:0];
+            if(!bytes.length || (clip ? bytes.length<16 : bytes.length%64!=0)) return nil;
+            id<MTLBuffer> buffer=[device newBufferWithBytes:bytes.bytes length:bytes.length options:MTLResourceStorageModeShared];
+            if(!buffer)return nil;
+            buffers[@(objects.length/sizeof(obj))]=buffer;
+        }
         [objects appendBytes:&obj length:sizeof(obj)];
     }
-    geometry->objects=objects;
+    geometry->objects=objects; geometry->imported=buffers;
     geometry->light.sun=xyz4(vector3(scene[@"lightDirection"]));
     geometry->light.sunlight=xyz4(vector3(scene[@"lightColor"]));
     geometry->light.ambient=xyz4(vector3(scene[@"ambient"]));
+    NSDictionary *probe=scene[@"probe"];
+    if(probe){
+        NSUInteger w=[probe[@"width"] unsignedIntegerValue],h=[probe[@"height"] unsignedIntegerValue];
+        NSData *bytes=[[NSData alloc]initWithBase64EncodedString:probe[@"pixels"] options:0];
+        if(!w||!h||w>1024||h>512||bytes.length!=w*h*4)return nil;
+        MTLTextureDescriptor *desc=[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm_sRGB width:w height:h mipmapped:YES];
+        desc.storageMode=MTLStorageModeShared;desc.usage=MTLTextureUsageShaderRead;
+        geometry->environment=[device newTextureWithDescriptor:desc];
+        if(!geometry->environment)return nil;
+        [geometry->environment replaceRegion:MTLRegionMake2D(0,0,w,h) mipmapLevel:0 withBytes:bytes.bytes bytesPerRow:w*4];
+        id<MTLCommandQueue> queue=[device newCommandQueue];
+        id<MTLCommandBuffer> cmd=[queue commandBuffer];
+        id<MTLBlitCommandEncoder> blit=[cmd blitCommandEncoder];
+        [blit generateMipmapsForTexture:geometry->environment];[blit endEncoding];[cmd commit];[cmd waitUntilCompleted];
+        if(!cmd || cmd.status!=MTLCommandBufferStatusCompleted)return nil;
+        geometry->light.ambient.w=1;
+    }
     NSArray *path=scene[@"portraitCamera"];
     if(spec->width>=spec->height || ![path isKindOfClass:NSArray.class])path=scene[@"camera"];
     NSMutableData *keys=[NSMutableData data];
@@ -120,7 +154,7 @@ static NRShot evaluateShot(NRGeometry *geometry,float seconds,float aspect) {
     simd_float3 up=fabsf(forward.y)>.999f?(simd_float3){0,0,1}:(simd_float3){0,1,0};
     simd_float3 right=simd_normalize(simd_cross(forward,up));
     NRShot shot=geometry->light;
-    shot.eye=xyz4(eye);shot.forward=xyz4(forward);shot.right=xyz4(right);shot.up=xyz4(simd_cross(right,forward));
+    shot.eye=xyz4(eye);shot.eye.w=seconds;shot.forward=xyz4(forward);shot.right=xyz4(right);shot.up=xyz4(simd_cross(right,forward));
     float focal=1/tanf((a.fov+(b.fov-a.fov)*f)*(float)(M_PI/360));
     shot.projection=(simd_float4){focal/aspect,focal,.04f,2000.f};
     return shot;

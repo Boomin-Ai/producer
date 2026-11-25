@@ -107,6 +107,7 @@ pub fn document(id: &str, nested: bool) -> Document {
             graphs: Default::default(),
             output_graphs: Default::default(),
             layout_transition_ms: None,
+            reversible_layout_transitions: BTreeMap::new(),
             layouts,
             theme: BTreeMap::new(),
             actions: BTreeMap::new(),

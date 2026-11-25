@@ -11,7 +11,7 @@ jobs:
     env:
       CARGO_INCREMENTAL: '0'
       MACOSX_DEPLOYMENT_TARGET: '13.0'
-      VERSION: '0.4.94'
+      VERSION: '0.4.95'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -38,6 +38,26 @@ jobs:
           NOTARY_PW: ${{ secrets.APPLE_PASSWORD }}
           NOTARY_TEAM: ${{ secrets.APPLE_TEAM_ID }}
         run: bash scripts/native-silicon-candidate.sh sign
+      - name: Verify and sign the notarized updater archive
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/native-delivery"
+          archive="$out/Producer_${VERSION}_aarch64.app.tar.gz"
+          tar -czf "$archive" -C "$RUNNER_TEMP/native-stage" Producer.app
+          mkdir "$RUNNER_TEMP/verify-updater"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/verify-updater"
+          app="$RUNNER_TEMP/verify-updater/Producer.app"
+          codesign --verify --deep --strict "$app"
+          xcrun stapler validate "$app"
+          spctl -a -t exec "$app"
+          test "$(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist")" = "$VERSION"
+          npm install --prefix "$RUNNER_TEMP/signer" --no-save @tauri-apps/cli@2.11.5
+          "$RUNNER_TEMP/signer/node_modules/.bin/tauri" signer sign "$archive" --password "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" >/dev/null
+          test -s "$archive.sig"
+          (cd "$out" && shasum -a 256 *.dmg *.tar.gz *.sig > SHA256SUMS)
       - uses: actions/upload-artifact@v4
         with:
           name: Producer-Silicon-candidate-${{ github.sha }}

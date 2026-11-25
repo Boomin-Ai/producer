@@ -2,6 +2,7 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         println!("cargo:rerun-if-changed=native/macos.m");
+        println!("cargo:rerun-if-changed=native/studio_audio.c");
         println!("cargo:rerun-if-changed=native/room.h");
         println!("cargo:rerun-if-changed=native/recording.inc");
         println!("cargo:rerun-if-changed=native/p0_pressure.inc");
@@ -19,6 +20,7 @@ fn main() {
                 println!("cargo:rustc-link-lib=framework={framework}");
             }
         }
+        cc::Build::new().file("native/studio_audio.c").flag("-mmacosx-version-min=13.0").compile("producer_studio_audio");
         cc::Build::new()
             .file("native/macos.m")
             .file("../../../src-tauri/src/window_vibrancy.m")

@@ -99,6 +99,9 @@ static NSString *const shader = @
 @end
 
 typedef struct { atomic_bool ready; uint64_t session; int stage, output; double pts, wall; } P0Timing;
+typedef enum {
+    NRScreenAny, NRScreenWindow, NRScreenDisplay, NRScreenStop
+} NRScreenTarget;
 @interface NRRoom : NSObject<SCStreamOutput,SCStreamDelegate> {
 @public
     void *_context; NRFrameCallback _frame; NRAudioCallback _audio; NRStatusCallback _status;
@@ -106,7 +109,13 @@ typedef struct { atomic_bool ready; uint64_t session; int stage, output; double 
     id<MTLTexture> _graphSurfaces[2][64], _graphDepth[2], _graphEmpty;
     id<MTLSamplerState> _graphSampler;
     NSString *_cameraID, *_micID; uint64_t _cameraGeneration;
-    SCStream *_screen; dispatch_queue_t _captureQueue, _screenQueue, _writerQueue;
+    SCStream *_screen;
+    id _screenPickerObserver;
+    BOOL _screenPickerPending, _screenUpdating;
+    NRScreenTarget _screenPickerTarget, _screenTarget;
+    NSString *_screenSharingStatus;
+    uint64_t _screenRequestGeneration;
+    dispatch_queue_t _captureQueue, _screenQueue, _writerQueue;
     id<MTLDevice> _device; id<MTLCommandQueue> _gpuQueue;
     id<MTLRenderPipelineState> _pipeline; id<MTLComputePipelineState> _convert;
     CVMetalTextureCacheRef _cache; id<MTLTexture> _white;
@@ -130,6 +139,8 @@ typedef struct { atomic_bool ready; uint64_t session; int stage, output; double 
 @end
 
 // The opt-in probe uses bounded memory only on render/GPU/encoder threads.
+static void endScreenShare(NRRoom *r);
+
 static void timing(NRRoom *r,int stage,int output,double pts) {
     if(!r->_timing || !atomic_load(&r->_recordEnabled))return;
     unsigned i=atomic_fetch_add(&r->_timingCount,1);
@@ -172,17 +183,35 @@ static void p0Stall(NRRoom *r, int lane, double pts) {
 #include "p0_pressure.inc"
 #include "recording.inc"
 
+// Capture sessions can use different device clocks. The mixer and program
+// writer compare against host time, so convert before crossing into Rust.
+static double sampleHostTime(AVCaptureSession *session, CMSampleBufferRef sample) {
+    CMTime pts = CMSampleBufferGetPresentationTimeStamp(sample);
+    CMClockRef captureClock = session.synchronizationClock;
+    CMClockRef hostClock = CMClockGetHostTimeClock();
+    if (captureClock && captureClock != hostClock) {
+        pts = CMSyncConvertTime(pts, captureClock, hostClock);
+    }
+    return CMTimeGetSeconds(pts);
+}
+
 @implementation NRFeed
 - (void)captureOutput:(AVCaptureOutput*)output didOutputSampleBuffer:(CMSampleBufferRef)s fromConnection:(AVCaptureConnection*)c {
     NRRoom *room=self.room; if(!room||atomic_load(&room->_closing))return;
-    if(self.source==0 && self==room->_cameraFeed) { CVPixelBufferRef b=CMSampleBufferGetImageBuffer(s); if(b){double pts=CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(s));if(!isfinite(pts))pts=nr_host_time();[room deliver:0 buffer:b pts:pts generation:self.generation];} }
-    else if(room->_audio) {
+    if(self.source==0 && self==room->_cameraFeed) {
+        CVPixelBufferRef b=CMSampleBufferGetImageBuffer(s);
+        if(b){
+            double pts=sampleHostTime(room->_camera,s);
+            if(!isfinite(pts))pts=nr_host_time();
+            [room deliver:0 buffer:b pts:pts generation:self.generation];
+        }
+    } else if(self.source==3 && self==room->_micFeed && room->_audio) {
         // AVCapture converts to bounded interleaved float32 48 kHz stereo.
         AudioStreamBasicDescription const *asbd=CMAudioFormatDescriptionGetStreamBasicDescription(CMSampleBufferGetFormatDescription(s));
         CMBlockBufferRef bb=CMSampleBufferGetDataBuffer(s); char *data=NULL;size_t size=0;
         if(asbd && asbd->mSampleRate==48000 && asbd->mChannelsPerFrame==2 && asbd->mBytesPerFrame==8 && (asbd->mFormatFlags&kAudioFormatFlagIsFloat)
             && bb && CMBlockBufferGetDataPointer(bb,0,NULL,&size,&data)==kCMBlockBufferNoErr && size<=8*8192) {
-            double stamp=CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(s));
+            double stamp=sampleHostTime(room->_mic,s);
             if(isfinite(stamp))room->_audio(room->_context,(const float*)data,(uint32_t)(size/8),stamp+(double)(size/8)/48000.);
         }
     }
@@ -197,15 +226,26 @@ static void p0Stall(NRRoom *r, int lane, double pts) {
     if(source<2)recordVideo(self,source+2,b,pts);
 }
 - (void)stream:(SCStream*)stream didOutputSampleBuffer:(CMSampleBufferRef)s ofType:(SCStreamOutputType)t {
-    if(t!=SCStreamOutputTypeScreen||!CMSampleBufferIsValid(s))return;
+    if (t!=SCStreamOutputTypeScreen || !CMSampleBufferIsValid(s)
+        || !atomic_load(&_screenRequested) || atomic_load(&_closing)) return;
+    @synchronized(self) {
+    if (stream != _screen) return;
     CFArrayRef attachments=CMSampleBufferGetSampleAttachmentsArray(s,false);
     if(attachments && CFArrayGetCount(attachments)>0) {
         NSDictionary *a=(__bridge NSDictionary*)CFArrayGetValueAtIndex(attachments,0);
-        if([a[SCStreamFrameInfoStatus] integerValue]!=SCFrameStatusComplete)return;
+        SCFrameStatus status=[a[SCStreamFrameInfoStatus] integerValue];
+        if(status!=SCFrameStatusComplete && status!=SCFrameStatusStarted)return;
     }
     CVPixelBufferRef b=CMSampleBufferGetImageBuffer(s);if(b){double pts=CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(s));if(!isfinite(pts))pts=nr_host_time();[self deliver:1 buffer:b pts:pts generation:1];}
+    }
 }
-- (void)stream:(SCStream*)stream didStopWithError:(NSError*)error { [self status:1 text:error.localizedDescription]; }
+- (void)stream:(SCStream*)stream didStopWithError:(NSError*)error {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (stream != self->_screen || atomic_load(&self->_closing)) return;
+        endScreenShare(self);
+        [self status:1 text:error.localizedDescription ?: @"Screen sharing stopped"];
+    });
+}
 @end
 
 static NRRoom *createClipWriter(void *context) {
@@ -356,41 +396,265 @@ static void startMic(NRRoom *r) {
         [s addInput:input];[s addOutput:out];[s commitConfiguration];r->_mic=s;[s startRunning];[r status:3 text:@"Microphone starting"];
     }});
 }
+// Screen selection and stream replacement run on the main queue. The screen
+// sample queue only consumes the selected stream.
+static void endScreenShare(NRRoom *r) {
+    atomic_store(&r->_screenRequested, false);
+    r->_screenRequestGeneration++;
+    r->_screenPickerPending=NO;
+    r->_screenUpdating=NO;
+    r->_screenTarget=NRScreenAny;
+    r->_screenSharingStatus=nil;
+    SCStream *stream;
+    @synchronized(r) { stream=r->_screen; r->_screen=nil; }
+    if (!atomic_load(&r->_closing) && r->_frame) r->_frame(r->_context,1,NULL,0.,0);
+    if (@available(macOS 14.0, *)) {
+        if (r->_screenPickerObserver) {
+            SCContentSharingPicker *picker=SCContentSharingPicker.sharedPicker;
+            [picker removeObserver:r->_screenPickerObserver];
+            if (stream) [picker setConfiguration:nil forStream:stream];
+            picker.active=NO;
+            r->_screenPickerObserver=nil;
+        }
+    }
+    [stream stopCaptureWithCompletionHandler:nil];
+}
+
+static SCStreamConfiguration *screenConfiguration(CGSize size, double pixelScale) {
+    if (size.width<=0 || size.height<=0) return nil;
+    double scale=fmin(fmax(1.,pixelScale),1920./fmax(size.width,size.height));
+    SCStreamConfiguration *config=[SCStreamConfiguration new];
+    config.width=(size_t)fmax(2.,floor(size.width*scale/2.)*2.);
+    config.height=(size_t)fmax(2.,floor(size.height*scale/2.)*2.);
+    config.minimumFrameInterval=CMTimeMake(1,30);
+    config.queueDepth=3;
+    config.pixelFormat=kCVPixelFormatType_32BGRA;
+    config.showsCursor=YES;
+    if (@available(macOS 14.0, *)) {
+        config.preservesAspectRatio=YES;
+        config.ignoreShadowsSingleWindow=YES;
+        config.ignoreGlobalClipSingleWindow=YES;
+    }
+    if (@available(macOS 14.2, *)) config.includeChildWindows=NO;
+    return config;
+}
+
+static void startScreenShare(NRRoom *r, SCContentFilter *filter, SCStreamConfiguration *config, NSString *status) {
+    if (atomic_load(&r->_closing) || !atomic_load(&r->_screenRequested)) return;
+    SCStream *stream=[[SCStream alloc] initWithFilter:filter configuration:config delegate:r];
+    NSError *error=nil;
+    if (![stream addStreamOutput:r type:SCStreamOutputTypeScreen sampleHandlerQueue:r->_screenQueue error:&error]) {
+        endScreenShare(r);
+        [r status:1 text:error.localizedDescription ?: @"Could not attach screen capture"];
+        return;
+    }
+    r->_screenSharingStatus=status;
+    r->_screenUpdating=YES;
+    @synchronized(r) { r->_screen=stream; }
+    [stream startCaptureWithCompletionHandler:^(NSError *error){
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (stream != r->_screen || atomic_load(&r->_closing)) return;
+            r->_screenUpdating=NO;
+            if (error) endScreenShare(r);
+            [r status:1 text:error.localizedDescription ?: status];
+        });
+    }];
+}
+
+API_AVAILABLE(macos(14.0))
+@interface NRScreenPicker : NSObject<SCContentSharingPickerObserver>
+@property(nonatomic, weak) NRRoom *room;
+- (void)finishWithMessage:(NSString *)message stream:(SCStream *)stream;
+@end
+
+@implementation NRScreenPicker
+- (void)contentSharingPicker:(SCContentSharingPicker *)picker didUpdateWithFilter:(SCContentFilter *)filter forStream:(SCStream *)stream {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NRRoom *r=self.room;
+        if (!r || r->_screenPickerObserver!=self || stream!=r->_screen
+            || atomic_load(&r->_closing) || !atomic_load(&r->_screenRequested) || r->_screenUpdating) return;
+        NRScreenTarget requested=r->_screenPickerPending ? r->_screenPickerTarget : r->_screenTarget;
+        r->_screenPickerPending=NO;
+        SCShareableContentStyle style=filter.style;
+        BOOL window=style==SCShareableContentStyleWindow;
+        BOOL display=style==SCShareableContentStyleDisplay;
+        if ((!window && !display) || (requested==NRScreenWindow && !window)
+            || (requested==NRScreenDisplay && !display)) {
+            if (!stream) endScreenShare(r);
+            [r status:1 text:requested==NRScreenWindow ? @"Select a single window to share"
+                : requested==NRScreenDisplay ? @"Select a display to share" : @"Select a window or display to share"];
+            return;
+        }
+        SCStreamConfiguration *config=screenConfiguration(filter.contentRect.size, filter.pointPixelScale);
+        if (!config) {
+            if (!stream) endScreenShare(r);
+            [r status:1 text:@"The selected window or display has no visible area"];
+            return;
+        }
+        NSString *status=window ? @"Sharing a window" : @"Sharing a display";
+        NRScreenTarget selected=window ? NRScreenWindow : NRScreenDisplay;
+        if (!stream) {
+            r->_screenTarget=selected;
+            startScreenShare(r,filter,config,status);
+            return;
+        }
+        // Keep the existing source texture until the stream delivers the new share.
+        r->_screenUpdating=YES;
+        [stream updateContentFilter:filter completionHandler:^(NSError *error) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (stream!=r->_screen || atomic_load(&r->_closing)) return;
+                if (error) {
+                    r->_screenUpdating=NO;
+                    [r status:1 text:error.localizedDescription];
+                    return;
+                }
+                r->_screenTarget=selected;
+                r->_screenSharingStatus=status;
+                [stream updateConfiguration:config completionHandler:^(NSError *error) {
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        if (stream!=r->_screen || atomic_load(&r->_closing)) return;
+                        r->_screenUpdating=NO;
+                        [r status:1 text:error.localizedDescription ?: status];
+                    });
+                }];
+            });
+        }];
+    });
+}
+- (void)contentSharingPicker:(SCContentSharingPicker *)picker didCancelForStream:(SCStream *)stream {
+    [self finishWithMessage:@"Screen selection canceled" stream:stream];
+}
+- (void)contentSharingPickerStartDidFailWithError:(NSError *)error {
+    [self finishWithMessage:error.localizedDescription ?: @"Could not open the screen sharing picker" stream:nil];
+}
+- (void)finishWithMessage:(NSString *)message stream:(SCStream *)stream {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NRRoom *r=self.room;
+        if (!r || r->_screenPickerObserver!=self || (stream && stream!=r->_screen)
+            || !r->_screenPickerPending || atomic_load(&r->_closing)) return;
+        r->_screenPickerPending=NO;
+        if (!r->_screen) endScreenShare(r);
+        [r status:1 text:r->_screenSharingStatus ?: message];
+    });
+}
+@end
+
+static void chooseScreen(NRRoom *r, NRScreenTarget target, BOOL replace) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (atomic_load(&r->_closing)) return;
+        if (target==NRScreenStop) {
+            endScreenShare(r);
+            [r status:1 text:@"Screen sharing stopped"];
+            return;
+        }
+        if (r->_screenPickerPending || r->_screenUpdating
+            || (!replace && atomic_load(&r->_screenRequested))) return;
+        atomic_store(&r->_screenRequested,true);
+        if (@available(macOS 14.0, *)) {
+            SCContentSharingPicker *picker=SCContentSharingPicker.sharedPicker;
+            if (!r->_screenPickerObserver) {
+                NRScreenPicker *observer=[NRScreenPicker new];
+                observer.room=r;
+                r->_screenPickerObserver=observer;
+                [picker addObserver:observer];
+            }
+            SCContentSharingPickerConfiguration *configuration=[SCContentSharingPickerConfiguration new];
+            SCContentSharingPickerMode window=SCContentSharingPickerModeSingleWindow;
+            SCContentSharingPickerMode display=SCContentSharingPickerModeSingleDisplay;
+            configuration.allowedPickerModes=target==NRScreenWindow ? window : target==NRScreenDisplay ? display : window|display;
+            configuration.allowsChangingSelectedContent=YES;
+            NSString *bundleID=NSBundle.mainBundle.bundleIdentifier;
+            if (bundleID) configuration.excludedBundleIDs=@[bundleID];
+            picker.maximumStreamCount=@1;
+            picker.active=YES;
+            r->_screenPickerPending=YES;
+            r->_screenPickerTarget=target;
+            [r status:1 text:target==NRScreenWindow ? @"Choose a window to share"
+                : target==NRScreenDisplay ? @"Choose a display to share" : @"Choose a window or display to share"];
+            SCShareableContentStyle style=target==NRScreenWindow ? SCShareableContentStyleWindow : SCShareableContentStyleDisplay;
+            if (r->_screen) {
+                [picker setConfiguration:configuration forStream:r->_screen];
+                if (target==NRScreenAny) [picker presentPickerForStream:r->_screen];
+                else [picker presentPickerForStream:r->_screen usingContentStyle:style];
+            } else {
+                picker.defaultConfiguration=configuration;
+                if (target==NRScreenAny) [picker present];
+                else [picker presentPickerUsingContentStyle:style];
+            }
+            return;
+        }
+        if (target==NRScreenWindow) {
+            if (!r->_screen) endScreenShare(r);
+            [r status:1 text:@"The window sharing picker requires macOS 14 or later"];
+            return;
+        }
+        if (r->_screen) return;
+        r->_screenPickerPending=YES;
+        uint64_t request=r->_screenRequestGeneration;
+        [r status:1 text:@"Requesting screen capture"];
+        [SCShareableContent getShareableContentExcludingDesktopWindows:YES onScreenWindowsOnly:YES completionHandler:^(SCShareableContent *content,NSError *error){
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (atomic_load(&r->_closing) || request!=r->_screenRequestGeneration) return;
+                r->_screenPickerPending=NO;
+                SCDisplay *display=content.displays.firstObject;
+                if (error || !display) {
+                    endScreenShare(r);
+                    [r status:1 text:error.code==SCStreamErrorUserDeclined
+                        ? @"Allow Screen Recording for Producer in macOS Privacy settings"
+                        : error.localizedDescription ?: @"No display available"];
+                    return;
+                }
+                NSMutableArray *exclude=[NSMutableArray new];
+                for (SCRunningApplication *app in content.applications) if (app.processID==getpid()) [exclude addObject:app];
+                SCContentFilter *filter=[[SCContentFilter alloc] initWithDisplay:display excludingApplications:exclude exceptingWindows:@[]];
+                startScreenShare(r,filter,screenConfiguration(CGSizeMake(display.width,display.height),1.),@"Sharing a display");
+            });
+        }];
+    });
+}
+
+static void requestMicrophone(NRRoom *r) {
+    if (atomic_load(&r->_closing)) return;
+    AVAuthorizationStatus access=[AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
+    if (access==AVAuthorizationStatusNotDetermined) {
+        [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL allowed) {
+            if (allowed) startMic(r);
+            else [r status:3 text:@"Allow Microphone in macOS Privacy settings"];
+        }];
+    } else if (access==AVAuthorizationStatusAuthorized) startMic(r);
+    else [r status:3 text:@"Allow Microphone in macOS Privacy settings"];
+}
+
 void nr_capture(void *handle,int camera,int screen,int mic) {
     NRRoom *r=(__bridge NRRoom*)handle;
-    if(camera) { AVAuthorizationStatus s=[AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
-        if(s==AVAuthorizationStatusNotDetermined)[AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL ok){if(ok)startCamera(r);else[r status:0 text:@"Allow Camera in macOS Privacy settings"];}];
-        else if(s==AVAuthorizationStatusAuthorized)startCamera(r);else[r status:0 text:@"Allow Camera in macOS Privacy settings"];
+    if (camera) {
+        AVAuthorizationStatus access=[AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
+        if (access==AVAuthorizationStatusNotDetermined) {
+            BOOL promptMicAfterCamera=mic &&
+                [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio]==AVAuthorizationStatusNotDetermined;
+            [AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL allowed) {
+                if (allowed) startCamera(r);
+                else [r status:0 text:@"Allow Camera in macOS Privacy settings"];
+                if (promptMicAfterCamera) requestMicrophone(r);
+            }];
+            if (promptMicAfterCamera) mic=0;
+        } else if (access==AVAuthorizationStatusAuthorized) startCamera(r);
+        else [r status:0 text:@"Allow Camera in macOS Privacy settings"];
     }
-    if(mic) { AVAuthorizationStatus s=[AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
-        if(s==AVAuthorizationStatusNotDetermined)[AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL ok){if(ok)startMic(r);else[r status:3 text:@"Allow Microphone in macOS Privacy settings"];}];
-        else if(s==AVAuthorizationStatusAuthorized)startMic(r);else[r status:3 text:@"Allow Microphone in macOS Privacy settings"];
-    }
-    if(screen&&!atomic_exchange(&r->_screenRequested,true)) {
-        // ScreenCaptureKit owns authorization for this provider. A separate
-        // CoreGraphics preflight must not prevent the authorized request from
-        // reaching it (notably after a local executable is rebuilt).
-        [r status:1 text:@"Requesting screen capture"];
-        [SCShareableContent getShareableContentExcludingDesktopWindows:YES onScreenWindowsOnly:YES completionHandler:^(SCShareableContent *c,NSError *e){
-            if(e||!c.displays.count){atomic_store(&r->_screenRequested,false);[r status:1 text:e.code==SCStreamErrorUserDeclined?@"Allow Screen Recording for Producer Native Dev in macOS Privacy settings":(e.localizedDescription?:@"No display available")];return;}
-            if(atomic_load(&r->_closing))return;
-            NSMutableArray *exclude=[NSMutableArray new];for(SCRunningApplication *a in c.applications)if(a.processID==getpid())[exclude addObject:a];
-            SCContentFilter *f=[[SCContentFilter alloc] initWithDisplay:c.displays.firstObject excludingApplications:exclude exceptingWindows:@[]];
-            SCStreamConfiguration *cfg=[SCStreamConfiguration new];cfg.width=1920;cfg.height=1080;cfg.minimumFrameInterval=CMTimeMake(1,30);cfg.queueDepth=3;cfg.pixelFormat=kCVPixelFormatType_32BGRA;cfg.showsCursor=YES;
-            SCStream *s=[[SCStream alloc] initWithFilter:f configuration:cfg delegate:r];NSError *err=nil;
-            if(![s addStreamOutput:r type:SCStreamOutputTypeScreen sampleHandlerQueue:r->_screenQueue error:&err]){atomic_store(&r->_screenRequested,false);[r status:1 text:err.localizedDescription];return;}
-            r->_screen=s;[s startCaptureWithCompletionHandler:^(NSError *err){if(err){r->_screen=nil;atomic_store(&r->_screenRequested,false);}[r status:1 text:err.localizedDescription?:@"Screen sharing"];}];
-        }];
-    }
+    if (mic) requestMicrophone(r);
+    if (screen) chooseScreen(r,NRScreenAny,NO);
+}
+
+void nr_screen_capture(void *handle,int target) {
+    NRRoom *r=(__bridge NRRoom*)handle;
+    chooseScreen(r,(NRScreenTarget)target,YES);
 }
 
 // Releasing a room source must release its capture without blocking the render lane.
 void nr_capture_stop(void *handle,int source) {
     NRRoom *r=(__bridge NRRoom*)handle;
     if(source==1) {
-        SCStream *stream=r->_screen;r->_screen=nil;
-        atomic_store(&r->_screenRequested,false);
-        [stream stopCaptureWithCompletionHandler:^(NSError *e){(void)e;}];
+        chooseScreen(r,NRScreenStop,YES);
     } else dispatch_async(r->_captureQueue,^{
         if(source==0){[r->_camera stopRunning];r->_camera=nil;r->_cameraFeed=nil;}
         if(source==3){[r->_mic stopRunning];r->_mic=nil;r->_micFeed=nil;}
@@ -428,6 +692,21 @@ void nr_input_stop(void *handle) {
     dispatch_sync(r->_captureQueue,^{[r->_camera stopRunning];[r->_mic stopRunning];r->_cameraFeed=nil;r->_micFeed=nil;});
 }
 
+static NSFont *systemTextFont(CGFloat size, uint32_t weight) {
+    const CGFloat weights[] = {NSFontWeightUltraLight, NSFontWeightThin, NSFontWeightLight,
+        NSFontWeightRegular, NSFontWeightMedium, NSFontWeightSemibold, NSFontWeightBold,
+        NSFontWeightHeavy, NSFontWeightBlack};
+    return [NSFont systemFontOfSize:size weight:weights[(weight-100)/100]];
+}
+
+double nr_headline_width(const char *value, double size) {
+    @autoreleasepool {
+        NSString *text = [NSString stringWithUTF8String:value];
+        if (!text) return NAN;
+        return [text sizeWithAttributes:@{NSFontAttributeName:systemTextFont(size, 700)}].width;
+    }
+}
+
 // Control-lane preparation; immutable textures are never rasterized per frame.
 void *nr_text_cache(const NRText *specs,size_t count,const NRGraphSpec *graphs,size_t graphCount,char *error,size_t capacity) {
     if(count>128 || graphCount>64)return NULL;
@@ -450,12 +729,11 @@ void *nr_text_cache(const NRText *specs,size_t count,const NRGraphSpec *graphs,s
             NSString *text=[NSString stringWithUTF8String:t.value];if(!text)return NULL;
             NSMutableData *pixels=[NSMutableData dataWithLength:w*h*4];CGColorSpaceRef cs=CGColorSpaceCreateDeviceRGB();
             CGContextRef c=CGBitmapContextCreate(pixels.mutableBytes,w,h,8,w*4,cs,kCGImageAlphaPremultipliedFirst|kCGBitmapByteOrder32Little);CGColorSpaceRelease(cs);if(!c)return NULL;
-            CGFloat weights[9]={NSFontWeightUltraLight,NSFontWeightThin,NSFontWeightLight,NSFontWeightRegular,NSFontWeightMedium,NSFontWeightSemibold,NSFontWeightBold,NSFontWeightHeavy,NSFontWeightBlack};
-            NSFont *font=[NSFont systemFontOfSize:t.font_size weight:weights[MIN(8,(t.weight-100)/100)]];
+            NSFont *font=systemTextFont(t.font_size,t.weight);
             NSMutableParagraphStyle *paragraph=[NSMutableParagraphStyle new];paragraph.alignment=t.align==1?NSTextAlignmentCenter:(t.align==2?NSTextAlignmentRight:NSTextAlignmentLeft);
             if(t.single_line){
                 CGFloat width=[text sizeWithAttributes:@{NSFontAttributeName:font}].width;
-                if(width>w) font=[NSFont systemFontOfSize:MAX(t.font_size*.60,t.font_size*(w-1)/width) weight:weights[MIN(8,(t.weight-100)/100)]];
+                if(width>w) font=systemTextFont(MAX(t.font_size*.60,t.font_size*(w-1)/width),t.weight);
                 paragraph.lineBreakMode=NSLineBreakByTruncatingTail;
             }
             NSAttributedString *string=[[NSAttributedString alloc] initWithString:text attributes:@{NSFontAttributeName:font,NSForegroundColorAttributeName:NSColor.whiteColor,NSParagraphStyleAttributeName:paragraph}];
@@ -500,7 +778,7 @@ int nr_prepare(void *handle,uint32_t w0,uint32_t h0,uint32_t w1,uint32_t h1) {
     if(ok)for(int i=0;i<2;i++)if(pools[i]){if(r->_pool[i])CFRelease(r->_pool[i]);r->_pool[i]=pools[i];pools[i]=NULL;r->_rgb[i]=textures[i];r->_width[i]=w[i];r->_height[i]=h[i];}
     for(int i=0;i<2;i++)if(pools[i])CFRelease(pools[i]);return ok?1:0;
 }
-int nr_render(void *handle,uint32_t output,uint32_t w,uint32_t h,const NRDraw *draws,size_t count,void **sources,void *textCache,double pts,uint64_t generation) {
+int nr_render(void *handle,uint32_t output,uint32_t w,uint32_t h,const NRDraw *draws,size_t count,void **sources,void *textCache,void *djCache,double pts,uint64_t generation) {
     NRRoom *r=(__bridge NRRoom*)handle;
     if(output>1||count>1024||w<64||h<64||w>4096||h>4096||w%2||h%2||atomic_load(&r->_closing))return 0;
     if(output==0 && atomic_load(&r->_recordEnabled))p0Stall(r,1,pts);
@@ -527,8 +805,9 @@ int nr_render(void *handle,uint32_t output,uint32_t w,uint32_t h,const NRDraw *d
         CVPixelBufferRef held[8]={0};
         for(int i=0;i<8;i++)if(sources[i]){held[i]=CVPixelBufferRetain((CVPixelBufferRef)sources[i]);textures[i]=cvtexture(r,held[i],MTLPixelFormatBGRA8Unorm,CVPixelBufferGetWidth(held[i]),CVPixelBufferGetHeight(held[i]),0,&keep[i]);}
         NRVisualResources *resourcesForFrame=(__bridge NRVisualResources*)textCache;
+        NRVisualResources *djResources=(__bridge NRVisualResources*)djCache;
         id<MTLTexture> graphOutputs[64]={nil};
-        if(!encodeGraphs(r,command,output,draws,count,resourcesForFrame,textures,graphOutputs)){
+        if(!encodeGraphs(r,command,output,draws,count,resourcesForFrame,textures,graphOutputs,djResources.images.firstObject)){
             for(int i=0;i<8;i++){if(keep[i])CFRelease(keep[i]);if(held[i])CVPixelBufferRelease(held[i]);}
             CVPixelBufferRelease(result);finishCommand(r,output);return 0;
         }
@@ -594,8 +873,11 @@ int nr_render(void *handle,uint32_t output,uint32_t w,uint32_t h,const NRDraw *d
 
 
 void nr_stop(void *handle) {
-    NRRoom *r=(__bridge_transfer NRRoom*)handle;atomic_store(&r->_closing,true);
-    [r->_screen stopCaptureWithCompletionHandler:^(NSError *e){(void)e;}];
+    NRRoom *r=(__bridge_transfer NRRoom*)handle;
+    // Fence the current screen sample before Rust releases the frame callback context.
+    @synchronized(r) { atomic_store(&r->_closing,true); }
+    atomic_store(&r->_screenRequested,false);
+    dispatch_async(dispatch_get_main_queue(), ^{ endScreenShare(r); });
     dispatch_sync(r->_captureQueue,^{[r->_camera stopRunning];[r->_mic stopRunning];});
     while(atomic_load(&r->_inflight)>0 || atomic_load(&r->_retainedAfterCompletion)>0)usleep(1000);
     for(NRRoom *clip in @[r->_clipWriter,r->_liveWriter]) {

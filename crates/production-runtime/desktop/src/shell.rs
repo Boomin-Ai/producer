@@ -3,6 +3,7 @@ use super::*;
 mod shell_account;
 use crate::boomin_account::Action;
 use crate::broadcast::{self, Destination};
+use crate::studio_presets::Starter;
 use anyhow::{ensure, Result};
 use set_text_field::SetTextField;
 use shell_account::Identity;
@@ -41,6 +42,10 @@ impl Section {
     }
 }
 impl EventEmitter<Page> for Room {}
+#[cfg(debug_assertions)]
+pub(super) struct ConnectBoomin;
+#[cfg(debug_assertions)]
+impl EventEmitter<ConnectBoomin> for Room {}
 struct RoomEntry {
     main: bool,
     path: PathBuf,
@@ -74,11 +79,11 @@ fn catalog(root: &Path) -> Result<Vec<RoomEntry>> {
         })
         .collect())
 }
-fn create_room(root: &Path, name: &str) -> Result<PathBuf> {
+fn create_room(root: &Path, name: &str, starter: Option<Starter>) -> Result<PathBuf> {
     let name = name.trim();
     ensure!(
         !name.is_empty() && name.chars().count() <= 80,
-        "Enter a room name (up to 80 characters)"
+        "Enter a studio name (up to 80 characters)"
     );
     let parent = root.join("rooms");
     fs::create_dir_all(&parent)?;
@@ -94,6 +99,9 @@ fn create_room(root: &Path, name: &str) -> Result<PathBuf> {
         .to_ascii_lowercase();
     project.production.id = project.room.clone();
     project.production.title = name.into();
+    if let Some(starter) = starter {
+        starter.apply(&mut project)?;
+    }
     project.compile()?;
     let mut file = fs::File::create(dir.path().join("room.json"))?;
     serde_json::to_writer_pretty(&mut file, &project)?;
@@ -120,6 +128,9 @@ pub(crate) struct Shell {
     switching: bool,
     notice: Option<String>,
     room_name: Option<Entity<SetTextField>>,
+    choosing_starter: bool,
+    studio_starter: Option<Starter>,
+    starter_art: [Arc<gpui::Image>; 4],
     rows: Vec<Destination>,
     form: Option<Form>,
     saving: bool,
@@ -161,6 +172,11 @@ impl Shell {
             switching: false,
             notice: None,
             room_name: None,
+            choosing_starter: false,
+            studio_starter: None,
+            starter_art: Starter::ALL.map(|starter| {
+                Arc::new(gpui::Image::from_bytes(ImageFormat::Jpeg, starter.art().to_vec()))
+            }),
             rows: vec![],
             form: None,
             saving: false,
@@ -176,6 +192,14 @@ impl Shell {
             profile: "Producer".into(),
         };
         shell.navigate(Page::Rooms, cx);
+        #[cfg(all(debug_assertions,not(test)))]
+        if std::env::var_os("PRODUCER_DEV_OPEN_LOCAL_ROOM").as_deref()==Some(std::ffi::OsStr::new("1"))
+            && std::env::var_os("PRODUCER_NATIVE_ROOM_HOME").is_some() {
+            shell.identity.local=true;
+            let local=shell.base.clone();
+            shell.open(local,cx);
+            return shell;
+        }
         #[cfg(not(test))]
         shell.account_action(Action::Restore, cx);
         cx.spawn(async move |this, cx| loop {
@@ -229,6 +253,8 @@ impl Shell {
         self.form = None;
         self.confirm_remove = None;
         self.room_name = None;
+        self.choosing_starter = false;
+        self.studio_starter = None;
         let result = match page {
             Page::Rooms => self.refresh_rooms(),
             Page::Settings => broadcast::list(&self.base).map(|v| self.rows = v),
@@ -248,10 +274,28 @@ impl Shell {
             h.closed.store(true, Ordering::Release);
             return Err(e);
         }
-        *h.pending_rtc_link.lock().unwrap() = self.pending.lock().unwrap().take();
+        let incoming_link = self.pending.lock().unwrap().take();
+        #[cfg(not(test))]
+        let opening_guest = incoming_link.is_some();
+        *h.pending_rtc_link.lock().unwrap() = incoming_link;
+        #[cfg(not(test))]
+        if !opening_guest {
+            let project = h.snapshot().project;
+            let camera = project.lanes.iter().any(|lane| lane.source == "camera");
+            let mic = project.lanes.iter().any(|lane| lane.source == "microphone");
+            if camera || mic {
+                if let Err(error) = h.send(RoomCommand::Capture { camera, screen: false, mic }) {
+                    h.closed.store(true, Ordering::Release);
+                    return Err(error);
+                }
+            }
+        }
         *self.active.lock().unwrap() = Some(h.clone());
         let room = cx.new(|cx| Room::new(h, cx));
         cx.subscribe(&room, |s, _, page: &Page, cx| s.navigate(*page, cx))
+            .detach();
+        #[cfg(debug_assertions)]
+        cx.subscribe(&room, |s, _, _: &ConnectBoomin, cx| s.open_studio_account(cx))
             .detach();
         self.studio = Some(room);
         self.navigate(Page::Studio, cx);
@@ -271,7 +315,7 @@ impl Shell {
                 return;
             }
             if self.has_active_session(&h, cx) {
-                self.notice = Some("Finish the active room session before switching rooms.".into());
+                self.notice = Some("Finish the active session before switching studios.".into());
                 return;
             }
             self.switching = true;
@@ -294,7 +338,7 @@ impl Shell {
             .detach();
         } else if let Err(e) = self.begin(path, cx) {
             self.pending.lock().unwrap().take();
-            self.notice = Some(format!("Open room · {e:#}"));
+            self.notice = Some(format!("Open studio · {e:#}"));
         }
         cx.notify();
     }
@@ -368,9 +412,98 @@ impl Shell {
         let goal = if self.page == Page::Settings { 1. } else { 0. };
         goal + (self.slide_from - goal) * (1. - t).powi(3)
     }
+    fn name_studio(&mut self, starter: Option<Starter>, window: &mut Window, cx: &mut Context<Self>) {
+        self.studio_starter = starter;
+        self.identity.reference = uuid::Uuid::new_v4().to_string();
+        let title = starter.map(Starter::name).unwrap_or_default().to_owned();
+        let field = cx.new(|cx| SetTextField::new(title, cx));
+        field.read(cx).focus_handle(cx).focus(window, cx);
+        self.room_name = Some(field);
+        self.notice = None;
+        cx.notify();
+    }
+    fn submit_studio(&mut self, cx: &mut Context<Self>) {
+        let Some(field) = &self.room_name else { return };
+        let name = field.read(cx).value.trim().to_owned();
+        if name.is_empty() || name.chars().count() > 80 {
+            self.notice = Some("Enter a studio name (up to 80 characters)".into());
+            cx.notify();
+            return;
+        }
+        if let Some(account) = self.identity.account.as_ref().filter(|_| !self.identity.local) {
+            self.account_action(Action::Create(account.login.clone(), name, self.identity.reference.clone()), cx);
+        } else {
+            match create_room(&self.base, &name, self.studio_starter) {
+                Ok(path) => {
+                    self.navigate(Page::Rooms, cx);
+                    self.open(path, cx);
+                }
+                Err(error) => self.notice = Some(error.to_string()),
+            }
+            cx.notify();
+        }
+    }
+    fn studio_creator(&self, width: f32, cx: &mut Context<Self>) -> Div {
+        let back = Room::edit_button("studio-creator-back", if self.room_name.is_some() { "‹ Starters" } else { "‹ Studios" }, false)
+            .on_click(cx.listener(|shell, _, _, cx| {
+                if shell.room_name.take().is_none() {
+                    shell.choosing_starter = false;
+                }
+                shell.notice = None;
+                cx.notify();
+            }));
+        let mut page = stack().w_full().max_w(px(854.)).mx_auto().gap(px(16.))
+            .child(div().flex().child(back));
+        if let Some(field) = &self.room_name {
+            let heading = self.studio_starter.map(Starter::name).unwrap_or("Blank studio");
+            page = page.child(stack().max_w(px(440.)).gap(px(12.))
+                .child(div().text_size(px(26.)).font_weight(FontWeight::BOLD).child(heading))
+                .child(label("Studio name"))
+                .child(field.clone())
+                .child(Room::edit_button("create-studio", "Create Studio", true)
+                    .debug_selector(|| "create-studio".into())
+                    .on_click(cx.listener(|shell, _, _, cx| shell.submit_studio(cx)))));
+            if let Some(error) = &self.identity.error {
+                page = page.child(div().text_color(rgb(0xffadb3)).child(error.clone()));
+            }
+            return page;
+        }
+        let columns = if width >= 696. { 2 } else { 1 };
+        let mut cards = stack().w_full().gap(px(14.));
+        for (starters, art) in Starter::ALL.chunks(columns).zip(self.starter_art.chunks(columns)) {
+            let mut row = div().w_full().flex().gap(px(14.));
+            for (&starter, art) in starters.iter().zip(art) {
+                let preview = div().id(format!("starter-preview-{}", starter.key()))
+                    .debug_selector(move || format!("starter-preview-{}", starter.key()))
+                    .w_full().aspect_ratio(16. / 9.).flex_none().bg(rgb(0x0d1721))
+                    .child(img(art.clone()).size_full().object_fit(ObjectFit::Contain));
+                row = row.child(
+                    stack()
+                        .id(starter.key()).debug_selector(move || starter.key().into())
+                        .flex_1().min_w_0()
+                        .rounded(px(13.)).overflow_hidden()
+                        .border_1().border_color(rgb(LINE)).bg(rgb(0x101924))
+                        .cursor_pointer().hover(|s| s.border_color(rgb(0x539d8a)))
+                        .child(preview)
+                        .child(stack().p(px(14.)).gap(px(4.))
+                            .child(div().text_size(px(16.)).font_weight(FontWeight::BOLD).child(starter.name()))
+                            .child(div().text_color(rgb(MUTED)).text_size(px(12.)).child(starter.description())))
+                        .on_click(cx.listener(move |shell, _, window, cx| shell.name_studio(Some(starter), window, cx))),
+                );
+            }
+            cards = cards.child(row);
+        }
+        page.child(div().text_size(px(28.)).font_weight(FontWeight::BOLD).child("Get in the studio, Producer."))
+            .child(cards)
+            .child(div().flex().child(Room::edit_button("blank-studio", "Blank studio", false)
+                .on_click(cx.listener(|shell, _, window, cx| shell.name_studio(None, window, cx)))))
+    }
     fn room_list(&self, width: f32, cx: &mut Context<Self>) -> Div {
         if let Some(status) = self.identity.busy {
             return div().child(label(status));
+        }
+        if self.choosing_starter {
+            return self.studio_creator(width, cx);
         }
         let usable = (width - 72. - 44.).max(160.);
         let cols = (((usable + 14.) / 234.).floor() as usize).max(1);
@@ -445,71 +578,21 @@ impl Shell {
                     .on_click(cx.listener(move |s, _, _, cx| s.open_card(path.clone(), cx))),
             );
         }
-        if let Some(field) = &self.room_name {
-            grid = grid.child(
-                tile()
-                    .border_dashed()
-                    .child(label("Room name"))
-                    .child(field.clone())
-                    .child(
-                        Room::edit_button("create-room", "Create room", true).on_click(
-                            cx.listener(|s, _, _, cx| {
-                                let name = s.room_name.as_ref().unwrap().read(cx).value.clone();
-                                if let Some(a) =
-                                    s.identity.account.as_ref().filter(|_| !s.identity.local)
-                                {
-                                    if name.trim().is_empty() || name.chars().count() > 80 {
-                                        s.notice =
-                                            Some("Enter a room name (up to 80 characters)".into());
-                                        cx.notify();
-                                        return;
-                                    }
-                                    s.account_action(
-                                        Action::Create(
-                                            a.login.clone(),
-                                            name.trim().into(),
-                                            s.identity.reference.clone(),
-                                        ),
-                                        cx,
-                                    );
-                                    return;
-                                }
-                                match create_room(&s.base, &name) {
-                                    Ok(path) => {
-                                        s.navigate(Page::Rooms, cx);
-                                        s.open(path, cx);
-                                    }
-                                    Err(e) => s.notice = Some(e.to_string()),
-                                }
-                                cx.notify();
-                            }),
-                        ),
-                    ),
-            );
-        } else {
-            grid = grid.child(
-                tile()
-                    .id("new-room")
-                    .border_dashed()
-                    .cursor_pointer()
-                    .hover(|v| v.border_color(rgb(0x438e7c)))
-                    .child(icon("plus").size(px(15.)).text_color(rgb(ACCENT)))
-                    .child(
-                        div()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_size(px(16.5))
-                            .child("New room"),
-                    )
-                    .child(label("a stage of its own"))
-                    .on_click(cx.listener(|s, _, w, cx| {
-                        let f = cx.new(|cx| SetTextField::new(String::new(), cx));
-                        f.read(cx).focus_handle(cx).focus(w, cx);
-                        s.identity.reference = uuid::Uuid::new_v4().to_string();
-                        s.room_name = Some(f);
-                        cx.notify();
-                    })),
-            );
-        }
+        grid = grid.child(
+            tile()
+                .id("new-studio")
+                .debug_selector(|| "new-studio".into())
+                .border_dashed()
+                .cursor_pointer()
+                .hover(|v| v.border_color(rgb(0x438e7c)))
+                .child(icon("plus").size(px(15.)).text_color(rgb(ACCENT)))
+                .child(div().font_weight(FontWeight::SEMIBOLD).text_size(px(16.5)).child("New Studio"))
+                .on_click(cx.listener(|s, _, _, cx| {
+                    s.choosing_starter = true;
+                    s.notice = None;
+                    cx.notify();
+                })),
+        );
         if self.identity.error.is_some() && !self.profile_open {
             return stack()
                 .gap(px(12.))
@@ -799,7 +882,7 @@ impl Shell {
             .gap(px(6.));
         if settings {
             rail = rail.child(
-                rail_icon("back-to-rooms", "back", "Back to Rooms", false)
+                rail_icon("back-to-rooms", "back", "Back to Studios", false)
                     .mb(px(8.))
                     .on_click(cx.listener(|s, _, _, cx| s.navigate(Page::Rooms, cx))),
             );
@@ -820,7 +903,7 @@ impl Shell {
             );
         }
         rail.child(
-            rail_icon("rooms", "live", "Rooms", !settings)
+            rail_icon("rooms", "live", "Studios", !settings)
                 .on_click(cx.listener(|s, _, _, cx| s.navigate(Page::Rooms, cx))),
         )
         .child(div().flex_1())
@@ -905,7 +988,7 @@ impl Shell {
                                 div()
                                     .text_color(rgb(0xbfc8d1))
                                     .text_size(px(12.))
-                                    .child("›  Rooms"),
+                                    .child("›  Studios"),
                             )
                             .child(
                                 div()
@@ -988,7 +1071,7 @@ impl Shell {
                 }
                 body = body.child(tabs.child(div().flex_1()).child(label(if cfg!(debug_assertions) { "Native Dev" } else { env!("CARGO_PKG_VERSION") })));
                 if self.shortcuts {
-                    body.child(detail_row("Edit room layout", "⌘ E"))
+                    body.child(detail_row("Edit studio layout", "⌘ E"))
                         .child(detail_row("Dismiss a menu", "Esc"))
                 } else {
                     body.child(detail_row("Workspace", &self.profile))
@@ -1055,8 +1138,9 @@ fn detail_row(name: &str, value: &str) -> Div {
 impl Render for Shell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if let Some(room) = self.studio.as_ref().filter(|_| self.page == Page::Studio) {
-            return div()
+            let view = div()
                 .size_full()
+                .relative()
                 .flex()
                 .flex_col()
                 .bg(rgb(BG))
@@ -1066,8 +1150,10 @@ impl Render for Shell {
                         .h(px(28.))
                         .window_control_area(WindowControlArea::Drag),
                 )
-                .child(div().flex_1().min_h_0().child(room.clone()))
-                .into_any_element();
+                .child(div().flex_1().min_h_0().child(room.clone()));
+            #[cfg(debug_assertions)]
+            let view = view.when(self.profile_open, |view| view.child(self.studio_account_sheet(cx)));
+            return view.into_any_element();
         }
         #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
         if self.first_light != FirstLight::Complete {
@@ -1182,8 +1268,8 @@ mod tests {
     #[test]
     fn shell_navigation_and_room_isolation() {
         let dir = tempfile::tempdir().unwrap();
-        let a = create_room(dir.path(), "Morning Brief").unwrap();
-        let b = create_room(dir.path(), "Evening Desk").unwrap();
+        let a = create_room(dir.path(), "Morning Brief", None).unwrap();
+        let b = create_room(dir.path(), "Evening Desk", None).unwrap();
         assert_ne!(a, b);
         assert_eq!(catalog(dir.path()).unwrap().len(), 3);
         let project: crate::model::RoomProject =
@@ -1261,5 +1347,69 @@ mod tests {
             assert!(shell.read(cx).page == Page::Rooms);
             assert!(shell.read(cx).studio.is_none());
         });
+        #[cfg(debug_assertions)]
+        {
+            cx.run_until_parked();
+            let new_studio = cx.debug_bounds("new-studio").unwrap().center();
+            cx.simulate_click(new_studio, Modifiers::default());
+            cx.run_until_parked();
+            for (id, preview_id) in [
+                ("clips", "starter-preview-clips"),
+                ("podcast", "starter-preview-podcast"),
+                ("pilot", "starter-preview-pilot"),
+                ("game-show", "starter-preview-game-show"),
+            ] {
+                assert!(cx.debug_bounds(id).is_some(), "missing starter card {id}");
+                let preview = cx.debug_bounds(preview_id).unwrap();
+                assert!((f32::from(preview.size.width) / f32::from(preview.size.height) - 16. / 9.).abs() < 0.02);
+            }
+            cx.update(|window, cx| {
+                let art = shell.read(cx).starter_art[0].clone();
+                let rgba = image::load_from_memory(&art.bytes).unwrap().into_rgba8();
+                let [r, g, b, a] = rgba.get_pixel(0, 0).0;
+                assert_ne!(r, b, "the fixture pixel must detect swapped channels");
+                let decoded = art.get_render_image(window, cx).unwrap();
+                assert_eq!(&decoded.as_bytes(0).unwrap()[..4], &[b, g, r, a]);
+            });
+            let game_show = cx.debug_bounds("game-show").unwrap().center();
+            cx.simulate_click(game_show, Modifiers::default());
+            cx.run_until_parked();
+            let create = cx.debug_bounds("create-studio")
+                .unwrap_or_else(|| panic!("starter naming form did not open after clicking {game_show:?}")).center();
+            cx.simulate_click(create, Modifiers::default());
+            cx.run_until_parked();
+            let reveal = cx.debug_bounds("quiz-no").unwrap().center();
+            cx.simulate_click(reveal, Modifiers::default());
+            cx.run_until_parked();
+            cx.update(|_, cx| {
+                let studio = shell.read(cx).active.lock().unwrap().clone().unwrap();
+                let project = studio.snapshot().project;
+                assert_eq!(project.production.title, "Game Show Studio");
+                assert_eq!(project.mounted_set.as_deref(), Some("game-show-studio"));
+                assert_eq!(studio.quiz_answer.load(std::sync::atomic::Ordering::Relaxed), -1);
+            });
+            let reset = cx.debug_bounds("quiz-reset").unwrap().center();
+            cx.simulate_click(reset, Modifiers::default());
+            cx.run_until_parked();
+            let link = cx.debug_bounds("studio-room-link").unwrap().center();
+            cx.simulate_click(link, Modifiers::default());
+            cx.run_until_parked();
+            assert!(cx.debug_bounds("studio-account-sheet").is_some());
+            assert!(cx.debug_bounds("submit-account").is_some());
+            let input = cx.debug_bounds("boomin-account-input").unwrap().center();
+            cx.simulate_click(input, Modifiers::default());
+            cx.simulate_input("test");
+            cx.update(|_, cx| {
+                let s = shell.read(cx);
+                assert!(s.page == Page::Studio);
+                assert_eq!(s.identity.email.read(cx).value, "test");
+                let studio = s.active.lock().unwrap().clone().unwrap();
+                assert_ne!(studio.root, a);
+                assert_ne!(studio.root, b);
+                assert_eq!(studio.quiz_answer.load(std::sync::atomic::Ordering::Relaxed), 0);
+                assert!(!studio.root.join("boomin/room-binding.json").exists());
+                studio.closed.store(true, std::sync::atomic::Ordering::Release);
+            });
+        }
     }
 }

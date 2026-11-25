@@ -133,6 +133,53 @@ fn http() -> Result<reqwest::Client> {
         .timeout(Duration::from_secs(15))
         .build()?)
 }
+async fn register_room(
+    client: &reqwest::Client,
+    brand: &str,
+    token: &str,
+    title: &str,
+    reference: &str,
+) -> Result<Uuid> {
+    let response: Value = client
+        .post(format!("{API}/v1/app/live/rooms"))
+        .query(&[("brandSlug", brand)])
+        .bearer_auth(token)
+        .json(&json!({"title":title,"external_ref":reference}))
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+    serde_json::from_value(response["room"]["id"].clone()).context("Boomin returned no room ID")
+}
+
+#[cfg(debug_assertions)]
+pub fn link_dev_room(base: &Path, root: &Path, local_room: &str, title: &str) -> Result<()> {
+    use sha2::{Digest, Sha256};
+    let binding = root.join("boomin/room-binding.json");
+    if binding.is_file() {
+        return Ok(());
+    }
+    let login = choice(base)?.login.context("Sign in to Boomin first")?;
+    ensure!(!login.brand.is_empty(), "Choose a Boomin workspace first");
+    let token = login.token()?;
+    // A stable reference lets a retry recover the same private dev room even
+    // if registration succeeds before the local binding can be written.
+    let mut digest = Sha256::new();
+    digest.update(root.canonicalize()?.as_os_str().as_encoded_bytes());
+    digest.update([0]);
+    digest.update(local_room.as_bytes());
+    let reference = format!("producer-native-dev:{:x}", digest.finalize());
+    let title = format!("{} · Native Dev", title.trim().chars().take(63).collect::<String>());
+    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+    let room_id = rt.block_on(async {
+        register_room(&http()?, &login.brand, &token, &title, &reference).await
+    })?;
+    save_json(&binding, &json!({
+        "roomId":room_id,"localRoom":local_room,"brandSlug":login.brand,
+        "domain":"producer.dev","nativeAccount":true
+    }))
+}
 async fn account(
     client: &reqwest::Client,
     login: Login,
@@ -319,17 +366,7 @@ pub fn run(base: &Path, action: Action) -> Result<Outcome> {
             Action::Create(l, title, reference) => {
                 let t = l.token()?;
                 let client = http()?;
-                let response: Value = client
-                    .post(format!("{API}/v1/app/live/rooms"))
-                    .query(&[("brandSlug", &l.brand)])
-                    .bearer_auth(&t)
-                    .json(&json!({"title":title,"external_ref":reference}))
-                    .send()
-                    .await?
-                    .error_for_status()?
-                    .json()
-                    .await?;
-                let id = serde_json::from_value(response["room"]["id"].clone())?;
+                let id = register_room(&client, &l.brand, &t, &title, &reference).await?;
                 let brands = boomin::list_brands(API, &t).await?;
                 Ok(Outcome::Created(account(&client, l, &t, brands).await?, id))
             }
@@ -342,7 +379,9 @@ pub fn room_path(base: &Path, brand: &str, id: Uuid) -> PathBuf {
         .join(format!("{:x}", Sha256::digest(brand.as_bytes())))
         .join(id.to_string())
 }
-pub fn prepare_room(base: &Path, brand: &str, room: &RemoteRoom) -> Result<PathBuf> {
+pub fn prepare_room(
+    base: &Path, brand: &str, room: &RemoteRoom, starter: Option<crate::studio_presets::Starter>,
+) -> Result<PathBuf> {
     let path = room_path(base, brand, room.id);
     if path.join("room.json").is_file() {
         return Ok(path);
@@ -363,6 +402,9 @@ pub fn prepare_room(base: &Path, brand: &str, room: &RemoteRoom) -> Result<PathB
         .filter(|t| !t.is_empty())
         .unwrap_or("Studio")
         .into();
+    if let Some(starter) = starter {
+        starter.apply(&mut project)?;
+    }
     project.compile()?;
     save_json(&tmp.path().join("room.json"), &project)?;
     save_json(
@@ -384,14 +426,15 @@ mod tests {
     fn reopening_and_signout_preserve_local_room_edits() {
         let root = tempfile::tempdir().unwrap();
         let room:RemoteRoom=serde_json::from_value(json!({"id":"71111111-2222-4333-8444-555555555555","title":"Main Stage","is_default":true})).unwrap();
-        let first = prepare_room(root.path(), "brand-a", &room).unwrap();
+        let first = prepare_room(root.path(), "brand-a", &room, Some(crate::studio_presets::Starter::Podcast)).unwrap();
         let mut project: crate::model::RoomProject =
             serde_json::from_slice(&fs::read(first.join("room.json")).unwrap()).unwrap();
         assert_eq!(project.room, room.id.to_string());
         assert_eq!(project.production.id, format!("room-{}", room.id));
+        assert_eq!(project.mounted_set.as_deref(), Some("podcast-studio"));
         project.production.title = "My local edit".into();
         save_json(&first.join("room.json"), &project).unwrap();
-        assert_eq!(first, prepare_room(root.path(), "brand-a", &room).unwrap());
+        assert_eq!(first, prepare_room(root.path(), "brand-a", &room, None).unwrap());
         assert_ne!(first, room_path(root.path(), "brand-b", room.id));
         let v: Value = serde_json::from_slice(&fs::read(first.join("room.json")).unwrap()).unwrap();
         assert_eq!(v["production"]["title"], "My local edit");

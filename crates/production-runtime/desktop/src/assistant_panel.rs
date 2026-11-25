@@ -24,6 +24,9 @@ impl AccountState {
     }
 }
 pub(super) struct Panel {
+    popout: bool,
+    anchor: std::rc::Rc<std::cell::Cell<Option<Bounds<Pixels>>>>,
+    trigger: FocusHandle,
     provider: fn(Value, &[(String, String)], &assistant::Turn) -> Result<Reply>,
     active: Option<(Instant, Arc<assistant::Turn>)>,
     input: Entity<set_text_field::SetTextField>,
@@ -59,13 +62,12 @@ impl Panel {
     pub(super) fn working(&self)->bool{self.busy}
     pub fn new(cx: &mut Context<Room>) -> Self {
         Self {
+            popout: false,
+            anchor: Default::default(),
+            trigger: cx.focus_handle(),
             provider: assistant::turn,
             active: None,
-            input: cx.new(|c| {
-                let mut f = set_text_field::SetTextField::new(String::new(), c);
-                f.composer = true;
-                f
-            }),
+            input: cx.new(|c| set_text_field::SetTextField::new(String::new(), c)),
             history: vec![],
             chips: vec![],
             attachments: vec![],
@@ -89,7 +91,7 @@ fn request(handle: &Handle, c: RoomCommand) -> Result<()> {
     if reply["ok"] != true {
         bail!(
             "{}",
-            reply["error"].as_str().unwrap_or("Room rejected edit")
+            reply["error"].as_str().unwrap_or("Studio rejected edit")
         )
     }
     Ok(())
@@ -172,7 +174,7 @@ fn prepare(
     }))
 }
 impl Room {
-    pub(super) fn assistant_compact(&self, cx: &mut Context<Self>) -> Div {
+    pub(super) fn assistant_compact(&self, width: f32, cx: &mut Context<Self>) -> Div {
         let status = if self.assistant.busy {
             "Working…"
         } else if self.assistant.failure.is_some() {
@@ -182,22 +184,83 @@ impl Room {
         } else {
             "View reply"
         };
-        let edge = self.workspace().panels[&PanelId::Assistant].edge;
-        div().child(
-            Self::edit_button("assistant-expand", status, false).on_click(cx.listener(
-                move |r, _, _, cx| {
-                    r.send(
-                        RoomCommand::Workspace {
-                            command: WorkspaceCommand::Collapse {
-                                edge,
-                                collapsed: false,
-                            },
-                        },
-                        cx,
-                    )
-                },
-            )),
-        )
+        let anchor = self.assistant.anchor.clone();
+        let expanded = self.assistant.popout;
+        let trigger = if width < 205. {
+            tool("assistant-expand", "assistant-bubble", status, expanded, true)
+                .size(px(28.))
+        } else {
+            Self::edit_button("assistant-expand", status, expanded)
+                .max_w(px(100.))
+                .truncate()
+        };
+        div()
+            .w_full()
+            .min_w_0()
+            .flex()
+            .items_center()
+            .gap(px(4.))
+            .on_children_prepainted(move |children, _, _| anchor.set(children.first().copied()))
+            .child(
+                trigger.flex_none()
+                    .debug_selector(|| "assistant-expand".into())
+                    .track_focus(&self.assistant.trigger)
+                    .on_click(cx.listener(|room, _, window, cx| {
+                        if !room.close_assistant_popout(window, cx) {
+                            room.assistant.popout = true;
+                            room.assistant.input.read(cx).focus_handle(cx).focus(window, cx);
+                            cx.notify();
+                        }
+                    })),
+            )
+            .when(!expanded, |d| d.child(self.assistant_composer(true, cx)))
+    }
+
+    pub(super) fn close_assistant_popout(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if !std::mem::take(&mut self.assistant.popout) {
+            return false;
+        }
+        self.assistant.attachment_menu = false;
+        self.assistant.trigger.focus(window, cx);
+        cx.notify();
+        true
+    }
+
+    pub(super) fn assistant_popout(
+        &self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Option<Stateful<Div>> {
+        let anchor = self.assistant.anchor.get()?;
+        if !self.assistant.popout || self.set_editor.is_some() || !self.assistant_dock_compact() {
+            return None;
+        }
+        let viewport = window.viewport_size();
+        let margin = px(12.);
+        let gap = px(7.);
+        let width = px(380.).min((viewport.width - margin * 2.).max(px(1.)));
+        let above = anchor.top() - gap - margin;
+        let below = viewport.height - anchor.bottom() - gap - margin;
+        let height = px(640.).min(above.max(below).max(px(1.)));
+        let left = anchor.left().max(margin).min((viewport.width - width - margin).max(margin));
+        let top = if above >= below { anchor.top() - gap - height } else { anchor.bottom() + gap };
+        Some(div().id("assistant-popout-layer").absolute().inset_0()
+            .child(div().id("assistant-popout-dismiss").absolute().inset_0().occlude()
+                .on_click(cx.listener(|room, _, window, cx| {
+                    room.close_assistant_popout(window, cx);
+                })))
+            .child(div().id("assistant-popout").debug_selector(|| "assistant-popout".into())
+                .absolute().left(left).top(top).w(width).h(height)
+                .min_h_0().overflow_hidden().rounded(px(10.)).border_1().border_color(rgb(LINE))
+                .bg(rgb(PANEL)).shadow_lg().occlude()
+                .child(self.assistant_panel(true, cx))))
+    }
+
+    fn assistant_dock_compact(&self) -> bool {
+        let workspace = self.workspace();
+        let panel = &workspace.panels[&PanelId::Assistant];
+        let dock = &workspace.docks[&panel.edge];
+        panel.visible && !panel.edge.side() && dock.collapsed && !dock.hidden
     }
     fn assistant_target(&self) -> Option<(String, SetLayoutPair)> {
         let (id, pair) = self.selected_set()?;
@@ -304,6 +367,11 @@ impl Room {
         let (id, layout) = self.assistant_target().unwrap_or_default();
         let snap = self.handle.snapshot();
         let mut context = assistant::context(&snap, &id);
+        let desk=&self.handle.studio_audio;
+        context["audioStatus"]=json!(desk.status());
+        let count=desk.catalog(None,"",0,0).total;
+        let audio=(0..count).step_by(64).flat_map(|offset|desk.catalog(None,"",offset,64).items).collect::<Vec<_>>();
+        context["resources"]["audio"]=json!(audio);
         let journal = match crate::assistant_log::Journal::start(
             &self.handle.root,
             self.assistant.generation + 1,
@@ -491,6 +559,9 @@ impl Room {
         cx.notify();
     }
     pub(super) fn assistant_tick(&mut self, cx: &mut Context<Self>) {
+        if self.assistant.popout && (!self.assistant_dock_compact() || self.set_editor.is_some()) {
+            self.assistant.popout = false;
+        }
         if self
             .assistant
             .next_account_check
@@ -557,7 +628,7 @@ impl Room {
     fn open_assistant_logs(&mut self, cx: &mut Context<Self>) {
         let path = crate::assistant_log::directory(&self.handle.root);
         if !path.is_dir() {
-            self.assistant.status = "No assistant turns logged in this room yet.".into();
+            self.assistant.status = "No assistant turns logged in this studio yet.".into();
             cx.notify();
             return;
         }
@@ -643,15 +714,15 @@ impl Room {
                 Proposal::Room { revision, command } => {
                     anyhow::ensure!(
                         h.snapshot().revision == revision,
-                        "Room changed. Ask for a fresh proposal."
+                        "Studio changed. Ask for a fresh proposal."
                     );
                     request(&h, command)?;
                 }
             }
-            Ok("Saved to room".into())
+            Ok("Saved to studio".into())
         });
     }
-    pub(super) fn assistant_panel(&self, cx: &mut Context<Self>) -> Div {
+    pub(super) fn assistant_panel(&self, popout: bool, cx: &mut Context<Self>) -> Div {
         let a = &self.assistant;
         let mut panel = div().size_full().min_w_0().flex().flex_col();
         let mut header = div()
@@ -664,10 +735,11 @@ impl Room {
                     .flex()
                     .justify_between()
                     .items_center()
+                    .gap(px(5.))
                     .child(
                         div()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child("Room Assistant"),
+                            .child("Studio Assistant"),
                     )
                     .child(match a.account {
                         AccountState::Disconnected | AccountState::Unavailable => {
@@ -689,7 +761,15 @@ impl Room {
                             .child(state.label())
                             .debug_selector(move || state.label().to_owned())
                             .into_any_element(),
-                    }),
+                    })
+                    .when(popout, |row| row.child(
+                        Self::edit_button("assistant-popout-close", "×", false)
+                            .debug_selector(|| "assistant-popout-close".into())
+                            .tooltip(|_, cx| cx.new(|_| HeaderTip("Close Assistant".into())).into())
+                            .on_click(cx.listener(|room, _, window, cx| {
+                                room.close_assistant_popout(window, cx);
+                            })),
+                    )),
             );
         header = header.child(
             Self::edit_button("assistant-logs", "Logs", false)
@@ -724,7 +804,7 @@ impl Room {
             body = body.child(
                 div()
                     .text_color(rgb(MUTED))
-                    .child("What would you like to change in this room?"),
+                    .child("What would you like to change in this studio?"),
             )
         }
         for (index, (role, msg)) in a.history.iter().enumerate() {
@@ -832,7 +912,7 @@ impl Room {
             );
             if a.reviewed && matches!(p, Proposal::Room { .. }) {
                 body = body.child(
-                    Self::edit_button("assistant-apply", "Apply room change", true)
+                    Self::edit_button("assistant-apply", "Apply studio change", true)
                         .on_click(cx.listener(|r, _, _, cx| r.assistant_apply(cx))),
                 )
             }
@@ -909,9 +989,9 @@ impl Room {
             ]
         } else {
             [
-                ("Create a Set", "Help me create a set for this room."),
+                ("Create a Set", "Help me create a set for this studio."),
                 ("Plan a show", "Help me plan a show."),
-                ("Help me get started", "What can I do in this room?"),
+                ("Help me get started", "What can I do in this studio?"),
             ]
         };
         if a.history.is_empty() {
@@ -993,32 +1073,6 @@ impl Room {
                 ));
             }
         }
-        let mut field = div().relative().flex_1().min_w_0().child(a.input.clone());
-        let enabled = !a.busy
-            && !a.choosing_image
-            && (!a.input.read(cx).value.trim().is_empty() || !a.attachments.is_empty());
-        let arrow = div()
-            .id("assistant-send")
-            .debug_selector(|| "assistant-send".to_owned())
-            .tooltip(|_, cx| cx.new(|_| HeaderTip("Send message".into())).into())
-            .absolute()
-            .right(px(3.))
-            .top(px(3.))
-            .size(px(25.))
-            .rounded(px(5.))
-            .flex()
-            .items_center()
-            .justify_center()
-            .bg(rgb(if enabled { ACCENT } else { LINE }))
-            .text_color(rgb(if enabled { BG } else { MUTED }))
-            .child("↑");
-        field = field.child(if enabled {
-            arrow
-                .cursor_pointer()
-                .on_click(cx.listener(|r, _, _, cx| r.assistant_send(cx)))
-        } else {
-            arrow
-        });
         let attach = Self::edit_button("assistant-attach", "＋", a.attachment_menu)
             .debug_selector(|| "assistant-attach".into())
             .tooltip(|_, cx| cx.new(|_| HeaderTip("Attach image".into())).into());
@@ -1037,10 +1091,46 @@ impl Room {
                     .items_center()
                     .gap(px(4.))
                     .child(attach)
-                    .child(field),
+                    .child(self.assistant_composer(false, cx)),
             ),
         )
     }
+    fn assistant_composer(&self, compact: bool, cx: &mut Context<Self>) -> Stateful<Div> {
+        let a = &self.assistant;
+        let empty = a.input.read(cx).value.is_empty();
+        let enabled = !a.busy && !a.choosing_image
+            && (!a.input.read(cx).value.trim().is_empty() || !a.attachments.is_empty());
+        let field = div().relative().flex_1().min_w_0()
+            .debug_selector(move || if compact { "assistant-inline-input".into() } else { "assistant-input".into() })
+            .child(a.input.clone())
+            .when(empty, |d| d.child(
+                div().absolute().left(px(8.)).right(px(4.)).top(px(7.))
+                    .truncate().text_size(px(11.)).text_color(rgb(MUTED))
+                    .child(if compact { "Ask…" } else { "Ask Producer…" }),
+            ));
+        let arrow = div().id("assistant-send")
+            .debug_selector(|| "assistant-send".into())
+            .tooltip(|_, cx| cx.new(|_| HeaderTip("Send message".into())).into())
+            .size(px(if compact { 23. } else { 26. }))
+            .flex_none().flex().items_center().justify_center().rounded(px(5.))
+            .bg(rgb(if enabled { ACCENT } else { LINE }))
+            .text_color(rgb(if enabled { BG } else { MUTED }))
+            .child("↑")
+            .when(enabled, |d| d.cursor_pointer()
+                .on_click(cx.listener(|r, _, _, cx| r.assistant_send(cx))));
+        div().id(if compact { "assistant-inline-composer" } else { "assistant-composer" })
+            .min_w_0().flex_1().flex().items_center().gap(px(4.))
+            .child(field).child(arrow)
+            .on_key_down(cx.listener(|r, e: &KeyDownEvent, _, cx| {
+                if e.keystroke.key == "enter" && !e.keystroke.modifiers.shift
+                    && !r.assistant.input.read(cx).is_composing()
+                {
+                    r.assistant_send(cx);
+                    cx.stop_propagation();
+                }
+            }))
+    }
+
 }
 
 #[cfg(test)]
@@ -1052,6 +1142,88 @@ mod tests {
     };
     use serde_json::json;
     use std::sync::Arc;
+
+    #[test]
+    fn compact_assistant_pops_out_without_expanding_its_dock() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut project = crate::model::RoomProject::demo();
+        let w = &mut project.workspace;
+        w.apply(WorkspaceCommand::Place {
+            panel: PanelId::Assistant, edge: super::Edge::Bottom, before: Some(PanelId::Timeline),
+        }).unwrap();
+        w.apply(WorkspaceCommand::Visibility {
+            panel: PanelId::Assistant, visible: true,
+        }).unwrap();
+        w.apply(WorkspaceCommand::Collapse {
+            edge: super::Edge::Bottom, collapsed: true,
+        }).unwrap();
+        w.apply(WorkspaceCommand::ResizeSplit {
+            first: PanelId::Assistant, second: PanelId::Timeline, ratio: 0.10,
+        }).unwrap();
+        std::fs::write(temp.path().join("room.json"), serde_json::to_vec(&project).unwrap()).unwrap();
+        let (handle, commands, _) = crate::engine::initial_room(temp.path()).unwrap();
+        let app = &mut TestAppContext::single();
+        let window = app.update(|cx| {
+            cx.open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+                        None, size(px(1180.), px(780.)), cx,
+                    ))),
+                    ..Default::default()
+                },
+                |_, cx| cx.new(|cx| Room::new(handle, cx)),
+            ).unwrap()
+        });
+        let mut ui = VisualTestContext::from_window(window.into(), app);
+        let room = window.root(&mut ui).unwrap();
+        ui.update(|_, cx| room.update(cx, |r, cx| {
+            r.assistant.account = super::AccountState::Connected;
+            r.assistant.next_account_check = None;
+            r.assistant.provider = |_, _, _| {
+                Ok(serde_json::from_value(json!({"message":"Inline reply","edits":[]}))?)
+            };
+        }));
+        ui.run_until_parked();
+        let inline = ui.debug_bounds("assistant-inline-input").unwrap();
+        assert!(inline.size.width >= px(55.));
+        ui.simulate_click(inline.center(), Modifiers::default());
+        ui.simulate_input("draft");
+        for close in ["assistant-popout-close", "escape", "outside"] {
+            let anchor = ui.debug_bounds("assistant-expand").unwrap();
+            ui.simulate_click(anchor.center(), Modifiers::default());
+            ui.run_until_parked();
+            let popout = ui.debug_bounds("assistant-popout").unwrap();
+            assert!(popout.top() >= px(12.) && popout.bottom() < anchor.top());
+            assert!(ui.debug_bounds("assistant-send").is_some());
+            assert!(ui.debug_bounds("assistant-inline-input").is_none());
+            match close {
+                "escape" => ui.simulate_keystrokes("escape"),
+                "outside" => ui.simulate_click(gpui::point(px(5.), px(70.)), Modifiers::default()),
+                button => {
+                    let rect = ui.debug_bounds(button).unwrap();
+                    ui.simulate_click(rect.center(), Modifiers::default());
+                }
+            }
+            ui.run_until_parked();
+            assert!(ui.debug_bounds("assistant-popout").is_none(), "Dismissal failed via {close}");
+            room.read_with(&ui, |r, cx| {
+                assert!(r.workspace().docks[&super::Edge::Bottom].collapsed);
+                assert_eq!(r.assistant.input.read(cx).value, "draft");
+            });
+        }
+        let inline = ui.debug_bounds("assistant-inline-input").unwrap();
+        ui.simulate_click(inline.center(), Modifiers::default());
+        ui.simulate_keystrokes("enter");
+        ui.run_until_parked();
+        room.read_with(&ui, |r, cx| {
+            assert_eq!(r.assistant.history[0].1, "draft");
+            assert_eq!(r.assistant.history.last().unwrap().1, "Inline reply");
+            assert!(r.assistant.input.read(cx).value.is_empty());
+            assert!(!r.assistant.popout);
+        });
+        assert!(commands.try_recv().is_err());
+    }
+
     #[test]
     fn failed_prompt_keeps_its_log_after_the_panel_closes() {
         let fixture_root = std::env::var_os("PRODUCER_ASSISTANT_LOG_TEST_ROOM");

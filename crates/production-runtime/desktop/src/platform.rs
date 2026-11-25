@@ -14,6 +14,16 @@ use std::{
     },
 };
 
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ScreenCaptureTarget {
+    Any = 0,
+    Window = 1,
+    Display = 2,
+    Stop = 3,
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Draw {
@@ -84,6 +94,13 @@ pub struct TextCache(NonNull<c_void>);
 unsafe impl Send for TextCache {}
 unsafe impl Sync for TextCache {}
 impl TextCache {
+    pub fn dj_title(value: &str) -> Result<Self> {
+        let value=CString::new(value)?;
+        Self::with_graphs(&[TextSpec {
+            rgba:std::ptr::null(),value:value.as_ptr(),width:920,height:54,
+            font_size:35.,weight:600,align:0,single_line:1,
+        }],&[])
+    }
     pub fn with_graphs(specs: &[TextSpec], graphs: &[GraphSpec]) -> Result<Self> {
         let mut error = [0i8; 1024];
         let ptr = unsafe { nr_text_cache(specs.as_ptr(), specs.len(), graphs.as_ptr(), graphs.len(),
@@ -123,6 +140,7 @@ unsafe extern "C" {
     fn nr_input_stop(input: *mut c_void);
     fn nr_capture_stop(room: *mut c_void, source: i32);
     fn nr_capture(room: *mut c_void, camera: i32, screen: i32, mic: i32);
+    fn nr_screen_capture(room: *mut c_void, target: i32);
     fn nr_stop(room: *mut c_void);
     fn nr_text_cache(text: *const TextSpec, count: usize, graphs: *const GraphSpec, graph_count:usize, error:*mut c_char, error_capacity:usize) -> *mut c_void;
     fn nr_text_cache_release(cache: *mut c_void);
@@ -138,6 +156,7 @@ unsafe extern "C" {
         count: usize,
         sources: *mut *mut c_void,
         text: *mut c_void,
+        dj_title: *mut c_void,
         pts: f64,
         generation: u64,
     ) -> i32;
@@ -306,6 +325,8 @@ pub struct Shared {
     pub broadcast:crate::broadcast::Broadcast,
     pub clips:crate::clips::Clips,
     pub frames: [Mutex<Option<Arc<Frame>>>; 5],
+    // Access each timestamp under its corresponding program frame slot lock.
+    pub first_revision_at: [AtomicU64; 2],
     pub statuses: [Mutex<String>; 10],
     pub counts: [AtomicU64; 5],
     // Only serial native mic callbacks access this endpoint. The mixer owns a
@@ -340,6 +361,7 @@ impl Shared {
                 clips:Default::default(),
                 frames: std::array::from_fn(|_| Mutex::new(None)),
                 statuses: std::array::from_fn(|_| Mutex::new(String::new())),
+                first_revision_at: Default::default(),
                 counts: std::array::from_fn(|_| AtomicU64::new(0)),
                 audio_producer: Mutex::new(producer),
                 audio_frames: AtomicU64::new(0),
@@ -361,7 +383,9 @@ impl Shared {
         end > 0 && ((host_time() - self.origin) * 48000. - end as f64).abs() < 24000.
     }
     pub fn frame(&self, index: usize) -> Option<Arc<Frame>> {
-        self.frames[index].try_lock().ok().and_then(|f| f.clone())
+        // A frame being published is still a live source. Clone its retained
+        // surface rather than treating a busy slot as an empty camera.
+        self.frames[index].lock().unwrap().clone()
     }
     pub fn audio_diagnostics(&self) -> AudioDiagnostics {
         let r = self
@@ -471,6 +495,11 @@ extern "C" fn frame_callback(
     generation: u64,
 ) {
     if buffer.is_null() {
+        if source == 1 {
+            let shared = unsafe { &*(ctx as *const Shared) };
+            let previous = shared.frames[1].lock().unwrap().take();
+            drop(previous);
+        }
         return;
     }
     let shared = unsafe { &*(ctx as *const Shared) };
@@ -479,9 +508,16 @@ extern "C" fn frame_callback(
         10..=11 => source as usize - 7,
         _ => return,
     };
+    // Core Video retain, buffer queries, and release stay outside the slot lock.
+    let frame = Arc::new(unsafe { Frame::retained(buffer, at, generation) });
     if let Ok(mut slot) = shared.frames[index].try_lock() {
-        *slot = Some(Arc::new(unsafe { Frame::retained(buffer, at, generation) }));
+        if index >= 3 && slot.as_ref().map(|f| f.generation) != Some(generation) {
+            shared.first_revision_at[index - 3].store(host_time().to_bits(), Ordering::Relaxed);
+        }
+        let previous = slot.replace(frame);
         shared.counts[index].fetch_add(1, Ordering::Relaxed);
+        drop(slot);
+        drop(previous);
     }
 }
 // AVFoundation's resampled PTS can round to either side of an integral sample
@@ -494,6 +530,13 @@ fn align_audio_start(raw: i64, previous_end: i64) -> i64 {
         raw
     }
 }
+
+// The host clock conversion can overlap a few PCM samples at a buffer seam.
+// Skip only samples already on the timeline so the ring keeps the rest.
+fn trim_capture_overlap(start: i64, previous_end: i64, frames: u32) -> usize {
+    previous_end.saturating_sub(start).clamp(0, i64::from(frames)) as usize
+}
+
 extern "C" fn audio_callback(ctx: *mut c_void, samples: *const f32, frames: u32, at: f64) {
     if samples.is_null() || frames == 0 || frames > 8192 {
         return;
@@ -507,7 +550,6 @@ extern "C" fn audio_callback(ctx: *mut c_void, samples: *const f32, frames: u32,
         shared.audio_rejections[0].fetch_add(frames as u64, Ordering::Relaxed);
         return;
     };
-    let mut offset = 0;
     let raw = ((at - shared.origin) * 48000.).round() as i64 - frames as i64;
     let end = shared.audio_end.load(Ordering::Relaxed);
     if end != i64::MIN {
@@ -525,9 +567,14 @@ extern "C" fn audio_callback(ctx: *mut c_void, samples: *const f32, frames: u32,
         }
     }
     let start = align_audio_start(raw, end);
+    let mut offset = trim_capture_overlap(start, end, frames);
     shared
         .audio_end
-        .store(start + frames as i64, Ordering::Relaxed);
+        .store(end.max(start + frames as i64), Ordering::Relaxed);
+    if offset != 0 {
+        shared.audio_dropped.fetch_add(offset as u64, Ordering::Relaxed);
+        shared.audio_rejections[2].fetch_add(offset as u64, Ordering::Relaxed);
+    }
     let mut peak = 0f32;
     while offset < frames as usize {
         let n = (frames as usize - offset).min(BLOCK_FRAMES);
@@ -623,7 +670,7 @@ impl CaptureInput {
         Ok(Self { ptr, shared, audio })
     }
     pub fn frame(&self) -> Option<Arc<Frame>> {
-        self.shared.frame.try_lock().ok().and_then(|s| s.clone())
+        self.shared.frame.lock().unwrap().clone()
     }
 }
 impl Drop for CaptureInput {
@@ -644,9 +691,12 @@ extern "C" fn input_frame_callback(
         return;
     }
     let s = unsafe { &*(ctx as *const InputShared) };
+    let frame = Arc::new(unsafe { Frame::retained(buffer, at, generation) });
     if let Ok(mut slot) = s.frame.try_lock() {
-        *slot = Some(Arc::new(unsafe { Frame::retained(buffer, at, generation) }));
+        let previous = slot.replace(frame);
         s.count.fetch_add(1, Ordering::Relaxed);
+        drop(slot);
+        drop(previous);
     }
 }
 extern "C" fn input_status_callback(ctx: *mut c_void, _source: u32, text: *const c_char) {
@@ -675,7 +725,6 @@ extern "C" fn input_audio_callback(ctx: *mut c_void, samples: *const f32, frames
         shared.audio_rejections[0].fetch_add(frames as u64, Ordering::Relaxed);
         return;
     };
-    let mut offset = 0;
     let raw = ((at - shared.origin) * 48000.).round() as i64 - frames as i64;
     let end = shared.audio_end.load(Ordering::Relaxed);
     if end != i64::MIN {
@@ -693,9 +742,14 @@ extern "C" fn input_audio_callback(ctx: *mut c_void, samples: *const f32, frames
         }
     }
     let start = align_audio_start(raw, end);
+    let mut offset = trim_capture_overlap(start, end, frames);
     shared
         .audio_end
-        .store(start + frames as i64, Ordering::Relaxed);
+        .store(end.max(start + frames as i64), Ordering::Relaxed);
+    if offset != 0 {
+        shared.audio_dropped.fetch_add(offset as u64, Ordering::Relaxed);
+        shared.audio_rejections[2].fetch_add(offset as u64, Ordering::Relaxed);
+    }
     let mut peak = 0f32;
     while offset < frames as usize {
         let n = (frames as usize - offset).min(BLOCK_FRAMES);
@@ -759,6 +813,20 @@ impl RenderTarget {
         at: f64,
         revision: u64,
     ) -> bool {
+        self.render_with_dj(output,w,h,draws,frames,text,None,at,revision)
+    }
+    pub fn render_with_dj(
+        &self,
+        output: usize,
+        w: u32,
+        h: u32,
+        draws: &[Draw],
+        frames: &[Option<Arc<Frame>>; 8],
+        text: &TextCache,
+        dj_title: Option<&TextCache>,
+        at: f64,
+        revision: u64,
+    ) -> bool {
         let target = self.0.read().unwrap();
         let Some(handle) = target.as_ref() else { return false };
         let mut ptrs = frames
@@ -774,6 +842,7 @@ impl RenderTarget {
                 draws.len(),
                 ptrs.as_mut_ptr(),
                 text.0.as_ptr(),
+                dj_title.map_or(std::ptr::null_mut(),|t|t.0.as_ptr()),
                 at,
                 revision,
             ) != 0
@@ -834,7 +903,8 @@ impl NativeRoom {
     }
     pub fn camera_device(&self, id: &str) -> Result<()> {
         let id = CString::new(id)?;
-        *self.shared.frames[0].lock().unwrap() = None;
+        let previous = self.shared.frames[0].lock().unwrap().take();
+        drop(previous);
         unsafe {
             nr_camera_device(self.ptr.as_ptr(), id.as_ptr());
         }
@@ -856,6 +926,9 @@ impl NativeRoom {
         unsafe {
             nr_capture(self.ptr.as_ptr(), camera as i32, screen as i32, mic as i32);
         }
+    }
+    pub fn screen_capture(&self, target: ScreenCaptureTarget) {
+        unsafe { nr_screen_capture(self.ptr.as_ptr(), target as i32) };
     }
     pub fn record(
         &self,
@@ -1026,7 +1099,33 @@ impl Drop for MovieAudio {
 
 #[cfg(test)]
 mod tests {
-    use super::align_audio_start;
+    use super::{align_audio_start, trim_capture_overlap, Frame, Shared};
+    use std::{sync::{mpsc, Arc}, thread, time::Duration};
+
+    #[test]
+    fn camera_read_keeps_a_picture_while_capture_publishes() {
+        let (shared, _) = Shared::new().unwrap();
+        assert!(shared.frame(0).is_none());
+        let picture = Arc::new(Frame::guest(&[255; 64], 4, 4).unwrap());
+        let mut slot = shared.frames[0].lock().unwrap();
+        *slot = Some(picture.clone());
+
+        thread::scope(|scope| {
+            let (started, start) = mpsc::channel();
+            let (send, receive) = mpsc::channel();
+            let shared = &shared;
+            scope.spawn(move || {
+                started.send(()).unwrap();
+                send.send(shared.frame(0)).unwrap();
+            });
+            start.recv().unwrap();
+            let during_publication = receive.recv_timeout(Duration::from_millis(20));
+            drop(slot);
+            assert!(matches!(during_publication, Err(mpsc::RecvTimeoutError::Timeout)));
+            let visible = receive.recv_timeout(Duration::from_secs(1)).unwrap().unwrap();
+            assert!(Arc::ptr_eq(&picture, &visible));
+        });
+    }
 
     #[test]
     fn resampled_mic_rounding_keeps_samples_but_does_not_hide_discontinuities() {
@@ -1038,5 +1137,13 @@ mod tests {
         }
         assert_eq!(align_audio_start(end + 480, end), end + 480);
         assert_eq!(align_audio_start(end - 1024, end), end - 1024);
+    }
+
+    #[test]
+    fn host_clock_overlap_discards_only_the_repeated_samples() {
+        assert_eq!(trim_capture_overlap(47995, 48000, 1024), 5);
+        assert_eq!(trim_capture_overlap(47000, 48000, 480), 480);
+        assert_eq!(trim_capture_overlap(48008, 48000, 1024), 0);
+        assert_eq!(trim_capture_overlap(0, i64::MIN, 1024), 0);
     }
 }

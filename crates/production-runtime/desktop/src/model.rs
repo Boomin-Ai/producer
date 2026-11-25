@@ -264,6 +264,7 @@ impl RoomProject {
             graphs: Default::default(),
             output_graphs: Default::default(),
             layout_transition_ms: None,
+            reversible_layout_transitions: BTreeMap::new(),
             layouts: BTreeMap::from([
                 (
                     "landscape".into(),

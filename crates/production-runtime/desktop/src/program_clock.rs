@@ -9,6 +9,7 @@ pub struct Scene {
     pub draws: [Vec<Draw>;2],
     pub sizes: [OutputSize;2],
     pub visuals: Arc<Visuals>,
+    pub dj_title: Option<Arc<platform::TextCache>>,
     pub revision: u64,
     pub guest_slot: Option<usize>,
 }
@@ -47,8 +48,8 @@ fn render_worker(target: RenderTarget, state: Arc<State>, relief: bool)
             for (i,size) in slot.scene.sizes.iter().enumerate() {
                 let bit=1<<i;
                 if slot.accepted.load(Ordering::Acquire)&bit != 0 {continue;}
-                if target.render(i,size.width,size.height,&slot.scene.draws[i],&slot.frames,
-                    &slot.scene.visuals.text,slot.pts,slot.scene.revision) {
+                if target.render_with_dj(i,size.width,size.height,&slot.scene.draws[i],&slot.frames,
+                    &slot.scene.visuals.text,slot.scene.dj_title.as_deref(),slot.pts,slot.scene.revision) {
                     slot.accepted.fetch_or(bit,Ordering::Release);
                     state.sent.fetch_add(1,Ordering::Relaxed);
                 }

@@ -1,6 +1,6 @@
 [package]
 name = "producer-native-room"
-version = "0.4.94"
+version = "0.4.95"
 edition = "2021"
 license = "AGPL-3.0-only"
 publish = false
@@ -32,6 +32,7 @@ libc = "0.2"
 anyhow = "1"
 url = "=2.5.8"
 image = { version = "=0.25.10", default-features = false, features = ["png","jpeg","webp","gif"] }
+gltf = { version = "1.4", default-features = false, features = ["utils"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-core-foundation = "=0.3.2"

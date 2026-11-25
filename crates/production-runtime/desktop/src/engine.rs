@@ -1,7 +1,7 @@
 use crate::{
     assets,
     model::{self, CanvasView, RoomProject, SetLayoutPair},
-    platform::{self, Frame, Movie, NativeRoom, Shared},
+    platform::{self, Frame, Movie, NativeRoom, ScreenCaptureTarget, Shared},
 };
 use anyhow::{anyhow, bail, Context, Result};
 use producer_native_media::boundary::{OutputSize, BLOCK_FRAMES, BLOCK_SAMPLES};
@@ -92,6 +92,7 @@ pub enum RoomCommand {
         microphone: bool,
     },
     ClipsStatus,
+    StudioAudio { command: crate::studio_audio::Command },
     BroadcastStart, BroadcastStop, BroadcastStatus,
     ClipsConfigure { settings:crate::clips::Settings },
     ClipsEnable { enabled:bool },
@@ -118,6 +119,14 @@ pub enum RoomCommand {
     },
     State,
     ClearError,
+    MarqueeReveal { id: String, revision: u64, text: String },
+    Headline {
+        id: String,
+        revision: u64,
+        text: Option<String>,
+        size: Option<u16>,
+        wrap: Option<crate::headline::Wrap>,
+    },
     SetEditPreview {
         id: Option<String>,
         draft: Option<producer_production_contract::Set>,
@@ -175,6 +184,7 @@ pub enum RoomCommand {
         screen: bool,
         mic: bool,
     },
+    ScreenCapture { target: ScreenCaptureTarget },
     ImportMov {
         path: PathBuf,
     },
@@ -254,9 +264,15 @@ pub struct Snapshot {
     pub assistant_context: serde_json::Value,
 }
 pub struct Handle {
+    pub studio_audio: crate::studio_audio::Desk,
     pub waiting_guests: Mutex<Vec<crate::room_share::WaitingGuest>>,
     pub root:PathBuf,
     pub assistant_requests: Mutex<std::collections::VecDeque<(crate::ipc::AssistantRequest, SyncSender<serde_json::Value>, Instant)>>,
+    pub ipo_line_chart: std::sync::atomic::AtomicBool,
+    pub host_zoom: std::sync::atomic::AtomicU32,
+    pub screen_zoom: std::sync::atomic::AtomicU32,
+    screen_pan: AtomicU64,
+    pub quiz_answer: std::sync::atomic::AtomicI32,
     camera_border_wave: AtomicBool,
     pub rtc_feed:Mutex<Option<crate::p0_call::Guest>>,
     pub pending_rtc_link:Mutex<Option<String>>,
@@ -293,6 +309,17 @@ impl Handle {
     }
     pub fn snapshot(&self) -> Snapshot {
         self.snapshot.lock().unwrap().clone()
+    }
+
+    pub(crate) fn screen_pan(&self) -> [f32; 2] {
+        let packed = self.screen_pan.load(Ordering::Relaxed);
+        [f32::from_bits(packed as u32), f32::from_bits((packed >> 32) as u32)]
+    }
+
+    pub(crate) fn set_screen_pan(&self, [x, y]: [f32; 2]) {
+        // Both axes reach the renderer in the same frame.
+        let packed = u64::from(x.to_bits()) | (u64::from(y.to_bits()) << 32);
+        self.screen_pan.store(packed, Ordering::Relaxed);
     }
 
     pub fn is_set_on_output(&self, id: &str, pair: &SetLayoutPair, set: &producer_production_contract::Set) -> bool {
@@ -712,6 +739,51 @@ impl SetMotionClock {
     }
 }
 
+// Both directions use the animated layout's graph. Retaining its visuals
+// keeps the outgoing live source available until its final transition frame.
+struct ReversibleLayout {
+    visuals: Arc<crate::visuals::Visuals>,
+    started: f64,
+    duration: f64,
+    initial: f32,
+    reverse: bool,
+}
+
+impl ReversibleLayout {
+    fn phase(&self, now: f64) -> f32 {
+        let elapsed = ((now - self.started) / self.duration).max(0.) as f32;
+        (self.initial + if self.reverse { -elapsed } else { elapsed }).clamp(0., 1.)
+    }
+
+    fn done(&self, phase: f32) -> bool {
+        phase == if self.reverse { 0. } else { 1. }
+    }
+
+    fn between(
+        old: &RoomProject, next: &RoomProject,
+        old_visuals: &Arc<crate::visuals::Visuals>, next_visuals: &Arc<crate::visuals::Visuals>,
+        prior: Option<&Self>, now: f64,
+    ) -> Option<Self> {
+        let set = next.production.sets.get(&next.scene)?;
+        let before = old.output_layout_pair();
+        let after = next.output_layout_pair();
+        let matches = |animated: &SetLayoutPair, resting: &SetLayoutPair| {
+            animated.ids().into_iter().zip(resting.ids()).all(|(a, b)| {
+                set.reversible_layout_transitions.get(a).is_some_and(|target| target == b)
+            })
+        };
+        let reverse = matches(&before, &after);
+        if !reverse && !matches(&after, &before) {
+            return None;
+        }
+        let visuals = if reverse { old_visuals } else { next_visuals };
+        let initial = prior.filter(|p| p.reverse != reverse)
+            .map_or(if reverse { 1. } else { 0. }, |p| p.phase(now));
+        Some(Self { visuals: visuals.clone(), started: now,
+            duration: f64::from(set.layout_transition_ms?)/1000., initial, reverse })
+    }
+}
+
 enum RenderOp {
     SetMotion(bool),
     ReplaceVisuals(Arc<crate::visuals::Visuals>),
@@ -730,6 +802,12 @@ enum RenderOp {
         movie: Option<MovieWorker>,
         take: Option<(MovieWorker, String, serde_json::Value)>,
     },
+    Layout {
+        project: Arc<RoomProject>,
+        plan: Arc<Plan>,
+        visuals: Arc<crate::visuals::Visuals>,
+        revision: u64,
+    },
     Mix {
         project: Arc<RoomProject>,
     },
@@ -743,6 +821,7 @@ enum RenderOp {
     Pause,
     Seek(Time),
     Capture(bool, bool, bool),
+    ScreenCapture(ScreenCaptureTarget),
     RemoveSource(String),
     CameraDevice(String),
     Input {
@@ -778,7 +857,7 @@ struct Renderer {
 impl Renderer {
     fn request(&self, op: RenderOp) -> Result<()> {
         let next = match &op {
-            RenderOp::Publish { project, plan, .. } | RenderOp::Adopt { project, plan, .. } | RenderOp::Take {project, plan, ..} => Some((project.clone(),plan.clone())),
+            RenderOp::Layout { project, plan, .. } | RenderOp::Publish { project, plan, .. } | RenderOp::Adopt { project, plan, .. } | RenderOp::Take {project, plan, ..} => Some((project.clone(),plan.clone())),
             _ => None,
         };
         let (tx, rx) = mpsc::sync_channel(1);
@@ -790,6 +869,36 @@ impl Renderer {
             .map_err(|e| anyhow!(e))?;
         if let Some(next) = next { *self.prepared.lock().unwrap() = next; }
         Ok(())
+    }
+    fn switch_layout(
+        &self, project: RoomProject, revision: u64, cache: &mut crate::visuals::VisualCache,
+        root: &Path,
+    ) -> Result<()> {
+        let (previous, plan) = self.prepared.lock().unwrap().clone();
+        // Compilation depends on the document, selected set, and both output sizes.
+        // A staged document edit still takes the full validation and publish path.
+        if previous.scene != project.scene || previous.production != project.production
+            || previous.canvas.landscape != project.canvas.landscape
+            || previous.canvas.vertical != project.canvas.vertical
+        {
+            return publish(self, root, project, 0., true, revision, cache);
+        }
+        let visuals = cache.prepare(&project, &plan)?;
+        self.request(RenderOp::Layout { project: Arc::new(project), plan, visuals, revision })
+    }
+
+    fn warm_layouts(&self, cache: &mut crate::visuals::VisualCache) {
+        let (project, plan) = self.prepared.lock().unwrap().clone();
+        if project.mounted_set.as_ref() != Some(&project.scene) { return; }
+        let current = project.output_layout_pair();
+        for choice in project.set_layout_choices(&project.scene).into_iter()
+            .filter(|choice| choice.pair != current).take(2)
+        {
+            let mut candidate = (*project).clone();
+            candidate.mounted_layout = Some(choice.pair);
+            // An unavailable optional layout is diagnosed when selected.
+            let _ = cache.prepare(&candidate, &plan);
+        }
     }
     fn refresh_fields(&self, cache: &mut crate::visuals::VisualCache) -> Result<()> {
         let (project,plan)=self.prepared.lock().unwrap().clone();
@@ -857,7 +966,7 @@ pub(crate) fn initial_room(root: &Path) -> Result<(Arc<Handle>,Receiver<Envelope
         refused_frames: 0,
         cpu_p99_ms: 0.,
         movie_playback: VideoDiagnostics::default(),
-        frame_age_ms: [0.; 3],
+        frame_age_ms: [-1.; 3],
         source_frames: [0; 3],
         output_frames: [0; 2],
         microphone_peak: 0.,
@@ -868,9 +977,15 @@ pub(crate) fn initial_room(root: &Path) -> Result<(Arc<Handle>,Receiver<Envelope
     };
     let (tx, rx) = mpsc::sync_channel(16);
     let handle = Arc::new(Handle {
+        studio_audio: crate::studio_audio::Desk::open(root)?,
         waiting_guests: Mutex::default(),
         root:root.to_path_buf(),
         assistant_requests:Mutex::default(),
+        ipo_line_chart: std::sync::atomic::AtomicBool::new(false),
+        host_zoom: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
+        screen_zoom: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
+        screen_pan: AtomicU64::new(0),
+        quiz_answer: std::sync::atomic::AtomicI32::new(0),
         camera_border_wave: AtomicBool::new(camera_border_wave),
         rtc_feed:Mutex::default(),
         pending_rtc_link:Mutex::default(),
@@ -908,8 +1023,9 @@ fn now(origin: f64) -> OutputInstant {
 pub(crate) fn persist(root: &Path, p: &RoomProject) -> Result<()> {
     let pending = root.join("room.pending");
     let mut file = File::create(&pending)?;
-    serde_json::to_writer_pretty(&mut file, p)?;
-    file.write_all(b"\n")?;
+    let mut bytes = serde_json::to_vec_pretty(p)?;
+    bytes.push(b'\n');
+    file.write_all(&bytes)?;
     file.sync_all()?;
     fs::rename(pending, root.join("room.json"))?;
     File::open(root)?.sync_all()?;
@@ -1045,6 +1161,7 @@ fn apply(
             state.error = None;
         }
         RoomCommand::Monitor { .. }
+        | RoomCommand::MarqueeReveal { .. } | RoomCommand::Headline { .. }
         | RoomCommand::SetEditPreview { .. } | RoomCommand::SetEditSave { .. }
         | RoomCommand::OperationOutcome { .. } | RoomCommand::RevokePermission { .. } | RoomCommand::GrantPermission { .. }
         | RoomCommand::SendToOutput { .. }
@@ -1137,6 +1254,15 @@ fn apply(
             }
             render.request(RenderOp::Capture(camera, screen, mic))?;
         }
+        RoomCommand::ScreenCapture { target } => {
+            if !matches!(target, ScreenCaptureTarget::Stop)
+                && !state.project.lanes.iter().any(|l| l.source == "screen")
+            {
+                state.project.restore_source("screen")?;
+                changed = true;
+            }
+            render.request(RenderOp::ScreenCapture(target))?;
+        }
         RoomCommand::ImportMov { path } => {
             if importing.swap(true, Ordering::AcqRel) {
                 bail!("An asset import is already running");
@@ -1224,7 +1350,7 @@ fn apply(
         RoomCommand::TakePlace { .. } | RoomCommand::TakeRefresh => {
             unreachable!("Handled on control worker")
         }
-        RoomCommand::BroadcastStart | RoomCommand::BroadcastStop | RoomCommand::BroadcastStatus | RoomCommand::ClipsStatus | RoomCommand::ClipsConfigure{..} |
+        RoomCommand::StudioAudio { .. } | RoomCommand::BroadcastStart | RoomCommand::BroadcastStop | RoomCommand::BroadcastStatus | RoomCommand::ClipsStatus | RoomCommand::ClipsConfigure{..} |
         RoomCommand::ClipsEnable{..} | RoomCommand::ClipsSave | RoomCommand::ClipsRename{..} => unreachable!("Handled on control worker"),
         RoomCommand::TakeList => unreachable!("Handled on control worker"),
         RoomCommand::TakeInspect { name } | RoomCommand::TakeRecover { name } => {
@@ -1616,6 +1742,7 @@ fn control(
             }
         })?;
     let render = Renderer { tx, stats, prepared };
+    let mut warmed_set = None;
     let mut history=crate::stage_history::History::open(&root)?;
     let mut rtc_staged=false;
     let mut peer:Option<crate::producer_rtc::Peer>=None;
@@ -1664,7 +1791,14 @@ fn control(
         }
         let live=handle.program.lock().unwrap().clone();
         history.observe(&observed,rtc_staged,&live,state.program_revision)?;
-        if let Ok(envelope) = rx.recv_timeout(Duration::from_millis(50)) {
+        let incoming = rx.recv_timeout(Duration::from_millis(50));
+        if matches!(incoming, Err(mpsc::RecvTimeoutError::Timeout))
+            && state.program_kind == "set" && warmed_set.as_ref() != Some(&live.scene)
+        {
+            render.warm_layouts(&mut visual_cache);
+            warmed_set = Some(live.scene.clone());
+        }
+        if let Ok(envelope) = incoming {
             if let RoomCommand::StageHistory{participant,before}=&envelope.command {
                 let reply=history.list(participant.as_deref(),before.as_deref()).unwrap_or_else(|e|serde_json::json!({"ok":false,"error":e.to_string()}));
                 if let Some(tx)=envelope.reply{let _=tx.try_send(reply);}continue;
@@ -1828,6 +1962,8 @@ fn control(
                     | RoomCommand::SceneRemove { .. }
                     | RoomCommand::SceneAdd
                     | RoomCommand::SceneSelect { .. }
+                    | RoomCommand::MarqueeReveal { .. }
+                    | RoomCommand::Headline { .. }
                     | RoomCommand::SetMount { .. }
             ) {
                 let result = (|| -> Result<()> {
@@ -1855,11 +1991,44 @@ fn control(
                             persist(&root, &next)?;
                             state.project = next;
                         }
-                        RoomCommand::SetMount { .. }
+                        RoomCommand::Headline { id, revision, text, size, wrap } => {
+                            if *revision != state.program_revision || state.program_kind != "set"
+                                || state.project.mounted_set.as_ref() != Some(id)
+                            {
+                                bail!("The selected Set is no longer on output");
+                            }
+                            let mut next = state.project.clone();
+                            let pair = next.output_layout_pair();
+                            let set = next.production.sets.get_mut(id).context("Missing Set")?;
+                            anyhow::ensure!(
+                                pair.ids().iter().any(|layout| crate::headline::supports(set, layout)),
+                                "This layout has no headline"
+                            );
+                            crate::headline::apply(set, text.as_deref(), *size, *wrap)?;
+                            let program = next.live_set()?;
+                            let plan = program.compile()?;
+                            let visuals = visual_cache.prepare(&program, &plan)?;
+                            let revision = state.program_revision + 1;
+                            render.request(RenderOp::Layout { project: Arc::new(program),
+                                plan, visuals, revision })?;
+                            state.project = next;
+                            state.revision += 1;
+                            state.program_revision = revision;
+                            persist(&root, &state.project)?;
+                        }
+                        RoomCommand::MarqueeReveal { .. }
+                        | RoomCommand::SetMount { .. }
                         | RoomCommand::SceneSelect { .. }
                         | RoomCommand::SceneRemove { .. } => {
                             let mut next = state.project.clone();
                             match &envelope.command {
+                                RoomCommand::MarqueeReveal {id, revision, text} => {
+                                    if *revision != state.program_revision || state.program_kind!="set" || next.mounted_set.as_ref()!=Some(id) {
+                                        bail!("The selected set is no longer on output");
+                                    }
+                                    let set=next.production.sets.get_mut(id).context("Missing set")?;
+                                    crate::marquee::apply(set,text)?;
+                                }
                                 RoomCommand::SetMount { id, layout } => {
                                     next.mount_set(id.clone(), layout.clone())?;
                                 }
@@ -1872,23 +2041,31 @@ fn control(
                             }
                             let has_set = next.mounted_set.is_some();
                             let live = next.live_set()?;
-                            publish(
-                                &render,
-                                &root,
-                                live,
-                                0.,
-                                true,
-                                state.program_revision + 1,
-                                &mut visual_cache,
-                            )?;
+                            let revision = state.program_revision + 1;
+                            if state.program_kind == "set" && has_set
+                                && matches!(envelope.command, RoomCommand::SetMount { .. })
+                                && state.project.mounted_set == next.mounted_set
+                                && state.project.mounted_layout != next.mounted_layout
+                            {
+                                render.switch_layout(live, revision, &mut visual_cache, &root)?;
+                            } else {
+                                publish(&render, &root, live, 0., true, revision, &mut visual_cache)?;
+                            }
                             state.project = next;
                             state.program_kind = if has_set { "set" } else { "room" }.into();
                             state.program_revision += 1;
-                            persist(&root, &state.project)?;
                             state.previewing = false;
                             if let Some(p) = &preview {
                                 p.render.request(RenderOp::Monitor(false))?;
                             }
+                            // Publish the accepted cut to the UI immediately. The control
+                            // worker still orders disk commits and durable CLI replies.
+                            if matches!(envelope.command, RoomCommand::SetMount { .. }) {
+                                state.error = None;
+                                state.assistant_context = state.project.assistant_context();
+                                *handle.snapshot.lock().unwrap() = state.clone();
+                            }
+                            persist(&root, &state.project)?;
                         }
                         RoomCommand::SendToOutput { .. } => {
                             handle.journal.legacy(||publish(
@@ -1931,18 +2108,13 @@ fn control(
                     Ok(())
                 })();
                 state.assistant_context = state.project.assistant_context();
-                let reply = match result {
-                    Ok(()) => {
-                        state.error = None;
-                        serde_json::json!({"ok":true,"state":state})
-                    }
-                    Err(e) => {
-                        state.error = Some(e.to_string());
-                        serde_json::json!({"ok":false,"error":e.to_string()})
-                    }
-                };
+                state.error = result.err().map(|err| err.to_string());
                 *handle.snapshot.lock().unwrap() = state.clone();
                 if let Some(tx) = envelope.reply {
+                    let reply = match &state.error {
+                        Some(error) => serde_json::json!({"ok":false,"error":error}),
+                        None => serde_json::json!({"ok":true,"state":state}),
+                    };
                     let _ = tx.try_send(reply);
                 }
                 continue;
@@ -1965,6 +2137,13 @@ fn control(
                 })();
                 let reply=result.unwrap_or_else(|e|{state.error=Some(e.to_string());serde_json::json!({"ok":false,"error":e.to_string()})});
                 if let Some(tx)=envelope.reply{let _=tx.try_send(reply);}
+                continue;
+            }
+            if let RoomCommand::StudioAudio { command } = &envelope.command {
+                let result=handle.studio_audio.execute(command.clone());
+                if let Some(tx)=envelope.reply {
+                    let _=tx.try_send(result.unwrap_or_else(|error|serde_json::json!({"ok":false,"error":error.to_string()})));
+                }
                 continue;
             }
             if matches!(envelope.command,RoomCommand::ClipsStatus|RoomCommand::ClipsConfigure{..}|RoomCommand::ClipsEnable{..}|RoomCommand::ClipsSave|RoomCommand::ClipsRename{..}){
@@ -2167,6 +2346,8 @@ fn control(
                 .any(|(enabled, id)| {
                     *enabled && !state.project.lanes.iter().any(|l| l.source == *id)
                 }),
+                RoomCommand::ScreenCapture { target } => !matches!(target, ScreenCaptureTarget::Stop)
+                    && !state.project.lanes.iter().any(|l| l.source == "screen"),
                 _ => false,
             };
             let input_or_size = restoring_capture
@@ -2310,6 +2491,12 @@ fn render_loop(
     if let Some(output) = preview_output {
         *output.lock().unwrap() = Some(native.shared.clone());
     } else {
+        if let Some(binding) = project.inputs.get("camera") {
+            native.camera_device(&binding.device)?;
+        }
+        if let Some(binding) = project.inputs.get("microphone") {
+            native.microphone_device(&binding.device)?;
+        }
         native.shared.clips.load(&crate::root());
         *handle.media.lock().unwrap() = Some(native.shared.clone());
     }
@@ -2321,8 +2508,13 @@ fn render_loop(
     if !preview {
         transport.play(now(origin))?;
     }
+    let mut chart_mix = 0f32;
+    let mut chart_tick = platform::host_time();
+    let mut headline_opacity = f32::from(project.production.sets.get(&project.scene)
+        .is_some_and(crate::headline::visible));
     let mut set_motion = SetMotionClock::Timeline;
     let mut layout_blend:Option<crate::visuals::LayoutBlend>=None;
+    let mut reversible_layout: Option<ReversibleLayout> = None;
     let mut visible = !preview;
     let (mut generation, mut revision) = (1u64, 1u64);
     let mut inputs = std::collections::BTreeMap::<String, platform::CaptureInput>::new();
@@ -2417,6 +2609,7 @@ fn render_loop(
                         if !preview {
                             *handle.program.lock().unwrap() = next.clone();
                         }
+                        reversible_layout = None;
                         let ms=next.production.sets.get(&next.scene).and_then(|s|s.layout_transition_ms).unwrap_or(0);
                         layout_blend=if ms>0 && next.scene==project.scene && next.output_layout_pair()!=project.output_layout_pair() {
                             Some(crate::visuals::LayoutBlend::begin(&visuals,&next_visuals,layout_blend.as_ref(),platform::host_time(),ms))
@@ -2438,6 +2631,23 @@ fn render_loop(
                         generation += 1;
                         samples.resize(plan.sequences["main"].tracks.len(), None);
                     }
+                    RenderOp::Layout { project: next, plan: next_plan, visuals: next_visuals, revision: next_revision } => {
+                        let now = platform::host_time();
+                        reversible_layout = ReversibleLayout::between(
+                            &project, &next, &visuals, &next_visuals, reversible_layout.as_ref(), now,
+                        );
+                        let ms = next.production.sets.get(&next.scene).and_then(|s|s.layout_transition_ms).unwrap_or(0);
+                        layout_blend = if reversible_layout.is_none() && ms > 0
+                            && next.output_layout_pair() != project.output_layout_pair()
+                        {
+                            Some(crate::visuals::LayoutBlend::begin(&visuals, &next_visuals, layout_blend.as_ref(), now, ms))
+                        } else { None };
+                        if !preview { *handle.program.lock().unwrap() = next.clone(); }
+                        project = next;
+                        visuals = next_visuals;
+                        plan = next_plan;
+                        revision = next_revision;
+                    }
                     RenderOp::Mix { project: next } => {
                         let mut mixed = (*project).clone();
                         mixed.lanes = next.lanes.clone();
@@ -2451,6 +2661,7 @@ fn render_loop(
                     } => {
                         native.prepare([next.canvas.landscape, next.canvas.vertical])?;
                         layout_blend=None;
+                        reversible_layout = None;
                         visuals = next_visuals;
                         transport.duration = next.production.sequences["main"].duration;
                         let sequence_changed = project.production.sequences.get("main")
@@ -2481,6 +2692,7 @@ fn render_loop(
                             .context("Media generation exhausted")?;
                     }
                     RenderOp::Capture(c, s, m) => native.capture(c, s, m),
+                    RenderOp::ScreenCapture(target) => native.screen_capture(target),
                     RenderOp::RemoveSource(source) => {
                         if let Some(old) = inputs.remove(&source) {
                             retire_tx
@@ -2526,6 +2738,7 @@ fn render_loop(
                             .checked_add(1)
                             .context("Media generation exhausted")?;
                         layout_blend=None;
+                        reversible_layout = None;
                         visuals = next_visuals;
                         take = Some(worker);
                         take_hash = hash;
@@ -2692,6 +2905,8 @@ fn render_loop(
                     }
                 }
             }
+            let mic_peak = native.shared.mic_peak.load(Ordering::Relaxed) as f32 / 1000. * gain;
+            handle.studio_audio.mix(&mut pcm, mic_peak);
             if let Some(input) = &guest { input.mix(&mut pcm); }
             native.audio(&pcm, &raw_mic, origin + audio_cursor as f64 / 48000.);
             audio_cursor += BLOCK_FRAMES as i64;
@@ -2784,13 +2999,38 @@ fn render_loop(
             }
             (state.set_motion_position, state.set_motion_playing) =
                 set_motion.sample(host, position.as_f64(), state.playing);
+            let chart_target = if handle.ipo_line_chart.load(Ordering::Relaxed) { 1. } else { 0. };
+            let delta = (host - chart_tick).max(0.) as f32;
+            let step = (delta / 0.85).min(1.);
+            chart_tick = host;
+            chart_mix += (chart_target - chart_mix).clamp(-step, step);
+            let headline_target = f32::from(project.production.sets.get(&project.scene)
+                .is_some_and(crate::headline::visible));
+            let step = (delta / 0.20).min(1.);
+            headline_opacity += (headline_target - headline_opacity).clamp(-step, step);
+            let host_zoom = f32::from_bits(handle.host_zoom.load(Ordering::Relaxed));
+            let screen_zoom = f32::from_bits(handle.screen_zoom.load(Ordering::Relaxed));
+            let screen_pan = handle.screen_pan();
+            let quiz_answer = handle.quiz_answer.load(Ordering::Relaxed) as f32;
             let camera_wave = handle.camera_border_wave.load(Ordering::Relaxed);
-            for (i, size) in [project.canvas.landscape, project.canvas.vertical]
-                .into_iter()
+            if layout_blend.as_ref().is_some_and(|b| b.phase(host) >= 1.) {
+                layout_blend = None;
+            }
+            let phase = reversible_layout.as_ref().map(|blend| blend.phase(host));
+            if reversible_layout.as_ref().zip(phase).is_some_and(|(blend, phase)| blend.done(phase)) {
+                reversible_layout = None;
+            }
+            let frame_visuals = reversible_layout.as_ref().map_or(&visuals, |blend| &blend.visuals);
+            let music=handle.studio_audio.dj_visual.bands();
+            let mut dj_title=None;
+            let graph_progress = reversible_layout.as_ref().zip(phase)
+                .map(|(_, phase)| phase * phase * (3. - 2. * phase));
+            let resting_layouts = project.production.sets.get(&project.scene)
+                .map(|set| &set.reversible_layout_transitions);
+            for (i, (layout, size)) in project.output_layouts().into_iter()
                 .enumerate()
             {
-                if layout_blend.as_ref().is_some_and(|b|b.phase(host)>=1.) {layout_blend=None;}
-                visuals.draw_transition(
+                frame_visuals.draw_transition(
                     &plan,
                     &samples,
                     i,
@@ -2803,8 +3043,21 @@ fn render_loop(
                     camera_wave,
                     &mut draws[i],
                     layout_blend.as_ref().map(|b|(b,b.phase(host))),
+                    graph_progress,
                 );
-                if let Some(slot) = guest_slot.filter(|_| !visuals.has_guest_slot(i)) {
+                for draw in draws[i].iter_mut().filter(|d| d.kind == 5) {
+                    draw.opacity = headline_opacity * headline_opacity * (3. - 2. * headline_opacity);
+                    draw.surface[0] = quiz_answer;
+                    draw.surface[3] = host_zoom;
+                    draw.surface[2] = chart_mix;
+                    draw.surface[1] = screen_zoom;
+                    // Terminal graph draws carry uniform values in place of texture coordinates.
+                    draw.uv[..2].copy_from_slice(&screen_pan);
+                    draw.material=music;
+                }
+                let suppress_guest_fallback = resting_layouts.is_some_and(|layouts|
+                    layouts.values().any(|target| target == layout));
+                if let Some(slot) = guest_slot.filter(|_| !frame_visuals.has_guest_slot(i) && !suppress_guest_fallback) {
                     let height = 0.8 * size.width as f32 * 9. / (16. * size.height as f32);
                     let mut draw = platform::Draw::solid([0.1,(1.-height)/2.,0.8,height],[1.;4]);
                     draw.metrics = [0.,0.8*size.width as f32,height*size.height as f32,0.];
@@ -2817,14 +3070,18 @@ fn render_loop(
                     .iter()
                     .filter(|d| d.kind == 1 && d.source == 3)
                     .count();
+                if dj_title.is_none() && draws[i].iter().any(|d|d.kind==2 && d.source==u32::MAX){
+                    dj_title=handle.studio_audio.dj_visual.label();
+                }
                 if program_clock.is_some() { continue; }
-                if native.target.render(
+                if native.target.render_with_dj(
                     i,
                     size.width,
                     size.height,
                     &draws[i],
                     &frames,
-                    &visuals.text,
+                    &frame_visuals.text,
+                    dj_title.as_deref(),
                     host,
                     revision,
                 ) {
@@ -2835,8 +3092,8 @@ fn render_loop(
             }
             if let Some(clock) = &program_clock {
                 let (sent,refused) = clock.publish(crate::program_clock::Scene {
-                    frames, draws: draws.clone(), sizes:[project.canvas.landscape,project.canvas.vertical],
-                    visuals:visuals.clone(), revision, guest_slot,
+                    frames, draws: draws.clone(), dj_title, sizes:[project.canvas.landscape,project.canvas.vertical],
+                    visuals:frame_visuals.clone(), revision, guest_slot,
                 });
                 state.render_frames += sent;
                 state.refused_frames += refused;
@@ -2887,7 +3144,7 @@ fn render_loop(
                 state.frame_age_ms[i] = native
                     .shared
                     .frame(i)
-                    .map_or(-1., |f| (host - f.at) * 1000.);
+                    .map_or(-1., |f| (host - f.at).max(0.) * 1000.);
             }
             for i in 0..2 {
                 state.output_frames[i] = native.shared.counts[i + 3].load(Ordering::Relaxed);

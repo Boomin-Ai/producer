@@ -46,7 +46,7 @@ static id<MTLRenderPipelineState> fragmentPipeline(id<MTLDevice> device,NSString
 
 static BOOL encodeLayers(NRRoom *r,id<MTLCommandBuffer> command,id<MTLTexture> target,
                          uint64_t groups,const NRDraw *draws,size_t count,NRVisualResources *resources,
-                         id<MTLTexture> __strong *live,id<MTLTexture> __strong *graphOutputs) {
+                         id<MTLTexture> __strong *live,id<MTLTexture> __strong *graphOutputs,id<MTLTexture> djTitle) {
     uint32_t w=(uint32_t)target.width,h=(uint32_t)target.height;
     MTLRenderPassDescriptor *pass=[MTLRenderPassDescriptor renderPassDescriptor];
     pass.colorAttachments[0].texture=target;
@@ -68,7 +68,13 @@ static BOOL encodeLayers(NRRoom *r,id<MTLCommandBuffer> command,id<MTLTexture> t
                 d.rect[2]=fitW/w; d.rect[3]=fitH/h;
                 d.metrics[1]=fitW; d.metrics[2]=fitH;
             }
-            if(d.kind==2||d.kind==3){if(d.source>=text.count)continue;texture=text[d.source];}
+            if(d.kind==2 && d.source==UINT32_MAX){
+                if(!djTitle)continue;
+                texture=djTitle;
+            } else if(d.kind==2||d.kind==3){
+                if(d.source>=text.count)continue;
+                texture=text[d.source];
+            }
             if(d.kind==4){
                 if(d.source>=64 || !graphOutputs[d.source])continue;
                 texture=graphOutputs[d.source];d.kind=3;
@@ -83,7 +89,7 @@ static BOOL encodeLayers(NRRoom *r,id<MTLCommandBuffer> command,id<MTLTexture> t
 
 static BOOL encodeGraphs(NRRoom *r,id<MTLCommandBuffer> command,uint32_t output,
                          const NRDraw *draws,size_t count,NRVisualResources *resources,
-                         id<MTLTexture> __strong *live, id<MTLTexture> __strong *results) {
+                         id<MTLTexture> __strong *live, id<MTLTexture> __strong *results,id<MTLTexture> djTitle) {
     @synchronized(r->_commitGate[output]) {
         BOOL explicitOutput=NO;
         for(size_t i=0;i<count;i++){
@@ -104,7 +110,7 @@ static BOOL encodeGraphs(NRRoom *r,id<MTLCommandBuffer> command,uint32_t output,
                     r->_graphSurfaces[output][slot]=target;
                 }
                 if(p->groups) {
-                    if(!encodeLayers(r,command,target,p->groups,draws,count,resources,live,results))return NO;
+                    if(!encodeLayers(r,command,target,p->groups,draws,count,resources,live,results,djTitle))return NO;
                     results[slot]=target;
                     continue;
                 }
@@ -140,21 +146,42 @@ static BOOL encodeGraphs(NRRoom *r,id<MTLCommandBuffer> command,uint32_t output,
                 }
                 if(p->geometry) {
                     NRGeometry *g=p->geometry;
-                    NRShot shot=evaluateShot(g,draw->accent[2],(float)p->width/p->height);
+                    float cameraTime=draw->accent[0]==2.f ? draw->accent[3] : draw->accent[2];
+                    NRShot shot=evaluateShot(g,cameraTime,(float)p->width/p->height);
+                    // Mesh animation keeps playing when a layout camera settles.
+                    shot.eye.w=draw->accent[2];
                     [enc setDepthStencilState:g->depthState];
                     [enc setVertexBuffer:g->grid offset:0 atIndex:0];
                     [enc setVertexBytes:&shot length:sizeof(shot) atIndex:1];
                     [enc setFragmentBytes:&shot length:sizeof(shot) atIndex:1];
+                    [enc setFragmentTexture:(g->environment ?: r->_graphEmpty) atIndex:2];
                     const NRInstance *obj=g->objects.bytes;
                     for(NSUInteger n=0;n<g->objects.length/sizeof(*obj);n++,obj++){
                         [enc setVertexBytes:obj length:sizeof(*obj) atIndex:2];
                         [enc setFragmentBytes:obj length:sizeof(*obj) atIndex:2];
+                        id<MTLBuffer> imported=g->imported[@(n)];
+                        [enc setVertexBuffer:(imported ?: g->grid) offset:0 atIndex:0];
+                        if(imported){
+                            [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:(obj->detail.z==5 ? ((const uint32_t *)imported.contents)[1] : imported.length/64)];
+                            continue;
+                        }
                         BOOL flat=obj->detail.z>=2;
                         [enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:flat?6:g->indexCount indexType:MTLIndexTypeUInt16 indexBuffer:g->indices indexBufferOffset:flat?g->flatIndexOffset:0];
                     }
                 } else {
-                    float uniforms[8]={(float)p->width,(float)p->height,draw->accent[2],draw->accent[3]};
+                    float uniforms[20]={(float)p->width,(float)p->height,draw->accent[2],draw->accent[3]};
                     memcpy(uniforms+4,p->params,sizeof(p->params));
+                    uniforms[8]=fmaxf(1.f,draw->surface[3]);
+                    uniforms[9]=draw->surface[2];
+                    uniforms[10]=fmaxf(1.f,draw->surface[1]);
+                    if(draw->kind==5){
+                        uniforms[11]=draw->surface[0];
+                        uniforms[12]=draw->uv[0];
+                        uniforms[13]=draw->uv[1];
+                        uniforms[14]=draw->opacity;
+                        // WGSL aligns the DJ vec4 to the next sixteen-byte boundary.
+                        memcpy(uniforms+16,draw->material,4*sizeof(float));
+                    }
                     [enc setFragmentBytes:uniforms length:sizeof(uniforms) atIndex:0];
                     [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
                 }
@@ -162,7 +189,7 @@ static BOOL encodeGraphs(NRRoom *r,id<MTLCommandBuffer> command,uint32_t output,
                 if(!final)results[slot]=target;
             }
         }
-        if(!explicitOutput && !encodeLayers(r,command,r->_rgb[output],0,draws,count,resources,live,results))return NO;
+        if(!explicitOutput && !encodeLayers(r,command,r->_rgb[output],0,draws,count,resources,live,results,djTitle))return NO;
         for(size_t i=0;i<64;i++)if(!results[i])r->_graphSurfaces[output][i]=nil;
     }
     return YES;

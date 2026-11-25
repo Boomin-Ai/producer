@@ -6,11 +6,14 @@ mod set_editor;
 mod assistant_panel;
 #[path="clips_panel.rs"]
 mod clips_panel;
+#[path="studio_audio_panel.rs"]
+mod studio_audio_panel;
 #[path="shell.rs"] pub(crate) mod shell;
 #[path="live_controls.rs"] mod live_controls;
 use crate::{
     engine::{Handle, RoomCommand, Snapshot},
     model::{set_label, CanvasView, SetLayoutPair},
+    platform::ScreenCaptureTarget,
     room_share::LinkKind,
     workspace::{Edge, PanelId, Workspace, WorkspaceCommand},
 };
@@ -43,9 +46,11 @@ fn icon(name: &str) -> Svg {
         "stage-in" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v4h16v-4 M12 15V3 M7 8l5-5 5 5"/></svg>"#,
         "plus" => br#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>"#,
         "record" => br#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle fill="black" cx="12" cy="12" r="7"/></svg>"#,
+        "pause" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="black" d="M7 5h3v14H7zm7 0h3v14h-3z"/></svg>"#,
         "play" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="black" d="M7 4v16l13-8Z"/></svg>"#,
         "previous" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="black" d="M4 6h2v12H4zm9 0-7 6 7 6zm7 0-7 6 7 6z"/></svg>"#,
         "next" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="black" d="M20 6h-2v12h2zM11 6l7 6-7 6zM4 6l7 6-7 6z"/></svg>"#,
+        "next-track" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="black" d="M5 4v16l12-8zM18 4h2v16h-2z"/></svg>"#,
         "restart" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 4v5h-5m5 0a7 7 0 1 0 1.4 7"/></svg>"#,
         "stop" => br#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><rect fill="black" x="5" y="5" width="14" height="14" rx="2"/></svg>"#,
         "mic" => br#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"/></svg>"#,
@@ -60,6 +65,9 @@ fn icon(name: &str) -> Svg {
         "studio" => br#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M10 3v18m0-7h11"/></svg>"#,
         "camera" => br#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="6" width="12" height="12" rx="2"/><path d="m15 10 6-3v10l-6-3"/></svg>"#,
         "live" => br#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="2"/><path d="M7 7a7 7 0 0 0 0 10M17 7a7 7 0 0 1 0 10M4 4a11 11 0 0 0 0 16M20 4a11 11 0 0 1 0 16"/></svg>"#,
+        "headphones" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linejoin="round"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="13" width="5" height="7" rx="2"/><rect x="16" y="13" width="5" height="7" rx="2"/></svg>"#,
+        "assistant-bubble" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8l-5 4v-4H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/><path d="M8 10h8"/></svg>"#,
+        "waveform" => br#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round"><path d="M4 10v4m4-7v10m4-14v18m4-14v10m4-7v4"/></svg>"#,
         "mixer" => br#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round"><path d="M5 3v18M12 3v18M19 3v18M2 8h6m1 8h6m1-10h6"/></svg>"#,
         "timeline" => br#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8" stroke-linecap="round"><path d="M3 4h18M8 2v20"/><rect x="3" y="9" width="10" height="4" rx="1"/><rect x="10" y="16" width="11" height="4" rx="1"/></svg>"#,
         "panels" => br#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>"#,
@@ -171,6 +179,31 @@ struct CityPicker {
     loading: bool,
 }
 
+#[derive(Clone, Copy)]
+enum FramingControl {
+    CameraZoom,
+    ScreenZoom,
+}
+
+impl FramingControl {
+    fn value(self, room: &Handle) -> &std::sync::atomic::AtomicU32 {
+        match self {
+            Self::CameraZoom => &room.host_zoom,
+            Self::ScreenZoom => &room.screen_zoom,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum FramingDrag {
+    Zoom { target: FramingControl, left: f32, width: f32 },
+    ScreenPosition { travel: Bounds<Pixels>, offset: Point<Pixels> },
+}
+
+const SCREEN_PAN_RANGE: f32 = 2.;
+const SCREEN_PAD_INSET: Pixels = px(10.);
+const SCREEN_PAD_THUMB: Pixels = px(16.);
+
 pub struct Room {
     pub handle: Arc<Handle>,
     snapshot: Snapshot,
@@ -211,8 +244,13 @@ pub struct Room {
     source_picker: Option<(String, Option<String>)>,
     source_picker_anchor: Point<Pixels>,
     city_picker: Option<CityPicker>,
+    marquee_input: Entity<set_text_field::SetTextField>,
+    headline_input: Entity<set_text_field::SetTextField>,
+    framing_drag: Option<FramingDrag>,
+    marquee_cue: Option<(String,String)>,
     set_selection: Option<(String, String, SetLayoutPair)>,
     clips_panel: clips_panel::Panel,
+    audio_panels: studio_audio_panel::Panels,
     live: live_controls::Panel,
     retiring: bool,
     set_editor: Option<set_editor::Editor>,
@@ -223,7 +261,7 @@ pub struct Room {
 enum GuestRoute { Invitation, Direct, Lan, Boomin }
 impl GuestRoute {
     fn label(self) -> &'static str {
-        match self { Self::Invitation => "Room invitation", Self::Direct => "Direct", Self::Lan => "LAN only", Self::Boomin => "Boomin Media Server" }
+        match self { Self::Invitation => "Guest invitation", Self::Direct => "Direct", Self::Lan => "LAN only", Self::Boomin => "Boomin Media Server" }
     }
 }
 
@@ -287,6 +325,14 @@ impl Room {
         snapshot.project.workspace.apply_launch_visibility();
         let bound = handle.root.join("boomin/room-binding.json").is_file();
         let guest_route = if bound && !handle.root.join("rtc-signaling.json").is_file() { GuestRoute::Invitation } else { GuestRoute::Direct };
+        let headline = snapshot.project.production.sets.values()
+            .find_map(crate::headline::text).unwrap_or_default().to_owned();
+        let headline_input = cx.new(|cx| {
+            set_text_field::SetTextField::new(headline, cx).submit_on_enter()
+        });
+        cx.subscribe(&headline_input, |room, _, _: &set_text_field::Submitted, cx| {
+            room.send_headline(true, None, None, cx);
+        }).detach();
         Self {
             assistant: assistant_panel::Panel::new(cx),
             handle,
@@ -324,8 +370,13 @@ impl Room {
             timeline_details: false,
             source_picker: None,
             city_picker: None,
+            marquee_input: cx.new(|cx| set_text_field::SetTextField::new(String::new(), cx)),
+            headline_input,
+            framing_drag: None,
+            marquee_cue: None,
             set_selection: None,
             clips_panel: clips_panel::Panel::default(),
+            audio_panels: studio_audio_panel::Panels::new(cx),
             live: Default::default(),
             retiring:false,
             set_editor: None,
@@ -692,6 +743,11 @@ impl Room {
             .rounded(px(7.))
             .bg(rgb(PANEL));
         if dock.collapsed {
+            let viewport_width = f32::from(window.viewport_size().width);
+            let assistant_min = 146_f32.min(viewport_width * 0.28);
+            let assistant_width = w.panel_spans(edge, viewport_width - 12., false)
+                .into_iter().find(|(id, _, _)| *id == PanelId::Assistant)
+                .map_or(0., |(_, _, width)| width.max(assistant_min) - 6.);
             // Every panel keeps its own usable compact surface, as in production.
             // The dock is a layout container, not a tab switcher.
             let mut compact = div()
@@ -725,8 +781,10 @@ impl Room {
                         .child(self.add_source_button(cx)),
                     PanelId::Scenes => self.scene_rows(true, cx),
                     PanelId::People => self.people(true,cx),
-                    PanelId::Assistant => self.assistant_compact(cx),
+                    PanelId::Assistant => self.assistant_compact(assistant_width,cx),
                     PanelId::Clips => self.clips_compact(cx),
+                    PanelId::Dj => self.dj_compact(cx),
+                    PanelId::Sound => self.sound_compact(cx),
                     PanelId::Mixer => self.mixer_channels(true, cx),
                     PanelId::Controls => div()
                         .flex()
@@ -779,7 +837,7 @@ impl Room {
                         .px(px(3.))
                         .flex_1()
                         .flex_grow(w.panels[&panel].weight)
-                        .min_w_0()
+                        .min_w(px(if panel == PanelId::Assistant { assistant_min } else { 0. }))
                         .h_full()
                         .flex()
                         .items_center()
@@ -808,11 +866,14 @@ impl Room {
                         .unwrap_or(200.)
                 };
                 let shelf = !edge.side() && panel_width >= 360.;
+                let is_dj = panel == PanelId::Dj;
                 let body = match panel {
                     PanelId::Sources => self.sources(!edge.side() && !shelf, cx),
                     PanelId::People => self.people(false,cx),
-                    PanelId::Assistant => self.assistant_panel(cx),
+                    PanelId::Assistant => self.assistant_panel(false,cx),
                     PanelId::Clips => self.clips_panel(shelf,cx),
+                    PanelId::Dj => self.dj_panel(panel_width, !edge.side() && extent < 196., cx),
+                    PanelId::Sound => self.sound_panel(panel_width >= 330.,cx),
                     PanelId::Mixer => self.mixer(shelf, cx),
                     PanelId::Controls => self.controls(shelf, cx),
                     PanelId::Timeline => self.timeline(window, cx),
@@ -825,7 +886,8 @@ impl Room {
                         .flex_grow(self.workspace().panels[&panel].weight)
                         .min_h_0()
                         .min_w_0()
-                        .overflow_y_scroll()
+                        .when(is_dj, |d| d.overflow_hidden())
+                        .when(!is_dj, |d| d.overflow_y_scroll())
                         .child(body),
                 );
             }
@@ -1055,7 +1117,7 @@ impl Room {
                     .on_click(cx.listener(move|this,_,_,cx|{this.confirm_remove=false;this.send(RoomCommand::RtcStage{enabled:!staged},cx);})))
                 .child(button("card-details","activity","Guest connection and stage time")
                     .on_click(cx.listener(|this,_,_,cx|{this.guest_details=!this.guest_details;this.confirm_remove=false;cx.notify();})))
-                .child(button("card-remove","remove-guest","Remove guest from room")
+                .child(button("card-remove","remove-guest","Remove guest from studio")
                     .on_click(cx.listener(|this,_,_,cx|{this.confirm_remove=!this.confirm_remove;this.guest_details=false;cx.notify();}))));
         }
         let mut stack=div().relative().flex().flex_col().child(card);
@@ -1065,7 +1127,7 @@ impl Room {
                 .on_click(cx.listener(|this,_,_,cx|{this.guest_details=false;this.confirm_remove=false;cx.notify();}));
             sheet=sheet.child(div().flex().justify_between().child(div().truncate().child(name.to_owned())).child(close));
             if self.confirm_remove {
-                sheet=sheet.child(self.button("confirm-remove-guest","Remove from room",false,RoomCommand::RtcEnd,cx));
+                sheet=sheet.child(self.button("confirm-remove-guest","Remove from studio",false,RoomCommand::RtcEnd,cx));
             }else{
                 let secs=rtc["stageTimeMs"].as_u64().unwrap_or(0)/1000;
                 let stats=&rtc["stats"];
@@ -1098,6 +1160,15 @@ impl Room {
                 cx.notify();
             });
         }).detach();
+    }
+    #[cfg(debug_assertions)]
+    fn boomin_linked(&mut self, cx: &mut Context<Self>) {
+        if !self.handle.root.join("rtc-signaling.json").is_file() {
+            self.guest_route = GuestRoute::Invitation;
+        }
+        crate::room_share::maintain_presence(&self.handle);
+        self.last_error = None;
+        cx.notify();
     }
     fn refresh_hosting(&mut self, cx: &mut Context<Self>) {
         if self.checking_hosting { return; }
@@ -1143,7 +1214,7 @@ impl Room {
             .rounded(px(8.)).bg(rgb(0x15202b)).border_1().border_color(rgb(LINE)).shadow_lg()
             .child(div().font_weight(FontWeight::SEMIBOLD).child("Guest connection"));
         for (route, id, hint) in [
-            (GuestRoute::Invitation, "room-invitation", "Invite a guest to this Boomin room"),
+            (GuestRoute::Invitation, "room-invitation", "Invite a guest to this studio"),
             (GuestRoute::Direct, "rtc-choice-internet", "Device hosted · no relay"),
             (GuestRoute::Lan, "rtc-choice-lan", "Same local network"),
             (GuestRoute::Boomin, "rtc-choice-hosted", self.hosting_status.as_ref().map(|status| status.0.as_str()).unwrap_or("Checking workspace…")),
@@ -1338,10 +1409,7 @@ impl Room {
                             .is_some_and(|v| v.frames > 0 && v.age_ms < 1000.)
                     },
                 ),
-                "screen" => (
-                    "screen",
-                    s.source_frames[1] > 0 && s.frame_age_ms[1] < 1000.,
-                ),
+                "screen" => ("screen", s.frame_age_ms[1] >= 0.),
                 "movie" => ("studio", s.source_frames[2] > 0),
                 "microphone" => (
                     "mic",
@@ -1508,7 +1576,7 @@ impl Room {
             .child(tool(
                 "room-home",
                 "chevron",
-                "Back to Rooms",
+                "Back to Studios",
                 false,
                 true,
             ).on_click(cx.listener(|_,_,_,cx|cx.emit(shell::Page::Rooms))))
@@ -1519,7 +1587,7 @@ impl Room {
                     if self.edit_layout {
                         "Done editing layout"
                     } else {
-                        "Edit room layout · ⌘E"
+                        "Edit studio layout · ⌘E"
                     },
                     self.edit_layout,
                     true,
@@ -1588,13 +1656,21 @@ impl Room {
         } else {
             bar = bar.child(div().flex_1());
         }
+        let connect_room = cfg!(debug_assertions) && !self.handle.root.join("boomin/room-binding.json").is_file();
         bar.child(tool(
             "guest-link",
             "link",
-            "Copy room link",
+            if connect_room { "Connect to Boomin" } else { "Copy studio link" },
             false,
             true,
-        ).on_click(cx.listener(|this,_,_,cx|this.copy_boomin_link(LinkKind::Room,cx))))
+        ).debug_selector(|| "studio-room-link".into()).on_click(cx.listener(move |this,_,_,cx| {
+            #[cfg(debug_assertions)]
+            if connect_room {
+                cx.emit(shell::ConnectBoomin);
+                return;
+            }
+            this.copy_boomin_link(LinkKind::Room,cx);
+        })))
         .child(tool(
             "channels",
             "channels",
@@ -1711,8 +1787,8 @@ impl Room {
                             "Ready to record?"
                         }
                     }
-                    "panels" => "Room panels",
-                    _ => "Room activity",
+                    "panels" => "Studio panels",
+                    _ => "Studio activity",
                 }))
                 .child(
                     div()
@@ -1752,7 +1828,7 @@ impl Room {
                 }
                 sheet = sheet.child(self.workspace_button(
                     "workspace-reset".into(),
-                    "Reset room layout",
+                    "Reset studio layout",
                     false,
                     WorkspaceCommand::Reset,
                     cx,
@@ -1783,7 +1859,7 @@ impl Room {
                         div()
                             .text_size(px(11.))
                             .text_color(rgb(MUTED))
-                            .child("Records Live output, even while viewing Preview. Saves to this room’s recording folder."),
+                            .child("Records Live output, even while viewing Preview. Saves to this studio’s recording folder."),
                     )
                     .child(
                         self.button(
@@ -1818,7 +1894,7 @@ impl Room {
                                 if self.snapshot.recording {
                                     "Recording locally. Your output remains live.".into()
                                 } else {
-                                    "No new room activity.".into()
+                                    "No new studio activity.".into()
                                 }
                             }),
                     ),
@@ -1828,7 +1904,7 @@ impl Room {
         sheet
     }
     fn sources(&self, dense: bool, cx: &mut Context<Self>) -> Div {
-        div()
+        let mut body = div()
             .w_full()
             .min_w_0()
             .p(px(if dense { 6. } else { 8. }))
@@ -1848,7 +1924,16 @@ impl Room {
                     )
                     .child(self.add_source_button(cx)),
             )
-            .child(self.source_rows(false, cx))
+            .child(self.source_rows(false, cx));
+        for (index, device, pane) in [(0, "Camera", "Camera"), (2, "Microphone", "Microphone")] {
+            if self.snapshot.native_status[index].starts_with("Allow ") {
+                body = body.child(Self::edit_button(format!("allow-{pane}"), format!("Allow {device} in System Settings"), false)
+                    .on_click(move |_, _, cx| {
+                        cx.open_url(&format!("x-apple.systempreferences:com.apple.preference.security?Privacy_{pane}"));
+                    }));
+            }
+        }
+        body
     }
     fn mixer_channel(&self, source: &str, compact: bool, cx: &mut Context<Self>) -> Div {
         let s = &self.snapshot;
@@ -2138,7 +2223,7 @@ impl Room {
             let width=w.min(h*aspect);
             picture=picture.child(surface(f.surface()).w(px(width)).h(px(width/aspect)));
         }else{
-            let hint=rtc["reason"].as_str().unwrap_or(if connected {"Waiting for host picture"}else if tally=="Disconnected" {"The call has ended"}else{"The host will admit you to the room"});
+            let hint=rtc["reason"].as_str().unwrap_or(if connected {"Waiting for host picture"}else if tally=="Disconnected" {"The call has ended"}else{"The host will admit you to the studio"});
             picture=picture.child(div().text_color(rgb(MUTED)).child(hint.to_owned()));
         }
         div().size_full().flex().flex_col().bg(rgb(BG)).text_color(rgb(TEXT)).font_family("Helvetica Neue")
@@ -2149,7 +2234,7 @@ impl Room {
                 .child(div().flex().gap(px(6.))
                     .child(self.button("stage-mic",if mic {"Mute mic"}else{"Unmute mic"},!mic,RoomCommand::RtcMedia{microphone:Some(!mic),camera:None},cx))
                     .child(self.button("stage-camera",if camera {"Camera off"}else{"Camera on"},!camera,RoomCommand::RtcMedia{microphone:None,camera:Some(!camera)},cx))
-                    .child(self.button("stage-leave","Leave room",false,RoomCommand::RtcEnd,cx))))
+                    .child(self.button("stage-leave","Leave stage",false,RoomCommand::RtcEnd,cx))))
             .child(div().flex_1().min_h_0().p(px(8.)).child(picture))
             .child(div().h(px(36.)).px(px(16.)).text_size(px(12.)).text_color(rgb(MUTED)).child("Host program · Landscape"))
     }
@@ -2230,7 +2315,7 @@ impl Room {
                 div()
                     .text_size(px(10.))
                     .text_color(rgb(MUTED))
-                    .child("ROOM OUTPUT SIZE"),
+                    .child("OUTPUT SIZE"),
             );
             let mut targets = div().flex().gap(px(6.));
             for (i, label) in ["Landscape", "Vertical"].iter().enumerate() {
@@ -2347,7 +2432,7 @@ impl Room {
                     div()
                         .text_size(px(10.))
                         .text_color(rgb(MUTED))
-                        .child("Only this room. Sets adapt to these dimensions."),
+                        .child("Sets in this studio adapt to these dimensions."),
                 );
             outer = outer.child(quick);
         }
@@ -2431,16 +2516,12 @@ impl Room {
                 circle(
                     "room-screen",
                     "screen",
-                    "Share your screen",
-                    self.snapshot.source_frames[1] > 0,
+                    "Share a window or display",
+                    self.snapshot.frame_age_ms[1] >= 0.,
                 )
                 .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
                     this.send(
-                        RoomCommand::Capture {
-                            camera: false,
-                            screen: true,
-                            mic: false,
-                        },
+                        RoomCommand::ScreenCapture { target: ScreenCaptureTarget::Any },
                         cx,
                     )
                 })),
@@ -2449,7 +2530,7 @@ impl Room {
                 circle(
                     "canvas-options",
                     "settings",
-                    "Room output · Orientation and dimensions",
+                    "Studio output · Orientation and dimensions",
                     self.quick,
                 )
                 .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
@@ -2615,13 +2696,27 @@ impl Room {
         panel
     }
 
+    fn send_headline(&mut self, show: bool, size: Option<u16>, wrap: Option<crate::headline::Wrap>, cx: &mut Context<Self>) {
+        let Some((id, layout)) = self.selected_set() else { return };
+        if self.snapshot.program_kind != "set" || self.snapshot.project.mounted_set.as_ref() != Some(&id)
+            || !self.snapshot.project.production.sets.get(&id).is_some_and(|set| {
+                layout.ids().iter().any(|id| crate::headline::supports(set, id))
+                    && self.handle.is_set_on_output(&id, &layout, set)
+            })
+        {
+            return;
+        }
+        let text = show.then(|| self.headline_input.read(cx).value.clone());
+        self.send(RoomCommand::Headline { id, revision: self.snapshot.program_revision, text, size, wrap }, cx);
+    }
+
     fn controls(&self, _shelf: bool, cx: &mut Context<Self>) -> Div {
         let snapshot = &self.snapshot;
         let project = &snapshot.project;
         let mut body = div().w_full().min_w_0().p(px(9.)).flex().flex_col().gap(px(8.));
         let Some((id, picked)) = self.selected_set() else {
             return body.child(Self::panel_heading("Set Controls", ""))
-                .child(div().text_color(rgb(MUTED)).child("No Sets in this room"));
+                .child(div().text_color(rgb(MUTED)).child("No Sets in this studio"));
         };
 
         let set_live = snapshot.program_kind == "set"
@@ -2667,12 +2762,12 @@ impl Room {
         let output_status = match snapshot.program_kind.as_str() {
             "timeline" => "Timeline on output".to_owned(),
             "set" => project.mounted_set.as_deref().map_or_else(
-                || "Room scene".into(),
+                || "Studio scene".into(),
                 |mounted| if mounted == id { "Set on output".into() } else { set_label(mounted) },
             ),
-            _ => "Room scene".into(),
+            _ => "Studio scene".into(),
         };
-        let output_hint = if on_output { "Show room scene" } else { "Show Set on output" };
+        let output_hint = if on_output { "Show studio scene" } else { "Show Set on output" };
         let output_command = if on_output {
             RoomCommand::SetMount { id: None, layout: None }
         } else {
@@ -2720,6 +2815,122 @@ impl Room {
                 })));
         }
         body = body.child(layouts);
+        if let Some(set) = project.production.sets.get(&id).filter(|set| on_output
+            && picked.ids().iter().any(|layout| crate::headline::supports(set, layout)))
+        {
+            let shown = crate::headline::visible(set);
+            let size = crate::headline::size(set);
+            let sizes = div().flex().flex_wrap().items_center().gap(px(6.))
+                .child(div().text_color(rgb(MUTED)).child("Text size"))
+                .child(Self::edit_button("headline-smaller", "−", false)
+                    .on_click(cx.listener(move |room, _, _, cx| {
+                        let next = (size - 4).max(crate::headline::MIN_SIZE);
+                        if next != size { room.send_headline(false, Some(next), None, cx); }
+                    })))
+                .child(div().min_w(px(20.)).text_center().child(size.to_string()))
+                .child(Self::edit_button("headline-larger", "+", false)
+                    .on_click(cx.listener(move |room, _, _, cx| {
+                        let next = (size + 4).min(crate::headline::MAX_SIZE);
+                        if next != size { room.send_headline(false, Some(next), None, cx); }
+                    })));
+            let wrap = crate::headline::wrap(set);
+            let mut wrapping = div().flex().flex_wrap().items_center().gap(px(5.))
+                .child(div().text_color(rgb(MUTED)).child("Portrait wrap"));
+            for (key, label, option) in [
+                ("headline-wrap-auto", "Auto", crate::headline::Wrap::Auto),
+                ("headline-wrap-one", "1 line", crate::headline::Wrap::OneLine),
+                ("headline-wrap-two", "2 lines", crate::headline::Wrap::TwoLines),
+            ] {
+                wrapping = wrapping.child(Self::edit_button(key, label, wrap == option)
+                    .on_click(cx.listener(move |room, _, _, cx| {
+                        if wrap != option { room.send_headline(false, None, Some(option), cx); }
+                    })));
+            }
+            let mut buttons = div().flex().flex_wrap().gap(px(5.)).child(
+                Self::edit_button("show-headline", if shown { "Update" } else { "Show" }, false)
+                    .on_click(cx.listener(|room, _, _, cx| room.send_headline(true, None, None, cx))),
+            );
+            if shown {
+                buttons = buttons.child(Self::edit_button("hide-headline", "Hide", false)
+                    .on_click(cx.listener(|room, _, _, cx| room.send_headline(false, None, None, cx))));
+            }
+            body = body.child("Headline").child(self.headline_input.clone()).child(sizes).child(wrapping).child(buttons);
+        }
+        let charts_on_output = project.production.sets.get(&id).is_some_and(|set|
+            set.theme.contains_key("ipo-chart") && picked.ids().iter().any(|layout| {
+                set.output_graphs.get(*layout).and_then(|id| set.graphs.get(id))
+                    .is_some_and(|graph| graph.passes.iter().any(|pass| matches!(pass,
+                        producer_production_contract::GraphPass::Fragment { shader, .. }
+                        if shader.contains("frame.controls.y"))))
+            }));
+        if on_output && charts_on_output {
+            let line = self.handle.ipo_line_chart.load(std::sync::atomic::Ordering::Relaxed);
+            body = body.child(Self::edit_button("ipo-chart-mode", if line { "Chart: Lines" } else { "Chart: Bars" }, line)
+                .on_click(cx.listener(|room, _, _, cx| {
+                    room.handle.ipo_line_chart.fetch_xor(true, std::sync::atomic::Ordering::Relaxed);
+                    cx.notify();
+                })));
+        }
+        if let Some(set) = project.production.sets.get(&id).filter(|_| on_output) {
+            let uses = |uniform: &str| {
+                picked.ids().iter().any(|layout| {
+                    set.output_graphs.get(*layout).and_then(|id| set.graphs.get(id))
+                        .is_some_and(|graph| graph.passes.iter().any(|pass| matches!(pass,
+                            producer_production_contract::GraphPass::Fragment { shader, .. }
+                            if shader.contains(uniform))))
+                })
+            };
+            for (target, control, label, uniform) in [
+                (FramingControl::CameraZoom, "host-camera-zoom", "Camera zoom", "frame.controls.x"),
+                (FramingControl::ScreenZoom, "screen-share-zoom", "Screen Share zoom", "frame.controls.z"),
+            ] {
+                if uses(uniform) {
+                    body = body.child(self.framing_control(target, control, label, cx));
+                }
+            }
+            if uses("frame.screenPan") {
+                body = body.child(self.screen_position_pad(cx))
+                    .child(Self::edit_button("center-screen-share", "Center window", false)
+                        .debug_selector(|| "center-screen-share".into())
+                        .on_click(cx.listener(|room, _, _, cx| {
+                            room.handle.set_screen_pan([0., 0.]);
+                            cx.notify();
+                        })));
+            }
+        }
+        if on_output && project.production.sets.get(&id).is_some_and(|set| set.theme.contains_key("quiz")) {
+            let answer = self.handle.quiz_answer.load(std::sync::atomic::Ordering::Relaxed);
+            let mut choices = div().flex().flex_wrap().gap(px(5.));
+            for (value, id, label) in [
+                (0, "quiz-reset", "Reset"),
+                (1, "quiz-yes", "Reveal Yes"),
+                (-1, "quiz-no", "Reveal No"),
+            ] {
+                choices = choices.child(Self::edit_button(id, label, answer == value)
+                    .debug_selector(move || id.into())
+                    .on_click(cx.listener(move |room, _, _, cx| {
+                        room.handle.quiz_answer.store(value, std::sync::atomic::Ordering::Relaxed);
+                        cx.notify();
+                    })));
+            }
+            body = body.child(choices);
+        }
+        if project.production.sets.get(&id).is_some_and(|s|s.theme.contains_key("marquee")) {
+            let owner=id.clone();
+            body=body.child("Next marquee").child(self.marquee_input.clone())
+                .child(Self::edit_button("marquee-cue","Cue",false).on_click(cx.listener(move |room,_,_,cx|{
+                    let text=room.marquee_input.read(cx).value.trim().to_owned();
+                    room.marquee_cue=Some((owner.clone(),text));
+                    cx.notify();
+                })));
+            if let Some((_,text))=self.marquee_cue.as_ref().filter(|(owner,_)|owner==&id) {
+                if let Ok(lines)=crate::marquee::lines(text) {
+                    body=body.child(if text.is_empty(){String::from("Clear marquee")}else{lines.join(" ").trim().to_owned()});
+                    if on_output {body=body.child(self.button("reveal-marquee","Reveal",false,
+                        RoomCommand::MarqueeReveal{id:id.clone(),revision:snapshot.program_revision,text:text.clone()},cx));}
+                } else {body=body.child("Shorten the cue to fit two lines.");}
+            }
+        }
         if project.production.sets.get(&id).is_some_and(|set| {
             picked.has_flythrough(set) && self.handle.is_set_on_output(&id, &picked, set)
         }) {
@@ -3320,7 +3531,124 @@ impl Room {
         }
         cx.notify();
     }
+    fn framing_control(
+        &self, target: FramingControl, id: &'static str, label: &'static str, cx: &mut Context<Self>,
+    ) -> Div {
+        let value = f32::from_bits(target.value(&self.handle).load(std::sync::atomic::Ordering::Relaxed));
+        let fraction = (value - 1.) / 2.;
+        let bounds = std::rc::Rc::new(std::cell::Cell::new((0f32, 0f32)));
+        let measure = bounds.clone();
+        let track = div().relative().w_full().h(px(4.)).rounded_full().bg(rgb(LINE))
+            .child(div().absolute().left_0().top_0().h_full()
+                .w(relative(fraction)).rounded_full().bg(rgb(ACCENT)))
+            .child(div().absolute().left(relative(fraction)).ml(px(-5.)).top(px(-3.)).size(px(10.)).rounded_full().bg(rgb(TEXT)));
+        div().flex().flex_col()
+            .child(div().flex().justify_between().child(label).child(format!("{value:.2}×")))
+            .child(div()
+                .w_full().px(px(6.)).h(px(24.)).flex().items_center().cursor_pointer()
+                .on_children_prepainted(move |children, _, _| {
+                    if let Some(track) = children.first() {
+                        measure.set((track.origin.x.into(), track.size.width.into()));
+                    }
+                })
+                .id(id).debug_selector(move || id.into())
+                .child(track)
+                .on_mouse_down(MouseButton::Left, cx.listener(move |room, event: &MouseDownEvent, _, cx| {
+                    let (left, width) = bounds.get();
+                    if width > 0. {
+                        room.framing_drag = Some(FramingDrag::Zoom { target, left, width });
+                        room.scrub_framing(event.position, cx);
+                    }
+                    cx.stop_propagation();
+                })))
+    }
+    fn screen_position_pad(&self, cx: &mut Context<Self>) -> Div {
+        let active = matches!(self.framing_drag, Some(FramingDrag::ScreenPosition { .. }));
+        let [x, y] = self.handle.screen_pan().map(|axis| (axis / SCREEN_PAN_RANGE + 1.) * 0.5);
+        let mut grid = div().relative().size_full().rounded(px(6.)).bg(rgb(0x0a111a))
+            .child(div().absolute().inset_0().rounded(px(6.)).border_1().border_color(rgb(LINE)));
+        for index in 1..6 {
+            let position = relative(index as f32 / 6.);
+            let ink = rgb(if index == 3 { 0x344b5b } else { 0x1c2b38 });
+            grid = grid
+                .child(div().absolute().left(position).top_0().h_full().w(px(1.)).bg(ink))
+                .child(div().absolute().top(position).left_0().w_full().h(px(1.)).bg(ink));
+        }
+        let half_thumb = SCREEN_PAD_THUMB / 2.;
+        grid = grid.child(div().absolute()
+            .top(SCREEN_PAD_INSET).bottom(SCREEN_PAD_INSET)
+            .left(SCREEN_PAD_INSET).right(SCREEN_PAD_INSET)
+            .child(div().id("screen-position-thumb").debug_selector(|| "screen-position-thumb".into())
+                .absolute().left(relative(x)).top(relative(y))
+                .ml(-half_thumb).mt(-half_thumb).size(SCREEN_PAD_THUMB)
+                .rounded(px(3.)).border_1().border_color(rgb(ACCENT))
+                .bg(rgb(if active { 0x377465 } else { 0x1b4038 }))
+                .cursor(if active { CursorStyle::ClosedHand } else { CursorStyle::OpenHand })));
+
+        let bounds = std::rc::Rc::new(std::cell::Cell::new(None));
+        let measure = bounds.clone();
+        let pad = div()
+            .size(px(108.)).flex_none()
+            .cursor(if active { CursorStyle::ClosedHand } else { CursorStyle::Crosshair })
+            .on_children_prepainted(move |children, _, _| measure.set(children.first().copied()))
+            .id("screen-share-position").debug_selector(|| "screen-share-position".into())
+            .child(grid)
+            .on_mouse_down(MouseButton::Left, cx.listener(move |room, event: &MouseDownEvent, _, cx| {
+                if let Some(travel) = bounds.get().map(|area| area.inset(SCREEN_PAD_INSET)) {
+                    let center = travel.origin + point(travel.size.width * x, travel.size.height * y);
+                    let offset = event.position - center;
+                    let grabbed = offset.x.abs() <= half_thumb && offset.y.abs() <= half_thumb;
+                    room.framing_drag = Some(FramingDrag::ScreenPosition {
+                        travel,
+                        offset: if grabbed { offset } else { Point::default() },
+                    });
+                    room.scrub_framing(event.position, cx);
+                }
+                cx.stop_propagation();
+            }));
+        div().min_w_0().flex().flex_col().gap(px(5.))
+            .child("Window position")
+            .child(div().flex().justify_center().child(pad))
+    }
+    fn scrub_framing(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
+        match self.framing_drag {
+            Some(FramingDrag::Zoom { target, left, width }) => {
+                let x = f32::from(position.x);
+                let zoom = 1. + 2. * ((x - left) / width).clamp(0., 1.);
+                target.value(&self.handle).store(zoom.to_bits(), std::sync::atomic::Ordering::Relaxed);
+            }
+            Some(FramingDrag::ScreenPosition { travel, offset }) => {
+                let local = position - offset - travel.origin;
+                let fraction = [local.x / travel.size.width, local.y / travel.size.height];
+                self.handle.set_screen_pan(fraction.map(|axis| {
+                    (axis.clamp(0., 1.) * 2. - 1.) * SCREEN_PAN_RANGE
+                }));
+            }
+            None => return,
+        }
+        cx.notify();
+    }
+    fn finish_framing_drag(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) -> bool {
+        if self.framing_drag.is_none() {
+            return false;
+        }
+        self.scrub_framing(position, cx);
+        self.framing_drag = None;
+        true
+    }
     fn mouse_move(&mut self, e: &MouseMoveEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if self.move_dj_slider(e.position.x, e.pressed_button != Some(MouseButton::Left), cx) {
+            return;
+        }
+        if self.framing_drag.is_some() {
+            if e.pressed_button == Some(MouseButton::Left) {
+                self.scrub_framing(e.position, cx);
+            } else {
+                self.framing_drag = None;
+                cx.notify();
+            }
+            return;
+        }
         if e.pressed_button != Some(MouseButton::Left) && self.drag.is_some() {
             self.finish_drag(cx);
             return;
@@ -3551,11 +3879,27 @@ impl Render for Room {
             .on_mouse_up(
                 MouseButton::Left,
                 cx.listener(|this, e: &MouseUpEvent, window, cx| {
+                    if this.move_dj_slider(e.position.x, false, cx) {
+                        this.move_dj_slider(e.position.x, true, cx);
+                        return;
+                    }
+                    if this.finish_framing_drag(e.position, cx) {
+                        return;
+                    }
                     this.drag_position(e.position, window, cx);
                     this.finish_drag(cx);
                 }),
             )
+            .on_mouse_up_out(MouseButton::Left, cx.listener(|this, e: &MouseUpEvent, _, cx| {
+                this.move_dj_slider(e.position.x, true, cx);
+                this.finish_framing_drag(e.position, cx);
+            }))
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
+                if e.keystroke.key == "escape" && this.set_editor.is_none()
+                    && this.close_assistant_popout(window, cx) {
+                    cx.stop_propagation();
+                    return;
+                }
                 if this.city_picker.as_ref().is_some_and(|p| p.input.read(cx).focus_handle(cx).is_focused(window)) && this.set_editor.is_none() {
                     match e.keystroke.key.as_str() {
                         "enter" => this.search_weather_city(cx),
@@ -3671,6 +4015,7 @@ impl Render for Room {
                 root = root.child(deferred(
                     div()
                         .id(SharedString::from(format!("reopen-dock-{}", edge.key())))
+                        .debug_selector(move||format!("reopen-dock-{}",edge.key()).into())
                         .absolute()
                         .left(px(bounds[0]))
                         .top(px(bounds[1]))
@@ -3843,7 +4188,7 @@ impl Render for Room {
                 let location = if state.visible {
                     format!("Move from {} dock", state.edge.key())
                 } else {
-                    "Not in room".into()
+                    "Not in studio".into()
                 };
                 let artwork = match panel {
                     PanelId::Sources => "channels",
@@ -3854,6 +4199,8 @@ impl Render for Room {
                     PanelId::Timeline => "timeline",
                     PanelId::Assistant => "edit",
                     PanelId::Clips => "record",
+                    PanelId::Dj => "headphones",
+                    PanelId::Sound => "waveform",
                 };
                 list = list.child(
                     div()
@@ -3991,7 +4338,7 @@ impl Render for Room {
             let height = f32::from(window.viewport_size().height);
             let edge = self.workspace().panels[&PanelId::Sources].edge;
             let menu_width = 300_f32.min((width - 16.).max(1.));
-            let menu_height = if kind.is_empty() { 206. } else { 284. };
+            let menu_height = if kind.is_empty() { 242. } else { 284. };
             let anchor = self.source_picker_anchor;
             let x = f32::from(anchor.x)
                 + if edge == Edge::Right {
@@ -4013,6 +4360,7 @@ impl Render for Room {
             let title = match kind.as_str() {
                 "camera" => "Choose camera",
                 "microphone" => "Choose microphone",
+                "screen" => "Screen Share",
                 "scene" => "Scene",
                 _ if source.is_some() => "Source",
                 _ => "Add source",
@@ -4055,12 +4403,14 @@ impl Render for Room {
                 for (id, label, symbol) in [
                     ("camera", "Camera", "camera"),
                     ("microphone", "Microphone", "mic"),
-                    ("screen", "Screen share", "screen"),
+                    ("window", "Window capture", "screen"),
+                    ("screen", "Display capture", "screen"),
                     ("video", "Video file", "studio"),
                 ] {
                     menu = menu.child(
                         div()
                             .id(SharedString::from(format!("source-type-{id}")))
+                            .debug_selector(move || format!("source-type-{id}"))
                             .h(px(36.))
                             .px(px(8.))
                             .rounded(px(5.))
@@ -4072,16 +4422,14 @@ impl Render for Room {
                             .child(icon(symbol))
                             .child(label)
                             .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| match id {
-                                "screen" => {
+                                "window" | "screen" => {
                                     this.source_picker = None;
-                                    this.send(
-                                        RoomCommand::Capture {
-                                            camera: false,
-                                            screen: true,
-                                            mic: false,
-                                        },
-                                        cx,
-                                    );
+                                    let target = if id == "window" {
+                                        ScreenCaptureTarget::Window
+                                    } else {
+                                        ScreenCaptureTarget::Display
+                                    };
+                                    this.send(RoomCommand::ScreenCapture { target }, cx);
                                 }
                                 "video" => this.import_video(cx),
                                 _ => {
@@ -4090,6 +4438,25 @@ impl Render for Room {
                                 }
                             })),
                     );
+                }
+            } else if kind == "screen" {
+                let status = &self.snapshot.native_status[1];
+                if !status.is_empty() {
+                    menu = menu.child(div().px(px(6.)).text_color(rgb(MUTED)).child(status.clone()));
+                }
+                for (id, label, target) in [
+                    ("choose-window", "Choose window…", ScreenCaptureTarget::Window),
+                    ("choose-display", "Choose display…", ScreenCaptureTarget::Display),
+                    ("stop-screen-share", "Stop sharing", ScreenCaptureTarget::Stop),
+                ] {
+                    if matches!(target, ScreenCaptureTarget::Stop) && self.snapshot.frame_age_ms[1] < 0. {
+                        continue;
+                    }
+                    menu = menu.child(Self::edit_button(id, label, false)
+                        .on_click(cx.listener(move |room, _, _, cx| {
+                            room.source_picker = None;
+                            room.send(RoomCommand::ScreenCapture { target }, cx);
+                        })));
                 }
             } else if matches!(kind.as_str(), "camera" | "microphone") {
                 let devices = if kind == "camera" {
@@ -4257,6 +4624,9 @@ impl Render for Room {
                 ))
                 .child("Metal · GPUI · Rust runtime"),
         );
+        if let Some(popout) = self.assistant_popout(window, cx) {
+            root = root.child(deferred(popout).with_priority(90));
+        }
         if self.set_editor.is_some() {
             root = root.child(deferred(self.render_set_editor(window,cx)).with_priority(100));
         }
@@ -4274,5 +4644,68 @@ mod mixer_tests {
         assert!((super::meter_level(0.1, false) - 2. / 3.).abs() < 0.0001);
         assert_eq!(super::meter_level(1., false), 1.);
         assert_eq!(super::meter_level(2., false), 1.);
+    }
+}
+
+#[cfg(test)]
+mod framing_tests {
+    use super::{FramingControl, Room};
+    use gpui::{point, px, size, AppContext, Bounds, Modifiers, MouseButton, TestAppContext,
+        VisualTestContext, WindowBounds, WindowOptions};
+    use std::sync::atomic::Ordering::Relaxed;
+
+    #[test]
+    fn screen_share_pad_moves_both_axes_and_centers_independently_of_zoom() {
+        let temp=tempfile::tempdir().unwrap();
+        let mut project=crate::model::RoomProject::demo();
+        let set=project.production.sets.get_mut("studio").unwrap();
+        for layout in ["landscape","vertical"] {
+            set.graphs.insert(layout.into(),serde_json::from_value(serde_json::json!({
+                "profile":"producer.render/1",
+                "passes":[{"kind":"fragment","id":"pan","inputs":[],
+                    "shader":"return vec4<f32>((frame.screenPan+2.)*.25,frame.controls.z/3.,1.);"}]
+            })).unwrap());
+            set.output_graphs.insert(layout.into(),layout.into());
+        }
+        project.mount_set(Some("studio".into()),None).unwrap();
+        std::fs::write(temp.path().join("room.json"),serde_json::to_vec(&project).unwrap()).unwrap();
+        let (handle,_commands,_)=crate::engine::initial_room(temp.path()).unwrap();
+        let app=&mut TestAppContext::single();
+        let view=app.update(|cx|cx.open_window(WindowOptions{
+            window_bounds:Some(WindowBounds::Windowed(Bounds::centered(None,size(px(1280.),px(950.)),cx))),
+            ..Default::default()
+        },|_,cx|cx.new(|cx|Room::new(handle.clone(),cx)))).unwrap();
+        let mut ui=VisualTestContext::from_window(view.into(),app);
+        let pad = ui.debug_bounds("screen-share-position").unwrap();
+        let thumb = ui.debug_bounds("screen-position-thumb").unwrap();
+        assert_eq!(pad.size.width, pad.size.height);
+        assert_eq!(thumb.center(), pad.center());
+        assert!(ui.debug_bounds("screen-share-x").is_none());
+        assert!(ui.debug_bounds("screen-share-y").is_none());
+
+        let modifiers = Modifiers::default();
+        let grab = thumb.center() + point(px(5.), px(-4.));
+        ui.simulate_mouse_down(grab, MouseButton::Left, modifiers);
+        assert_eq!(handle.screen_pan(), [0., 0.]);
+        let lower_right = point(pad.right() + px(5.), pad.bottom() + px(5.));
+        ui.simulate_mouse_move(lower_right, MouseButton::Left, modifiers);
+        assert_eq!(handle.screen_pan(), [2., 2.]);
+        let upper_left = point(pad.left() - px(5.), pad.top() - px(5.));
+        ui.simulate_mouse_up(upper_left, MouseButton::Left, modifiers);
+        assert_eq!(handle.screen_pan(), [-2., -2.]);
+
+        let upper_right = point(pad.right() - px(1.), pad.top() + px(1.));
+        ui.simulate_click(upper_right, modifiers);
+        assert_eq!(handle.screen_pan(), [2., -2.]);
+        let zoom = ui.debug_bounds("screen-share-zoom").unwrap();
+        ui.simulate_click(point(zoom.right() - px(1.), zoom.center().y), modifiers);
+        let zoom_value = || f32::from_bits(FramingControl::ScreenZoom.value(&handle).load(Relaxed));
+        assert_eq!(zoom_value(), 3.);
+        assert_eq!(handle.screen_pan(), [2., -2.]);
+        let center = ui.debug_bounds("center-screen-share").unwrap().center();
+        ui.simulate_click(center, modifiers);
+        assert_eq!(handle.screen_pan(), [0., 0.]);
+        assert_eq!(ui.debug_bounds("screen-position-thumb").unwrap().center(), pad.center());
+        assert_eq!(zoom_value(), 3.);
     }
 }

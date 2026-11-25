@@ -397,7 +397,7 @@ impl Room {
                         "{}",
                         reply["error"]
                             .as_str()
-                            .unwrap_or("The room could not apply this edit")
+                            .unwrap_or("The studio could not apply this edit")
                     );
                     Ok::<_, anyhow::Error>(reply)
                 })

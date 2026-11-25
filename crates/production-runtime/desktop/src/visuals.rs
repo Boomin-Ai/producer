@@ -12,10 +12,12 @@ use sha2::{Digest, Sha256};
 use std::{ffi::CString, sync::Arc};
 
 pub const MAX_DRAWS: usize = 1024;
+// Budget for intermediate color, layer and depth surfaces per output. An
+// eight-pass 1080p graph also needs space for its layer textures.
+const MAX_GRAPH_SURFACE_PIXELS: u64 = 32 * 1024 * 1024;
 #[derive(Default)]
 pub struct VisualCache {
-    key: String,
-    prepared: Option<Arc<Visuals>>,
+    entries: std::collections::VecDeque<(String, Arc<Visuals>)>,
 }
 impl VisualCache {
     pub fn prepare(&mut self, project: &RoomProject, plan: &Plan) -> Result<Arc<Visuals>> {
@@ -52,7 +54,7 @@ impl VisualCache {
                 node.style
                     .as_ref()
                     .and_then(|s| s.text.as_ref())
-                    .is_some_and(|t| t.field.is_some())
+                    .is_some_and(|t| t.field.as_deref().is_some_and(|f| f != "dj-track"))
             }) {
             crate::weather::fields(&crate::root())?
         } else {
@@ -62,16 +64,17 @@ impl VisualCache {
             .is_some_and(|set| set.theme.contains_key("weather-desk"));
         let key = format!(
             "{:x}",
-            Sha256::digest(serde_json::to_vec(&(project.production.sets.get(&project.scene).map(|s| (&s.graphs,&s.output_graphs)), weather_desk, selected, targets, &project.inputs, &project.production.assets, &fields))?)
+            Sha256::digest(serde_json::to_vec(&(&project.scene, project.output_layouts(), project.production.sets.get(&project.scene).map(|s| (&s.graphs,&s.output_graphs)), weather_desk, selected, targets, &project.inputs, &project.production.assets, &fields))?)
         );
-        if self.key == key {
-            if let Some(v) = &self.prepared {
-                return Ok(v.clone());
-            }
+        if let Some(index) = self.entries.iter().position(|(cached, _)| cached == &key) {
+            let entry = self.entries.remove(index).unwrap();
+            let prepared = entry.1.clone();
+            self.entries.push_front(entry);
+            return Ok(prepared);
         }
         let prepared = Arc::new(Visuals::prepare(project, plan, &fields)?);
-        self.key = key;
-        self.prepared = Some(prepared.clone());
+        self.entries.push_front((key, prepared.clone()));
+        self.entries.truncate(3);
         Ok(prepared)
     }
 }
@@ -210,11 +213,20 @@ impl Visuals {
                         _ => bail!("Unsupported native animation at {}: {property:?}", n.path),
                     }
                 }
+                // The headline occupies a fixed region in the output graph's
+                // text atlas. Preserve that UV region at every target size.
+                let (width, height) = if depth == 1 && n.path.ends_with("/headline")
+                    && crate::headline::supports(set, name)
+                {
+                    (set.layouts[name].width, set.layouts[name].height)
+                } else {
+                    (size.width, size.height)
+                };
                 let rect = [
-                    n.frame.x as f32 / size.width as f32,
-                    n.frame.y as f32 / size.height as f32,
-                    n.frame.width as f32 / size.width as f32,
-                    n.frame.height as f32 / size.height as f32,
+                    n.frame.x as f32 / width as f32,
+                    n.frame.y as f32 / height as f32,
+                    n.frame.width as f32 / width as f32,
+                    n.frame.height as f32 / height as f32,
                 ];
                 let mut base = Draw::solid(rect, [0.; 4]);
                 base.group=n.path[prefix.len()..].split('/').nth(1).and_then(|n|groups.get(n)).copied().unwrap_or(0);
@@ -284,33 +296,37 @@ impl Visuals {
                         bail!("Native text requires the qualified system-font asset");
                     }
                     let (w, h) = (n.frame.width.ceil() as u32, n.frame.height.ceil() as u32);
-                    pixels += w as u64 * h as u64;
-                    if specs.len() >= 128 || pixels > 8_388_608 || w > 4096 || h > 4096 {
-                        bail!("Native text cache budget exceeded; working output retained");
-                    }
-                    let name = n.style.as_ref().and_then(|s| s.text.as_ref()).and_then(|s| s.field.as_ref());
-                    let value = name.and_then(|k| fields.get(k)).unwrap_or(text);
-                    strings.push(CString::new(value.as_str())?);
                     let style = n.style.as_ref().and_then(|s| s.text.as_ref());
-                    specs.push(TextSpec {
-                        rgba: std::ptr::null(),
-                        value: strings.last().unwrap().as_ptr(),
-                        width: w,
-                        height: h,
-                        font_size: style.map_or(48., |s| s.font_size as f32),
-                        weight: style.map_or(600, |s| s.weight as u32),
-                        single_line: u32::from(name.is_some()),
-                        align: style.map_or(0, |s| match s.align {
-                            TextAlign::Left => 0,
-                            TextAlign::Center => 1,
-                            TextAlign::Right => 2,
-                        }),
-                    });
+                    let name = style.and_then(|s| s.field.as_ref());
                     let mut d = Draw::solid(rect, style.map_or([1.; 4], |s| ink(&s.ink)));
                     d.metrics = [0., w as f32, h as f32, 0.];
                     d.group = base.group;
                     d.kind = 2;
-                    d.source = (specs.len() - 1) as u32;
+                    if name.is_some_and(|key| key == "dj-track") {
+                        d.source = u32::MAX;
+                    } else {
+                        pixels += w as u64 * h as u64;
+                        if specs.len() >= 128 || pixels > 8_388_608 || w > 4096 || h > 4096 {
+                            bail!("Native text cache budget exceeded; working output retained");
+                        }
+                        let value = name.and_then(|k| fields.get(k)).unwrap_or(text);
+                        strings.push(CString::new(value.as_str())?);
+                        d.source = specs.len() as u32;
+                        specs.push(TextSpec {
+                            rgba: std::ptr::null(),
+                            value: strings.last().unwrap().as_ptr(),
+                            width: w,
+                            height: h,
+                            font_size: style.map_or(48., |s| s.font_size as f32),
+                            weight: style.map_or(600, |s| s.weight as u32),
+                            single_line: u32::from(name.is_some()),
+                            align: style.map_or(0, |s| match s.align {
+                                TextAlign::Left => 0,
+                                TextAlign::Center => 1,
+                                TextAlign::Right => 2,
+                            }),
+                        });
+                    }
                     content = Some(d);
                 } else if let Some(source) = &n.source {
                     let slot = match source.as_str() {
@@ -363,7 +379,7 @@ impl Visuals {
                 graph_pixels +=
                     u64::from(width) * u64::from(height) * definition.passes.len() as u64;
                 anyhow::ensure!(
-                    graph_pixels <= 16_777_216 && first + definition.passes.len() <= 64,
+                    graph_pixels <= MAX_GRAPH_SURFACE_PIXELS && first + definition.passes.len() <= 64,
                     "graph target budget exceeded at {}",
                     graph
                 );
@@ -374,8 +390,8 @@ impl Visuals {
                     let (id, geometry, source, entry, params) = match pass {
                         GraphPass::Geometry { id,scene,.. } => {
                             graph_pixels += u64::from(width) * u64::from(height);
-                            anyhow::ensure!(graph_pixels <= 16_777_216,"geometry depth target exceeds graph budget");
-                            strings.push(CString::new(serde_json::to_vec(scene)?)?);
+                            anyhow::ensure!(graph_pixels <= MAX_GRAPH_SURFACE_PIXELS,"geometry depth target exceeds graph budget");
+                            strings.push(CString::new(crate::glb::prepare(scene)?)?);
                             (id,strings.last().unwrap().as_ptr(),c_geometry_shader(),std::ptr::null(),[0.;4])
                         }
                         GraphPass::Fragment {id,shader,params,fields:bindings,..} => {
@@ -414,7 +430,7 @@ impl Visuals {
                                 } else {
                                     graph_pixels += u64::from(width) * u64::from(height);
                                     anyhow::ensure!(
-                                        graph_pixels <= 16_777_216 && graph_specs.len() < 64,
+                                        graph_pixels <= MAX_GRAPH_SURFACE_PIXELS && graph_specs.len() < 64,
                                         "output graph exceeds texture budget"
                                     );
                                     let index = graph_specs.len() as i32;
@@ -468,12 +484,16 @@ impl Visuals {
                     &mut marker
                 };
                 base.kind = if element.is_some() { 4 } else { 5 };
-                base.accent[0] = f32::from(
-                    definition.clock == producer_production_contract::GraphClock::Timeline,
-                );
+                use producer_production_contract::GraphClock;
+                base.accent[0] = match definition.clock {
+                    GraphClock::Live => 0.,
+                    GraphClock::Timeline => 1.,
+                    GraphClock::Layout => 2.,
+                };
                 base.source = (graph_specs.len() - 1) as u32;
                 base.reserved = first as u32;
                 if element.is_none() {
+                    marker.opacity = f32::from(crate::headline::visible(set));
                     terminal[out] = Some(marker);
                 }
             }
@@ -498,7 +518,7 @@ impl Visuals {
         camera_wave: bool,
         out: &mut Vec<Draw>,
     ) {
-        self.draw_transition(plan,samples,output,size,frames,active,production_seconds,production_seconds,production_seconds,camera_wave,out,None)
+        self.draw_transition(plan,samples,output,size,frames,active,production_seconds,production_seconds,production_seconds,camera_wave,out,None,None)
     }
     pub fn draw_transition(
         &self,
@@ -514,8 +534,10 @@ impl Visuals {
         camera_wave: bool,
         out: &mut Vec<Draw>,
         transition: Option<(&LayoutBlend,f32)>,
+        graph_progress: Option<f32>,
     ) {
         out.clear();
+        let progress = graph_progress.unwrap_or_else(|| transition.map_or(1., |(_, p)| p));
         let (w,h) = (size.width as f32,size.height as f32);
         let mut poses = [Pose::IDENTITY; producer_production_contract::SPATIAL_DEPTH + 2];
         for (index,e) in self.outputs[output].iter().enumerate() {
@@ -593,7 +615,7 @@ impl Visuals {
             }
         }
         if let Some(mut d)=self.terminal[output] {
-            set_graph_clock(&mut d,active,production_seconds,set_motion_seconds,transition.map_or(1.,|(_,p)|p));
+            set_graph_clock(&mut d,active,production_seconds,set_motion_seconds,progress);
             out.push(d);
         }
     }
@@ -780,6 +802,26 @@ mod resource_tests {
         assert_eq!(out.capacity(), before);
     }
     #[test]
+    fn returning_to_a_layout_reuses_its_prepared_visuals() {
+        let mut project = crate::visual_fixture::project(false);
+        let set = project.production.sets.get_mut("studio").unwrap();
+        for orientation in ["landscape", "vertical"] {
+            set.layouts.insert(format!("alternate-{orientation}"), set.layouts[orientation].clone());
+        }
+        let plan = project.compile().unwrap();
+        let mut cache = VisualCache::default();
+        let original = cache.prepare(&project, &plan).unwrap();
+        let selection = project.mounted_layout.clone();
+        project.mount_set(Some("studio".into()), Some(crate::model::SetLayoutPair {
+            landscape: "alternate-landscape".into(), vertical: "alternate-vertical".into(),
+        })).unwrap();
+        let alternate = cache.prepare(&project, &plan).unwrap();
+        assert!(!Arc::ptr_eq(&original, &alternate));
+        project.mounted_layout = selection;
+        assert!(Arc::ptr_eq(&original, &cache.prepare(&project, &plan).unwrap()));
+    }
+
+    #[test]
     fn unknown_font_is_refused_and_previous_resources_survive() {
         let mut p = crate::visual_fixture::project(false);
         let mut cache = VisualCache::default();
@@ -799,7 +841,7 @@ mod resource_tests {
             *font = "f".repeat(64);
         }
         assert!(cache.prepare(&p, &p.compile().unwrap()).is_err());
-        assert!(Arc::ptr_eq(&before, cache.prepared.as_ref().unwrap()));
+        assert!(Arc::ptr_eq(&before, &cache.entries.front().unwrap().1));
     }
 }
 
@@ -840,7 +882,7 @@ mod admission_tests {
                 interpolation: Interpolation::Linear,
             });
         assert!(cache.prepare(&p, &p.compile().unwrap()).is_err());
-        assert!(Arc::ptr_eq(&before, cache.prepared.as_ref().unwrap()));
+        assert!(Arc::ptr_eq(&before, &cache.entries.front().unwrap().1));
     }
 }
 

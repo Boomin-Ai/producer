@@ -3,17 +3,19 @@ use producer_production_contract::STRING_BYTES;
 use std::ops::Range;
 
 pub(super) struct Changed;
+pub(super) struct Submitted;
 impl EventEmitter<Changed> for SetTextField {}
+impl EventEmitter<Submitted> for SetTextField {}
 
 pub(super) struct SetTextField {
     pub value: String,
-    pub composer:bool,
     focus: FocusHandle,
     anchor: usize,
     caret: usize,
     marked: Option<Range<usize>>,
     shape: Option<(Bounds<Pixels>, ShapedLine)>,
     dragging: bool,
+    submit_on_enter: bool,
 }
 
 impl SetTextField {
@@ -21,14 +23,19 @@ impl SetTextField {
         let caret = value.len();
         Self {
             value,
-            composer:false,
             focus: cx.focus_handle(),
             anchor: caret,
             caret,
             marked: None,
             shape: None,
             dragging: false,
+            submit_on_enter: false,
         }
+    }
+
+    pub(super) fn submit_on_enter(mut self) -> Self {
+        self.submit_on_enter = true;
+        self
     }
 
     pub fn reset(&mut self, value: String, cx: &mut Context<Self>) {
@@ -38,6 +45,10 @@ impl SetTextField {
         self.marked = None;
         self.shape = None;
         cx.notify();
+    }
+
+    pub(super) fn is_composing(&self) -> bool {
+        self.marked.is_some()
     }
 
     fn selection(&self) -> Range<usize> {
@@ -143,6 +154,9 @@ impl SetTextField {
             }
         } else {
             match key.key.as_str() {
+                "enter" if self.submit_on_enter && !self.is_composing() => {
+                    cx.emit(Submitted);
+                }
                 "left" => self.select(
                     if !extend && !selection.is_empty() {
                         selection.start
@@ -316,7 +330,7 @@ impl Render for SetTextField {
             .h(px(31.))
             .flex()
             .items_center()
-            .pl(px(8.)).pr(px(if self.composer{38.}else{8.}))
+            .px(px(8.))
             .rounded(px(6.))
             .border_1()
             .border_color(rgb(if self.focus.is_focused(window) {

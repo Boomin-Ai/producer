@@ -124,6 +124,7 @@ pub fn responsive_layout() -> Document {
             graphs: Default::default(),
             output_graphs: Default::default(),
             layout_transition_ms: None,
+            reversible_layout_transitions: BTreeMap::new(),
             layouts,
             theme: BTreeMap::new(),
             actions: BTreeMap::new(),
@@ -291,6 +292,7 @@ pub fn classic_like() -> Document {
         graphs: Default::default(),
             output_graphs: Default::default(),
             layout_transition_ms: None,
+            reversible_layout_transitions: BTreeMap::new(),
         layouts,
         theme: BTreeMap::from([
             ("accent".into(), "#83d9ba".into()),

@@ -115,6 +115,10 @@ pub struct Set {
     pub output_graphs: BTreeMap<Id, Id>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layout_transition_ms: Option<u16>,
+    /// Animated layout to resting layout. The animated graph runs from 0 to 1
+    /// on entry from its resting layout and from 1 to 0 on return.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub reversible_layout_transitions: BTreeMap<Id, Id>,
     pub layouts: BTreeMap<Id, Layout>,
     #[serde(default)]
     pub theme: BTreeMap<Id, String>,
@@ -362,6 +366,9 @@ pub enum GraphClock {
     #[default]
     Live,
     Timeline,
+    /// Geometry camera keys use the layout transition's normalized progress.
+    /// Fragment passes continue to use the live clock.
+    Layout,
 }
 impl GraphClock {
     fn is_live(&self) -> bool { *self == Self::Live }

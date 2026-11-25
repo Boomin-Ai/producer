@@ -12,6 +12,9 @@ pub struct GeometryScene {
     pub light_direction: [f32; 3],
     pub light_color: [f32; 3],
     pub ambient: [f32; 3],
+    /// Optional digest of a 2:1 equirectangular environment image in the room assets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub environment: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
@@ -41,9 +44,9 @@ pub struct MeshInstance {
 
 fn tube_radius() -> f32 { 0.04 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub enum Mesh { Sphere, Torus, Panel, Disc }
+pub enum Mesh { Sphere, Torus, Panel, Disc, Glb { digest: String }, VertexClip { digest: String, #[serde(default)] phase: f32 } }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -68,11 +71,12 @@ impl GeometryScene {
                 && (0..3).any(|i|(k.eye[i]-k.target[i]).abs()>0.001))
         }
         let mut ids = std::collections::BTreeSet::new();
-        (1..=64).contains(&self.objects.len()) && path(&self.camera)
+        self.environment.as_ref().is_none_or(|v|v.len()==64 && v.bytes().all(|b|b.is_ascii_hexdigit()))
+        && (1..=64).contains(&self.objects.len()) && path(&self.camera)
         && self.portrait_camera.as_ref().is_none_or(|keys|path(keys))
         && bounded(&self.ambient,0.,1.) && bounded(&self.light_color,0.,4.)
         && bounded(&self.light_direction,-1.,1.) && self.light_direction.iter().any(|v|v.abs()>0.001)
-        && self.objects.iter().all(|o| valid_id(&o.id) && ids.insert(&o.id)
+        && self.objects.iter().all(|o| (!matches!(&o.mesh, Mesh::Glb { digest } | Mesh::VertexClip { digest, .. } if digest.len()!=64 || !digest.bytes().all(|c| c.is_ascii_hexdigit()))) && !matches!(&o.mesh,Mesh::VertexClip{phase,..} if !(0.0..=600.0).contains(phase)) && valid_id(&o.id) && ids.insert(&o.id)
             && bounded(&o.position,-1000.,1000.) && bounded(&o.scale,0.001,1000.)
             && bounded(&o.rotation,-3600.,3600.) && bounded(&o.color,0.,1.)
             && (0.0..=1.).contains(&o.metallic) && (0.02..=1.).contains(&o.roughness)

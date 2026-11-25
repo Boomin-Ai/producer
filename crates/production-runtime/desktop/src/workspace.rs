@@ -15,9 +15,11 @@ pub enum PanelId {
     Assistant,
     Timeline,
     Clips,
+    Dj,
+    Sound,
 }
 impl PanelId {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 10] = [
         Self::Sources,
         Self::Scenes,
         Self::Mixer,
@@ -26,6 +28,8 @@ impl PanelId {
         Self::Timeline,
         Self::Clips,
         Self::Assistant,
+        Self::Dj,
+        Self::Sound,
     ];
     pub fn launch_panels() -> impl Iterator<Item = Self> {
         Self::ALL.into_iter().filter(|panel| *panel != Self::Timeline)
@@ -40,6 +44,8 @@ impl PanelId {
             Self::Timeline => "Timeline",
             Self::Assistant => "Assistant",
             Self::Clips => "Clips",
+            Self::Dj => "DJ",
+            Self::Sound => "Sound",
         }
     }
     pub fn key(self) -> &'static str {
@@ -52,6 +58,8 @@ impl PanelId {
             Self::Timeline => "timeline",
             Self::Assistant => "assistant",
             Self::Clips => "clips",
+            Self::Dj => "dj",
+            Self::Sound => "sound",
         }
     }
     pub fn parse(s: &str) -> Result<Self> {
@@ -138,24 +146,17 @@ impl<'de> Deserialize<'de> for Workspace {
                     .iter()
                     .all(Option::is_none) =>
             {
-                let needs_clips=!p.contains_key(&PanelId::Clips) && !o.contains(&PanelId::Clips);
-                let clips=out.panels[&PanelId::Clips].clone();
-                let legacy = !p.contains_key(&PanelId::People) && !o.contains(&PanelId::People);
-                let needs_assistant = !p.contains_key(&PanelId::Assistant) && !o.contains(&PanelId::Assistant);
-                let assistant = out.panels[&PanelId::Assistant].clone();
-                let people = out.panels[&PanelId::People].clone();
-                out.panels = p;
+                let mut panels = p;
+                let mut order = o;
+                for id in [PanelId::Clips, PanelId::People, PanelId::Assistant, PanelId::Dj, PanelId::Sound] {
+                    if !panels.contains_key(&id) && !order.contains(&id) {
+                        panels.insert(id, out.panels[&id].clone());
+                        order.push(id);
+                    }
+                }
+                out.panels = panels;
                 out.docks = d;
-                out.order = o;
-                if needs_clips{out.panels.insert(PanelId::Clips,clips);out.order.push(PanelId::Clips);}
-                if legacy {
-                    out.panels.insert(PanelId::People, people);
-                    out.order.push(PanelId::People);
-                }
-                if needs_assistant {
-                    out.panels.insert(PanelId::Assistant, assistant);
-                    out.order.push(PanelId::Assistant);
-                }
+                out.order = order;
             }
             (None, None, None) => {
                 for (p, v) in [
@@ -193,6 +194,8 @@ impl Default for Workspace {
                 (PanelId::People, Edge::Left, false),
                 (PanelId::Assistant, Edge::Right, false),
                 (PanelId::Clips, Edge::Right, false),
+                (PanelId::Dj, Edge::Bottom, false),
+                (PanelId::Sound, Edge::Left, false),
                 (PanelId::Controls, Edge::Right, true),
                 (PanelId::Timeline, Edge::Bottom, true),
             ]

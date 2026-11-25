@@ -1,6 +1,6 @@
 //! Local, same-user, bounded control path used by both CLI and the native operator UI.
 use crate::engine::{Handle, RoomCommand};
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use std::{
     fs,
     io::{Read, Write},
@@ -16,6 +16,9 @@ use std::{
 #[derive(serde::Deserialize)]
 #[serde(tag="op", rename_all="camelCase",deny_unknown_fields)]
 pub enum AssistantRequest {AssistantStatus,AssistantReview{generation:u64},AssistantStop{generation:u64},AssistantSend{prompt:String}}
+#[derive(serde::Deserialize)]
+#[serde(tag="op", rename_all="camelCase",deny_unknown_fields)]
+enum OutputRequest { OutputFrameTiming }
 const MAX_REQUEST: u64 = 256 * 1024;
 fn socket(root: &Path) -> std::path::PathBuf {
     use sha2::{Digest, Sha256};
@@ -84,6 +87,17 @@ pub fn serve(reserved:RoomListener,handle:Arc<Handle>)->Result<()>{
                         drop(queue);
                         return Ok(rx.recv_timeout(Duration::from_secs(4))?);
                     }
+                    if serde_json::from_slice::<OutputRequest>(&bytes).is_ok() {
+                        let media=handle.media.lock().unwrap().clone().context("Renderer is starting")?;
+                        let outputs: Vec<_> = (0..2).map(|i| {
+                            let frame = media.frames[i+3].lock().unwrap();
+                            frame.as_ref().map(|f| serde_json::json!({
+                                "revision": f.generation,
+                                "firstFrameAt": f64::from_bits(media.first_revision_at[i].load(Ordering::Relaxed))
+                            }))
+                        }).collect();
+                        return Ok(serde_json::json!({"ok":true,"hostTime":crate::platform::host_time(),"outputs":outputs}));
+                    }
                     let command: RoomCommand = serde_json::from_slice(&bytes)?;
                     if matches!(
                         command,
@@ -100,8 +114,10 @@ pub fn serve(reserved:RoomListener,handle:Arc<Handle>)->Result<()>{
                 })();
                 let reply = result
                     .unwrap_or_else(|e| serde_json::json!({"ok":false,"error":e.to_string()}));
-                let _ = serde_json::to_writer(&mut stream, &reply);
-                let _ = stream.write_all(b"\n");
+                let mut writer = std::io::BufWriter::new(&mut stream);
+                let _ = serde_json::to_writer(&mut writer, &reply);
+                let _ = writer.write_all(b"\n");
+                let _ = writer.flush();
                 count.fetch_sub(1,Ordering::Release);
                 }).is_err(){active.fetch_sub(1,Ordering::Release);}
             }
@@ -112,7 +128,7 @@ pub fn request(root: &Path, json: &str) -> Result<()> {
     if json.len() > MAX_REQUEST as usize {
         bail!("Control request too large");
     }
-    if serde_json::from_str::<AssistantRequest>(json).is_err(){let _:RoomCommand=serde_json::from_str(json)?;}
+    if serde_json::from_str::<AssistantRequest>(json).is_err() && serde_json::from_str::<OutputRequest>(json).is_err(){let _:RoomCommand=serde_json::from_str(json)?;}
     let mut stream = UnixStream::connect(socket(root))?;
     stream.set_read_timeout(Some(Duration::from_secs(10)))?;
     stream.write_all(json.as_bytes())?;

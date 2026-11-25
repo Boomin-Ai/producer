@@ -4,7 +4,7 @@ pub(super) struct Identity {
     pub(super) account: Option<Account>,
     pub(super) avatar: Option<Arc<RenderImage>>,
     pending: Option<(Login, Vec<(String, String)>)>,
-    email: Entity<SetTextField>,
+    pub(super) email: Entity<SetTextField>,
     code: Entity<SetTextField>,
     enter_code: bool,
     form: bool,
@@ -31,6 +31,86 @@ impl Identity {
     }
 }
 impl Shell {
+    #[cfg(debug_assertions)]
+    pub(super) fn open_studio_account(&mut self, cx: &mut Context<Self>) {
+        self.profile_open = true;
+        self.identity.error = None;
+        cx.notify();
+    }
+
+    #[cfg(debug_assertions)]
+    fn connect_studio(&mut self, cx: &mut Context<Self>) {
+        if self.identity.busy.is_some() || self.identity.account.is_none() {
+            return;
+        }
+        let Some(handle) = self.active.lock().unwrap().clone() else {
+            return;
+        };
+        let project = handle.snapshot().project;
+        let base = self.base.clone();
+        let studio_root = handle.root.clone();
+        self.identity.busy = Some("Connecting studio…");
+        self.identity.error = None;
+        cx.spawn(async move |this, cx| {
+            let result = cx.background_executor().spawn(async move {
+                boomin_account::link_dev_room(&base, &studio_root, &project.room, &project.production.title)
+            }).await;
+            let _ = this.update(cx, |shell, cx| {
+                shell.identity.busy = None;
+                match result {
+                    Ok(()) => {
+                        shell.profile_open = false;
+                        let same_studio = shell.active.lock().unwrap().as_ref()
+                            .is_some_and(|active| Arc::ptr_eq(active, &handle));
+                        if let Some(studio) = shell.studio.as_ref().filter(|_| same_studio) {
+                            studio.update(cx, |room, cx| {
+                                room.boomin_linked(cx);
+                                room.copy_boomin_link(crate::room_share::LinkKind::Room, cx);
+                            });
+                        }
+                    }
+                    Err(error) => shell.identity.error = Some(error.to_string()),
+                }
+                cx.notify();
+            });
+        }).detach();
+        cx.notify();
+    }
+
+    #[cfg(debug_assertions)]
+    pub(super) fn studio_account_sheet(&self, cx: &mut Context<Self>) -> Div {
+        let signed_in = self.identity.account.as_ref();
+        let mut card = stack().gap(px(10.)).child(label("Connect to Boomin"));
+        if let Some(account) = signed_in {
+            card = card.child(detail_row("Workspace", &account.login.brand))
+                .child("Connect this studio to Boomin for sharing.");
+            if let Some(error) = &self.identity.error {
+                card = card.child(div().text_color(rgb(0xffadb3)).child(error.clone()));
+            }
+            if let Some(busy) = self.identity.busy {
+                card = card.child(label(busy));
+            } else {
+                card = card.child(Room::edit_button("connect-dev-studio", "Connect studio", true)
+                    .on_click(cx.listener(|shell, _, _, cx| shell.connect_studio(cx))));
+            }
+        } else {
+            card = card.child(self.account_contents(true, cx));
+            if self.identity.busy.is_none() && self.identity.pending.is_none() && !self.identity.enter_code {
+                card = card.child(Room::edit_button("restore-dev-account", "Use saved Boomin sign-in", false)
+                    .on_click(cx.listener(|shell, _, _, cx| shell.account_action(Action::Restore, cx))));
+            }
+        }
+        div().absolute().inset_0()
+            .child(div().id("dismiss-studio-account").absolute().inset_0()
+                .on_click(cx.listener(|shell, _, _, cx| {
+                    shell.profile_open = false;
+                    cx.notify();
+                })))
+            .child(div().id("studio-account-sheet").debug_selector(|| "studio-account-sheet".into())
+                .absolute().right(px(16.)).top(px(66.)).w(px(320.)).max_w_full()
+                .rounded(px(12.)).p(px(12.)).border_1().border_color(rgb(LINE))
+                .bg(rgb(0x111b25)).shadow_lg().occlude().child(card))
+    }
     pub(super) fn refresh_rooms(&mut self) -> Result<()> {
         self.rooms = if let Some(a) = self
             .identity
@@ -52,6 +132,9 @@ impl Shell {
         Ok(())
     }
     pub(super) fn open_card(&mut self, path: PathBuf, cx: &mut Context<Self>) {
+        self.open_card_with_starter(path, None, cx);
+    }
+    fn open_card_with_starter(&mut self, path: PathBuf, starter: Option<Starter>, cx: &mut Context<Self>) {
         if let Some(a) = self
             .identity
             .account
@@ -65,7 +148,7 @@ impl Shell {
             else {
                 return;
             };
-            if let Err(e) = boomin_account::prepare_room(&self.base, &a.login.brand, r) {
+            if let Err(e) = boomin_account::prepare_room(&self.base, &a.login.brand, r, starter) {
                 self.notice = Some(e.to_string());
                 cx.notify();
                 return;
@@ -77,7 +160,8 @@ impl Shell {
         if self.identity.busy.is_some() || self.switching {
             return;
         }
-        if matches!(action, Action::Switch(..) | Action::SignOut)
+        let connecting_local_studio = cfg!(debug_assertions) && self.page == Page::Studio && self.profile_open;
+        if (matches!(action, Action::SignOut) || (matches!(action, Action::Switch(..)) && !connecting_local_studio))
             && self.active.lock().unwrap().is_some()
         {
             let h = self.active.lock().unwrap().clone().unwrap();
@@ -107,13 +191,14 @@ impl Shell {
             .detach();
             return;
         }
+        let starter = self.studio_starter.filter(|_| matches!(action, Action::Create(..)));
         let message = match &action {
             Action::Restore => "Opening your workspace…",
             Action::RequestCode(_) => "Sending code…",
             Action::Verify(..) => "Verifying code…",
             Action::Switch(..) => "Opening workspace…",
             Action::SignOut => "Signing out…",
-            Action::Create(..) => "Creating room…",
+            Action::Create(..) => "Creating studio…",
         };
         self.identity.busy = Some(message);
         self.identity.error = None;
@@ -128,8 +213,12 @@ impl Shell {
                 match result {
                     Ok(Outcome::Local) => {
                         s.identity = Identity::new(cx);
+                        s.identity.local = connecting_local_studio;
+                        if connecting_local_studio {
+                            s.identity.error = Some("No saved Boomin sign-in. Sign in with your email.".into());
+                        }
                         s.profile = "Producer".into();
-                        s.profile_open = false;
+                        s.profile_open &= connecting_local_studio;
                         let _ = s.refresh_rooms();
                     }
                     Ok(Outcome::CodeSent) => {
@@ -152,12 +241,13 @@ impl Shell {
                             .take()
                             .map(|i| Arc::new(RenderImage::new([image::Frame::new(i)])));
                         s.identity.account = Some(a);
-                        s.profile_open = false;
+                        s.identity.local = connecting_local_studio;
+                        s.profile_open &= connecting_local_studio;
                         s.room_name = None;
                         let _ = s.refresh_rooms();
                         if let Some(id) = new_room {
                             let a = s.identity.account.as_ref().unwrap();
-                            s.open_card(boomin_account::room_path(&s.base, &a.login.brand, id), cx);
+                            s.open_card_with_starter(boomin_account::room_path(&s.base, &a.login.brand, id), starter, cx);
                         }
                     }
                     Err(e) => {
@@ -176,7 +266,13 @@ impl Shell {
         let result = fs::create_dir_all(&self.base)
             .and_then(|_| fs::write(self.base.join("setup-stage"), marker));
         match result {
-            Ok(()) => { self.first_light = next; self.notice = None; }
+            Ok(()) => {
+                self.first_light = next;
+                if next == FirstLight::Complete {
+                    self.choosing_starter = true;
+                }
+                self.notice = None;
+            }
             Err(err) => self.notice = Some(format!("Could not save setup progress: {err}")),
         }
         cx.notify();
@@ -258,7 +354,7 @@ impl Shell {
             }
             #[cfg(debug_assertions)]
             if self.identity.busy.is_none() {
-                card = card.child(Room::edit_button("entry-local", "Rooms on this Mac", false)
+                card = card.child(Room::edit_button("entry-local", "Studios on this Mac", false)
                     .debug_selector(|| "entry-local".into())
                     .on_click(cx.listener(|s, _, _, cx| {
                         s.identity.local = true;
@@ -323,7 +419,7 @@ impl Shell {
             }
             body = body
                 .child(
-                    Room::edit_button("local-workspace", "Rooms on this Mac", i.local).on_click(
+                    Room::edit_button("local-workspace", "Studios on this Mac", i.local).on_click(
                         cx.listener(|s, _, _, cx| {
                             s.identity.local = true;
                             s.profile_open = false;
@@ -345,11 +441,8 @@ impl Shell {
                 } else {
                     "Boomin email"
                 }))
-                .child(if verify {
-                    i.code.clone()
-                } else {
-                    i.email.clone()
-                })
+                .child(div().id("boomin-account-input").debug_selector(|| "boomin-account-input".into())
+                    .child(if verify { i.code.clone() } else { i.email.clone() }))
                 .child(
                     Room::edit_button(
                         "submit-account",

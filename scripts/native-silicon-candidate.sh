@@ -49,6 +49,7 @@ test)
 compile)
   cargo build --locked --manifest-path "$desktop/Cargo.toml" --release
   cp "$desktop/target/release/producer-native-room" "$bin/producer"
+  ditto assets/starter-audio "$app/Contents/Resources/starter-audio"
   for exe in producer producer-rtc gh ffmpeg; do [[ "$(lipo -archs "$bin/$exe")" == arm64 ]]; done
   plutil -replace CFBundleShortVersionString -string "$VERSION" "$app/Contents/Info.plist"
   plutil -replace CFBundleVersion -string "$VERSION" "$app/Contents/Info.plist"

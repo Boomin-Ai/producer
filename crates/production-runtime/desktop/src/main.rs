@@ -1,3 +1,6 @@
+mod marquee;
+mod headline;
+mod glb;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 mod virtual_camera;
 mod posters;
@@ -15,8 +18,11 @@ mod assistant;
 mod assistant_log;
 mod assistant_image;
 mod clips;
+mod studio_audio;
+mod dj_visual;
 mod broadcast;
 mod starter_sets;
+mod studio_presets;
 mod boomin_account;
 #[path = "../../../../src-tauri/src/boomin.rs"]
 mod boomin;

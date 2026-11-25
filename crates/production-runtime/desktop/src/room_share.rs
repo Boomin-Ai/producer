@@ -27,7 +27,7 @@ impl LinkKind {
         match self {
             Self::Guest => "Guest invitation copied",
             Self::Audience => "Audience link copied",
-            Self::Room => "Room link copied",
+            Self::Room => "Studio link copied",
         }
     }
 }
@@ -35,7 +35,7 @@ impl LinkKind {
 fn account(root: &Path) -> Result<(Binding,String)> {
     let binding: Binding = serde_json::from_slice(
         &fs::read(root.join("boomin/room-binding.json"))
-            .context("Connect this studio to a Boomin room first")?,
+            .context("Connect this studio to Boomin first")?,
     )?;
     let local: Value = serde_json::from_slice(&fs::read(root.join("room.json"))?)?;
     ensure!(
@@ -92,7 +92,7 @@ pub fn link(root: &Path, kind: LinkKind) -> Result<String> {
     );
     let slug = room["room_slug"]
         .as_str()
-        .context("Room has no share address")?;
+        .context("Studio has no share address")?;
     let mut url = url::Url::parse(&format!("https://{}", binding.domain))?;
     if matches!(kind, LinkKind::Guest) {
         let invite = call("POST", "guests", Some(&json!({"display_name":"Guest"})))?;
