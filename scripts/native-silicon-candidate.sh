@@ -62,9 +62,8 @@ compile)
   cargo build ${cargo_target[@]+"${cargo_target[@]}"} --locked --manifest-path "$desktop/Cargo.toml" --release
   cp "$release_dir/producer-native-room" "$bin/producer"
   ditto assets/starter-audio "$app/Contents/Resources/starter-audio"
-  if [[ "$(uname -m)" == arm64 ]]; then
-    bash "$desktop/scripts/check-silicon-release.sh" "$bin/producer" "$RUNNER_TEMP"
-  fi
+  # Rune's release binary omits headless tooling. Test the signed application through
+  # its normal launch and run the scripted Rune checks with a tooling build.
   for exe in producer producer-rtc gh ffmpeg; do [[ "$(lipo -archs "$bin/$exe")" == arm64 ]]; done
   plutil -replace CFBundleShortVersionString -string "$VERSION" "$app/Contents/Info.plist"
   plutil -replace CFBundleVersion -string "$VERSION" "$app/Contents/Info.plist"
