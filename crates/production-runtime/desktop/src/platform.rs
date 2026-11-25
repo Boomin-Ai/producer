@@ -125,6 +125,8 @@ unsafe extern "C" {
         audio: extern "C" fn(*mut c_void, *const f32, u32, f64),
         status: extern "C" fn(*mut c_void, u32, *const c_char),
     ) -> *mut c_void;
+    fn nr_camera_controls(id:*const c_char, control:i32, automatic:i32)->*mut c_char;
+    fn nr_camera_effects();
     fn nr_cameras() -> *mut c_char;
     fn nr_camera_device(room: *mut c_void, id: *const c_char);
     fn nr_microphones() -> *mut c_char;
@@ -253,6 +255,16 @@ pub fn cameras() -> serde_json::Value {
         json
     }
 }
+pub fn camera_controls(id:&str,control:i32,value:i32)->serde_json::Value {
+    let Ok(id)=CString::new(id) else{return serde_json::Value::Null};
+    unsafe {
+        let ptr=nr_camera_controls(id.as_ptr(),control,value);
+        if ptr.is_null(){return serde_json::Value::Null;}
+        let info=serde_json::from_slice(CStr::from_ptr(ptr).to_bytes()).unwrap_or_default();
+        libc::free(ptr.cast());info
+    }
+}
+pub fn camera_effects(){unsafe{nr_camera_effects()}}
 pub fn microphones() -> serde_json::Value {
     unsafe {
         let ptr = nr_microphones();

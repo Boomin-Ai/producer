@@ -20,6 +20,16 @@ pub struct VisualCache {
     entries: std::collections::VecDeque<(String, Arc<Visuals>)>,
 }
 impl VisualCache {
+    pub fn merge_warmed(&mut self, cache: Self) {
+        for entry in cache.entries {
+            if !self.entries.iter().any(|(key, _)| key == &entry.0) {
+                // Keep the active layout at the head of the cache.
+                self.entries.insert(self.entries.len().min(1), entry);
+                self.entries.truncate(3);
+            }
+        }
+    }
+
     pub fn prepare(&mut self, project: &RoomProject, plan: &Plan) -> Result<Arc<Visuals>> {
         // Editorial cuts and panel changes do not invalidate static text or
         // surface resources. Node indices are included because render records
@@ -62,9 +72,14 @@ impl VisualCache {
         };
         let weather_desk = project.production.sets.get(&project.scene)
             .is_some_and(|set| set.theme.contains_key("weather-desk"));
+        // Device names and primary bindings do not affect GPU resources.
+        let camera_slots: Vec<_> = project.inputs.iter()
+            .filter(|(id, binding)| id.as_str() != "camera" && binding.kind == "camera")
+            .map(|(id, binding)| (id, binding.slot))
+            .collect();
         let key = format!(
             "{:x}",
-            Sha256::digest(serde_json::to_vec(&(&project.scene, project.output_layouts(), project.production.sets.get(&project.scene).map(|s| (&s.graphs,&s.output_graphs)), weather_desk, selected, targets, &project.inputs, &project.production.assets, &fields))?)
+            Sha256::digest(serde_json::to_vec(&(&project.scene, project.output_layouts(), project.production.sets.get(&project.scene).map(|s| (&s.graphs,&s.output_graphs)), weather_desk, selected, targets, camera_slots, project.rtc_video_slot(), &project.production.assets, &fields))?)
         );
         if let Some(index) = self.entries.iter().position(|(cached, _)| cached == &key) {
             let entry = self.entries.remove(index).unwrap();
@@ -754,6 +769,17 @@ mod tests {
 #[cfg(test)]
 mod resource_tests {
     use super::*;
+    #[test]
+    fn changing_the_primary_camera_reuses_prepared_visuals() {
+        let mut project = crate::visual_fixture::project(false);
+        let mut cache = VisualCache::default();
+        let original = cache.prepare(&project, &project.compile().unwrap()).unwrap();
+        project.configure_input("camera", "camera", "facetime", "FaceTime").unwrap();
+        let rebound = cache.prepare(&project, &project.compile().unwrap()).unwrap();
+        assert!(Arc::ptr_eq(&original, &rebound));
+        let removed_plan = project.remove_source("camera").unwrap();
+        assert!(Arc::ptr_eq(&original, &cache.prepare(&project, &removed_plan).unwrap()));
+    }
     #[test]
     fn prepared_text_is_reused_for_editorial_and_dock_changes() {
         let mut p = crate::visual_fixture::project(false);

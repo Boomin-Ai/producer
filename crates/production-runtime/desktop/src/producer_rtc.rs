@@ -58,14 +58,34 @@ pub fn description(code:&str, kind:&str) -> Result<Value> {
 }
 
 impl Peer {
-    pub fn start(root:&Path, room_link:Option<&str>, lan:bool, rehearsal:bool, start_muted:bool, display_name:Option<&str>, program:Arc<Mutex<Option<Arc<crate::platform::Shared>>>>) -> Result<(Self,Guest)> {
+    fn signaling_config(root: &Path) -> std::path::PathBuf {
+        let path = root.join("rtc-signaling.json");
+        if path.is_file() {
+            path
+        } else {
+            crate::workspace_root().join("rtc-signaling.json")
+        }
+    }
+
+    pub(crate) fn can_host_direct(root: &Path) -> bool {
+        (Self::signaling_config(root).is_file() || root.join("boomin/room-binding.json").is_file())
+            && std::env::current_exe().is_ok_and(|exe| exe.with_file_name("producer-rtc").is_file())
+    }
+
+    pub fn start(root:&Path, room_link:Option<&str>, lan:bool, rehearsal:bool, start_muted:bool, display_name:Option<&str>, program:Arc<Mutex<Option<Arc<crate::platform::Shared>>>>, portrait:bool) -> Result<(Self,Guest)> {
         let join=room_link.map(signal::parse).transpose()?;
         let session_id=crate::stage_history::new_id()?;
         let identity=if join.is_some(){Some(json!({"id":crate::stage_history::participant(root)?,"name":crate::stage_history::name(display_name.or(if rehearsal{Some("Witness guest")}else{None}))}))}else{None};
         let mut host=None;
         if join.is_none() {
-            let cfg:Value=serde_json::from_slice(&std::fs::read(root.join("rtc-signaling.json")).context("Configure the studio signaling service first")?)?;
-            host=Some((signal::origin(cfg["origin"].as_str().context("Missing signaling origin")?)?,cfg["createKey"].as_str().context("Missing studio signaling credential")?.to_owned()));
+            let config = Self::signaling_config(root);
+            host = Some(if config.is_file() {
+                let cfg: Value = serde_json::from_slice(&std::fs::read(config)?)?;
+                let origin = signal::origin(cfg["origin"].as_str().context("Missing signaling origin")?)?;
+                (origin.clone(), format!("{origin}/sessions"), cfg["createKey"].as_str().context("Missing studio signaling credential")?.to_owned())
+            } else {
+                crate::room_share::direct_session_host(root)?
+            });
         }
         let helper=std::env::current_exe()?.with_file_name("producer-rtc");
         let (reader,writer)=UnixStream::pair()?;
@@ -80,7 +100,10 @@ impl Peer {
         if start_muted {command.arg("--start-muted");}
         if lan {command.arg("--lan");}
         if rehearsal {command.arg("--rehearsal");} else {command.arg("--camera");}
-        if let Some(fd)=stage_fd {command.env("PRODUCER_STAGE_RETURN_FD",fd.to_string());}
+        if let Some(fd)=stage_fd {
+            command.env("PRODUCER_STAGE_RETURN_FD",fd.to_string());
+            if portrait { command.env("PRODUCER_STAGE_PORTRAIT","1"); }
+        }
         unsafe { command.pre_exec(move ||{
             if libc::fcntl(fd,libc::F_SETFD,0)<0 { return Err(std::io::Error::last_os_error()); }
             if let Some(s)=stage_fd {if libc::fcntl(s,libc::F_SETFD,0)<0 {return Err(std::io::Error::last_os_error());}}
@@ -91,8 +114,9 @@ impl Peer {
         drop(stage_reader);
         let stdout=child.stdout.take().unwrap();
         let input=child.stdin.take().unwrap();
+        let output = if portrait { "portrait" } else { "landscape" };
         let observed=Arc::new(Mutex::new(Observed {
-            status:json!({"sessionId":session_id,"role":if join.is_none(){"host"}else{"guest"},"phase":"gathering","routePolicy":"directOnly","hostedRelayEnabled":false,"discovery":if lan{"local interfaces"}else{"STUN + local interfaces"}}),
+            status:json!({"sessionId":session_id,"role":if join.is_none(){"host"}else{"guest"},"phase":"gathering","routePolicy":"directOnly","hostedRelayEnabled":false,"outputOrientation":output,"discovery":if lan{"local interfaces"}else{"STUN + local interfaces"}}),
             code:None,ever_connected:false,link:None,reply:None
         }));
         let thread_state=observed.clone();
@@ -103,14 +127,15 @@ impl Peer {
             let health=peer.observed.clone();
             // This dedicated writer can block during helper startup. Ending the peer closes its socket.
             std::thread::Builder::new().name("producer-stage-return".into()).spawn(move || {
-                let mut pixels=vec![0u8;640*360*3/2];
+                let (width, height, bus_index) = if portrait {(360,640,4)} else {(640,360,3)};
+                let mut pixels=vec![0u8;width*height*3/2];
                 let mut sent=0u64;
                 while !done.load(Ordering::Acquire) {
                     let tick=Instant::now();
-                    let frame=program.lock().unwrap().as_ref().and_then(|m|m.frame(3));
+                    let frame=program.lock().unwrap().as_ref().and_then(|m|m.frame(bus_index));
                     if let Some(f)=frame {
-                        extern "C" {fn nr_stage_copy(frame:*mut std::ffi::c_void,out:*mut u8)->bool;}
-                        if unsafe{nr_stage_copy(f.ptr.as_ptr(),pixels.as_mut_ptr())} {
+                        extern "C" {fn nr_stage_copy(frame:*mut std::ffi::c_void,out:*mut u8,width:usize,height:usize)->bool;}
+                        if unsafe{nr_stage_copy(f.ptr.as_ptr(),pixels.as_mut_ptr(),width,height)} {
                             if sink.write_all(&pixels).is_err(){health.lock().unwrap().status["stageReturn"]=json!("closed");break;}
                             sent+=1;
                             if sent%30==1 {health.lock().unwrap().status["stageReturnFrames"]=json!(sent);}
@@ -150,7 +175,7 @@ impl Peer {
                     Self::write(&sink,&json!({"description":description(&offer.to_string(),"offer")?}))?;
                 } else {Self::write(&sink,&json!({"offer":true}))?;}
                 let mut code=loop{
-                    if !active(){bail!("Room link expired");}
+                    if !active(){bail!("Studio link expired");}
                     if let Some(d)=shared.lock().unwrap().code.clone(){break d;}
                     std::thread::sleep(Duration::from_millis(80));
                 };
@@ -161,9 +186,9 @@ impl Peer {
                     shared.lock().unwrap().status["pendingAdmission"]=json!(true);
                     return Ok(());
                 }
-                let (base,key)=host.unwrap();
-                let created=signal::request("POST",&format!("{base}/sessions"),&key,Some(&code))?;
-                let url=created["link"].as_str().context("Missing room link")?;
+                let (base,sessions,key)=host.unwrap();
+                let created=signal::request("POST",&sessions,&key,Some(&code))?;
+                let url=created["link"].as_str().context("Missing studio link")?;
                 let link=signal::parse(url)?;
                 if url::Url::parse(&link.page)?.origin().ascii_serialization()!=base {bail!("Signaling origin changed");}
                 let owner=created["owner"].as_str().context("Missing room owner capability")?;
@@ -181,7 +206,7 @@ impl Peer {
                         }
                         std::thread::sleep(Duration::from_millis(750));
                     }
-                    bail!("Room link expired")
+                    bail!("Studio link expired")
                 })();
                 let _=signal::request("POST",&format!("{}/close",link.page),owner,None);
                 result
@@ -216,7 +241,7 @@ impl Peer {
         s.reply=None;s.status["admitReady"]=json!(false);Ok(())
     }
     pub fn link(&self)->Result<String>{
-        self.observed.lock().unwrap().link.clone().context("Room link is not ready")
+        self.observed.lock().unwrap().link.clone().context("Studio link is not ready")
     }
     pub fn status(&mut self)->Value {
         let mut s=self.observed.lock().unwrap();

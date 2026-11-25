@@ -322,6 +322,19 @@ impl Broadcast {
     pub fn active(&self) -> bool {
         self.0.lock().unwrap().start.is_some()
     }
+    pub fn sending_to_studio_site(&self) -> bool {
+        let state = self.0.lock().unwrap();
+        state.start.is_some() && state.senders.iter().any(|sender| {
+            if sender.error.is_some() || sender.frames.load(std::sync::atomic::Ordering::Relaxed) == 0 {
+                return false;
+            }
+            url::Url::parse(&sender.retry.row.server).ok()
+                .and_then(|url| url.host_str().map(str::to_owned))
+                .is_some_and(|host| ["producer.dev", "boomin.ai"].iter().any(|domain| {
+                    host == *domain || host.strip_suffix(domain).is_some_and(|subdomain| subdomain.ends_with('.'))
+                }))
+        })
+    }
     pub fn begin(&self, root: &Path, room: &Path) -> Result<(u64, Vec<usize>)> {
         let rows: Vec<_> = channels(root, room)?
             .into_iter()

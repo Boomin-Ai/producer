@@ -82,6 +82,23 @@ fn api(binding: &Binding, token: &str, method: &str, resource: &str, body: Optio
         }
         Ok::<Value, anyhow::Error>(reply)
 }
+pub fn direct_session_host(root: &Path) -> Result<(String, String, String)> {
+    let (binding, token) = account(root)?;
+    let base = crate::rtc_signaling::BROWSER_SIGNALING_ORIGIN;
+    let mut sessions = url::Url::parse(&format!("{base}/sessions"))?;
+    sessions.query_pairs_mut()
+        .append_pair("roomId", &binding.room_id)
+        .append_pair("brandSlug", &binding.brand_slug);
+    Ok((base.into(), sessions.into(), token))
+}
+pub fn copy_url(url: &str) -> Result<()> {
+    use std::{io::Write, process::{Command, Stdio}};
+    let mut copy = Command::new("/usr/bin/pbcopy").stdin(Stdio::piped()).spawn()?;
+    copy.stdin.take().unwrap().write_all(url.as_bytes())?;
+    ensure!(copy.wait()?.success(), "Could not copy link");
+    Ok(())
+}
+
 pub fn link(root: &Path, kind: LinkKind) -> Result<String> {
     let (binding,token) = account(root)?;
     let call = |method, resource: &str, body: Option<&Value>| api(&binding,&token,method,resource,body);
@@ -155,10 +172,10 @@ pub fn admit(root: &Path, id: uuid::Uuid) -> Result<()> {
     let roster=api(&binding,&token,"GET","guests",None)?;
     let target=id.to_string();
     ensure!(roster["guests"].as_array().into_iter().flatten().any(|g|
-        g["id"]==target && g["state"]=="waiting"),"Guest is no longer waiting in this room");
+        g["id"]==target && g["state"]=="waiting"),"Guest is no longer waiting in this studio");
     let run=api(&binding,&token,"GET","rtc-control",None)?;
     let run=&run["rtc"];
-    ensure!(run["state"]=="active","Start the room’s hosted RTC session before admitting a guest");
+    ensure!(run["state"]=="active","Start hosted guest media for this studio before admitting a guest");
     let expected=json!({"run_id":run["run_id"],"control_revision":run["control_revision"],"host_lease_epoch":run["host_lease_epoch"]});
     let mut url=url::Url::parse(&format!("https://api.boomin.ai/v1/app/live/guests/{id}/admit"))?;
     url.query_pairs_mut().append_pair("brandSlug",&binding.brand_slug);
@@ -169,13 +186,15 @@ pub fn admit(root: &Path, id: uuid::Uuid) -> Result<()> {
 
 pub fn maintain_presence(handle: &std::sync::Arc<crate::engine::Handle>) {
     let root=handle.root.clone();
-    if !root.join("boomin/room-binding.json").exists(){return;}
+    let binding_path = root.join("boomin/room-binding.json");
     let handle=handle.clone();
     std::thread::spawn(move || {
         while !handle.closed.load(std::sync::atomic::Ordering::Acquire) {
-            let result=account(&root).and_then(|(binding,token)|api(&binding,&token,"GET","guests",None));
-            if let Ok(roster)=result {
-                *handle.waiting_guests.lock().unwrap()=waiting_guests(&roster);
+            if binding_path.is_file() {
+                let result = account(&root).and_then(|(binding, token)| api(&binding, &token, "GET", "guests", None));
+                if let Ok(roster) = result {
+                    *handle.waiting_guests.lock().unwrap() = waiting_guests(&roster);
+                }
             }
             for _ in 0..3 {if handle.closed.load(std::sync::atomic::Ordering::Acquire){return;} std::thread::sleep(std::time::Duration::from_secs(1));}
         }

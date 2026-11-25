@@ -45,16 +45,15 @@ mod platform;
 mod presentation;
 mod recording;
 mod take_playback;
-mod ui;
+mod rune_studio;
 mod visual_fixture;
 mod visuals;
 mod workspace;
 use anyhow::Result;
-use gpui::{px, size, App, AppContext, Bounds, TitlebarOptions, WindowBounds, WindowOptions};
+
 use std::{
     path::PathBuf,
-    sync::{atomic::Ordering, Arc, Mutex},
-    time::{Duration, Instant},
+
 };
 static ACTIVE_ROOT:std::sync::RwLock<Option<PathBuf>>=std::sync::RwLock::new(None);
 fn root()->PathBuf{ACTIVE_ROOT.read().unwrap().clone().unwrap_or_else(workspace_root)}
@@ -82,6 +81,15 @@ fn main() -> Result<()> {
     match args.get(1).map(String::as_str) {
         #[cfg(debug_assertions)]
         Some("--assistant-sign-in") => return assistant::sign_in_check(),
+        #[cfg(debug_assertions)]
+        Some("--copy-guest-link") => {
+            let room_root = root();
+            let project: model::RoomProject = serde_json::from_slice(&std::fs::read(room_root.join("room.json"))?)?;
+            boomin_account::link_dev_room(&workspace_root(), &room_root, &project.room, &project.production.title)?;
+            room_share::copy_url(&room_share::link(&room_root, room_share::LinkKind::Guest)?)?;
+            println!("Guest invitation copied");
+            return Ok(());
+        }
         Some("--assistant-log") => return assistant_log::print(&root(), args.get(2).map_or("latest", String::as_str)),
         Some("--check-set-graph") => {
             anyhow::ensure!(args.len()==4, "Expected set ID and draft JSON path");
@@ -168,54 +176,6 @@ fn main() -> Result<()> {
         let receipt = CString::new(root.join("p0-microphone-status").as_os_str().as_encoded_bytes())?;
         unsafe { nr_request_witness_microphone(receipt.as_ptr()); }
     }
-    // Register the native application before filesystem or device permissions can prompt.
-    let shared = Arc::new(Mutex::new(None::<Arc<engine::Handle>>));
-    let shutdown = shared.clone();
-    let application=gpui_platform::application();
-
-    let pending=Arc::new(Mutex::new(None::<String>));
-    let before_launch=pending.clone();
-    application.on_open_urls(move |urls|{
-        for item in urls {
-            let Ok(url)=url::Url::parse(&item) else {continue};
-            if url.scheme()!="producer-rtc" || url.host_str()!=Some("join"){continue;}
-            let Some((_,link))=url.query_pairs().find(|(k,_)|k=="url") else {continue};
-            if crate::rtc_signaling::parse(&link).is_err(){continue;}
-            *before_launch.lock().unwrap()=Some(link.into_owned());
-        }
-    });
-    application.run(move |cx: &mut App| {
-        let bounds = Bounds::centered(None, size(px(1440.), px(940.)), cx);
-        cx.open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                window_background:gpui::WindowBackgroundAppearance::Transparent,
-                titlebar: Some(TitlebarOptions {
-                    title: None, appears_transparent:true, traffic_light_position:Some(gpui::point(px(9.),px(9.))),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            },
-            |window, cx| {
-                use raw_window_handle::{HasWindowHandle,RawWindowHandle};
-                if let Ok(handle)=HasWindowHandle::window_handle(&*window){
-                    if let RawWindowHandle::AppKit(view)=handle.as_raw(){
-                        unsafe extern "C"{fn nr_shell_vibrancy(view:*mut std::ffi::c_void);}
-                        unsafe{nr_shell_vibrancy(view.ns_view.as_ptr());}
-                    }
-                }
-                cx.new(|cx| ui::shell::Shell::new(root, shared.clone(), pending, cx))
-            },
-        )
-        .expect("native dev window");
-        cx.activate(true);
-    });
-    if let Some(shutdown) = shutdown.lock().unwrap().as_ref() {
-        shutdown.closed.store(true, Ordering::Release);
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while !shutdown.done.load(Ordering::Acquire) && Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(20));
-        }
-    }
+    rune_studio::run();
     Ok(())
 }

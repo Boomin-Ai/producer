@@ -105,6 +105,9 @@ pub enum Command {
     NextTrack {
         deck: DeckId,
     },
+    PreviousTrack {
+        deck: DeckId,
+    },
     PlayDeck {
         deck: DeckId,
     },
@@ -134,6 +137,12 @@ pub enum Command {
     Gain {
         bus: Bus,
         value: f32,
+    },
+    AdjustMusicGain {
+        delta: f32,
+    },
+    MuteMusic {
+        muted: bool,
     },
     DuckMusic {
         enabled: bool,
@@ -174,11 +183,14 @@ pub fn commands() -> serde_json::Value {
             "setSoundAdded":{"id":"effect ID from catalog","added":true},
             "loadDeck":{"deck":"a or b","id":"music ID from catalog","play":false},
             "nextTrack":{"deck":"a or b"},
+            "previousTrack":{"deck":"a or b"},
             "playDeck":{"deck":"a or b"}, "pauseDeck":{"deck":"a or b"},
             "stopDeck":{"deck":"a or b"}, "unloadDeck":{"deck":"a or b"}, "seekDeck":{"deck":"a or b","seconds":0},
             "loopDeck":{"deck":"a or b","enabled":true},
             "mix":{"enabled":true}, "crossfade":{"value":"-1 (A) to 1 (B)"},
             "gain":{"bus":"music or sound","value":"0 to 1"},
+            "adjustMusicGain":{"delta":"-1 to 1 relative to current gain"},
+            "muteMusic":{"muted":true},
             "duckMusic":{"enabled":true}, "duckAmount":{"amount":"0 to 1 reduction while speaking"}, "monitor":{"enabled":true},
             "trigger":{"id":"effect ID","mode":"restart, toggle, overlap or loop (optional)"},
             "configurePad":{"id":"effect ID","mode":"restart, toggle, overlap or loop","gain":"0 to 1","fadeMs":"0 to 2000"},
@@ -242,6 +254,7 @@ struct Preferences {
     mixing: bool,
     crossfade: f32,
     music_gain: f32,
+    music_muted: bool,
     sound_gain: f32,
     duck_music: bool,
     duck_amount: f32,
@@ -256,6 +269,7 @@ impl Default for Preferences {
             mixing: false,
             crossfade: 0.,
             music_gain: 0.66,
+            music_muted: false,
             sound_gain: 0.8,
             duck_music: false,
             duck_amount: 0.72,
@@ -358,6 +372,7 @@ struct Playback {
     crossfade: f32,
     live_crossfade: f32,
     music_gain: f32,
+    music_muted: bool,
     sound_gain: f32,
     duck_music: bool,
     duck_amount: f32,
@@ -378,6 +393,7 @@ impl Playback {
             crossfade: p.crossfade,
             live_crossfade: if p.mixing { p.crossfade } else { -1. },
             music_gain: p.music_gain,
+            music_muted: p.music_muted,
             sound_gain: p.sound_gain,
             duck_music: p.duck_music,
             duck_amount: p.duck_amount.clamp(0., 1.),
@@ -389,7 +405,7 @@ impl Playback {
     }
 
     fn primary_track(&self) -> Option<&Arc<str>> {
-        if self.music_gain <= 0.0001 {return None}
+        if self.music_muted || self.music_gain <= 0.0001 {return None}
         let decks=[self.decks.first()?,self.decks.get(1)?];
         let gains=[1.-self.live_crossfade.max(0.),1.+self.live_crossfade.min(0.)];
         let preferred=usize::from(gains[1]>gains[0]+0.02);
@@ -409,6 +425,7 @@ impl Playback {
         let previous_duck = self.duck;
         self.duck += (goal - self.duck) * if goal < self.duck { 0.29 } else { 0.075 };
         let crossfade = if self.mixing { self.crossfade } else { -1. };
+        let music_gain = if self.music_muted { 0. } else { self.music_gain };
         self.live_crossfade += (crossfade - self.live_crossfade) * 0.45;
         if (self.live_crossfade - crossfade).abs() < 0.0005 {
             self.live_crossfade = crossfade;
@@ -438,7 +455,7 @@ impl Playback {
                 };
                 let duck = previous_duck + (self.duck - previous_duck) * t;
                 deck.envelope = (deck.envelope + 1. / 240.).min(1.);
-                let gain = self.music_gain * balance * duck * deck.envelope;
+                let gain = music_gain * balance * duck * deck.envelope;
                 let sample = &clip.pcm[deck.frame * 2..][..2];
                 frame[0] += sample[0] * gain;
                 frame[1] += sample[1] * gain;
@@ -468,6 +485,7 @@ pub struct Status {
     pub mixing: bool,
     pub crossfade: f32,
     pub music_gain: f32,
+    pub music_muted: bool,
     pub sound_gain: f32,
     pub duck_music: bool,
     pub duck_amount: f32,
@@ -557,7 +575,8 @@ impl Desk {
         std::thread::Builder::new()
             .name("producer-studio-audio-decode".into())
             .spawn(move || decode_worker(queue, &decoder))?;
-        let (monitor, queue) = mpsc::sync_channel(4);
+        // The media clock can catch up by 100 ms after a scheduling stall.
+        let (monitor, queue) = mpsc::sync_channel(12);
         let monitor_error = Arc::new(AtomicBool::new(false));
         let error = Arc::clone(&monitor_error);
         let monitor_drops = Arc::new(AtomicU64::new(0));
@@ -654,7 +673,7 @@ impl Desk {
             .with_context(|| format!("Unknown audio asset {id}"))
     }
 
-    fn next_track(&self, deck: DeckId) -> Result<()> {
+    fn navigate_track(&self, deck: DeckId, previous: bool) -> Result<()> {
         let (current, play) = {
             let playback = self.playback.lock().unwrap();
             let deck = &playback.decks[deck.index()];
@@ -668,8 +687,14 @@ impl Desk {
             let preferences = self.preferences.lock().unwrap();
             let mut tracks = self.bundled.iter().chain(&preferences.imports)
                 .filter(|asset| asset.item.kind == Kind::Music);
-            current.and_then(|id| tracks.clone().skip_while(|a| a.item.id != id).nth(1))
-                .or_else(|| tracks.next())
+            let candidate = if previous {
+                current.and_then(|id| tracks.clone().rev().skip_while(|a| a.item.id != id).nth(1))
+                    .or_else(|| tracks.next_back())
+            } else {
+                current.and_then(|id| tracks.clone().skip_while(|a| a.item.id != id).nth(1))
+                    .or_else(|| tracks.next())
+            };
+            candidate
                 .cloned()
                 .context("Import a track first")?
         };
@@ -703,6 +728,7 @@ impl Desk {
         playback.mixing = next.mixing;
         playback.crossfade = next.crossfade;
         playback.music_gain = next.music_gain;
+        playback.music_muted = next.music_muted;
         playback.sound_gain = next.sound_gain;
         playback.duck_music = next.duck_music;
         playback.duck_amount = next.duck_amount.clamp(0., 1.);
@@ -738,6 +764,7 @@ impl Desk {
             crossfade: p.crossfade,
             mixing: p.mixing,
             music_gain: p.music_gain,
+            music_muted: p.music_muted,
             sound_gain: p.sound_gain,
             duck_music: p.duck_music,
             duck_amount: p.duck_amount,
@@ -882,7 +909,8 @@ impl Desk {
                 );
                 self.load_deck(deck, asset, play)?;
             }
-            NextTrack { deck } => self.next_track(deck)?,
+            NextTrack { deck } => self.navigate_track(deck, false)?,
+            PreviousTrack { deck } => self.navigate_track(deck, true)?,
             PlayDeck { deck } => {
                 if deck == DeckId::B {
                     let p = self.playback.lock().unwrap();
@@ -949,6 +977,14 @@ impl Desk {
                     Bus::Music => s.music_gain = gain,
                     Bus::Sound => s.sound_gain = gain,
                 }
+                Ok(())
+            })?,
+            AdjustMusicGain { delta } => self.settings(|s| {
+                s.music_gain = (s.music_gain + checked(delta, -1., 1.)?).clamp(0., 1.);
+                Ok(())
+            })?,
+            MuteMusic { muted } => self.settings(|s| {
+                s.music_muted = muted;
                 Ok(())
             })?,
             DuckMusic { enabled } => self.settings(|s| {
@@ -1288,7 +1324,16 @@ fn monitor_worker(queue: Receiver<[f32; BLOCK_SAMPLES]>, failed: &AtomicBool, dr
             failed.store(true, Relaxed);
             continue;
         }
-        let sent = unsafe { studio_monitor_write(player, block.as_ptr()) };
+        // A full hardware queue is normal backpressure. Keep this block in order
+        // while the device returns a slot, without blocking the program mixer.
+        let mut sent = unsafe { studio_monitor_write(player, block.as_ptr()) };
+        if sent == 0 {
+            let deadline = std::time::Instant::now() + Duration::from_millis(100);
+            while sent == 0 && std::time::Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(1));
+                sent = unsafe { studio_monitor_write(player, block.as_ptr()) };
+            }
+        }
         if sent <= 0 {
             drops.fetch_add(1, Relaxed);
         }

@@ -314,14 +314,16 @@ int main(int argc, const char **argv) { @autoreleasepool {
     peer.mic.isEnabled=![args containsObject:@"--start-muted"];
     emit(@{@"microphoneEnabled":@(peer.mic.isEnabled)});
     peer.source=[peer.factory videoSource];
-    [peer.source adaptOutputFormatToWidth:640 height:360 fps:30];
+    const bool portrait=getenv("PRODUCER_STAGE_PORTRAIT")!=nullptr;
+    const int stageWidth=portrait?360:640,stageHeight=portrait?640:360;
+    [peer.source adaptOutputFormatToWidth:stageWidth height:stageHeight fps:30];
     peer.video=[peer.factory videoTrackWithSource:peer.source trackId:@"studio-camera"];
     [peer.pc addTrack:peer.mic streamIds:@[@"producer"]]; [peer.pc addTrack:peer.video streamIds:@[@"producer"]];
     if(getenv("PRODUCER_STAGE_RETURN_FD")) {
         int fd=atoi(getenv("PRODUCER_STAGE_RETURN_FD"));
         RTCVideoCapturer *capture=[[RTCVideoCapturer alloc] initWithDelegate:peer.source];
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0),^{
-            std::vector<uint8_t> nv12(640*360*3/2);
+            std::vector<uint8_t> nv12(stageWidth*stageHeight*3/2);
             while(true) { @autoreleasepool {
                 size_t n=0;
                 while(n<nv12.size()) {
@@ -329,8 +331,8 @@ int main(int argc, const char **argv) { @autoreleasepool {
                     if(got<=0) return;
                     n+=got;
                 }
-                RTCMutableI420Buffer *b=[[RTCMutableI420Buffer alloc] initWithWidth:640 height:360];
-                libyuv::NV12ToI420(nv12.data(),640,nv12.data()+640*360,640,b.mutableDataY,b.strideY,b.mutableDataU,b.strideU,b.mutableDataV,b.strideV,640,360);
+                RTCMutableI420Buffer *b=[[RTCMutableI420Buffer alloc] initWithWidth:stageWidth height:stageHeight];
+                libyuv::NV12ToI420(nv12.data(),stageWidth,nv12.data()+stageWidth*stageHeight,stageWidth,b.mutableDataY,b.strideY,b.mutableDataU,b.strideU,b.mutableDataV,b.strideV,stageWidth,stageHeight);
                 auto ns=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
                 [peer.source capturer:capture didCaptureVideoFrame:[[RTCVideoFrame alloc] initWithBuffer:b rotation:RTCVideoRotation_0 timeStampNs:ns]];
             }}

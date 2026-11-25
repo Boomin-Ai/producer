@@ -444,10 +444,11 @@ impl RoomProject {
     pub fn add_input(&mut self, kind: &str, device: &str, label: &str) -> Result<String> {
         let mut next = self.clone();
         let source = next.add_input_inner(kind, device, label)?;
+        next.validate()?;
         *self = next;
         Ok(source)
     }
-    fn add_input_inner(&mut self, kind: &str, device: &str, label: &str) -> Result<String> {
+    pub(crate) fn add_input_inner(&mut self, kind: &str, device: &str, label: &str) -> Result<String> {
         if !matches!(kind, "camera" | "microphone")
             || device.is_empty()
             || device.len() > 512
@@ -529,7 +530,6 @@ impl RoomProject {
                 slot,
             },
         );
-        self.validate()?;
         Ok(source)
     }
     pub fn configure_input(
@@ -541,10 +541,11 @@ impl RoomProject {
     ) -> Result<()> {
         let mut next = self.clone();
         next.configure_input_inner(source, kind, device, label)?;
+        next.validate()?;
         *self = next;
         Ok(())
     }
-    fn configure_input_inner(
+    pub(crate) fn configure_input_inner(
         &mut self,
         source: &str,
         kind: &str,
@@ -598,9 +599,14 @@ impl RoomProject {
         if let Some(lane) = self.lanes.iter_mut().find(|l| l.source == source) {
             lane.label = label.into();
         }
-        self.validate()
+        Ok(())
     }
     pub fn validate(&self) -> Result<()> {
+        self.validate_room()?;
+        validate_document(&self.production)?;
+        Ok(())
+    }
+    fn validate_room(&self) -> Result<()> {
         if self.version != 1 || self.room.is_empty() || self.room.len() > 128 {
             bail!("Invalid room project");
         }
@@ -637,7 +643,6 @@ impl RoomProject {
         if self.lanes.len() > 32 || !self.production.sets.contains_key(&self.scene) {
             bail!("Invalid scene/layer admission");
         }
-        validate_document(&self.production)?;
         if !self.production.sequences.contains_key("main") {
             bail!("Missing editorial sequence");
         }
@@ -645,7 +650,20 @@ impl RoomProject {
     }
     /// Room overrides adapt a prepared copy. The library Set/document stays unchanged.
     pub fn compile(&self) -> Result<Arc<compile::Plan>> {
-        self.validate()?;
+        self.validate_room()?;
+        let set = &self.production.sets[&self.scene];
+        if set.layouts.values().all(|layout| {
+            let size = match layout.orientation {
+                Orientation::Landscape => self.canvas.landscape,
+                Orientation::Vertical => self.canvas.vertical,
+            };
+            layout.width == size.width && layout.height == size.height
+                && layout.root.frame.as_ref().is_none_or(|f| f.width == size.width as f64 && f.height == size.height as f64)
+        }) {
+            // The compiler validates this exact document before producing its plan.
+            return Ok(Arc::new(compile::compile(&self.production)?));
+        }
+        validate_document(&self.production)?;
         let mut render = self.production.clone();
         if let Some(set) = render.sets.get_mut(&self.scene) {
             for l in set.layouts.values_mut() {
@@ -985,7 +1003,7 @@ impl RoomProject {
     }
     /// Remove a room instance, retaining reusable source definitions/assets in
     /// the document so existing Set templates and recorded takes remain valid.
-    pub fn remove_source(&mut self, source: &str) -> Result<()> {
+    pub fn remove_source(&mut self, source: &str) -> Result<Arc<compile::Plan>> {
         if !self
             .lanes
             .iter()
@@ -999,10 +1017,15 @@ impl RoomProject {
             seq.placements.retain(|p| p.source != source);
             seq.audio_routes.retain(|r| r.source != source);
         }
+        self.compile()
+    }
+    pub fn restore_source(&mut self, source: &str) -> Result<()> {
+        if self.lanes.iter().any(|lane| lane.source == source) { return Ok(()); }
+        self.restore_source_lane(source)?;
         self.compile()?;
         Ok(())
     }
-    pub fn restore_source(&mut self, source: &str) -> Result<()> {
+    pub(crate) fn restore_source_lane(&mut self, source: &str) -> Result<()> {
         if self.lanes.iter().any(|l| l.source == source) {
             return Ok(());
         }
@@ -1036,7 +1059,6 @@ impl RoomProject {
                 seq.audio_routes.push(route.clone());
             }
         }
-        self.compile()?;
         Ok(())
     }
     pub fn select_scene(&mut self, id: &str) -> Result<()> {

@@ -8,7 +8,7 @@ pub struct Link { pub page:String, pub guest:String }
 fn validate_origin(u:&Url)->Result<()> {
     let local=u.scheme()=="http" && matches!(u.host_str(),Some("localhost"|"127.0.0.1"|"[::1]"));
     if !(u.scheme()=="https"||local)||u.host_str().is_none()||!u.username().is_empty()||u.password().is_some()||u.query().is_some() {
-        bail!("The room needs an HTTPS address or a local development address");
+        bail!("The studio needs an HTTPS address or a local development address");
     }
     Ok(())
 }
@@ -18,14 +18,29 @@ pub fn origin(value:&str)->Result<String>{
     Ok(u.origin().ascii_serialization())
 }
 pub fn parse(value:&str)->Result<Link>{
-    let mut u=Url::parse(value.trim()).context("Copy a Producer room link first")?;
+    let mut u=Url::parse(value.trim()).context("Copy a Producer studio link first")?;
     validate_origin(&u)?;
     let id=u.path().strip_prefix("/r/").unwrap_or_default();
-    if id.len()!=36 || !id.bytes().all(|b| b.is_ascii_hexdigit()||b==b'-'){bail!("Invalid room link");}
+    if id.len()!=36 || !id.bytes().all(|b| b.is_ascii_hexdigit()||b==b'-'){bail!("Invalid studio link");}
     let guest=u.fragment().unwrap_or_default().to_owned();
-    if guest.len()!=64||!guest.bytes().all(|b| b.is_ascii_hexdigit()){bail!("Room invitation is incomplete");}
+    if guest.len()!=64||!guest.bytes().all(|b| b.is_ascii_hexdigit()){bail!("Studio invitation is incomplete");}
     u.set_fragment(None);
     Ok(Link{page:u.to_string(),guest})
+}
+
+pub const BROWSER_SIGNALING_ORIGIN: &str =
+    "https://producer-rune-guest-dev.kleveland-bishop.workers.dev";
+
+pub fn browser_invitation(value: &str) -> Result<String> {
+    let link = parse(value)?;
+    let page = Url::parse(&link.page)?;
+    // The branded guest page resolves this one broker. Custom brokers keep
+    // their own invitations and their own browser entry page.
+    if page.origin().ascii_serialization() != BROWSER_SIGNALING_ORIGIN {
+        return Ok(value.to_owned());
+    }
+    let id = page.path().trim_start_matches("/r/");
+    Ok(format!("https://producer.dev/connect/guest/gi_rtc_{id}#{}", link.guest))
 }
 /// Pass credentials and SDP through stdin only. curl performs normal TLS
 /// certificate checks, has bounded time/size and never follows redirects.

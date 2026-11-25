@@ -44,6 +44,7 @@ typedef struct {
     AudioQueueRef queue;
     AudioQueueBufferRef buffers[MonitorBuffers];
     atomic_uint available;
+    unsigned queued_before_start;
     int started;
 } Monitor;
 
@@ -91,7 +92,8 @@ int studio_monitor_write(void *context, const float *samples) {
         atomic_fetch_or(&monitor->available, 1u << slot);
         return -1;
     }
-    if (!monitor->started) {
+    // Prime 30 ms before starting the device so one late mixer tick is inaudible.
+    if (!monitor->started && ++monitor->queued_before_start >= 3) {
         if (AudioQueueStart(monitor->queue, NULL) != noErr) return -1;
         monitor->started = 1;
     }

@@ -32,7 +32,7 @@ pub enum RoomCommand {
     CameraBorderWave { enabled: bool },
     ForecastView { view: crate::weather::View },
     StageHistory {participant:Option<String>, before:Option<String>},
-    RtcStart { #[serde(default,rename="displayName")] display_name:Option<String>, link: Option<String>, #[serde(default)] lan:bool, #[serde(default)] rehearsal:bool },
+    RtcStart { #[serde(default,rename="displayName")] display_name:Option<String>, link: Option<String>, #[serde(default)] lan:bool, #[serde(default)] rehearsal:bool, #[serde(default)] output:Option<crate::model::CanvasView> },
     RtcAdmit,
     RtcAdmitBoomin { #[serde(rename="sessionId")] session_id:String, #[serde(rename="answerFingerprint")] answer_fingerprint:String, brand:String },
     RtcStage { enabled:bool },
@@ -65,6 +65,7 @@ pub enum RoomCommand {
     SourceRemove {
         source: String,
     },
+    StopCamera,
     SceneSelect {
         id: String,
     },
@@ -257,11 +258,15 @@ pub struct Snapshot {
     pub source_frames: [u64; 3],
     pub output_frames: [u64; 2],
     pub microphone_peak: f32,
+    pub mixer_peaks: std::collections::BTreeMap<String, f32>,
     pub audio_frames: u64,
     pub audio_dropped: u64,
     pub audio_diagnostics: platform::AudioDiagnostics,
     pub native_status: [String; 5],
     pub assistant_context: serde_json::Value,
+}
+impl Snapshot {
+    pub fn movie_loaded(&self) -> bool { self.movie_playback.loaded }
 }
 pub struct Handle {
     pub studio_audio: crate::studio_audio::Desk,
@@ -297,6 +302,7 @@ impl Handle {
     }
     pub fn request(&self, command: RoomCommand) -> Result<serde_json::Value> {
         let broadcast=matches!(command,RoomCommand::BroadcastStart|RoomCommand::BroadcastStop);
+        let private_edit=matches!(command,RoomCommand::SetEditPreview{..}|RoomCommand::SetEditSave{..});
         let (tx, rx) = mpsc::sync_channel(1);
         self.tx
             .try_send(Envelope {
@@ -305,7 +311,7 @@ impl Handle {
             })
             .map_err(|_| anyhow!("Room control queue busy"))?;
         if broadcast{return rx.recv().map_err(Into::into)}
-        rx.recv_timeout(Duration::from_secs(8)).map_err(Into::into)
+        rx.recv_timeout(Duration::from_secs(if private_edit { 45 } else { 8 })).map_err(Into::into)
     }
     pub fn snapshot(&self) -> Snapshot {
         self.snapshot.lock().unwrap().clone()
@@ -634,6 +640,7 @@ pub struct InputStatus {
 #[derive(Clone, Default, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct VideoDiagnostics {
+    loaded: bool,
     requested: f64,
     decoded_at: f64,
     decode_age_ms: f64,
@@ -657,6 +664,7 @@ struct RenderStats {
     output_frames: [u64; 2],
     frame_age_ms: [f64; 3],
     microphone_peak: f32,
+    mixer_peaks: std::collections::BTreeMap<String, f32>,
     audio_frames: u64,
     audio_dropped: u64,
     audio_diagnostics: platform::AudioDiagnostics,
@@ -680,6 +688,7 @@ impl RenderStats {
         s.output_frames = self.output_frames;
         s.frame_age_ms = self.frame_age_ms;
         s.microphone_peak = self.microphone_peak;
+        s.mixer_peaks.clone_from(&self.mixer_peaks);
         s.audio_frames = self.audio_frames;
         s.audio_dropped = self.audio_dropped;
         s.audio_diagnostics = self.audio_diagnostics.clone();
@@ -821,6 +830,7 @@ enum RenderOp {
     Pause,
     Seek(Time),
     Capture(bool, bool, bool),
+    StopCamera,
     ScreenCapture(ScreenCaptureTarget),
     RemoveSource(String),
     CameraDevice(String),
@@ -887,18 +897,22 @@ impl Renderer {
         self.request(RenderOp::Layout { project: Arc::new(project), plan, visuals, revision })
     }
 
-    fn warm_layouts(&self, cache: &mut crate::visuals::VisualCache) {
+    fn warm_layouts(&self) -> std::thread::JoinHandle<crate::visuals::VisualCache> {
         let (project, plan) = self.prepared.lock().unwrap().clone();
-        if project.mounted_set.as_ref() != Some(&project.scene) { return; }
-        let current = project.output_layout_pair();
-        for choice in project.set_layout_choices(&project.scene).into_iter()
-            .filter(|choice| choice.pair != current).take(2)
-        {
-            let mut candidate = (*project).clone();
-            candidate.mounted_layout = Some(choice.pair);
-            // An unavailable optional layout is diagnosed when selected.
-            let _ = cache.prepare(&candidate, &plan);
-        }
+        std::thread::spawn(move || {
+            let mut cache = crate::visuals::VisualCache::default();
+            if project.mounted_set.as_ref() == Some(&project.scene) {
+                let current = project.output_layout_pair();
+                for choice in project.set_layout_choices(&project.scene).into_iter()
+                    .filter(|choice| choice.pair != current).take(2)
+                {
+                    let mut candidate = (*project).clone();
+                    candidate.mounted_layout = Some(choice.pair);
+                    let _ = cache.prepare(&candidate, &plan);
+                }
+            }
+            cache
+        })
     }
     fn refresh_fields(&self, cache: &mut crate::visuals::VisualCache) -> Result<()> {
         let (project,plan)=self.prepared.lock().unwrap().clone();
@@ -970,6 +984,7 @@ pub(crate) fn initial_room(root: &Path) -> Result<(Arc<Handle>,Receiver<Envelope
         source_frames: [0; 3],
         output_frames: [0; 2],
         microphone_peak: 0.,
+        mixer_peaks: Default::default(),
         audio_frames: 0,
         audio_dropped: 0,
         audio_diagnostics: platform::AudioDiagnostics::default(),
@@ -1038,6 +1053,7 @@ fn apply(
     render: &Renderer,
     handle: &Arc<Handle>,
     importing: &Arc<AtomicBool>,
+    prepared_plan: &mut Option<Arc<Plan>>,
 ) -> Result<bool> {
     let mut changed = false;
     match command {
@@ -1068,7 +1084,7 @@ fn apply(
             let restoring =
                 source.is_none() && !state.project.lanes.iter().any(|l| l.source == kind);
             if restoring {
-                state.project.restore_source(&kind)?;
+                state.project.restore_source_lane(&kind)?;
             }
             // Claim the existing default endpoint before admitting a second
             // capture of the same physical device.
@@ -1078,25 +1094,25 @@ fn apply(
                     .and_then(|a| a.iter().find(|d| d["default"].as_bool() == Some(true)))
                 {
                     if let (Some(id), Some(name)) = (d["id"].as_str(), d["name"].as_str()) {
-                        state.project.configure_input(&kind, &kind, id, name)?;
+                        state.project.configure_input_inner(&kind, &kind, id, name)?;
                     }
                 }
             }
             let source = if restoring {
                 state
                     .project
-                    .configure_input(&kind, &kind, &device, &label)?;
+                    .configure_input_inner(&kind, &kind, &device, &label)?;
                 kind.clone()
             } else if let Some(source) = source {
                 state
                     .project
-                    .configure_input(&source, &kind, &device, &label)?;
+                    .configure_input_inner(&source, &kind, &device, &label)?;
                 source
             } else {
-                state.project.add_input(&kind, &device, &label)?
+                state.project.add_input_inner(&kind, &device, &label)?
             };
             // Validate before opening hardware; a rejected candidate opens nothing.
-            state.project.compile()?;
+            *prepared_plan = Some(state.project.compile()?);
             if source == "camera" {
                 render.request(RenderOp::CameraDevice(device))?;
                 render.request(RenderOp::Capture(true, false, false))?;
@@ -1114,15 +1130,14 @@ fn apply(
                 let endpoint = platform::CaptureInput::new(kind == "microphone", &device, origin)?;
                 render.request(RenderOp::Input { source, endpoint })?;
             }
-            state.cameras = platform::cameras();
-            state.microphones = platform::microphones();
+            if kind == "camera" { state.cameras = devices; } else { state.microphones = devices; }
             changed = true;
         }
         RoomCommand::SourceRemove { source } => {
             if state.recording || state.take.busy() {
                 bail!("Stop and finalize recording before removing a source");
             }
-            state.project.remove_source(&source)?;
+            *prepared_plan = Some(state.project.remove_source(&source)?);
 
             if state.selected_clip.as_ref().is_some_and(|id| {
                 !state.project.production.sequences["main"]
@@ -1263,6 +1278,7 @@ fn apply(
             }
             render.request(RenderOp::ScreenCapture(target))?;
         }
+        RoomCommand::StopCamera => render.request(RenderOp::StopCamera)?,
         RoomCommand::ImportMov { path } => {
             if importing.swap(true, Ordering::AcqRel) {
                 bail!("An asset import is already running");
@@ -1654,13 +1670,17 @@ fn start_preview_worker(
     project: RoomProject,
     output: Arc<Mutex<Option<Arc<Shared>>>>,
 ) -> Result<PreviewRuntime> {
+    let plan = project.compile()?;
+    let visuals = crate::visuals::VisualCache::default().prepare(&project, &plan)?;
+    start_prepared_preview(handle, Arc::new(project), plan, visuals, output)
+}
+
+fn start_prepared_preview(handle: &Arc<Handle>, project: Arc<RoomProject>, plan: Arc<Plan>,
+    visuals: Arc<crate::visuals::Visuals>, output: Arc<Mutex<Option<Arc<Shared>>>>) -> Result<PreviewRuntime> {
     let (tx, rx) = mpsc::sync_channel(16);
     let stats = Arc::new(Mutex::new(RenderStats::default()));
     let worker_stats = stats.clone();
     let handle = handle.clone();
-    let plan = project.compile()?;
-    let visuals = crate::visuals::VisualCache::default().prepare(&project, &plan)?;
-    let project = Arc::new(project);
     let prepared=Mutex::new((project.clone(),plan.clone()));
     let worker = std::thread::Builder::new().name("producer-preview".into()).spawn(move || {
         if let Err(error) = render_loop(handle, rx, project, plan, worker_stats.clone(), visuals, Some(output)) {
@@ -1743,6 +1763,7 @@ fn control(
         })?;
     let render = Renderer { tx, stats, prepared };
     let mut warmed_set = None;
+    let mut warmer: Option<std::thread::JoinHandle<crate::visuals::VisualCache>> = None;
     let mut history=crate::stage_history::History::open(&root)?;
     let mut rtc_staged=false;
     let mut peer:Option<crate::producer_rtc::Peer>=None;
@@ -1792,10 +1813,15 @@ fn control(
         let live=handle.program.lock().unwrap().clone();
         history.observe(&observed,rtc_staged,&live,state.program_revision)?;
         let incoming = rx.recv_timeout(Duration::from_millis(50));
-        if matches!(incoming, Err(mpsc::RecvTimeoutError::Timeout))
+        if warmer.as_ref().is_some_and(|worker| worker.is_finished()) {
+            if let Ok(cache) = warmer.take().unwrap().join() {
+                if warmed_set.as_ref() == Some(&live.scene) { visual_cache.merge_warmed(cache); }
+            }
+        }
+        if warmer.is_none() && matches!(incoming, Err(mpsc::RecvTimeoutError::Timeout))
             && state.program_kind == "set" && warmed_set.as_ref() != Some(&live.scene)
         {
-            render.warm_layouts(&mut visual_cache);
+            warmer = Some(render.warm_layouts());
             warmed_set = Some(live.scene.clone());
         }
         if let Ok(envelope) = incoming {
@@ -1811,12 +1837,10 @@ fn control(
                             let mut next = set_edit_project(&state.project, id, draft)?;
                             next.mount_set(Some(id.clone()), layout.clone())?;
                             let next = next.live_set()?;
-                            let prepared = prepare_publish(&root, next.clone(), 0., true, state.revision, &mut set_edit_cache)?;
-                            if let RenderOp::Publish { plan, .. } = &prepared {
+                            let prepared = prepare_publish(&root, next, 0., true, state.revision, &mut set_edit_cache)?;
+                            if let RenderOp::Publish { project, plan, visuals, .. } = &prepared {
                                 slots = editor_slot_bounds(plan, id);
-                            }
-                            if set_edit.is_none() {
-                                set_edit = Some(start_preview_worker(&handle, next, handle.set_edit_media.clone())?);
+                                if set_edit.is_none() {set_edit=Some(start_prepared_preview(&handle,project.clone(),plan.clone(),visuals.clone(),handle.set_edit_media.clone())?);}
                             }
                             let preview = &set_edit.as_ref().unwrap().render;
                             preview.request(prepared)?;
@@ -1858,10 +1882,16 @@ fn control(
             if matches!(&envelope.command, RoomCommand::RtcStart{..}|RoomCommand::RtcAdmit|RoomCommand::RtcAdmitBoomin{..}|RoomCommand::RtcStage{..}|RoomCommand::RtcGuestMute{..}|RoomCommand::RtcLink|RoomCommand::RtcMedia{..}|RoomCommand::RtcEnd) {
                 let result=(|| -> Result<serde_json::Value> {
                     match &envelope.command {
-                        RoomCommand::RtcStart{link,lan,rehearsal,display_name}=>{
+                        RoomCommand::RtcStart{link,lan,rehearsal,display_name,output}=>{
                             if peer.is_some() || observed_guest.is_some() {bail!("End the current guest session first");}
                             let start_muted=link.is_none() && (state.project.lanes.iter().find(|l|l.source=="microphone").is_none_or(|l| l.muted) || (!*rehearsal && state.audio_frames==0));
-                            let (session,guest)=crate::producer_rtc::Peer::start(&root,link.as_deref(),*lan,*rehearsal,start_muted,display_name.as_deref(),handle.media.clone())?;
+                            let view = state.project.canvas.view;
+                            let portrait = match view {
+                                crate::model::CanvasView::Vertical => true,
+                                crate::model::CanvasView::Landscape => false,
+                                crate::model::CanvasView::Both => *output == Some(crate::model::CanvasView::Vertical),
+                            };
+                            let (session,guest)=crate::producer_rtc::Peer::start(&root,link.as_deref(),*lan,*rehearsal,start_muted,display_name.as_deref(),handle.media.clone(),portrait)?;
                             *handle.rtc_feed.lock().unwrap()=Some(guest.clone());
                             observed_guest=Some(guest);peer=Some(session);
                         }
@@ -2361,6 +2391,7 @@ fn control(
                 );
             let imported = matches!(&envelope.command, RoomCommand::Imported { .. });
             let before = state.project.clone();
+            let mut prepared_plan = None;
             let result = if matches!(&envelope.command,RoomCommand::CanvasSize{..})
                 && handle.media.lock().unwrap().as_ref().is_some_and(|media|media.clips.enabled() || media.broadcast.active()){
                 Err(anyhow!("Stop streaming and rolling capture before changing output dimensions"))
@@ -2373,6 +2404,7 @@ fn control(
                 &render,
                 &handle,
                 &importing,
+                &mut prepared_plan,
             ) }
             .and_then(|changed| {
                 if changed && gain_only {
@@ -2386,8 +2418,18 @@ fn control(
                     state.project.workspace.validate()?;
                     persist(&root, &state.project)?;
                     state.assistant_context = state.project.assistant_context();
+                    use crate::workspace::PanelId;
+                    if before.workspace.visible(PanelId::Timeline)
+                        && !state.project.workspace.visible(PanelId::Timeline)
+                        && state.previewing
+                    {
+                        state.previewing = false;
+                        if let Some(p) = &preview {
+                            let _ = p.render.request(RenderOp::Monitor(false));
+                        }
+                    }
                 } else if changed {
-                    let next = state.project.compile()?;
+                    let next = match prepared_plan { Some(plan) => plan, None => state.project.compile()? };
                     let revision = state
                         .revision
                         .checked_add(1)
@@ -2435,7 +2477,7 @@ fn control(
                     if !read_only {
                         state.error = None;
                     }
-                    serde_json::json!({"ok":true,"state":state})
+                    if envelope.reply.is_some() { serde_json::json!({"ok":true,"state":state}) } else { serde_json::Value::Null }
                 }
                 Err(e) => {
                     state.project = before;
@@ -2462,6 +2504,23 @@ fn control(
         state.assistant_context["monitor"] = serde_json::json!({"previewing":state.previewing,"programKind":state.program_kind,"programRevision":state.program_revision,"commands":["monitor","sendToOutput","setMount"],"policy":"Timeline play/seek/edit are preview-only. Only sendToOutput or setMount changes program. Recording always reads program."});
         *handle.snapshot.lock().unwrap() = state.clone();
     }
+    // A window can close immediately after a dock edit. Save accepted workspace
+    // commands even if shutdown won the race with the next control-loop tick.
+    let mut layout_changed = false;
+    for envelope in rx.try_iter() {
+        if matches!(&envelope.command, RoomCommand::Workspace { .. }
+            | RoomCommand::Panel { .. } | RoomCommand::TimelineDock { .. })
+        {
+            match apply(&mut state, envelope.command, &root, &render, &handle, &importing, &mut None) {
+                Ok(changed) => layout_changed |= changed,
+                Err(error) => eprintln!("Workspace command at shutdown failed: {error:#}"),
+            }
+        }
+    }
+    if layout_changed {
+        persist(&root, &state.project)?;
+    }
+    if let Some(warmer) = warmer { let _ = warmer.join(); }
     history.finish("roomClosed")?;
     if let Some(p) = preview {
         let _ = p.worker.join();
@@ -2474,6 +2533,13 @@ fn control(
     persist(&root, &state.project)?;
     Ok(())
 }
+fn mix_metered_channel(program: &mut [f32], input: &[f32], gain: f32, peak: &mut f32) {
+    for (output, &sample) in program.iter_mut().zip(input) {
+        *peak = peak.max(sample.abs());
+        *output = (*output + sample * gain).clamp(-1., 1.);
+    }
+}
+
 fn render_loop(
     handle: Arc<Handle>,
     rx: Receiver<RenderEnvelope>,
@@ -2549,6 +2615,9 @@ fn render_loop(
     let (mut times_index, mut times_len) = (0usize, 0usize);
     let mut audio_cursor = 0i64;
     let mut pcm = [0f32; BLOCK_SAMPLES];
+    let mut microphone_peak = 0.0_f32;
+    let mut movie_peaks = [0.0_f32; 2];
+    let mut input_peaks = std::collections::BTreeMap::<String, f32>::new();
     let mut raw_mic = [0f32; BLOCK_SAMPLES];
     let mut last_media_time = [-1.; 2];
     let mut media_generation = [0; 2];
@@ -2692,6 +2761,10 @@ fn render_loop(
                             .context("Media generation exhausted")?;
                     }
                     RenderOp::Capture(c, s, m) => native.capture(c, s, m),
+                    RenderOp::StopCamera => {
+                        native.stop_capture(0);
+                        *native.shared.frames[0].lock().unwrap() = None;
+                    }
                     RenderOp::ScreenCapture(target) => native.screen_capture(target),
                     RenderOp::RemoveSource(source) => {
                         if let Some(old) = inputs.remove(&source) {
@@ -2857,6 +2930,7 @@ fn render_loop(
             if let Some(input)=&guest {input.host_mic(&mut pcm,origin+audio_cursor as f64/48000.);}
             raw_mic.copy_from_slice(&pcm);
             for sample in &mut pcm {
+                microphone_peak = microphone_peak.max(sample.abs());
                 *sample = (*sample * gain).clamp(-1., 1.);
             }
             for (source, input) in &mut inputs {
@@ -2875,16 +2949,17 @@ fn render_loop(
                     .map_or(0., |l| if l.muted { 0. } else { l.gain });
                 let _ = input
                     .audio
-                    .mix(input.shared.fence, audio_cursor, &mut movie_pcm, gain);
-                for i in 0..BLOCK_SAMPLES {
-                    pcm[i] = (pcm[i] + movie_pcm[i]).clamp(-1., 1.);
+                    .mix(input.shared.fence, audio_cursor, &mut movie_pcm, 1.);
+                if !input_peaks.contains_key(source) {
+                    input_peaks.insert(source.clone(), 0.);
                 }
+                mix_metered_channel(&mut pcm, &movie_pcm, gain, input_peaks.get_mut(source).unwrap());
             }
             if state.playing {
-                for (source, worker) in [
+                for ((source, worker), peak) in [
                     ("movie", movie.as_ref()),
                     ("take", take.as_ref().filter(|_| take_bound)),
-                ] {
+                ].into_iter().zip(&mut movie_peaks) {
                     let Some(worker) = worker else {
                         continue;
                     };
@@ -2898,11 +2973,9 @@ fn render_loop(
                         movie_fence(generation),
                         audio_cursor,
                         &mut movie_pcm,
-                        gain,
+                        1.,
                     );
-                    for i in 0..BLOCK_SAMPLES {
-                        pcm[i] = (pcm[i] + movie_pcm[i]).clamp(-1., 1.);
-                    }
+                    mix_metered_channel(&mut pcm, &movie_pcm, gain, peak);
                 }
             }
             let mic_peak = native.shared.mic_peak.load(Ordering::Relaxed) as f32 / 1000. * gain;
@@ -2974,6 +3047,7 @@ fn render_loop(
                 }
             }
             take_frame_ready = frames[3].is_some();
+            state.movie_playback.loaded = movie.is_some();
             state.movie_playback.frame_ready = frames[2].is_some();
             if movie.is_some() && source_times[2].is_some() && frames[2].is_none() {
                 state.movie_playback.missing_presentations += 1;
@@ -3113,6 +3187,15 @@ fn render_loop(
             }
         }
         if last_snapshot.elapsed() >= Duration::from_millis(100) {
+            input_peaks.retain(|source, _| inputs.contains_key(source));
+            state.mixer_peaks.clone_from(&input_peaks);
+            for peak in input_peaks.values_mut() {
+                *peak = 0.;
+            }
+            state.mixer_peaks.insert("microphone".into(), std::mem::take(&mut microphone_peak));
+            for (source, peak) in ["movie", "take"].into_iter().zip(&mut movie_peaks) {
+                state.mixer_peaks.insert(source.into(), std::mem::take(peak));
+            }
             state.input_status.clear();
             for (source, input) in &inputs {
                 let mic = project

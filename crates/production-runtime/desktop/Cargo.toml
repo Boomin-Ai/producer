@@ -1,25 +1,23 @@
 [package]
 name = "producer-native-room"
-version = "0.4.95"
+version = "0.4.96"
 edition = "2021"
 license = "AGPL-3.0-only"
 publish = false
 build = "build.rs"
 
-# The desktop is an isolated leaf: GPUI/platform dependencies never enter core.
+# The desktop is an isolated leaf: operator UI and platform dependencies stay here.
 [workspace]
 
 [dependencies]
+rune = { git = "https://github.com/anomalyco/rune", rev = "5d70a78dcaa141ee9e33f100caa79d86e7553754", default-features = false, features = ["metal-backend", "embedded-fonts"] }
 thiserror = "2"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-uuid = { version = "1", features = ["v4"] }
-raw-window-handle = "0.6"
+uuid = { version = "1", features = ["v4","serde"] }
 producer-assistant-runtime = { path = "../../assistant-runtime" }
 security-framework = "3"
 tokio = { version = "1", features = ["rt-multi-thread", "time"] }
 naga = { git = "https://github.com/gfx-rs/wgpu", rev = "cddb2f5d80dc0009b2ef6767635140cacf90a007", features = ["wgsl-in", "msl-out"] }
-gpui = { git = "https://github.com/longbridge/gpui-fast", rev = "454c29e8f0e36a7794140d32a544d6d37a0693c1", default-features = false }
-gpui_platform = { git = "https://github.com/longbridge/gpui-fast", rev = "454c29e8f0e36a7794140d32a544d6d37a0693c1", default-features = false, features = ["font-kit", "runtime_shaders", "test-support"] }
 producer-production-contract = { path = "../contract" }
 producer-production-core = { path = "../core" }
 producer-native-media = { path = "../media" }
@@ -46,7 +44,28 @@ debug = 0
 incremental = false
 opt-level = 1
 
+# Interactive source edits validate and compile the room while layout preparation
+# verifies content-addressed textures. Keep those hot loops fast in Native Dev.
+[profile.dev.package.producer-production-contract]
+opt-level = 2
+
+[profile.dev.package.producer-production-core]
+opt-level = 2
+
+[profile.dev.package.sha2]
+opt-level = 2
+
 [profile.release]
 debug = 0
 incremental = false
 overflow-checks = true
+
+[patch.crates-io]
+wgpu-hal = { git = "https://github.com/anomalyco/rune", rev = "5d70a78dcaa141ee9e33f100caa79d86e7553754" }
+naga = { git = "https://github.com/anomalyco/rune", rev = "5d70a78dcaa141ee9e33f100caa79d86e7553754" }
+winit = { git = "https://github.com/anomalyco/rune", rev = "5d70a78dcaa141ee9e33f100caa79d86e7553754" }
+sctk-adwaita = { git = "https://github.com/anomalyco/rune", rev = "5d70a78dcaa141ee9e33f100caa79d86e7553754" }
+parley_engine = { git = "https://github.com/anomalyco/rune", rev = "5d70a78dcaa141ee9e33f100caa79d86e7553754" }
+accesskit_windows = { git = "https://github.com/anomalyco/rune", rev = "5d70a78dcaa141ee9e33f100caa79d86e7553754" }
+accesskit_atspi_common = { git = "https://github.com/anomalyco/rune", rev = "5d70a78dcaa141ee9e33f100caa79d86e7553754" }
+accesskit_macos = { git = "https://github.com/anomalyco/rune", rev = "5d70a78dcaa141ee9e33f100caa79d86e7553754" }

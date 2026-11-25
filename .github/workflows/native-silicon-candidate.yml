@@ -11,7 +11,9 @@ jobs:
     env:
       CARGO_INCREMENTAL: '0'
       MACOSX_DEPLOYMENT_TARGET: '13.0'
-      VERSION: '0.4.95'
+      VERSION: '0.4.96'
+      PRODUCER_REQUIRE_ENGINE: '1'
+      PRODUCER_NOTARY_RECEIPT_DIR: ${{ runner.temp }}/native-notary-receipts
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -24,7 +26,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/native-silicon-candidate.sh build
-      - name: Verify native shell navigation
+      - name: Verify Rune studio and native media
         run: bash scripts/native-silicon-candidate.sh test
       - name: Compile native release executable
         run: bash scripts/native-silicon-candidate.sh compile
@@ -63,3 +65,9 @@ jobs:
           name: Producer-Silicon-candidate-${{ github.sha }}
           path: ${{ runner.temp }}/native-delivery/
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Producer-Silicon-notary-${{ github.sha }}
+          path: ${{ runner.temp }}/native-notary-receipts/
+          if-no-files-found: ignore

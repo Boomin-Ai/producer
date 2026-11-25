@@ -1,4 +1,4 @@
-# Producer Native Dev: first GPUI room
+# Producer Native Dev with Rune
 
 An isolated macOS development application, not the production desktop. The existing Tauri app, production library, account credentials, backend and releases are unchanged.
 
@@ -8,7 +8,7 @@ An isolated macOS development application, not the production desktop. The exist
 - **Rust desktop control worker:** bounded UI/CLI commands, compile/admission, durable room edits, asset-worker supervision and current Assistant context.
 - **Rust render/audio worker:** continuous output clock, seekable editorial transport, compiled scene evaluation, preallocated PCM mixing and submission to the platform adapter. File import, document validation and disk saving do not run here.
 - **macOS adapter:** AVFoundation camera/microphone/MOV, ScreenCaptureKit, Metal compositing and AVAssetWriter. The narrow Objective-C bridge does not own the production document or layout rules.
-- **GPUI:** native operator panels, top/bottom multilayer timeline and GPU-buffer previews. It never drives production animation time.
+- **Rune** draws the native operator panels, docked timeline and landscape and portrait previews. The production engine owns animation time.
 
 The source/player/asset distinction is real: importing a MOV creates an immutable content-hashed asset, rebinds a stable player source, and changes that source's timed placement. A file is not the live camera, and the timeline lane is not a second media owner. The initial five lanes are screen, camera, MOV, graphics/animation and microphone. Placing a committed take adds a separate V4 lane; the core supports additional placements and nested sequences.
 
@@ -33,7 +33,7 @@ CARGO_TARGET_DIR=target/native-room CARGO_PROFILE_DEV_STRIP=none \
   cargo build --manifest-path crates/production-runtime/desktop/Cargo.toml
 ```
 
-GPUI Fast is pinned in Cargo.toml and Cargo.lock. This build uses runtime Metal shaders and the Command Line Tools SDK. It does not need a second browser/webview application.
+Rune is pinned in Cargo.toml and Cargo.lock. This build uses runtime Metal shaders and the Command Line Tools SDK. It does not need a second browser/webview application.
 
 Run the packaged **Producer Native Dev.app** with its camera, microphone and Screen Recording permissions. The profile defaults to `~/Library/Application Support/Producer Native Dev`, independent of production. `PRODUCER_NATIVE_ROOM_HOME` can select another isolated profile. This local prototype is ad-hoc signed; rebuilt executable identities can require macOS permission renewal. A stable developer/release signing identity is a remaining distribution requirement.
 
@@ -95,7 +95,9 @@ The cold-relaunch trace covered capture startup and about 50 seconds of operatio
 
 ## Fidelity and limits
 
-Live frames remain CVPixelBuffers/IOSurfaces through Metal and GPUI. The bridge composes BGRA then converts on the GPU to full-range NV12, matching the pinned GPUI surface shader's BT.601 convention. Both previews and AVAssetWriter receive the same output buffers at the configured output resolution. This avoids a CPU-readback/image-upload preview loop; it is not a claim that there are zero GPU copies. Native UI, source textures and recorded compressed pixels have distinct density/codec limits.
+The Metal compositor converts BGRA to full-range NV12. Recording uses its native output buffers. A dedicated preview worker copies the latest completed NV12 planes for each output into Rune surfaces, releasing the producer buffer before upload. Both previews keep their output aspect ratio.
+
+Run the dock and interaction checks with `python3 scripts/check-rune-studio.py /absolute/path/to/producer-native-room`. The check uses temporary local studios and Rune’s headless renderer.
 
 The mic boundary uses a fixed 32-block `rtrb` 0.4.1 SPSC ring of 10 ms, 48 kHz stereo blocks, exact sample positions and generation rejection. The serial capture callback owns the producer; the Rust mixer exclusively owns the consumer. A producer-only `try_lock` guard safely rejects unexpected reentrant callbacks, but mixing never acquires that guard. The consumer peeks partial/future blocks without releasing their storage, so capture cannot overwrite samples still in use. Buffer capacity and the 40 ms mixer offset are unchanged. The resettable MOV queue remains independent. Device timestamps, rather than callback-arrival jitter, establish mic positions. Stale seek generations cannot overwrite the latest movie frame. Camera rate negotiation stays inside supported ranges.
 

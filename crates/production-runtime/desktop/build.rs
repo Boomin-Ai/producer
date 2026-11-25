@@ -8,7 +8,6 @@ fn main() {
         println!("cargo:rerun-if-changed=native/p0_pressure.inc");
         println!("cargo:rerun-if-changed=native/render_graph.inc");
         println!("cargo:rerun-if-changed=native/geometry.inc");
-        println!("cargo:rerun-if-changed=../../../src-tauri/src/window_vibrancy.m");
         if std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() == Ok("aarch64") {
             let shim = "../../../src-tauri/src/live/shim.m";
             println!("cargo:rerun-if-changed={shim}");
@@ -23,7 +22,6 @@ fn main() {
         cc::Build::new().file("native/studio_audio.c").flag("-mmacosx-version-min=13.0").compile("producer_studio_audio");
         cc::Build::new()
             .file("native/macos.m")
-            .file("../../../src-tauri/src/window_vibrancy.m")
             .flag("-fobjc-arc")
             .flag("-fblocks")
             .flag("-Wno-deprecated-declarations")

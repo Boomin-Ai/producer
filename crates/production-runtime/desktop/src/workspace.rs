@@ -17,9 +17,10 @@ pub enum PanelId {
     Clips,
     Dj,
     Sound,
+    Network,
 }
 impl PanelId {
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Sources,
         Self::Scenes,
         Self::Mixer,
@@ -30,9 +31,13 @@ impl PanelId {
         Self::Assistant,
         Self::Dj,
         Self::Sound,
+        Self::Network,
     ];
     pub fn launch_panels() -> impl Iterator<Item = Self> {
-        Self::ALL.into_iter().filter(|panel| *panel != Self::Timeline)
+        let boomin = crate::boomin_account::STUDIO_PANELS;
+        Self::ALL.into_iter()
+            .filter(move |panel| *panel != Self::Timeline && !boomin.contains(panel))
+            .chain(boomin.iter().copied())
     }
     pub fn label(self) -> &'static str {
         match self {
@@ -46,6 +51,7 @@ impl PanelId {
             Self::Clips => "Clips",
             Self::Dj => "DJ",
             Self::Sound => "Sound",
+            Self::Network => "Network",
         }
     }
     pub fn key(self) -> &'static str {
@@ -60,6 +66,7 @@ impl PanelId {
             Self::Clips => "clips",
             Self::Dj => "dj",
             Self::Sound => "sound",
+            Self::Network => "network",
         }
     }
     pub fn parse(s: &str) -> Result<Self> {
@@ -148,7 +155,7 @@ impl<'de> Deserialize<'de> for Workspace {
             {
                 let mut panels = p;
                 let mut order = o;
-                for id in [PanelId::Clips, PanelId::People, PanelId::Assistant, PanelId::Dj, PanelId::Sound] {
+                for id in [PanelId::Clips, PanelId::People, PanelId::Assistant, PanelId::Dj, PanelId::Sound, PanelId::Network] {
                     if !panels.contains_key(&id) && !order.contains(&id) {
                         panels.insert(id, out.panels[&id].clone());
                         order.push(id);
@@ -196,6 +203,7 @@ impl Default for Workspace {
                 (PanelId::Clips, Edge::Right, false),
                 (PanelId::Dj, Edge::Bottom, false),
                 (PanelId::Sound, Edge::Left, false),
+                (PanelId::Network, Edge::Right, false),
                 (PanelId::Controls, Edge::Right, true),
                 (PanelId::Timeline, Edge::Bottom, true),
             ]
@@ -580,7 +588,9 @@ impl Workspace {
                 }
                 let edge = next.panels[&first].edge;
                 let ids = next.at(edge);
-                if !ids.windows(2).any(|pair| pair == [first, second]) {
+                let adjacent=ids.windows(2).any(|pair| pair == [first, second]);
+                let across_hidden_timeline=next.docks[&edge].collapsed && ids.windows(3).any(|trio|trio==[first,PanelId::Timeline,second]);
+                if !adjacent && !across_hidden_timeline {
                     bail!("Panel split must join adjacent visible panels");
                 }
                 let total = next.panels[&first].weight + next.panels[&second].weight;
@@ -728,6 +738,19 @@ mod tests {
         assert_eq!(restored.order[..5], [PanelId::Sources, PanelId::Scenes, PanelId::Mixer, PanelId::Controls, PanelId::Timeline]);
         assert_eq!(restored.order.last(), Some(&PanelId::People));
         assert!(!restored.visible(PanelId::People));
+    }
+    #[test]
+    fn old_workspace_gains_the_optional_boomin_panel_once() {
+        let mut old = serde_json::to_value(Workspace::default()).unwrap();
+        old["panels"].as_object_mut().unwrap().remove("network");
+        old["order"].as_array_mut().unwrap().retain(|id| id != "network");
+        let mut workspace: Workspace = serde_json::from_value(old).unwrap();
+        assert!(!workspace.visible(PanelId::Network));
+        assert_eq!(PanelId::launch_panels().filter(|id| *id == PanelId::Network).count(), 1);
+        for edge in Edge::ALL {
+            workspace.apply(WorkspaceCommand::Place { panel: PanelId::Network, edge, before: None }).unwrap();
+            assert_eq!(workspace.panels[&PanelId::Network].edge, edge);
+        }
     }
     #[test]
     fn insertion_reorders_and_persists_in_every_dock_without_changing_sizes() {

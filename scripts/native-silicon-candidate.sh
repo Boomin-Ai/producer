@@ -16,6 +16,7 @@ build)
   verify b94d251164694c13e7596e8000f98a7914896186fc2638a615e5e1aca610551c "$RUNNER_TEMP/$old"
   tar -xzf "$RUNNER_TEMP/$old" -C "$stage"
   codesign --verify --deep --strict "$app"
+  bash scripts/engine-closure.sh "$app/Contents"
   gh release download webrtc-89d790b --repo livekit/rust-sdks --pattern webrtc-mac-arm64-release.zip --dir "$RUNNER_TEMP"
   verify 9f25fea48588deac18d68e120d18b33af7ef10f921f74b7c57f66b642262c348 "$RUNNER_TEMP/webrtc-mac-arm64-release.zip"
   unzip -q "$RUNNER_TEMP/webrtc-mac-arm64-release.zip" -d "$RUNNER_TEMP/sdk"
@@ -35,7 +36,7 @@ test)
   cargo test --locked --manifest-path "$desktop/Cargo.toml" --no-run --message-format=json-render-diagnostics > "$tests_json"
   test_binary=$(jq -rs 'map(select(.profile.test == true and .target.name == "producer-native-room" and .executable != null)) | last.executable' "$tests_json")
   [[ -x "$test_binary" ]]
-  "$test_binary" --exact ui::shell::tests::shell_navigation_and_room_isolation --nocapture &
+  "$test_binary" --test-threads=2 --nocapture &
   test_pid=$!
   for ((n=0; n<60; n++)); do
     if ! kill -0 "$test_pid" 2>/dev/null; then wait "$test_pid"; exit $?; fi
@@ -50,6 +51,7 @@ compile)
   cargo build --locked --manifest-path "$desktop/Cargo.toml" --release
   cp "$desktop/target/release/producer-native-room" "$bin/producer"
   ditto assets/starter-audio "$app/Contents/Resources/starter-audio"
+  bash "$desktop/scripts/check-silicon-release.sh" "$bin/producer" "$RUNNER_TEMP"
   for exe in producer producer-rtc gh ffmpeg; do [[ "$(lipo -archs "$bin/$exe")" == arm64 ]]; done
   plutil -replace CFBundleShortVersionString -string "$VERSION" "$app/Contents/Info.plist"
   plutil -replace CFBundleVersion -string "$VERSION" "$app/Contents/Info.plist"

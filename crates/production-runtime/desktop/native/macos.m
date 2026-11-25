@@ -359,6 +359,59 @@ static void startCamera(NRRoom *r) {
         r->_camera=s;[s startRunning];[r status:0 text:[@"Camera: " stringByAppendingString:d.localizedName]];
     }});
 }
+// Read from the device bound to this source. Only explicit button presses take its configuration lock.
+char *nr_camera_controls(const char *uid, int control, int value) {
+    @autoreleasepool {
+        AVCaptureDevice *device=[AVCaptureDevice deviceWithUniqueID:[NSString stringWithUTF8String:uid]];
+        NSMutableDictionary *info=[NSMutableDictionary dictionary];
+        if (!device) { info[@"error"]=@"Camera disconnected"; }
+        else {
+            BOOL automatic=value!=0;
+            NSMutableArray *rates=[NSMutableArray array];
+            for (NSNumber *rate in @[@15,@24,@30]) {
+                for (AVFrameRateRange *range in device.activeFormat.videoSupportedFrameRateRanges) {
+                    if (range.minFrameRate<=rate.doubleValue && range.maxFrameRate>=rate.doubleValue) { [rates addObject:rate]; break; }
+                }
+            }
+            if (control) {
+                NSError *error=nil;
+                if (![device lockForConfiguration:&error]) info[@"error"]=error.localizedDescription ?: @"Camera is busy";
+                else {
+                    @try {
+                        if (control==1 && [device isFocusModeSupported:automatic ? AVCaptureFocusModeContinuousAutoFocus : AVCaptureFocusModeLocked])
+                            device.focusMode=automatic ? AVCaptureFocusModeContinuousAutoFocus : AVCaptureFocusModeLocked;
+                        else if (control==2 && [device isExposureModeSupported:automatic ? AVCaptureExposureModeContinuousAutoExposure : AVCaptureExposureModeLocked])
+                            device.exposureMode=automatic ? AVCaptureExposureModeContinuousAutoExposure : AVCaptureExposureModeLocked;
+                        else if (control==3 && [device isWhiteBalanceModeSupported:automatic ? AVCaptureWhiteBalanceModeContinuousAutoWhiteBalance : AVCaptureWhiteBalanceModeLocked])
+                            device.whiteBalanceMode=automatic ? AVCaptureWhiteBalanceModeContinuousAutoWhiteBalance : AVCaptureWhiteBalanceModeLocked;
+                        else if (control==4 && [rates containsObject:@(value)]) {
+                            CMTime duration=CMTimeMake(1,value);
+                            device.activeVideoMaxFrameDuration=kCMTimeInvalid;
+                            device.activeVideoMinFrameDuration=duration;
+                            device.activeVideoMaxFrameDuration=duration;
+                        } else info[@"error"]=@"This mode is unavailable for this camera";
+                    } @catch(NSException *e) {info[@"error"]=e.reason ?: @"Camera configuration failed";}
+                    @finally {[device unlockForConfiguration];}
+                }
+            }
+            CMVideoDimensions dimensions=CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription);
+            info[@"rates"]=rates;
+            double duration=CMTimeGetSeconds(device.activeVideoMinFrameDuration);
+            if (isfinite(duration) && duration>0) info[@"fps"]=@(lround(1./duration));
+            info[@"device"]=device.uniqueID;
+            info[@"format"]=[NSString stringWithFormat:@"%d × %d",dimensions.width,dimensions.height];
+            info[@"modes"]=@[
+                @[@([device isFocusModeSupported:AVCaptureFocusModeLocked]),@([device isFocusModeSupported:AVCaptureFocusModeContinuousAutoFocus]),@(device.focusMode)],
+                @[@([device isExposureModeSupported:AVCaptureExposureModeLocked]),@([device isExposureModeSupported:AVCaptureExposureModeContinuousAutoExposure]),@(device.exposureMode)],
+                @[@([device isWhiteBalanceModeSupported:AVCaptureWhiteBalanceModeLocked]),@([device isWhiteBalanceModeSupported:AVCaptureWhiteBalanceModeContinuousAutoWhiteBalance]),@(device.whiteBalanceMode)]];
+        }
+        NSData *data=[NSJSONSerialization dataWithJSONObject:info options:0 error:nil];
+        return strdup([[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding].UTF8String);
+    }
+}
+void nr_camera_effects(void) {
+    if (@available(macOS 12.0,*)) [AVCaptureDevice showSystemUserInterface:AVCaptureSystemUserInterfaceVideoEffects];
+}
 char *nr_cameras(void) {
     @autoreleasepool {NSMutableArray *result=[NSMutableArray new];
         for(AVCaptureDevice *d in [AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo]) {
@@ -998,28 +1051,51 @@ int nr_audio_read(void *handle,double at,uint64_t generation,float *out,uint32_t
 }
 void nr_audio_close(void *handle){NRAudioReader *m=(__bridge_transfer NRAudioReader*)handle;[m->_reader cancelReading];}
 
+// Copy a completed monitor into Rune-owned storage. Its upload queue cannot retain
+// buffers from the small, latency-bounded production/encoder pool.
+int nr_monitor_planes(CVPixelBufferRef pixel, size_t w, size_t h, uint8_t *y, uint8_t *uv) {
+    if (CVPixelBufferGetWidth(pixel) != w || CVPixelBufferGetHeight(pixel) != h ||
+        !w || !h || (w | h) % 2 || CVPixelBufferGetPlaneCount(pixel) != 2) return -1;
+    OSType fmt = CVPixelBufferGetPixelFormatType(pixel);
+    if (fmt != kCVPixelFormatType_420YpCbCr8BiPlanarFullRange &&
+        fmt != kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange) return -1;
+    if (CVPixelBufferLockBaseAddress(pixel, kCVPixelBufferLock_ReadOnly) != kCVReturnSuccess) return -1;
+    int result = fmt == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange;
+    for (size_t p = 0; p < 2; p++) {
+        const uint8_t *src = CVPixelBufferGetBaseAddressOfPlane(pixel, p);
+        const size_t stride = CVPixelBufferGetBytesPerRowOfPlane(pixel, p);
+        const size_t rows = p ? h/2 : h;
+        if (!src || stride < w || CVPixelBufferGetHeightOfPlane(pixel, p) < rows) { result = -1; break; }
+        uint8_t *dst = p ? uv : y;
+        if (stride == w) memcpy(dst, src, rows * w);
+        else for (size_t row = 0; row < rows; row++) memcpy(dst + row*w, src + row*stride, w);
+    }
+    CVPixelBufferUnlockBaseAddress(pixel, kCVPixelBufferLock_ReadOnly);
+    return result;
+}
+
 // Immutable, Metal-readable surface for the fixed-size Native Dev guest fixture.
-// Pack the live landscape monitor for the guest return on its dedicated worker.
-bool nr_stage_copy(CVPixelBufferRef frame, uint8_t *out) {
+// Pack the chosen program canvas for the guest return on its dedicated worker.
+bool nr_stage_copy(CVPixelBufferRef frame, uint8_t *out, size_t width, size_t height) {
     OSType fmt=CVPixelBufferGetPixelFormatType(frame);
     if ((fmt!=kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange && fmt!=kCVPixelFormatType_420YpCbCr8BiPlanarFullRange) ||
         CVPixelBufferGetPlaneCount(frame)!=2 || CVPixelBufferLockBaseAddress(frame,kCVPixelBufferLock_ReadOnly)!=kCVReturnSuccess) return false;
     size_t w=CVPixelBufferGetWidth(frame),h=CVPixelBufferGetHeight(frame);
     bool ok=w>=2 && h>=2;
     if(ok) {
-        double scale=fmin(640.0/w,360.0/h);
-        size_t dw=MAX(2,MIN(640,lround(w*scale))) & ~1u, dh=MAX(2,MIN(360,lround(h*scale))) & ~1u;
-        size_t left=((640-dw)/2)&~1u,top=((360-dh)/2)&~1u;
+        double scale=fmin((double)width/w,(double)height/h);
+        size_t dw=MAX(2,MIN(width,lround(w*scale))) & ~1u, dh=MAX(2,MIN(height,lround(h*scale))) & ~1u;
+        size_t left=((width-dw)/2)&~1u,top=((height-dh)/2)&~1u;
         for(size_t plane=0;plane<2;plane++) {
             const uint8_t *src=CVPixelBufferGetBaseAddressOfPlane(frame,plane);
             if(!src){ok=false;break;}
             size_t step=plane?2:1, rows=dh/step, stride=CVPixelBufferGetBytesPerRowOfPlane(frame,plane);
-            uint8_t *dest=out+(plane?640*360:0);
-            if(dw!=640 || dh!=360) memset(dest,plane?128:16,640*(360/step));
+            uint8_t *dest=out+(plane?width*height:0);
+            if(dw!=width || dh!=height) memset(dest,plane?128:16,width*(height/step));
             size_t sh=CVPixelBufferGetHeightOfPlane(frame,plane),sw=CVPixelBufferGetWidthOfPlane(frame,plane);
             for(size_t y=0;y<rows;y++) {
                 const uint8_t *row=src+(y*sh/rows)*stride;
-                uint8_t *line=dest+(y+top/step)*640+left;
+                uint8_t *line=dest+(y+top/step)*width+left;
                 for(size_t x=0;x<dw/step;x++){
                     size_t sx=x*sw/(dw/step)*step;
                     line[x*step]=row[sx];
@@ -1105,12 +1181,6 @@ bool nr_write_poster(CVPixelBufferRef pixel, const char *path) {
 }
 
 // Use the shipping shell's HUD material with the NSWindow that owns GPUI's Metal view.
-extern int producer_apply_window_vibrancy(void *);
-void nr_shell_vibrancy(void *view) {
-    NSView *content=(__bridge NSView *)view;
-    if(content.window)producer_apply_window_vibrancy((__bridge void*)content.window);
-}
-
 // The host service acknowledges ownership before accepting audience configuration.
 bool nr_audience_access(const char *address, const char *publication, bool enabled) {
     @autoreleasepool {

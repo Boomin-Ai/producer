@@ -14,6 +14,9 @@ use std::{
 };
 use uuid::Uuid;
 
+/// Panels contributed by the built-in Boomin integration to the studio's dock picker.
+pub const STUDIO_PANELS: &[crate::workspace::PanelId] = &[crate::workspace::PanelId::Network];
+
 const VAULT: &str = "ai.boomin.producer.native.account";
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Login {
@@ -32,6 +35,8 @@ pub struct RemoteRoom {
     pub id: Uuid,
     pub title: Option<String>,
     #[serde(default)]
+    pub visibility: Option<String>,
+    #[serde(default)]
     pub is_default: bool,
     status: Option<String>,
     archived_at: Option<Value>,
@@ -49,6 +54,7 @@ pub struct Account {
 }
 pub enum Action {
     Restore,
+    UseProducerLogin,
     RequestCode(String),
     Verify(String, String),
     Switch(Login, String),
@@ -127,7 +133,7 @@ pub fn room_token(base: &Path, brand: &str) -> Result<String> {
     ensure!(login.brand == brand, "Select this room's workspace");
     login.token()
 }
-fn http() -> Result<reqwest::Client> {
+pub(crate) fn http() -> Result<reqwest::Client> {
     Ok(reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(15))
@@ -247,7 +253,7 @@ async fn account(
         avatar,
     })
 }
-async fn avatar(raw: &str) -> Result<image::RgbaImage> {
+pub(crate) async fn avatar(raw: &str) -> Result<image::RgbaImage> {
     let url = url::Url::parse(API)?.join(raw)?;
     ensure!(url.scheme() == "https", "Invalid avatar URL");
     let mut res = reqwest::Client::builder()
@@ -267,13 +273,10 @@ async fn avatar(raw: &str) -> Result<image::RgbaImage> {
         data.extend(chunk);
     }
     let reader = image::ImageReader::new(std::io::Cursor::new(data)).with_guessed_format()?;
-    let mut img = reader
+    let img = reader
         .decode()?
         .resize_to_fill(96, 96, image::imageops::FilterType::Triangle)
         .into_rgba8();
-    for p in img.pixels_mut() {
-        p.0.swap(0, 2);
-    }
     Ok(img)
 }
 async fn resolve(
@@ -320,6 +323,11 @@ pub fn run(base: &Path, action: Action) -> Result<Outcome> {
                 };
                 let t = l.token()?;
                 resolve(base, l, &t, None).await
+            }
+            Action::UseProducerLogin => {
+                let login = production_login()?.context("No saved Producer sign-in. Sign in with your email.")?;
+                let token = login.token()?;
+                resolve(base, login, &token, None).await
             }
             Action::RequestCode(email) => {
                 boomin::request_otp(API, email.trim()).await?;
