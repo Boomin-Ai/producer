@@ -1,0 +1,15 @@
+let aspect=frame.info.x/frame.info.y;
+let tall=aspect<1.;
+let C=select(vec2<f32>(.669,.370),vec2<f32>(.655,.340),tall);
+let R=select(.242,.128,tall);
+let p=(uv-C)*vec2<f32>(aspect,1.)/R;
+let r=length(p);
+let t=frame.info.z;
+let pixel=1./(R*frame.info.y);
+let tilt=-.31+.085*sin(t*.117);
+let rot=mat2x2<f32>(vec2<f32>(cos(tilt),sin(tilt)),vec2<f32>(-sin(tilt),cos(tilt)));
+let axes=vec2<f32>(select(1.59,1.36,tall),.50+.065*cos(t*.16));
+let local=transpose(rot)*p;
+let ellipse=local/axes;
+let gold=vec3<f32>(1.,.70,.34);
+let jade=vec3<f32>(.26,.86,.79);

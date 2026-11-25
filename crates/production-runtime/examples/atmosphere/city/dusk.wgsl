@@ -1,0 +1,17 @@
+let distant=textureSample(input0,linear_sampler,uv);
+let street=textureSample(input1,linear_sampler,uv);
+let aspect=frame.info.x/frame.info.y;
+let air=mix(vec3<f32>(.075,.13,.24),vec3<f32>(.60,.43,.41),smoothstep(.00,.73,uv.y));
+let sun=exp(-3.7*length((uv-vec2<f32>(.60,.50))*vec2<f32>(aspect,1.)));
+let skylineX=uv.x*aspect;
+let n=floor(skylineX*92.);
+let h=fract(sin(n*27.47)*1934.23);
+let h2=fract(sin(floor(skylineX*57.)*53.39)*924.57);
+let far=step(.59-.080*h,uv.y);
+let mid=step(.65-.10*h2,uv.y);
+var sky=mix(air+sun*vec3<f32>(.24,.10,.027),vec3<f32>(.25,.27,.34),far*.74);
+sky=mix(sky,vec3<f32>(.13,.19,.26),mid*.76);
+let district=mix(sky,distant.rgb,distant.a);
+let lit=mix(district,street.rgb,street.a);
+let edge=1.-.12*pow(length((uv-.5)*1.2),2.);
+return vec4<f32>(lit*edge,1.);

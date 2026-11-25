@@ -1,0 +1,27 @@
+[package]
+name = "producer-native-media"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+ffmpeg = ["dep:ffmpeg-next", "dep:ffmpeg-sys-next"]
+
+[dependencies]
+producer-production-contract = { path = "../contract" }
+serde.workspace = true
+serde_json.workspace = true
+rtrb = "=0.4.1"
+sha2.workspace = true
+ffmpeg-next = { version = "=8.0.0", optional = true, default-features = false, features = ["format", "software-scaling"] }
+ffmpeg-sys-next = { version = "=8.0.1", optional = true, default-features = false }
+
+[[example]]
+name = "media_proof"
+required-features = ["ffmpeg"]
+
+[[example]]
+name = "take_proof"
+required-features = ["ffmpeg"]

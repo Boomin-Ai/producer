@@ -1,0 +1,65 @@
+name: Native Apple Silicon candidate
+on:
+  push:
+    branches: [release/native-silicon-candidate]
+permissions:
+  contents: read
+jobs:
+  candidate:
+    runs-on: macos-15
+    timeout-minutes: 100
+    env:
+      CARGO_INCREMENTAL: '0'
+      MACOSX_DEPLOYMENT_TARGET: '13.0'
+      VERSION: '0.4.95'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.100.0'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/production-runtime/desktop
+      - name: Prepare signed production bundle and build RTC helper
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/native-silicon-candidate.sh build
+      - name: Verify native shell navigation
+        run: bash scripts/native-silicon-candidate.sh test
+      - name: Compile native release executable
+        run: bash scripts/native-silicon-candidate.sh compile
+      - name: Provision, sign, and notarize
+        env:
+          SIGN_IDENT: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          CERT_B64: ${{ secrets.APPLE_CERTIFICATE }}
+          CERT_PW: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          PROFILE_B64: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+          NOTARY_ID: ${{ secrets.APPLE_ID }}
+          NOTARY_PW: ${{ secrets.APPLE_PASSWORD }}
+          NOTARY_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash scripts/native-silicon-candidate.sh sign
+      - name: Verify and sign the notarized updater archive
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/native-delivery"
+          archive="$out/Producer_${VERSION}_aarch64.app.tar.gz"
+          tar -czf "$archive" -C "$RUNNER_TEMP/native-stage" Producer.app
+          mkdir "$RUNNER_TEMP/verify-updater"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/verify-updater"
+          app="$RUNNER_TEMP/verify-updater/Producer.app"
+          codesign --verify --deep --strict "$app"
+          xcrun stapler validate "$app"
+          spctl -a -t exec "$app"
+          test "$(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist")" = "$VERSION"
+          npm install --prefix "$RUNNER_TEMP/signer" --no-save @tauri-apps/cli@2.11.5
+          "$RUNNER_TEMP/signer/node_modules/.bin/tauri" signer sign "$archive" --password "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" >/dev/null
+          test -s "$archive.sig"
+          (cd "$out" && shasum -a 256 *.dmg *.tar.gz *.sig > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Producer-Silicon-candidate-${{ github.sha }}
+          path: ${{ runner.temp }}/native-delivery/
+          if-no-files-found: error
