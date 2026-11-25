@@ -13,7 +13,6 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: '13.0'
       VERSION: '0.4.96'
       PRODUCER_REQUIRE_ENGINE: '1'
-      PRODUCER_NOTARY_RECEIPT_DIR: ${{ runner.temp }}/native-notary-receipts
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -32,6 +31,7 @@ jobs:
         run: bash scripts/native-silicon-candidate.sh compile
       - name: Provision, sign, and notarize
         env:
+          PRODUCER_NOTARY_RECEIPT_DIR: ${{ runner.temp }}/native-notary-receipts
           SIGN_IDENT: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           CERT_B64: ${{ secrets.APPLE_CERTIFICATE }}
           CERT_PW: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
