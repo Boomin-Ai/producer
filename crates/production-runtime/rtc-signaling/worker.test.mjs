@@ -39,11 +39,12 @@ test("a signed-in studio host can create a private mailbox", async t => {
   const broker = "https://signaling.test";
   const auth = "Bearer test-host";
   let granted = false, initialized = 0;
-  t.mock.method(globalThis, "fetch", async (url, options) => {
+  t.mock.method(globalThis, "fetch", async (address, options) => {
+    const url = new URL(address);
     assert.equal(url.origin, "https://api.boomin.ai");
     assert.equal(url.pathname, `/v1/app/live/rooms/${id}/share-links`);
     assert.equal(url.searchParams.get("brandSlug"), "host");
-    assert.equal(options.redirect, "error");
+    assert.equal(options.redirect, "manual");
     assert.equal(options.headers.Authorization, auth);
     return granted ? Response.json({room_id:id,brand_slug:"host"}) : new Response(null,{status:403});
   });

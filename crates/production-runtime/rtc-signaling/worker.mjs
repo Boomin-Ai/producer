@@ -30,7 +30,10 @@ async function canCreate(req, url, env) {
   const authority = new URL(`https://api.boomin.ai/v1/app/live/rooms/${id}/share-links`);
   authority.searchParams.set("brandSlug", brand);
   try {
-    const response = await fetch(authority, {headers:{Authorization:auth, Accept:"application/json"}, redirect:"error", cache:"no-store"});
+    const response = await fetch(authority.toString(), {
+      headers:{Authorization:auth, Accept:"application/json", "User-Agent":"Producer Studio Signaling", "Cache-Control":"no-store"},
+      redirect:"manual",
+    });
     if (!response.ok) return false;
     const room = await response.json();
     return room.room_id === id && room.brand_slug === brand;
