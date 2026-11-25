@@ -4,6 +4,7 @@
 // published Sets are visibility-gated by the API. Other paths use static assets.
 
 const REPO = "Boomin-Ai/producer";
+const APPLE_SILICON_RELEASE = "native-silicon-0.4.96";
 
 const PLATFORMS = {
   "macos": [/aarch64.*\.dmg$/i],
@@ -198,10 +199,9 @@ function cleanName(platform, assetName) {
   }[platform] || assetName;
 }
 
-async function latestRelease() {
-  // Public downloads follow the stable channel; private/performance candidates
-  // must not replace its installers merely because they were published later.
-  const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
+async function publicRelease(tag) {
+  const route = tag ? `tags/${tag}` : "latest";
+  const res = await fetch(`https://api.github.com/repos/${REPO}/releases/${route}`, {
     headers: {
       "user-agent": "producer-site",
       "accept": "application/vnd.github+json",
@@ -260,12 +260,15 @@ export default {
     }
 
     if (url.pathname === "/download/meta.json") {
-      const rel = await latestRelease();
+      const [rel, silicon] = await Promise.all([publicRelease(), publicRelease(APPLE_SILICON_RELEASE)]);
       if (!rel) return new Response("{}", { status: 503, headers: { "content-type": "application/json" } });
       const meta = { version: rel.tag_name, platforms: {} };
       for (const [key, patterns] of Object.entries(PLATFORMS)) {
-        const asset = rel.assets.find((a) => patterns.some((re) => re.test(a.name)));
-        if (asset) meta.platforms[key] = { name: asset.name, size: asset.size };
+        const source = key === "macos" ? silicon : rel;
+        const asset = source?.assets.find((a) => patterns.some((re) => re.test(a.name)));
+        if (asset) meta.platforms[key] = key === "macos"
+          ? { name: asset.name, size: asset.size, version: source.tag_name.replace(/^native-silicon-/, "") }
+          : { name: asset.name, size: asset.size };
       }
       return new Response(JSON.stringify(meta), {
         headers: { "content-type": "application/json", "cache-control": "public, max-age=300" },
@@ -278,7 +281,7 @@ export default {
       return route ? publicPage(req, route, url.pathname) : env.ASSETS.fetch(req);
     }
 
-    const rel = await latestRelease();
+    const rel = await publicRelease(m[1] === "macos" ? APPLE_SILICON_RELEASE : undefined);
     if (!rel || !rel.assets) return new Response("Release temporarily unavailable.", { status: 503 });
 
     const patterns = PLATFORMS[m[1]];
