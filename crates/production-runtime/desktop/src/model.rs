@@ -846,7 +846,24 @@ impl RoomProject {
         if self.rendering_show {
             let segment = self.active_segment()?.context("No segment selected for program")?;
             if let Some(id) = &segment.sequence {
-                let compiled = plan.sequences.get(id).context("Missing segment sequence")?.clone();
+                let mut compiled = plan.sequences.get(id).context("Missing segment sequence")?.clone();
+                if self.scene == "my-first-million" {
+                    // Timing belongs to the authored role. The set supplies the input
+                    // that occupies that role in this studio, including remote guests.
+                    let bindings = crate::set_slots::bindings(&self.production.sets[&self.scene]);
+                    for player in &mut compiled.players {
+                        let slot = match player.source.as_str() {
+                            "camera" => "node/stage/shaan",
+                            "camera-2" => "node/stage/sam",
+                            "rtc-guest" => "node/stage/guest",
+                            "screen" => "node/stage/screen-share",
+                            _ => continue,
+                        };
+                        if let Some(bound) = bindings.get(slot) {
+                            player.source.clone_from(bound);
+                        }
+                    }
+                }
                 plan.sequences.insert("main".into(), compiled);
             }
         }
@@ -1227,7 +1244,8 @@ impl RoomProject {
         self.lanes.retain(|l| l.source != source);
         self.inputs.remove(source);
         self.camera_grades.remove(source);
-        for seq in self.production.sequences.values_mut() {
+        // Disconnect a studio input without deleting authored cues from show timelines.
+        if let Some(seq) = self.production.sequences.get_mut("main") {
             seq.placements.retain(|p| p.source != source);
             seq.audio_routes.retain(|r| r.source != source);
         }

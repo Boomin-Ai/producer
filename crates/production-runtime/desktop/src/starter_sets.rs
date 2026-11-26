@@ -33,7 +33,7 @@ const SPEAKER_RECEIPT: &str = "starter-sets-v2.installed";
 const CLASSIC_RECEIPT: &str = "starter-sets-v4.installed";
 const MFM_RECEIPT: &str = "starter-sets-v5.installed";
 const RUNDOWN_RECEIPT: &str = "starter-sets-v8.installed";
-const RECEIPT: &str = "starter-sets-v10.installed";
+const RECEIPT: &str = "starter-sets-v11.installed";
 const RETIRED: [&str; 4] = ["studio", "waves", "podcast", "podcast-studio"];
 const CLASSIC_SKYLINE_HASH: &str = "ab06936944a63d57755ab8f1cc3ee96abaa2ee7a7902efc4d64ae8bc329f4c46";
 const CLASSIC_SKYLINE: &[u8] = include_bytes!("../starter-sets/classic-skyline.png");
@@ -338,6 +338,31 @@ fn upgrade_set_graphs(room: &mut RoomProject) -> Result<()> {
     Ok(())
 }
 
+// Older rooms deleted every placement for a source when a studio device was removed.
+// Match that exact loss across the stock rundown before restoring any authored timing.
+fn repair_missing_show_inputs(room: &mut RoomProject) -> Result<()> {
+    const ID: &str = "my-first-million";
+    if !room.production.shows.values().any(|show| show.set == ID) { return Ok(()); }
+    let stock: producer_production_contract::Document = serde_json::from_slice(
+        include_bytes!("../../../../protocol/v1/my-first-million/production.json"),
+    )?;
+    let missing: Vec<&str> = ["camera", "camera-2", "microphone", "screen", "rtc-guest"]
+        .into_iter().filter(|id| room.production.sources.contains_key(*id) && stock.sequences.iter()
+            .filter(|(_, original)| original.placements.iter().any(|p| p.source == *id))
+            .all(|(key, _)| room.production.sequences.get(key)
+                .is_some_and(|seq| seq.placements.iter().all(|p| p.source != *id))))
+        .collect();
+    if missing.is_empty() { return Ok(()); }
+    for (key, original) in stock.sequences {
+        let Some(saved) = room.production.sequences.get_mut(&key) else { continue };
+        let mut remainder = original.clone();
+        remainder.placements.retain(|p| !missing.contains(&p.source.as_str()));
+        remainder.audio_routes.retain(|r| !missing.contains(&r.source.as_str()));
+        if *saved == remainder { *saved = original; }
+    }
+    Ok(())
+}
+
 pub(crate) fn install(root: &Path) -> Result<()> {
     if root.join(RECEIPT).is_file() {
         return Ok(());
@@ -401,6 +426,7 @@ pub(crate) fn install(root: &Path) -> Result<()> {
         }
         install_mfm_rundown(&mut room, &assets)?;
     }
+    repair_missing_show_inputs(&mut room)?;
     remove_library_sets(&mut room);
     upgrade_set_graphs(&mut room)?;
     room.compile()?;
@@ -431,11 +457,42 @@ pub(crate) fn install(root: &Path) -> Result<()> {
     write_missing(&root.join(CLASSIC_RECEIPT), b"4\n")?;
     write_missing(&root.join(MFM_RECEIPT), b"5\n")?;
     write_missing(&root.join(RUNDOWN_RECEIPT), b"8\n")?;
-    write_missing(&root.join(RECEIPT), b"10\n")
+    write_missing(&root.join(RECEIPT), b"11\n")
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rebound_host_camera_follows_authored_show_time_without_opening_the_editor() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        install(root).unwrap();
+        let read = || serde_json::from_slice::<RoomProject>(&fs::read(root.join("room.json")).unwrap()).unwrap();
+        let mut room = read();
+        let id = "my-first-million";
+        let stock = room.production.sequences["mfm-conversation"].clone();
+        room.remove_source("camera").unwrap();
+        assert_eq!(room.production.sequences["mfm-conversation"], stock);
+        room.restore_source("camera").unwrap();
+        // Recreate the v10 loss in a room with Sam on the primary camera.
+        for seq in room.production.sequences.values_mut() {
+            seq.placements.retain(|p| p.source != "camera");
+        }
+        let set = room.production.sets.get_mut(id).unwrap();
+        crate::set_slots::assign(set, "node/stage/shaan", "rtc-guest");
+        crate::set_slots::assign(set, "node/stage/sam", "camera");
+        crate::engine::persist(root, &room).unwrap();
+        fs::remove_file(root.join(RECEIPT)).unwrap();
+        install(root).unwrap();
+        let mut reopened = read();
+        reopened.enter_segment(id, "conversation").unwrap();
+        let plan = reopened.live_set().unwrap().compile().unwrap();
+        let now = producer_production_contract::Time::new(21,1).unwrap();
+        for role in ["camera","rtc-guest"] {
+            assert!(plan.sequences["main"].players.iter().any(|p| p.source == role && p.media_seconds(now).unwrap().is_some()));
+        }
+        assert_eq!(reopened.production.sequences["mfm-conversation"], stock);
+    }
     #[test]
     fn focus_upgrade_preserves_studio_edits_and_host_routing() {
         let dir = tempfile::tempdir().unwrap();

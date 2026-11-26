@@ -659,7 +659,7 @@ pub(super) fn view(s: &Studio, width: f32, height: f32) -> El {
                     .production
                     .sources
                     .keys()
-                    .filter(|key| key.as_str() != "rtc-guest" && super::set_sources::visual_source(p, key))
+                    .filter(|key| key.as_str() != "rtc-guest" && crate::set_slots::visual_source(p, key))
                     .map(String::as_str)
                     .chain(std::iter::once("rtc-guest"))
                 {

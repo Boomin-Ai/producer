@@ -19,16 +19,6 @@ pub(super) struct Picker {
     anchor: String,
 }
 
-pub(super) fn visual_source(room: &RoomProject, id: &str) -> bool {
-    matches!(
-        room.production.sources.get(id),
-        Some(Source::Live {
-            role: Role::HostCamera | Role::Screen | Role::Guest
-        })
-    ) || (matches!(id, "movie" | "take")
-        && matches!(room.production.sources.get(id), Some(Source::Player { .. })))
-}
-
 fn name(snap: &Snapshot, source: &str) -> String {
     if source == "rtc-guest" {
         if snap.producer_rtc["phase"] == "connected" {
@@ -40,7 +30,12 @@ fn name(snap: &Snapshot, source: &str) -> String {
         }
         return "Waiting for guest".into();
     }
-    super::editor::source_name(&snap.project, source)
+    let display = super::editor::source_name(&snap.project, source);
+    if display == source {
+        super::editor::control_label(source)
+    } else {
+        display
+    }
 }
 
 impl Picker {
@@ -60,23 +55,12 @@ impl Picker {
         let Some(live) = &s.live else { return };
         let p = &live.snapshot.project;
         let cmd = match &self.binding {
-            Binding::Picture(slot) => {
-                let Some(set) = p.production.sets.get(&self.set) else {
-                    return;
-                };
-                if !crate::set_slots::for_pair(p, set, &self.pair).contains(slot) {
-                    s.slot_picker = None;
-                    return;
-                }
-                let mut draft = set.clone();
-                crate::set_slots::assign(&mut draft, &slot.key, source);
-                RoomCommand::SetEditSave {
-                    id: self.set.clone(),
-                    expected: set.clone(),
-                    draft,
-                    layout: Some(self.pair.clone()),
-                }
-            }
+            Binding::Picture(slot) => RoomCommand::SetBindSource {
+                id: self.set.clone(),
+                layout: self.pair.clone(),
+                key: slot.key.clone(),
+                source: source.to_owned(),
+            },
             Binding::Microphone(i) => {
                 let Some((show, segment)) = p
                     .playing_segment
@@ -119,7 +103,6 @@ impl Picker {
             }
         };
         s.send(cmd);
-        s.slot_picker = None;
     }
     fn invite(&self, s: &mut Studio) {
         panels::copy_link(
@@ -142,7 +125,6 @@ pub(super) fn rows(s: &Studio, set: &str, pair: &SetLayoutPair, slots: &[Slot]) 
         return list;
     }
     list = list.child(title("Sources", 12., 600., TEXT));
-    let mut invited = false;
     for binding in bindings {
         let suffix = match &binding {
             Binding::Picture(slot) => slot.key.clone(),
@@ -160,11 +142,28 @@ pub(super) fn rows(s: &Studio, set: &str, pair: &SetLayoutPair, slots: &[Slot]) 
             Binding::Microphone(_) if source == "rtc-guest" => snap.guest_audio_received,
             _ => panels::slot_ready(snap, source),
         };
-        let guest = source == "rtc-guest" && !ready && snap.producer_rtc["phase"] != "connected";
-        let mut line = row()
+        let expanded = s
+            .slot_picker
+            .as_ref()
+            .is_some_and(|open| open.0 == set && open.1 == anchor);
+        let label = pick.title();
+        let row_key = (set.to_owned(), anchor.clone());
+        let line = row()
+            .key(anchor)
+            .role("button")
+            .label(format!(
+                "{} {label} source",
+                if expanded { "Collapse" } else { "Expand" }
+            ))
+            .focusable(true)
             .items_center()
-            .gap(5.)
-            .child(title(pick.title(), 11., 560., TEXT).grow(1.).min_w(0.))
+            .gap(6.)
+            .h(29.)
+            .px(5.)
+            .min_w(0.)
+            .radius(5.)
+            .hover_fill(color(SURFACE))
+            .child(title(label, 11., 580., TEXT).grow(1.).min_w(0.))
             .child(
                 title(
                     name(snap, source),
@@ -173,38 +172,62 @@ pub(super) fn rows(s: &Studio, set: &str, pair: &SetLayoutPair, slots: &[Slot]) 
                     if ready { MINT } else { MUTED },
                 )
                 .min_w(0.),
-            );
-        let edit = pick.clone();
-        line = line.child(
-            panels::tool(
-                &anchor,
-                "settings",
-                &format!("Assign {}", pick.title()),
-                false,
-                move |s| s.slot_picker = Some(edit.clone()),
             )
-            .size(24., 24.),
-        );
-        if guest && !invited {
-            invited = true;
-            line = line.child(
-                button("invite-unlinked-slot", "Invite guest", false, move |s| {
-                    pick.invite(s)
-                })
-                .disabled(s.people.busy()),
-            );
-        }
+            .child(panels::glyph(
+                if expanded {
+                    "chevron-up"
+                } else {
+                    "chevron-down"
+                },
+                13.,
+                MUTED,
+            ))
+            .on_press(move |s| {
+                s.slot_picker = if expanded {
+                    None
+                } else {
+                    Some(row_key.clone())
+                }
+            });
         list = list.child(line);
-    }
-    if invited && s.slot_picker.is_none() {
-        if let Some(feedback) = s.people.invitation_feedback(&snap.producer_rtc) {
-            list = list.child(feedback);
+        if expanded {
+            list = list.child(choices(s, &pick));
         }
     }
     list
 }
 
-pub(super) fn popover(s: &Studio, pick: &Picker, edge: Edge, w: f32, h: f32) -> El {
+fn choice(
+    key: impl Into<String>,
+    icon: &str,
+    label: String,
+    selected: bool,
+    press: impl Fn(&mut Studio) + 'static,
+) -> El {
+    let tint = if selected { MINT } else { TEXT };
+    row()
+        .key(key.into())
+        .role("button")
+        .label(label.clone())
+        .focusable(true)
+        .h(24.)
+        .max_w(190.)
+        .min_w(0.)
+        .items_center()
+        .px(6.)
+        .gap(4.)
+        .radius(5.)
+        .fill(color(if selected {
+            theme::TOOL_SELECTED
+        } else {
+            PANEL
+        }))
+        .child(panels::glyph(icon, 12., tint))
+        .child(title(label, 10., 550., tint).min_w(0.))
+        .on_press(press)
+}
+
+fn choices(s: &Studio, pick: &Picker) -> El {
     let snap = &s.live.as_ref().unwrap().snapshot;
     let p = &snap.project;
     let current = pick.source(p);
@@ -216,6 +239,8 @@ pub(super) fn popover(s: &Studio, pick: &Picker, edge: Edge, w: f32, h: f32) -> 
         .keys()
         .filter(|id| {
             id.as_str() != "rtc-guest"
+                && (p.inputs.contains_key(*id)
+                    || p.lanes.iter().any(|lane| lane.source == id.as_str()))
                 && if mic {
                     matches!(
                         p.production.sources.get(*id),
@@ -224,7 +249,7 @@ pub(super) fn popover(s: &Studio, pick: &Picker, edge: Edge, w: f32, h: f32) -> 
                         })
                     )
                 } else {
-                    visual_source(p, id)
+                    crate::set_slots::visual_source(p, id)
                 }
         })
         .cloned()
@@ -240,116 +265,124 @@ pub(super) fn popover(s: &Studio, pick: &Picker, edge: Edge, w: f32, h: f32) -> 
     choices.sort();
     choices.dedup();
     if !matches!(&pick.binding,Binding::Picture(slot) if slot.component) {
-        content = content.child(title("Studio sources", 10., 550., MUTED));
-        for id in choices {
-            let edit = pick.clone();
-            content = content.child(button(
-                format!("bind-{id}"),
-                name(snap, &id),
-                current == id,
-                move |s| edit.assign(s, &id),
-            ));
+        if !choices.is_empty() {
+            let mut inputs = row().min_w(0.).flex_wrap().gap(4.);
+            for id in choices {
+                let edit = pick.clone();
+                let icon = if mic {
+                    "mic"
+                } else {
+                    match id.as_str() {
+                        "screen" => "screen",
+                        "movie" | "take" => "clip",
+                        _ => "camera",
+                    }
+                };
+                inputs = inputs.child(choice(
+                    format!("bind-{id}"),
+                    icon,
+                    name(snap, &id),
+                    current == id,
+                    move |s| edit.assign(s, &id),
+                ));
+            }
+            content = content
+                .child(title("Studio inputs", 10., 550., MUTED))
+                .child(inputs);
         }
         let edit = pick.clone();
-        let guest_label = if snap.producer_rtc["phase"] == "connected" {
+        let connected = snap.producer_rtc["phase"] == "connected";
+        let guest_label = if connected {
             name(snap, "rtc-guest")
         } else {
             "Stage guest".into()
         };
-        content = content
-            .child(title("People", 10., 550., MUTED))
-            .child(button(
-                "bind-rtc-guest",
-                guest_label,
-                current == "rtc-guest",
-                move |s| edit.assign(s, "rtc-guest"),
-            ));
-        if snap.producer_rtc["phase"] != "connected" {
+        let mut people = row().min_w(0.).flex_wrap().gap(4.).child(choice(
+            "bind-rtc-guest",
+            "profile",
+            guest_label,
+            current == "rtc-guest",
+            move |s| edit.assign(s, "rtc-guest"),
+        ));
+        if !connected {
             let edit = pick.clone();
-            content = content.child(
-                button("invite-slot-guest", "Copy guest invite", false, move |s| {
-                    edit.invite(s)
-                })
+            people = people.child(
+                choice(
+                    "invite-slot-guest",
+                    "link",
+                    "Copy invite".into(),
+                    false,
+                    move |s| edit.invite(s),
+                )
                 .disabled(s.people.busy()),
             );
-            if let Some(feedback) = s.people.invitation_feedback(&snap.producer_rtc) {
-                content = content.child(feedback);
-            }
+        }
+        content = content
+            .child(title("People", 10., 550., MUTED))
+            .child(people);
+        if let Some(feedback) = s.people.invitation_feedback(&snap.producer_rtc) {
+            content = content.child(feedback);
         }
     }
+    let anchor = pick.anchor.clone();
+    let mut actions = row().min_w(0.).flex_wrap().gap(4.).child(choice(
+        "slot-add-input",
+        "plus",
+        "Add input".into(),
+        false,
+        move |s| panels::open_source(s, "add", PanelId::Controls, anchor.clone()),
+    ));
     if current != "rtc-guest" {
         let anchor = pick.anchor.clone();
         let src = current.to_owned();
-        content = content.child(button(
+        actions = actions.child(choice(
             "slot-input-settings",
-            "Input settings",
+            "mixer",
+            "Input settings".into(),
             false,
             move |s| panels::open_source(s, &src, PanelId::Controls, anchor.clone()),
         ));
     }
-    let anchor = pick.anchor.clone();
-    content = content.child(button(
-        "slot-add-input",
-        "Add studio input…",
-        false,
-        move |s| panels::open_source(s, "add", PanelId::Controls, anchor.clone()),
-    ));
     let default = match &pick.binding {
         Binding::Microphone(i) => {
             Some(crate::model::HostDirection::default().microphones[*i].clone())
         }
-        Binding::Picture(slot) => p
-            .set_source_defaults
-            .get(&pick.set)
-            .and_then(|m| m.get(&slot.key))
-            .cloned()
-            .or_else(|| {
-                (pick.set == "my-first-million")
-                    .then(|| match slot.name.as_str() {
-                        "shaan" => Some("camera".into()),
-                        "sam" => Some("camera-2".into()),
-                        "guest" => Some("rtc-guest".into()),
-                        "screen-share" => Some("screen".into()),
-                        _ => None,
-                    })
-                    .flatten()
-            }),
+        Binding::Picture(slot) => {
+            let authored = (pick.set == "my-first-million")
+                .then(|| match slot.name.as_str() {
+                    "shaan" => Some("camera"),
+                    "sam" => Some("camera-2"),
+                    "guest" => Some("rtc-guest"),
+                    "screen-share" => Some("screen"),
+                    _ => None,
+                })
+                .flatten();
+            authored.map(str::to_owned).or_else(|| {
+                p.set_source_defaults
+                    .get(&pick.set)
+                    .and_then(|defaults| defaults.get(&slot.key))
+                    .cloned()
+            })
+        }
     };
     if let Some(default) = default.filter(|id| id != current) {
         let edit = pick.clone();
-        content = content.child(button(
+        actions = actions.child(choice(
             "reset-slot-source",
-            "Reset source",
+            "restart",
+            "Reset".into(),
             false,
             move |s| edit.assign(s, &default),
         ));
     }
-    col()
+    content
+        .child(el().w_full().h(1.).fill(color(theme::SEAM)))
+        .child(actions)
         .key("set-source-picker")
-        .role("dialog")
-        .label(pick.title())
-        .w(260_f32.min(w - 16.))
-        .max_h((h - 68.).max(96.))
-        .anchored_fit(
-            pick.anchor.clone(),
-            panels::dock_popover_side(edge),
-            rune::Align::Start,
-            5.,
-        )
-        .modal(true, |s: &mut Studio| s.slot_picker = None)
-        .radius(8.)
-        .border(1., color(theme::SEAM))
-        .fill(color(PANEL))
-        .padding(8.)
-        .gap(6.)
-        .child(
-            row()
-                .items_center()
-                .child(title(pick.title(), 14., 600., TEXT).grow(1.))
-                .child(
-                    button("close-slot-picker", "×", false, |s| s.slot_picker = None)
-                        .size(24., 24.),
-                ),
-        )
-        .child(content.min_h(0.).scroll(Default::default()))
+        .role("group")
+        .label(format!("{} sources", pick.title()))
+        .min_w(0.)
+        .radius(6.)
+        .fill(color(SURFACE))
+        .padding(6.)
 }

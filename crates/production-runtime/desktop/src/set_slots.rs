@@ -1,6 +1,8 @@
 //! Stable addresses for source bindings in authored layouts and GPU pass inputs.
 use crate::model::{RoomProject, SetLayoutPair};
-use producer_production_contract::{Content, GraphInput, GraphPass, Node, Paint, Set};
+use producer_production_contract::{
+    Content, GraphInput, GraphPass, Node, Paint, Role, Set, Source,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -181,4 +183,14 @@ pub fn assign(set: &mut Set, key: &str, source: &str) {
         }
         _ => {}
     }
+}
+
+pub(crate) fn visual_source(room: &RoomProject, id: &str) -> bool {
+    matches!(
+        room.production.sources.get(id),
+        Some(Source::Live {
+            role: Role::HostCamera | Role::Screen | Role::Guest
+        })
+    ) || (matches!(id, "movie" | "take")
+        && matches!(room.production.sources.get(id), Some(Source::Player { .. })))
 }

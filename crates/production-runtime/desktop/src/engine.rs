@@ -141,6 +141,7 @@ pub enum RoomCommand {
         #[serde(default)]
         layout: Option<SetLayoutPair>,
     },
+    SetBindSource { id: String, layout: SetLayoutPair, key: String, source: String },
     SetEditSave {
         id: String,
         expected: producer_production_contract::Set,
@@ -319,7 +320,7 @@ impl Handle {
     }
     pub fn request(&self, command: RoomCommand) -> Result<serde_json::Value> {
         let broadcast=matches!(command,RoomCommand::BroadcastStart|RoomCommand::BroadcastStop);
-        let private_edit=matches!(command,RoomCommand::SetEditPreview{..}|RoomCommand::SetEditSave{..});
+        let private_edit=matches!(command,RoomCommand::SetEditPreview{..}|RoomCommand::SetEditSave{..}|RoomCommand::SetBindSource{..});
         let (tx, rx) = mpsc::sync_channel(1);
         self.tx
             .try_send(Envelope {
@@ -1228,7 +1229,7 @@ fn apply(
         }
         RoomCommand::Monitor { .. }
         | RoomCommand::MarqueeReveal { .. } | RoomCommand::Headline { .. }
-        | RoomCommand::SetEditPreview { .. } | RoomCommand::SetEditSave { .. }
+        | RoomCommand::SetEditPreview { .. } | RoomCommand::SetEditSave { .. } | RoomCommand::SetBindSource { .. }
         | RoomCommand::OperationOutcome { .. } | RoomCommand::RevokePermission { .. } | RoomCommand::GrantPermission { .. }
         | RoomCommand::SendToOutput { .. }
         | RoomCommand::SceneRemove { .. }
@@ -1911,10 +1912,23 @@ fn control(
                 let reply=history.list(participant.as_deref(),before.as_deref()).unwrap_or_else(|e|serde_json::json!({"ok":false,"error":e.to_string()}));
                 if let Some(tx)=envelope.reply{let _=tx.try_send(reply);}continue;
             }
-            if matches!(&envelope.command, RoomCommand::SetEditPreview { .. } | RoomCommand::SetEditSave { .. }) {
+            if matches!(&envelope.command, RoomCommand::SetEditPreview { .. } | RoomCommand::SetEditSave { .. } | RoomCommand::SetBindSource { .. }) {
                 let result = (|| -> Result<SetSlotBounds> {
                     let mut slots = SetSlotBounds::new();
-                    match &envelope.command {
+                    // Resolve a single assignment against the committed document on the
+                    // control worker so consecutive selections cannot overwrite one another.
+                    let assignment;
+                    let edit = if let RoomCommand::SetBindSource { id, layout, key, source } = &envelope.command {
+                        let room = &state.project;
+                        let set = room.production.sets.get(id).context("Unknown set")?;
+                        anyhow::ensure!(source == "rtc-guest" || crate::set_slots::visual_source(room, source), "Choose a visual source");
+                        anyhow::ensure!(crate::set_slots::for_pair(room, set, layout).iter().any(|slot| slot.key == *key && !slot.component), "Source slot is no longer available");
+                        let mut draft = set.clone();
+                        crate::set_slots::assign(&mut draft, key, source);
+                        assignment = RoomCommand::SetEditSave { id: id.clone(), expected: set.clone(), draft, layout: Some(layout.clone()) };
+                        &assignment
+                    } else { &envelope.command };
+                    match edit {
                         RoomCommand::SetEditPreview { id: Some(id), draft: Some(draft), layout } => {
                             let mut next = set_edit_project(&state.project, id, draft)?;
                             next.mount_set(Some(id.clone()), layout.clone())?;

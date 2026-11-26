@@ -327,7 +327,7 @@ struct Studio {
     expanded_rundown: Option<String>,
     folded_shots: std::collections::BTreeSet<String>,
     expanded_layout_controls: std::collections::BTreeSet<String>,
-    slot_picker: Option<set_sources::Picker>,
+    slot_picker: Option<(String, String)>,
     selected_show: Option<String>,
     choose_show: bool,
     headline_notice: Option<(String, &'static str)>,

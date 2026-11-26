@@ -1,7 +1,7 @@
 use super::*;
 use crate::platform::ScreenCaptureTarget;
 use crate::studio_audio::{Bus, Command as Audio, DeckId, Kind};
-fn glyph(name: &str, size: f32, c: u32) -> El {
+pub(super) fn glyph(name: &str, size: f32, c: u32) -> El {
     rune::icon(super::glyphs::glyph(name), size).color(color(c))
 }
 pub(super) fn tool(id: &str, g: &str, label: &str, on: bool, act: impl Fn(&mut Studio) + 'static) -> El {
@@ -527,9 +527,6 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
     }
     if let Some((source, owner, anchor)) = &s.source {
         return completed.child(source_popout(s, source, ws.panels[owner].edge, anchor, w, h));
-    }
-    if let Some(picker) = &s.slot_picker {
-        return completed.child(super::set_sources::popover(s, picker, ws.panels[&PanelId::Controls].edge, w, h));
     }
     if let Some(sheet) = super::channels::sheet(s, w) {
         completed.child(sheet)
