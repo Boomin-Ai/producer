@@ -328,8 +328,6 @@ struct Studio {
     folded_shots: std::collections::BTreeSet<String>,
     expanded_layout_controls: std::collections::BTreeSet<String>,
     slot_picker: Option<(String, String)>,
-    selected_show: Option<String>,
-    choose_show: bool,
     headline_notice: Option<(String, &'static str)>,
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     camera: crate::virtual_camera::Camera,
@@ -409,8 +407,6 @@ impl Studio {
             folded_shots: Default::default(),
             expanded_layout_controls: Default::default(),
             slot_picker: None,
-            selected_show: None,
-            choose_show: false,
             headline_notice: None,
             #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
             camera: Default::default(),
@@ -451,8 +447,6 @@ impl Studio {
                 self.mixer_scrub = None;
                 self.set_selection = None;
                 self.slot_picker = None;
-                self.selected_show = None;
-                self.choose_show = false;
                 self.pending_link = None;
                 self.activity = false;
                 self.editing_docks = false;

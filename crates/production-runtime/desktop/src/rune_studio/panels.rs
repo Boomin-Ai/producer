@@ -1411,7 +1411,7 @@ fn set_controls_header(snap: &Snapshot, key: &str, pair: &crate::model::SetLayou
             .child(title(label, 11., 600., if running { MINT } else { TEXT }))
             .child(title(show_clock(snap.show_elapsed), 11., 600., TEXT).key("set-show-time"))
             .child(title("·", 11., 500., MUTED));
-    } else if project.production.shows.values().any(|show| show.set == key) {
+    } else if key == "my-first-million" && project.production.shows.contains_key(key) {
         status = status.child(title("Ready", 11., 600., TEXT)).child(title("·", 11., 500., MUTED));
     }
     status = status.child(title(if on { "On output" } else { "Prepared" }, 10., 500., MUTED));
@@ -1506,26 +1506,12 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 let pair = if running || (snap.active_host_shot.is_some() && p.mounted_set.as_ref() == Some(key)) { snap.program_layout.clone().unwrap_or(pair) } else { pair };
                 let on = running || (snap.program_kind == "set" && (l.handle.is_set_on_output(key, &pair, set) || (snap.active_host_shot.is_some() && p.mounted_set.as_ref() == Some(key))));
                 let header = set_controls_header(snap, key, &pair, on, width, shelf);
-                let shows: Vec<_> = p.production.shows.iter().filter(|(_, show)| &show.set == key).collect();
-                let active = p.playing_segment.as_ref().filter(|_| running).map(|(show,_)| show);
-                let choice = [active, s.selected_show.as_ref(), Some(key)].into_iter().flatten()
-                    .find_map(|id| shows.iter().find(|(k,_)| *k == id)).or(shows.first());
+                let active = p.playing_segment.as_ref().filter(|_| running).map(|(id, _)| id.as_str());
+                let show_id = active.or_else(|| (key == "my-first-million").then_some(key.as_str()));
                 let mut players = Vec::new();
-                if let Some((id, show)) = choice.copied() {
-                    if let Some(player) = show_controller(s,snap,id,show,set) {
-                        let mut pane = col().gap(4.);
-                        if shows.len() > 1 {
-                            pane = pane.child(button("choose-set-show", format!("Show · {}",crate::model::set_label(id)),false,
-                                |s| s.choose_show = !s.choose_show).disabled(running));
-                            if s.choose_show && !running {
-                                for (option,_) in &shows {
-                                    let value = (*option).clone();
-                                    pane = pane.child(button(format!("select-show-{option}"),crate::model::set_label(option),option == &id,
-                                        move |s| { s.selected_show=Some(value.clone()); s.choose_show=false; }));
-                                }
-                            }
-                        }
-                        players.push(pane.child(player));
+                if let Some((id, show)) = show_id.and_then(|id| p.production.shows.get(id).filter(|show| &show.set == key).map(|show| (id, show))) {
+                    if let Some(player) = show_controller(s, snap, id, show, set) {
+                        players.push(player);
                     }
                 }
                 let has_show = !players.is_empty();
@@ -1536,7 +1522,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 let active_shot = choices.iter().find(|choice| choice.pair == pair)
                     .map(|choice| if key == "my-first-million" && pair.landscape == "landscape" { "Two hosts" } else { &choice.label }).unwrap_or("");
                 let owner = key.clone();
-                let mut shot_heading = row().items_center().h(27.).gap(3.).child(set_disclosure("set-shots-toggle", "Shots",
+                let mut shot_heading = row().items_center().h(27.).gap(3.).child(set_disclosure("set-shots-toggle", if has_show { "Shots" } else { "Layouts" },
                     if shots_open { "" } else { active_shot }, shots_open, move |s| {
                         if shots_open { s.folded_shots.insert(owner.clone()); } else { s.folded_shots.remove(&owner); }
                     }).grow(1.).min_w(0.));

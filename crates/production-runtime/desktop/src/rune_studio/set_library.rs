@@ -443,7 +443,7 @@ pub(super) fn view(s: &Studio, width: f32, current: &str) -> El {
             .collect();
         sets.sort_by_key(|(id, _)| (id.as_str() != current, crate::model::set_label(id)));
         for (id, set) in sets {
-            let bundled = library.local.contains_key(id.as_str());
+            let bundled = library.local.contains_key(id.as_str()) || id == "useful-information";
             let label = crate::model::set_label(id);
             if (library.collection == Collection::Producer && !bundled)
                 || !label.to_lowercase().contains(&filter)
@@ -467,8 +467,7 @@ pub(super) fn view(s: &Studio, width: f32, current: &str) -> El {
             let image = artwork(card_width, library.local.get(id.as_str()), fallback);
             let source = if bundled { "Producer" } else { "This studio" };
             let count = project.set_layout_choices(id).len();
-            let segments = project.production.shows.get(id).filter(|show| &show.set == id)
-                .or_else(|| project.production.shows.values().find(|show| &show.set == id))
+            let segments = project.production.shows.get(id).filter(|show| id == "my-first-million" && &show.set == id)
                 .map_or(0, |show| show.segments.len());
             let detail = if segments > 0 {
                 format!("{segments} {} · {count} {}", if segments == 1 { "segment" } else { "segments" },
@@ -484,7 +483,8 @@ pub(super) fn view(s: &Studio, width: f32, current: &str) -> El {
                 format!("{source} · {detail}")
             };
             let id = id.clone();
-            cards.push(card(
+            let template = id == "useful-information";
+            let entry = card(
                 format!("select-{id}"),
                 &label,
                 subtitle,
@@ -493,7 +493,12 @@ pub(super) fn view(s: &Studio, width: f32, current: &str) -> El {
                 card_width,
                 id == current,
                 move |s| super::editor::open_selection(s, id.clone(), pair.clone()),
-            ));
+            );
+            cards.push(if template {
+                col().w(card_width).child(entry).child(button("clone-podcast-set", "Clone starter set", false, |s| {
+                    s.send(RoomCommand::CloneSet { id: "useful-information".into() });
+                }))
+            } else { entry });
         }
         if cards.is_empty() {
             status = "No sets match your search.".into();

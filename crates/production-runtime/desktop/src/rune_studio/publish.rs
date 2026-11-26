@@ -25,6 +25,7 @@ pub(super) struct Publish {
     schedule: TextEdit,
     scheduled: bool,
     pub(super) files: Vec<PathBuf>,
+    pasted_images: Vec<tempfile::NamedTempFile>,
     thumbnails: BTreeMap<PathBuf, Thumbnail>,
     avatars: BTreeMap<String, Thumbnail>,
     awaiting_default: bool,
@@ -80,6 +81,7 @@ fn thumbnail(path: &Path) -> Result<rune::Pixels> {
 
 impl Publish {
     pub(super) fn set_files(&mut self, files: Vec<PathBuf>) {
+        self.pasted_images.retain(|image| files.iter().any(|path| path == image.path()));
         self.thumbnails.retain(|path, _| files.contains(path));
         let mut pending = Vec::new();
         for path in &files {
@@ -993,6 +995,14 @@ fn append_media(existing: &[PathBuf], picked: Vec<PathBuf>) -> Result<Vec<PathBu
     Ok(files)
 }
 
+fn attach_paths(s: &mut Studio, paths: Vec<PathBuf>) {
+    if s.publish.working.is_some() { return; }
+    match append_media(&s.publish.files, paths) {
+        Ok(files) => { s.publish.set_files(files); s.publish.notice.clear(); }
+        Err(error) => s.publish.notice = error.to_string(),
+    }
+}
+
 fn composer_media(s: &Studio, mut b: El, wide: bool) -> El {
     let p = &s.publish;
     let busy = p.working.is_some();
@@ -1001,10 +1011,32 @@ fn composer_media(s: &Studio, mut b: El, wide: bool) -> El {
     });
     let limit = if threads { 500 } else { 2200 };
     let count = p.caption.text.chars().count();
+    b = b.on_drop_files(|s: &mut Studio, paths, _| attach_paths(s, paths.to_vec()));
     b = b.child(col().w_full().radius(7.).clip_rounded(7.)
         .border(1., color(theme::TRANSPORT_BORDER)).fill(color(SURFACE))
         .child(field("Post caption", &p.caption, |s| &mut s.publish.caption)
             .h(if wide && !p.files.is_empty() { 31. } else if wide { 46. } else { 68. })
+            .on_input_paste(|s: &mut Studio, content, _| {
+                if !content.files().is_empty() {
+                    attach_paths(s, content.files().to_vec());
+                    return true;
+                }
+                let Some(image) = content.image() else { return false };
+                let saved = (|| -> Result<_> {
+                    let mut file = tempfile::Builder::new().suffix(".png").tempfile()?;
+                    file.write_all(image.png())?;
+                    Ok(file)
+                })();
+                match saved {
+                    Ok(file) => {
+                        let path = file.path().to_owned();
+                        attach_paths(s, vec![path.clone()]);
+                        if s.publish.files.contains(&path) { s.publish.pasted_images.push(file); }
+                    }
+                    Err(error) => s.publish.notice = error.to_string(),
+                }
+                true
+            })
             .placeholder("Write a caption…", color(MUTED))
             .disabled(busy))
         .child(row().px(8.).py(3.).justify_end()

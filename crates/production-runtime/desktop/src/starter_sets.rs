@@ -33,7 +33,7 @@ const SPEAKER_RECEIPT: &str = "starter-sets-v2.installed";
 const CLASSIC_RECEIPT: &str = "starter-sets-v4.installed";
 const MFM_RECEIPT: &str = "starter-sets-v5.installed";
 const RUNDOWN_RECEIPT: &str = "starter-sets-v8.installed";
-const RECEIPT: &str = "starter-sets-v11.installed";
+const RECEIPT: &str = "starter-sets-v12.installed";
 const RETIRED: [&str; 4] = ["studio", "waves", "podcast", "podcast-studio"];
 const CLASSIC_SKYLINE_HASH: &str = "ab06936944a63d57755ab8f1cc3ee96abaa2ee7a7902efc4d64ae8bc329f4c46";
 const CLASSIC_SKYLINE: &[u8] = include_bytes!("../starter-sets/classic-skyline.png");
@@ -426,6 +426,10 @@ pub(crate) fn install(root: &Path) -> Result<()> {
         }
         install_mfm_rundown(&mut room, &assets)?;
     }
+    if !room.production.sets.contains_key("useful-information") {
+        let starter = serde_json::from_slice(include_bytes!("../starter-sets/useful-information.json"))?;
+        room.production.sets.insert("useful-information".into(), starter);
+    }
     repair_missing_show_inputs(&mut room)?;
     remove_library_sets(&mut room);
     upgrade_set_graphs(&mut room)?;
@@ -457,7 +461,7 @@ pub(crate) fn install(root: &Path) -> Result<()> {
     write_missing(&root.join(CLASSIC_RECEIPT), b"4\n")?;
     write_missing(&root.join(MFM_RECEIPT), b"5\n")?;
     write_missing(&root.join(RUNDOWN_RECEIPT), b"8\n")?;
-    write_missing(&root.join(RECEIPT), b"11\n")
+    write_missing(&root.join(RECEIPT), b"12\n")
 }
 #[cfg(test)]
 mod tests {

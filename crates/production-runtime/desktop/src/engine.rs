@@ -141,6 +141,7 @@ pub enum RoomCommand {
         #[serde(default)]
         layout: Option<SetLayoutPair>,
     },
+    CloneSet { id: String },
     SetBindSource { id: String, layout: SetLayoutPair, key: String, source: String },
     SetEditSave {
         id: String,
@@ -1099,6 +1100,14 @@ fn apply(
 ) -> Result<bool> {
     let mut changed = false;
     match command {
+        RoomCommand::CloneSet { id } => {
+            let template = state.project.production.sets.get(&id).context("Unknown set")?.clone();
+            let base = format!("{id}-copy");
+            let name = (1..).map(|i| if i == 1 { base.clone() } else { format!("{base}-{i}") })
+                .find(|key| !state.project.production.sets.contains_key(key)).unwrap();
+            state.project.production.sets.insert(name, template);
+            changed = true;
+        }
         c @ (RoomCommand::AddInput { .. } | RoomCommand::ConfigureInput { .. }) => {
             if state.recording || state.take.busy() {
                 bail!("Stop and finalize recording before changing device inputs");
