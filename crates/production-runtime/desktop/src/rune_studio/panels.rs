@@ -1223,8 +1223,12 @@ fn dock(
                     panel = panel.child(switcher);
                 }
             }
-            panel = panel.child(super::panel_frame::scroll_body(id,
-                panel_body(s, id, edge, if edge.side() { width } else { span })));
+            let body = panel_body(s, id, edge, if edge.side() { width } else { span });
+            panel = if id == PanelId::Controls && !edge.side() {
+                panel.child(body)
+            } else {
+                panel.child(super::panel_frame::scroll_body(id, body))
+            };
         }
         list = list.child(panel);
     }
@@ -1417,7 +1421,7 @@ pub(super) fn edit_set_button() -> El {
     tool("edit-set", "settings", "Edit set", false, super::editor::open).size(22., 22.)
 }
 
-fn set_controls_header(snap: &Snapshot, key: &str, pair: &crate::model::SetLayoutPair, on: bool, width: f32) -> El {
+fn set_controls_header(snap: &Snapshot, key: &str, pair: &crate::model::SetLayoutPair, on: bool, width: f32, shelf: bool) -> El {
     let project = &snap.project;
     let mut heading = row().items_center().gap(6.)
         .child(title(crate::model::set_label(key), 18., 650., TEXT).grow(1.));
@@ -1459,7 +1463,7 @@ fn set_controls_header(snap: &Snapshot, key: &str, pair: &crate::model::SetLayou
         .label(action_label).help(action_label).h(24.).px(6.).gap(4.).items_center().radius(5.)
         .fill(color(SURFACE)).hover_fill(color(theme::GRIP_HOVER))
         .child(glyph(if on { "back" } else { "studio" }, 12., MUTED));
-    if width >= 245. {
+    if shelf || width >= 245. {
         action = action.child(title(if on { "Studio scene" } else { "Take set" }, 10., 580., TEXT));
     }
     action = action.on_press(move |s: &mut Studio| {
@@ -1469,9 +1473,12 @@ fn set_controls_header(snap: &Snapshot, key: &str, pair: &crate::model::SetLayou
             layout: (!on).then(|| layouts.clone()),
         });
     });
-    let mut header = col().key("set-controls-header").min_w(0.).gap(5.)
-        .child(heading)
-        .child(row().items_center().flex_wrap().gap(4.).child(status).child(el().grow(1.)).child(action));
+    let mut header = col().key("set-controls-header").min_w(0.).gap(5.).child(heading);
+    header = if shelf {
+        header.child(status).child(action.self_start())
+    } else {
+        header.child(row().items_center().flex_wrap().gap(4.).child(status).child(el().grow(1.)).child(action))
+    };
 
     if !on {
         let output = match snap.program_kind.as_str() {
@@ -1504,23 +1511,33 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
             if let Some((selected, pair)) = super::editor::selection(s, p) {
                 let key = &selected;
                 let set = &p.production.sets[key];
+                let shelf = !edge.side();
+                // Allow compact shelves to pan across the three panes once their controls
+                // reach their minimum usable widths. Each pane scrolls vertically on its own.
+                let padding = if theme::orbital() { 16. } else { 12. };
+                let usable = (width - padding - 26.).max(0.); // two seams and four 6-point gaps
+                let extra = (usable - 485.).max(0.);
+                let overview_width = 150. + extra * 0.25;
+                let center_width = 205. + extra * 0.35;
+                let end_width = 130. + extra * 0.40;
                 let running = snap.program_kind == "show" && p.mounted_set.as_ref() == Some(key);
                 let pair = if running || (snap.active_host_shot.is_some() && p.mounted_set.as_ref() == Some(key)) { snap.program_layout.clone().unwrap_or(pair) } else { pair };
                 let on = running || (snap.program_kind == "set" && (l.handle.is_set_on_output(key, &pair, set) || (snap.active_host_shot.is_some() && p.mounted_set.as_ref() == Some(key))));
-                b = b.gap(8.).child(set_controls_header(snap, key, &pair, on, width));
-                for (id, show) in p.production.shows.iter().filter(|(_, show)| &show.set == key) {
-                    if let Some(transport) = show_controller(s, snap, id, show, set) {
-                        b = b.child(transport);
-                    }
-                }
+                let header = set_controls_header(snap, key, &pair, on, width, shelf);
+                let players: Vec<_> = p.production.shows.iter().filter(|(_, show)| &show.set == key)
+                    .filter_map(|(id, show)| show_controller(s, snap, id, show, set)).collect();
+                let has_show = !players.is_empty();
+                b = b.gap(8.);
                 let mut shot_header = row().items_center().gap(6.).child(title("Shots", 12., 640., TEXT).grow(1.));
                 if let Some((show, segment)) = p.playing_segment.clone().filter(|_| running && p.shot_override.is_some()) {
                     shot_header = shot_header.child(command("follow-show-layout", "Follow rundown", false,
                         RoomCommand::ShowLayout { show, segment, layout: None }));
                 }
-                b = b.child(shot_header);
-                let columns = ((width - 14.) / 128.).floor().clamp(1., 4.);
-                let shot_width = ((width - 20. - (columns - 1.) * 5.) / columns).clamp(76., 230.);
+                let shot_area = if shelf {
+                    if has_show { end_width } else { center_width }
+                } else { width - 20. };
+                let columns = ((shot_area + 5.) / 128.).floor().clamp(1., 4.);
+                let shot_width = ((shot_area - (columns - 1.) * 5.) / columns).clamp(76., 230.);
                 let mut layouts = row().flex_wrap().gap(5.);
                 let slots = super::editor::layout_slots(p, set, &pair);
                 for layout in p.set_layout_choices(key) {
@@ -1562,7 +1579,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                         },
                     ));
                 }
-                b = b.child(layouts);
+                let shots = col().min_w(0.).gap(6.).child(shot_header).child(layouts);
                 let missing: std::collections::BTreeSet<_> = slots.iter()
                     .map(|(_, id)| id.clone()).filter(|id| !slot_ready(snap, id)).collect();
                 for id in missing {
@@ -1631,7 +1648,8 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 }
                 if uses("frame.screenPan") {
                     let [x, y] = l.handle.screen_pan();
-                    let size = (width - 24.).clamp(84., 144.);
+                    let controls_width = if !shelf { width } else if has_show { overview_width } else { end_width };
+                    let size = (controls_width - 24.).clamp(84., 144.);
                     let marker = size * 0.21;
                     let mut pad = el()
                         .key("window-position")
@@ -1977,6 +1995,29 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                         );
                     }
                 }
+                if shelf {
+                    let pane = |key: &'static str, size: f32, content: El| {
+                        col().key(key).w(size).min_w(size).h_full().min_h(0.)
+                            .child(content.w_full()).scroll(Default::default())
+                    };
+                    let seam = || el().w(1.).h_full().fill(color(theme::SEAM));
+                    let mut columns = row().key("set-control-columns").w_full().h(0.).min_h(0.).grow(1.).gap(6.);
+                    if has_show {
+                        let rundown = players.into_iter().fold(col().gap(6.), |column, player| column.child(player));
+                        columns = columns
+                            .child(pane("set-overview-column", overview_width, col().gap(8.).child(header).child(b)))
+                            .child(seam()).child(pane("set-segments-column", center_width, rundown))
+                            .child(seam()).child(pane("set-shots-column", end_width, shots));
+                    } else {
+                        columns = columns
+                            .child(pane("set-overview-column", overview_width, header))
+                            .child(seam()).child(pane("set-shots-column", center_width, shots))
+                            .child(seam()).child(pane("set-settings-column", end_width, b));
+                    }
+                    return columns.scroll_x();
+                }
+                let stack = players.into_iter().fold(col().gap(8.).child(header), |column, player| column.child(player));
+                return stack.child(shots).child(b);
             } else {
                 b = b.child(title(
                     "No Sets in this studio",
