@@ -16,6 +16,7 @@ mod publish_options;
 mod publish_history;
 mod settings;
 mod set_library;
+mod set_sources;
 mod timeline;
 use crate::{
     engine::{self, Handle, RoomCommand, Snapshot},
@@ -326,7 +327,9 @@ struct Studio {
     expanded_rundown: Option<String>,
     folded_shots: std::collections::BTreeSet<String>,
     expanded_layout_controls: std::collections::BTreeSet<String>,
-    host_mic_settings: bool,
+    slot_picker: Option<set_sources::Picker>,
+    selected_show: Option<String>,
+    choose_show: bool,
     headline_notice: Option<(String, &'static str)>,
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     camera: crate::virtual_camera::Camera,
@@ -405,7 +408,9 @@ impl Studio {
             expanded_rundown: None,
             folded_shots: Default::default(),
             expanded_layout_controls: Default::default(),
-            host_mic_settings: false,
+            slot_picker: None,
+            selected_show: None,
+            choose_show: false,
             headline_notice: None,
             #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
             camera: Default::default(),
@@ -445,6 +450,9 @@ impl Studio {
                 self.studio_settings = None;
                 self.mixer_scrub = None;
                 self.set_selection = None;
+                self.slot_picker = None;
+                self.selected_show = None;
+                self.choose_show = false;
                 self.pending_link = None;
                 self.activity = false;
                 self.editing_docks = false;

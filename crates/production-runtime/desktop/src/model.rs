@@ -176,9 +176,9 @@ pub type MfmFraming = BTreeMap<String, [u16; 3]>;
 pub enum MfmSubject { Shaan, Sam, Screen }
 
 impl MfmSubject {
-    pub fn from_source(id: &str) -> Option<Self> {
-        match id { "camera" => Some(Self::Shaan), "camera-2" => Some(Self::Sam),
-            "screen" => Some(Self::Screen), _ => None }
+    pub fn from_slot(id: &str) -> Option<Self> {
+        match id { "shaan" => Some(Self::Shaan), "sam" => Some(Self::Sam),
+            "screen-share" => Some(Self::Screen), _ => None }
     }
     pub fn label(self) -> &'static str {
         match self { Self::Shaan => "Shaan", Self::Sam => "Sam", Self::Screen => "Screen share" }
@@ -192,6 +192,8 @@ pub struct RoomProject {
     pub mfm_direction: HostDirection,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub mfm_framing: MfmFraming,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub set_source_defaults: BTreeMap<String, BTreeMap<String, String>>,
     #[serde(default)]
     pub speaker_segments: BTreeMap<String, std::collections::BTreeSet<String>>,
     #[serde(default)]
@@ -247,7 +249,7 @@ impl RoomProject {
         let set = self.production.sets.get("my-first-million").context("My First Million is unavailable")?;
         anyhow::ensure!(pair.exists_in(set) && (100..=300).contains(&percent), "Invalid shot or zoom");
         fn has_subject(node: &Node, subject: MfmSubject) -> bool {
-            matches!(&node.content, Content::Source { source, .. } if MfmSubject::from_source(source) == Some(subject))
+            (matches!(&node.content, Content::Source { .. }) && MfmSubject::from_slot(&node.id) == Some(subject))
                 || node.children.iter().any(|child| has_subject(child, subject))
         }
         anyhow::ensure!(pair.ids().iter().any(|id| has_subject(&set.layouts[*id].root, subject)), "Source is absent from this shot");
@@ -542,6 +544,7 @@ impl RoomProject {
         Self {
             mfm_direction: HostDirection::default(),
             mfm_framing: Default::default(),
+            set_source_defaults: Default::default(),
             speaker_segments: BTreeMap::new(),
             untimed_segments: BTreeMap::new(),
             playing_segment: None,

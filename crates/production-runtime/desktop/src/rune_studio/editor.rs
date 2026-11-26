@@ -9,7 +9,7 @@ fn node_at_mut<'a>(set: &'a mut Set, layout: &str, path: &[usize]) -> Option<&'a
     Some(node)
 }
 
-fn control_label(id: &str) -> String {
+pub(super) fn control_label(id: &str) -> String {
     match id {
         "mov" => "Media".into(),
         "classic-title" => "On-screen title".into(),
@@ -171,33 +171,37 @@ impl Editor {
     fn text_changes(&mut self) {
         let layout = self.pair.ids()[self.output];
         let mut changed = false;
-        let mut classic_title = None;
+        // A field identifies the same authored copy in every shot and output.
+        // Unbound copy is shared only by matching nodes in the paired composition.
+        let mut edits = Vec::new();
+        let selected = &self.draft.layouts[layout];
         for f in &self.fields {
-            if let Some(Node {
-                id,
-                content: Content::Text { value, .. },
-                ..
-            }) = node_at_mut(&mut self.draft, layout, &f.path)
-            {
-                if value != &f.input.text {
-                    value.clone_from(&f.input.text);
-                    changed = true;
-                    if id == "classic-title" {
-                        classic_title = Some(value.clone());
-                    }
-                }
+            let mut node = &selected.root;
+            let mut path = vec![node.id.clone()];
+            for &index in &f.path {
+                node = &node.children[index];
+                path.push(node.id.clone());
+            }
+            if matches!(&node.content, Content::Text { value, .. } if value != &f.input.text) {
+                let field = node.style.as_ref().and_then(|s| s.text.as_ref()).and_then(|s| s.field.clone());
+                edits.push((path, field, f.input.text.clone()));
             }
         }
-        if let Some(title) = classic_title {
-            for layout in self.draft.layouts.values_mut() {
-                for node in &mut layout.root.children {
-                    if node.id == "classic-title" {
-                        if let Content::Text { value, .. } = &mut node.content {
-                            value.clone_from(&title);
-                        }
-                    }
+        fn update(node: &mut Node, path: Option<&[String]>, field: Option<&str>, value: &str) {
+            let path = path.and_then(|p| p.split_first()).and_then(|(id, rest)| (id == &node.id).then_some(rest));
+            let bound = node.style.as_ref().and_then(|s| s.text.as_ref()).and_then(|s| s.field.as_deref());
+            if (field.is_some() && field == bound) || (field.is_none() && path.is_some_and(|p| p.is_empty())) {
+                if let Content::Text { value: text, .. } = &mut node.content { value.clone_into(text); }
+            }
+            for child in &mut node.children { update(child, path, field, value); }
+        }
+        for (path, field, value) in edits {
+            for (id, output) in &mut self.draft.layouts {
+                if field.is_some() || self.pair.ids().contains(&id.as_str()) || path.last().is_some_and(|id| id == "classic-title") {
+                    update(&mut output.root, Some(&path), field.as_deref(), &value);
                 }
             }
+            changed = true;
         }
         if changed {
             self.changed();
@@ -394,9 +398,8 @@ pub(super) fn view(s: &Studio, width: f32, height: f32) -> El {
             }
         }).disabled(e.draft != e.saved || e.saving))
         .child(el().grow(1.));
-    let mounted = l.snapshot.program_kind == "set"
-        && p.mounted_set.as_ref() == Some(&e.id)
-        && p.output_layout_pair() == e.pair;
+    let mounted = matches!(l.snapshot.program_kind.as_str(), "set" | "show") && p.mounted_set.as_ref() == Some(&e.id)
+        && l.snapshot.program_layout.as_ref().unwrap_or(&p.output_layout_pair()) == &e.pair;
     if e.draft != e.saved {
         header = header.child(button("discard-set", "Discard edits", false, |s| {
             let e = s.editor.as_mut().unwrap();
@@ -407,12 +410,12 @@ pub(super) fn view(s: &Studio, width: f32, height: f32) -> El {
             }
         }));
     }
-    if e.ready && e.draft != e.saved {
+    if e.draft != e.saved {
         header = header.child(button("save-set", "Save set", true, |s| {
             if let (Some(l), Some(e)) = (&s.live, &mut s.editor) {
                 e.save(l.handle.clone());
             }
-        }));
+        }).disabled(!e.ready || e.saving));
     }
     header = header.child(title(
         if e.saving {
@@ -656,7 +659,7 @@ pub(super) fn view(s: &Studio, width: f32, height: f32) -> El {
                     .production
                     .sources
                     .keys()
-                    .filter(|key| key.as_str() != "rtc-guest")
+                    .filter(|key| key.as_str() != "rtc-guest" && super::set_sources::visual_source(p, key))
                     .map(String::as_str)
                     .chain(std::iter::once("rtc-guest"))
                 {
@@ -756,58 +759,6 @@ pub(super) fn view(s: &Studio, width: f32, height: f32) -> El {
         row().grow(1.).min_h(0.).child(center.grow(1.)).child(inspector_body.w(inspector))
     });
     modal_frame(width, height, mw, mh, progress, root)
-}
-
-pub(super) fn layout_slots(p: &crate::model::RoomProject, set: &Set, pair: &SetLayoutPair) -> Vec<(String, String)> {
-    fn collect(
-        node: &Node, p: &crate::model::RoomProject, stack: &mut Vec<String>, slots: &mut Vec<(String, String)>,
-    ) {
-        match &node.content {
-            Content::Source { source, .. } => {
-                let entry = (control_label(&node.id), source.clone());
-                if !slots.contains(&entry) {
-                    slots.push(entry);
-                }
-            }
-            Content::Component { definition, .. } if !stack.contains(definition) => {
-                if let Some(component) = p.production.components.get(definition) {
-                    stack.push(definition.clone());
-                    collect(&component.root, p, stack, slots);
-                    stack.pop();
-                }
-            }
-            _ => {}
-        }
-        for child in &node.children {
-            collect(child, p, stack, slots);
-        }
-    }
-    let mut slots = Vec::new();
-    for id in pair.ids() {
-        if let Some(layout) = set.layouts.get(id) {
-            collect(&layout.root, p, &mut Vec::new(), &mut slots);
-        }
-    }
-    slots
-}
-
-/// A template can identify a camera with an editable nameplate: a slot named
-/// "host" pairs with the text field on the "host-name" node in the same layout.
-pub(super) fn camera_nameplate<'a>(set: &'a Set, pair: &SetLayoutPair, source: &str) -> Option<&'a str> {
-    fn find<'a>(node: &'a Node, test: &impl Fn(&Node) -> bool) -> Option<&'a Node> {
-        if test(node) { return Some(node); }
-        node.children.iter().find_map(|child| find(child, test))
-    }
-    pair.ids().into_iter().find_map(|layout| {
-        let root = &set.layouts.get(layout)?.root;
-        let slot = find(root, &|node| matches!(&node.content, Content::Source { source: id, .. } if id == source))?;
-        let nameplate = format!("{}-name", slot.id);
-        let node = find(root, &|node| node.id == nameplate && node.style.as_ref()
-            .and_then(|style| style.text.as_ref()).is_some_and(|text| text.field.is_some()))?;
-        let Content::Text { value, .. } = &node.content else { return None };
-        let name = value.trim();
-        (!name.is_empty()).then_some(name)
-    })
 }
 
 pub(super) fn source_name(p: &crate::model::RoomProject, id: &str) -> String {

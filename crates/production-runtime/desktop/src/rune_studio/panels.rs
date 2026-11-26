@@ -528,6 +528,9 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
     if let Some((source, owner, anchor)) = &s.source {
         return completed.child(source_popout(s, source, ws.panels[owner].edge, anchor, w, h));
     }
+    if let Some(picker) = &s.slot_picker {
+        return completed.child(super::set_sources::popover(s, picker, ws.panels[&PanelId::Controls].edge, w, h));
+    }
     if let Some(sheet) = super::channels::sheet(s, w) {
         completed.child(sheet)
     } else if let Some(panel) = super::chat::popout(s, &ws) {
@@ -536,7 +539,7 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
         completed
     }
 }
-fn slot_ready(snap: &crate::engine::Snapshot, id: &str) -> bool {
+pub(super) fn slot_ready(snap: &crate::engine::Snapshot, id: &str) -> bool {
     use producer_production_contract::{Role, Source};
     let p = &snap.project;
     match p.production.sources.get(id) {
@@ -569,7 +572,7 @@ pub(super) fn dock_popover_side(edge: Edge) -> rune::Side {
         Edge::Right => rune::Side::Left,
     }
 }
-fn open_source(s: &mut Studio, source: &str, owner: PanelId, anchor: String) {
+pub(super) fn open_source(s: &mut Studio, source: &str, owner: PanelId, anchor: String) {
     s.camera_info = Default::default();
     s.source = Some((source.into(), owner, anchor));
     let Some(l) = &s.live else {
@@ -1368,31 +1371,11 @@ fn host_direction_settings(s: &Studio, snap: &Snapshot, show: &str, segment: &st
         .child(glyph("waveform", 15., MUTED))
         .child(title("Follow active speaker", 12., 600., TEXT).grow(1.))
         .child(command(format!("auto-host-shots-{show}-{segment}"), if enabled { "On" } else { "Off" }, enabled,
-            configure(!enabled, settings.clone())).help("Automatically follow Shaan and Sam during this segment"))
-        .child(tool("host-mic-settings", "settings", "Assign host microphones", s.host_mic_settings,
-            |s| s.host_mic_settings = !s.host_mic_settings).size(25.,25.)));
+            configure(!enabled, settings.clone())).help("Automatically follow Shaan and Sam during this segment")));
     let p = &snap.project;
-    if s.host_mic_settings {
-        let mut candidates: Vec<_> = p.inputs.iter().filter(|(_,b)| b.kind == "microphone")
-            .map(|(id,_)| id.clone()).collect();
-        candidates.extend(settings.microphones.iter().cloned());
-        candidates.extend(["microphone".to_owned(),"microphone-2".to_owned()]);
-        candidates.sort(); candidates.dedup();
-        for (i, name) in ["Shaan", "Sam"].iter().enumerate() {
-            let current = &settings.microphones[i];
-            let mut new = settings.clone();
-            let at = candidates.iter().position(|id| id == current).unwrap_or(0);
-            new.microphones[i] = candidates[(at+1)%candidates.len()].clone();
-            if new.microphones[0] == new.microphones[1] { new.microphones[1-i] = current.clone(); }
-            let mic = p.lanes.iter().find(|l| &l.source == current).map(|l| l.label.clone())
-                .unwrap_or_else(|| current.clone());
-            b = b.child(row().gap(5.).items_center().child(title(*name, 11., 560., MUTED).grow(1.))
-                .child(command(format!("host-mic-{i}"), mic, false, configure(enabled, new))
-                    .help("Cycle microphone assignment")));
-        }
-    }
-    if enabled && settings.microphones.iter().any(|id| id != "microphone" && !p.inputs.contains_key(id)) {
-        b = b.child(title("Add a second microphone in Sources.", 11., 520., MUTED));
+    let missing = settings.microphones.iter().any(|id| if id == "rtc-guest" { !snap.guest_audio_received } else { !slot_ready(snap,id) });
+    if enabled && missing {
+        b = b.child(title("Assign both host microphones in Sources.", 11., 520., MUTED));
     } else if enabled && settings.microphones.iter().any(|id| p.lanes.iter().find(|l| &l.source == id).is_some_and(|l| l.muted || l.gain <= 0.)) {
         b = b.child(title("Unmute the host microphones in Mixer.", 11., 520., MUTED));
     }
@@ -1526,8 +1509,28 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 let pair = if running || (snap.active_host_shot.is_some() && p.mounted_set.as_ref() == Some(key)) { snap.program_layout.clone().unwrap_or(pair) } else { pair };
                 let on = running || (snap.program_kind == "set" && (l.handle.is_set_on_output(key, &pair, set) || (snap.active_host_shot.is_some() && p.mounted_set.as_ref() == Some(key))));
                 let header = set_controls_header(snap, key, &pair, on, width, shelf);
-                let players: Vec<_> = p.production.shows.iter().filter(|(_, show)| &show.set == key)
-                    .filter_map(|(id, show)| show_controller(s, snap, id, show, set)).collect();
+                let shows: Vec<_> = p.production.shows.iter().filter(|(_, show)| &show.set == key).collect();
+                let active = p.playing_segment.as_ref().filter(|_| running).map(|(show,_)| show);
+                let choice = [active, s.selected_show.as_ref(), Some(key)].into_iter().flatten()
+                    .find_map(|id| shows.iter().find(|(k,_)| *k == id)).or(shows.first());
+                let mut players = Vec::new();
+                if let Some((id, show)) = choice.copied() {
+                    if let Some(player) = show_controller(s,snap,id,show,set) {
+                        let mut pane = col().gap(4.);
+                        if shows.len() > 1 {
+                            pane = pane.child(button("choose-set-show", format!("Show · {}",crate::model::set_label(id)),false,
+                                |s| s.choose_show = !s.choose_show).disabled(running));
+                            if s.choose_show && !running {
+                                for (option,_) in &shows {
+                                    let value = (*option).clone();
+                                    pane = pane.child(button(format!("select-show-{option}"),crate::model::set_label(option),option == &id,
+                                        move |s| { s.selected_show=Some(value.clone()); s.choose_show=false; }));
+                                }
+                            }
+                        }
+                        players.push(pane.child(player));
+                    }
+                }
                 let has_show = !players.is_empty();
                 b = b.gap(8.);
                 let shots_open = !s.folded_shots.contains(key);
@@ -1551,7 +1554,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 let columns = ((shot_area + 5.) / 128.).floor().clamp(1., 4.);
                 let shot_width = ((shot_area - (columns - 1.) * 5.) / columns).clamp(76., 230.);
                 let mut layouts = row().flex_wrap().gap(5.);
-                let slots = super::editor::layout_slots(p, set, &pair);
+                let slots = crate::set_slots::for_pair(p, set, &pair);
                 for layout in choices.into_iter().filter(|_| shots_open) {
                     let k = key.clone();
                     let scene = p.active_scene.clone();
@@ -1559,8 +1562,8 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                     let show_segment = p.playing_segment.clone().filter(|_| running);
                     let active = chosen == pair;
                     let snap_directed = snap.active_host_shot.is_some();
-                    let ready = super::editor::layout_slots(p, set, &chosen)
-                        .iter().all(|(_, id)| slot_ready(snap, id));
+                    let ready = crate::set_slots::for_pair(p, set, &chosen)
+                        .iter().all(|slot| slot_ready(snap, &slot.source));
                     let label = format!("{} · {}", layout.label, if ready { "Ready" } else { "Needs source" });
                     let label_text = if key == "my-first-million" && chosen.landscape == "landscape" { "Two hosts".into() } else { layout.label };
                     let thumbnail = s.set_library.shot_image(key, set, &chosen.landscape, 40., 23.);
@@ -1592,50 +1595,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                     ));
                 }
                 if shots_open { shots = shots.child(layouts); }
-                let missing: std::collections::BTreeSet<_> = slots.iter()
-                    .map(|(_, id)| id.clone()).filter(|id| !slot_ready(snap, id)).collect();
-                for id in missing {
-                    use producer_production_contract::{Role, Source};
-                    let repair_key = format!("configure-slot-{id}");
-                    let action = match p.production.sources.get(&id) {
-                        Some(Source::Live { role: Role::Screen }) => button(repair_key.clone(), "Share a screen…", false,
-                            move |s| open_source(s, &id, PanelId::Controls, repair_key.clone())),
-                        Some(Source::Live { role: Role::Guest }) if p.rtc_video_slot().is_none() =>
-                            title("Remove an extra camera in Sources to make space for guest video.", 11., 500., MUTED),
-                        Some(Source::Live { role: Role::Guest }) => {
-                            let copying = s.people.copying_invitation();
-                            let mut invitation = col().gap(4.).child(button(
-                                repair_key.clone(), if copying { "Copying invitation…" } else { "Invite a guest…" }, false,
-                                move |s| copy_link(s, crate::room_share::LinkKind::Guest, Some(PanelId::Controls), &repair_key))
-                                .disabled(s.people.busy()));
-                            if let Some(feedback) = s.people.invitation_feedback(&snap.producer_rtc) {
-                                invitation = invitation.child(feedback);
-                            }
-                            invitation
-                        }
-                        Some(Source::Live { role: Role::HostCamera | Role::Microphone }) => {
-                            let nameplate = if source_kind(p, &id) == "camera" {
-                                super::editor::camera_nameplate(set, &pair, &id)
-                            } else {
-                                None
-                            };
-                            let label = nameplate.map_or_else(
-                                || format!("Connect {}", super::editor::source_name(p, &id)),
-                                |name| format!("Connect {name}’s camera"),
-                            );
-                            if id == "camera" || id == "microphone" {
-                                command(repair_key, label, false, RoomCommand::Capture {
-                                    camera: id == "camera", mic: id == "microphone", screen: false,
-                                })
-                            } else {
-                                button(repair_key.clone(), label, false, move |s| open_source(s, &id, PanelId::Controls, repair_key.clone()))
-                            }
-                        }
-                        _ => button(repair_key.clone(), "Choose media…", false, move |s| open_source(s, &id, PanelId::Controls, repair_key.clone())),
-                    };
-                    b = b.child(action);
-                }
-                let mut sources = b;
+                let sources = super::set_sources::rows(s,key,&pair,&slots);
                 let mut b = col().gap(5.);
                 let uses = |uniform: &str| {
                     on && pair.ids().iter().any(|id|set.output_graphs.get(*id).and_then(|g|set.graphs.get(g)).is_some_and(|g|g.passes.iter().any(|pass|matches!(pass,producer_production_contract::GraphPass::Fragment{shader,..} if shader.contains(uniform)))))
@@ -2003,7 +1963,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                         use crate::model::MfmSubject;
                         let framing = p.mfm_framing.get(&pair.landscape).copied().unwrap_or([100; 3]);
                         for subject in [MfmSubject::Shaan, MfmSubject::Sam, MfmSubject::Screen] {
-                            if slots.iter().any(|(_, id)| MfmSubject::from_source(id) == Some(subject)) {
+                            if slots.iter().any(|slot| MfmSubject::from_slot(&slot.name) == Some(subject)) {
                                 b = b.child(mfm_zoom_control(&pair, subject, framing[subject as usize]));
                             }
                         }
@@ -2014,23 +1974,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                             if layout_open { s.expanded_layout_controls.remove(&owner); } else { s.expanded_layout_controls.insert(owner.clone()); }
                         }));
                     if layout_open { sections = sections.child(b); }
-                    shots = sections.child(el().w_full().h(1.).fill(color(theme::SEAM))).child(shots);
-                }
-                if !slots.is_empty() {
-                    sources = sources
-                        .child(el().h(1.).w_full().fill(color(0x263443)))
-                        .child(title("Sources", 12., 600., TEXT));
-                    for (slot, src) in slots {
-                        let name = super::editor::source_name(p, &src);
-                        sources = sources.child(
-                            row()
-                                .items_center()
-                                .gap(6.)
-                                .child(title(slot, 12., 500., TEXT))
-                                .child(el().grow(1.))
-                                .child(title(name, 12., 500., MUTED)),
-                        );
-                    }
+                    shots = shots.child(el().w_full().h(1.).fill(color(theme::SEAM))).child(sections);
                 }
                 if shelf {
                     let pane = |key: &'static str, size: f32, content: El| {
@@ -3108,6 +3052,7 @@ pub(super) fn layout_key(s: &mut Studio, event: &rune::KeyEvent, _: &mut rune::T
         s.source = None;
         return true;
     }
+    if s.slot_picker.is_some() && matches!(event.key, rune::Key::Escape) { s.slot_picker=None; return true; }
     if s.show_chat && matches!(event.key, rune::Key::Escape) {
         super::chat::close_popout(s);
         return true;

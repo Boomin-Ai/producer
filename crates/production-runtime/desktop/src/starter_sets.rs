@@ -32,7 +32,8 @@ const LEGACY_RECEIPT: &str = "starter-sets-v1.installed";
 const SPEAKER_RECEIPT: &str = "starter-sets-v2.installed";
 const CLASSIC_RECEIPT: &str = "starter-sets-v4.installed";
 const MFM_RECEIPT: &str = "starter-sets-v5.installed";
-const RECEIPT: &str = "starter-sets-v8.installed";
+const RUNDOWN_RECEIPT: &str = "starter-sets-v8.installed";
+const RECEIPT: &str = "starter-sets-v9.installed";
 const RETIRED: [&str; 4] = ["studio", "waves", "podcast", "podcast-studio"];
 const CLASSIC_SKYLINE_HASH: &str = "ab06936944a63d57755ab8f1cc3ee96abaa2ee7a7902efc4d64ae8bc329f4c46";
 const CLASSIC_SKYLINE: &[u8] = include_bytes!("../starter-sets/classic-skyline.png");
@@ -248,6 +249,26 @@ fn install_mfm_rundown(room: &mut RoomProject, assets: &Path) -> Result<()> {
     Ok(())
 }
 
+fn upgrade_set_graphs(room: &mut RoomProject) -> Result<()> {
+    use producer_production_contract::{GraphInput, GraphPass};
+    for set in room.production.sets.values_mut() {
+        if set.layouts.keys().any(|id| !set.output_graphs.contains_key(id)) {
+            *set = set.clone().with_output_graphs();
+        }
+    }
+    let Some(set) = room.production.sets.get_mut("meridian-avenue") else { return Ok(()) };
+    if !set.layouts.values().all(|l| l.root.children.iter().any(|n| n.id == "caption")) { return Ok(()); }
+    let Some(GraphPass::Fragment {shader, inputs, ..}) = set.graphs.get_mut("city").and_then(|g| g.passes.last_mut()) else { return Ok(()) };
+    if inputs.len() == 2 && format!("{:x}", Sha256::digest(shader.as_bytes())) == "c0edab53ef0a3900e65839c7b612fe8500a9cc3b672208a89e331a8e97b29164" {
+        let catalog: Catalog = serde_json::from_slice(include_bytes!("../starter-sets/catalog.json"))?;
+        if let Some(GraphPass::Fragment {shader: updated, ..}) = catalog.sets["meridian-avenue"].graphs["city"].passes.last() {
+            shader.clone_from(updated);
+            inputs.push(GraphInput::Layers {nodes:vec!["caption".into()]});
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn install(root: &Path) -> Result<()> {
     if root.join(RECEIPT).is_file() {
         return Ok(());
@@ -303,12 +324,15 @@ pub(crate) fn install(root: &Path) -> Result<()> {
     }
     let assets = root.join("assets");
     fs::create_dir_all(&assets)?;
-    if root.join(MFM_RECEIPT).is_file() {
-        add_mfm_focus_shots(&mut room)?;
-    } else {
-        install_my_first_million(&mut room, &assets)?;
+    if !root.join(RUNDOWN_RECEIPT).is_file() {
+        if root.join(MFM_RECEIPT).is_file() {
+            add_mfm_focus_shots(&mut room)?;
+        } else {
+            install_my_first_million(&mut room, &assets)?;
+        }
+        install_mfm_rundown(&mut room, &assets)?;
     }
-    install_mfm_rundown(&mut room, &assets)?;
+    upgrade_set_graphs(&mut room)?;
     room.compile()?;
     ensure!(format!("{:x}", Sha256::digest(CLASSIC_SKYLINE)) == CLASSIC_SKYLINE_HASH, "Invalid Classic skyline");
     write_missing(&assets.join(format!("{CLASSIC_SKYLINE_HASH}.png")), CLASSIC_SKYLINE)?;
@@ -336,7 +360,8 @@ pub(crate) fn install(root: &Path) -> Result<()> {
     write_missing(&root.join(SPEAKER_RECEIPT), b"2\n")?;
     write_missing(&root.join(CLASSIC_RECEIPT), b"4\n")?;
     write_missing(&root.join(MFM_RECEIPT), b"5\n")?;
-    write_missing(&root.join(RECEIPT), b"8\n")
+    write_missing(&root.join(RUNDOWN_RECEIPT), b"8\n")?;
+    write_missing(&root.join(RECEIPT), b"9\n")
 }
 #[cfg(test)]
 mod tests {

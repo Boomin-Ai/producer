@@ -44,6 +44,7 @@ mod clips_media;
 mod engine;
 mod ipc;
 mod model;
+mod set_slots;
 mod platform;
 mod presentation;
 mod recording;

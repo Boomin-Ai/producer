@@ -1937,13 +1937,41 @@ fn control(
                             if state.project.production.sets.get(id) != Some(expected) {
                                 bail!("This set changed while you were editing. Reopen it to use the current version.");
                             }
-                            let next = set_edit_project(&state.project, id, draft)?;
+                            let mut next = set_edit_project(&state.project, id, draft)?;
+                            let previous = crate::set_slots::bindings(expected);
+                            let revised = crate::set_slots::bindings(draft);
+                            let defaults = next.set_source_defaults.entry(id.clone()).or_default();
+                            for (slot, source) in previous {
+                                if revised.get(&slot).is_some_and(|new| new != &source) {
+                                    defaults.entry(slot).or_insert(source);
+                                }
+                            }
+                            defaults.retain(|slot, default| revised.get(slot).is_some_and(|source| source != default));
+                            if defaults.is_empty() { next.set_source_defaults.remove(id); }
                             let mut live = next.clone();
                             live.mount_set(Some(id.clone()), layout.clone())?;
                             let live = live.live_set()?;
                             let plan = live.compile()?;
                             set_edit_cache.prepare(&live, &plan)?;
+                            // Publish the current program composition, including its running show and
+                            // shot override. The layout inspected in the editor can be a different shot.
+                            let active = matches!(state.program_kind.as_str(), "set" | "show")
+                                && state.project.mounted_set.as_ref() == Some(id);
+                            let revision = state.program_revision + 1;
+                            let change = if active {
+                                let program = next.live_set()?;
+                                let plan = program.compile()?;
+                                let visuals = visual_cache.prepare(&program, &plan)?;
+                                Some(RenderOp::Layout { project: Arc::new(program), plan, visuals, revision })
+                            } else { None };
                             persist(&root, &next)?;
+                            if let Some(change) = change {
+                                if let Err(error) = render.request(change) {
+                                    persist(&root, &state.project)?;
+                                    return Err(error);
+                                }
+                                state.program_revision = revision;
+                            }
                             state.project = next;
                             state.revision += 1;
                             state.assistant_context = state.project.assistant_context();
@@ -1953,6 +1981,9 @@ fn control(
                     }
                     Ok(slots)
                 })();
+                if let Err(error) = &result {
+                    if envelope.reply.is_none() { state.error = Some(error.to_string()); *handle.snapshot.lock().unwrap() = state.clone(); }
+                }
                 if let Some(tx) = envelope.reply {
                     let _ = tx.try_send(match result {
                         Ok(slots) => serde_json::json!({"ok": true, "programRevision": state.program_revision, "slots": slots}),
@@ -2139,7 +2170,7 @@ fn control(
                             let production_show = state.project.production.shows.get(show).context("Show unavailable")?;
                             anyhow::ensure!(production_show.set == "my-first-million" && production_show.segments.iter().any(|s| &s.id == segment), "Segment unavailable");
                             anyhow::ensure!(settings.microphones[0] != settings.microphones[1] &&
-                                settings.microphones.iter().all(|id| id == "microphone" || id == "microphone-2" ||
+                                settings.microphones.iter().all(|id| id == "microphone" || id == "microphone-2" || id == "rtc-guest" ||
                                 state.project.inputs.get(id).is_some_and(|input| input.kind == "microphone")),
                                 "Choose a separate microphone source for each host");
                             let mut next = state.project.clone();
@@ -3088,7 +3119,7 @@ fn render_loop(
         }
         let wanted = ((host - origin - 0.04).max(0.) * 48000.) as i64;
         let eligible = !preview && visuals.host_shots.iter().all(Option::is_some)
-            && project.mfm_direction.microphones.iter().all(|id| id == "microphone" || inputs.contains_key(id));
+            && project.mfm_direction.microphones.iter().all(|id| id == "microphone" || (id == "rtc-guest" && guest.is_some()) || inputs.contains_key(id));
         let direct = eligible && state.playing;
         let current_director = eligible.then_some(revision);
         if director_revision != current_director {
@@ -3159,7 +3190,6 @@ fn render_loop(
                 }
                 mix_metered_channel(&mut pcm, &movie_pcm, gain, input_peaks.get_mut(source).unwrap());
             }
-            if direct { director.observe(voices); }
             let host_level = if measure_speakers && guest.is_some() {
                 crate::speaker_split::rms(&pcm)
             } else {
@@ -3201,7 +3231,19 @@ fn render_loop(
             }
             let mic_peak = native.shared.mic_peak.load(Ordering::Relaxed) as f32 / 1000. * gain;
             handle.studio_audio.mix(&mut pcm, mic_peak);
-            let guest_level = guest.as_ref().map(|input| input.mix(&mut pcm, measure_speakers));
+            let guest_host = direct.then(|| microphones.iter().position(|id| id == "rtc-guest")).flatten();
+            let guest_level = guest.as_ref().map(|input| {
+                if let Some(index) = guest_host {
+                    movie_pcm.fill(0.);
+                    let level = input.mix(&mut movie_pcm, measure_speakers);
+                    voices[index] = director.input(index, &movie_pcm, 1.);
+                    for (mixed, sample) in pcm.iter_mut().zip(movie_pcm.iter()) {
+                        *mixed = (*mixed + sample).clamp(-1., 1.);
+                    }
+                    level
+                } else { input.mix(&mut pcm, measure_speakers) }
+            });
+            if direct { director.observe(voices); }
             if measure_speakers {
                 speaker_focus.observe(host_level, guest_level);
             }

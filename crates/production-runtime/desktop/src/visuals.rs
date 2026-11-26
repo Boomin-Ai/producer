@@ -428,7 +428,7 @@ impl Visuals {
                 }
                 let framing_subject = if project.scene == "my-first-million" {
                     use crate::model::MfmSubject;
-                    n.source.as_deref().and_then(MfmSubject::from_source).or_else(|| {
+                    n.source.as_ref().and_then(|_| MfmSubject::from_slot(key.rsplit('/').next()?)).or_else(|| {
                         match n.style.as_ref()?.fill.as_ref()? {
                             Paint::Image { asset, .. } if asset == "my-first-million-shaan" => Some(MfmSubject::Shaan),
                             Paint::Image { asset, .. } if asset == "my-first-million-sam" => Some(MfmSubject::Sam),
