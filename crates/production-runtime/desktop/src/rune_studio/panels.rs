@@ -1338,8 +1338,11 @@ fn show_controller(s: &Studio, snap: &Snapshot, show_id: &str,
         .child(el().min_w(0.).grow(1.))
         .child(col().gap(1.).child(title("Show time", 9., 550., MUTED))
             .child(title(show_clock(if active { snap.show_elapsed } else { 0. }), 11., 650., TEXT)));
-    let player = col().gap(7.).px(7.).py(6.).min_w(0.).radius(6.)
+    let mut player = col().gap(7.).px(7.).py(6.).min_w(0.).radius(6.)
         .fill(color(theme::TOOL)).child(summary).child(timing).child(transport);
+    if show.set == "my-first-million" {
+        player = player.child(host_direction_settings(s, snap, show_id, &current.id));
+    }
     let mut panel = col().gap(3.).py(4.).min_w(0.).radius(8.)
         .border(1., color(theme::SLIDER_RAIL_COMPACT)).fill(color(SURFACE)).px(4.).child(header).child(player);
     if expanded {
@@ -1367,15 +1370,15 @@ fn show_controller(s: &Studio, snap: &Snapshot, show_id: &str,
     }
     Some(panel)
 }
-fn host_direction_settings(s: &Studio, snap: &Snapshot) -> El {
+fn host_direction_settings(s: &Studio, snap: &Snapshot, show: &str, segment: &str) -> El {
     let settings = &snap.project.mfm_direction;
-    let mut next = settings.clone();
-    next.enabled = !next.enabled;
+    let enabled = snap.project.speaker_segments.get(show).is_some_and(|ids| ids.contains(segment));
+    let configure = |enabled, settings| RoomCommand::MfmDirection { show: show.into(), segment: segment.into(), enabled, settings };
     let mut b = col().gap(4.).child(row().gap(4.).items_center()
         .child(glyph("waveform", 15., MUTED))
         .child(title("Follow active speaker", 12., 600., TEXT).grow(1.))
-        .child(command("auto-host-shots", if settings.enabled { "On" } else { "Off" }, settings.enabled,
-            RoomCommand::MfmDirection { settings: next }).help("Cut between Shaan and Sam in the two-host shot"))
+        .child(command(format!("auto-host-shots-{show}-{segment}"), if enabled { "On" } else { "Off" }, enabled,
+            configure(!enabled, settings.clone())).help("Automatically follow Shaan and Sam during this segment"))
         .child(tool("host-mic-settings", "settings", "Assign host microphones", s.host_mic_settings,
             |s| s.host_mic_settings = !s.host_mic_settings).size(25.,25.)));
     let p = &snap.project;
@@ -1394,13 +1397,13 @@ fn host_direction_settings(s: &Studio, snap: &Snapshot) -> El {
             let mic = p.lanes.iter().find(|l| &l.source == current).map(|l| l.label.clone())
                 .unwrap_or_else(|| current.clone());
             b = b.child(row().gap(5.).items_center().child(title(*name, 11., 560., MUTED).grow(1.))
-                .child(command(format!("host-mic-{i}"), mic, false, RoomCommand::MfmDirection {settings:new})
+                .child(command(format!("host-mic-{i}"), mic, false, configure(enabled, new))
                     .help("Cycle microphone assignment")));
         }
     }
-    if settings.enabled && settings.microphones.iter().any(|id| id != "microphone" && !p.inputs.contains_key(id)) {
+    if enabled && settings.microphones.iter().any(|id| id != "microphone" && !p.inputs.contains_key(id)) {
         b = b.child(title("Add a second microphone in Sources.", 11., 520., MUTED));
-    } else if settings.enabled && settings.microphones.iter().any(|id| p.lanes.iter().find(|l| &l.source == id).is_some_and(|l| l.muted || l.gain <= 0.)) {
+    } else if enabled && settings.microphones.iter().any(|id| p.lanes.iter().find(|l| &l.source == id).is_some_and(|l| l.muted || l.gain <= 0.)) {
         b = b.child(title("Unmute the host microphones in Mixer.", 11., 520., MUTED));
     }
     b
@@ -1503,7 +1506,6 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                         b = b.child(transport);
                     }
                 }
-                if key == "my-first-million" { b = b.child(host_direction_settings(s, snap)); }
                 let mut shot_header = row().items_center().gap(6.).child(title("Shots", 12., 640., TEXT).grow(1.));
                 if let Some((show, segment)) = p.playing_segment.clone().filter(|_| running && p.shot_override.is_some()) {
                     shot_header = shot_header.child(command("follow-show-layout", "Follow rundown", false,

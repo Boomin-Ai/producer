@@ -160,12 +160,11 @@ impl std::ops::DerefMut for ProductionDocument {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default, deny_unknown_fields, rename_all = "camelCase")]
 pub struct HostDirection {
-    pub enabled: bool,
     pub microphones: [String; 2],
 }
 impl Default for HostDirection {
     fn default() -> Self {
-        Self { enabled: false, microphones: ["microphone".into(), "microphone-2".into()] }
+        Self { microphones: ["microphone".into(), "microphone-2".into()] }
     }
 }
 
@@ -174,6 +173,8 @@ impl Default for HostDirection {
 pub struct RoomProject {
     #[serde(default)]
     pub mfm_direction: HostDirection,
+    #[serde(default)]
+    pub speaker_segments: BTreeMap<String, std::collections::BTreeSet<String>>,
     #[serde(default)]
     pub untimed_segments: BTreeMap<String, std::collections::BTreeSet<String>>,
     /// Program selection belongs to this running harness. Reopening a studio
@@ -501,6 +502,7 @@ impl RoomProject {
         );
         Self {
             mfm_direction: HostDirection::default(),
+            speaker_segments: BTreeMap::new(),
             untimed_segments: BTreeMap::new(),
             playing_segment: None,
             shot_override: None,
@@ -827,10 +829,13 @@ impl RoomProject {
         self.production.sequences.get(segment.sequence.as_ref()?).map(|seq| seq.duration.as_f64())
     }
 
-    // Editorial shots (screen, guest, opener and CTA) have priority over the two-host camera director.
+    // The director has authority only during the exact opted-in show occurrence.
+    // A manual shot takes precedence until the operator returns to the rundown.
     pub fn supports_host_shots(&self) -> bool {
         self.scene == "my-first-million" && self.mounted_set.as_deref() == Some("my-first-million")
-            && self.shot_override.is_none() && self.mounted_layout.as_ref().is_some_and(|pair| pair == &SetLayoutPair::default())
+            && self.rendering_show && self.shot_override.is_none()
+            && self.playing_segment.as_ref().is_some_and(|(show, segment)|
+                self.speaker_segments.get(show).is_some_and(|ids| ids.contains(segment)))
     }
 
     pub fn enter_segment(&mut self, show_id: &str, segment_id: &str) -> Result<()> {

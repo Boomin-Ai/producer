@@ -37,7 +37,7 @@ impl VisualCache {
 
     fn prepare_layout(&mut self, project: &RoomProject, plan: &Plan, follow_segment: bool) -> Result<Arc<Visuals>> {
         let pair = project.output_layout_pair();
-        let host_shots = follow_segment && project.mfm_direction.enabled && project.supports_host_shots();
+        let host_shots = follow_segment && project.supports_host_shots();
         let schedule = if follow_segment && project.rendering_show && project.shot_override.is_none() {
             project.active_segment()?.filter(|s| !s.layout_changes.is_empty())
         } else { None };

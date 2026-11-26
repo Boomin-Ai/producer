@@ -60,7 +60,7 @@ pub enum RoomCommand {
     GrantPermission { permission:String, #[serde(rename="permissionEpoch")] permission_epoch:u64 },
     RunSegment { show: String, segment: String, #[serde(default)] paused: bool, #[serde(default)] restart: bool },
     SegmentTiming { show: String, segment: String, timed: bool },
-    MfmDirection { settings: crate::model::HostDirection },
+    MfmDirection { show: String, segment: String, enabled: bool, settings: crate::model::HostDirection },
     ShowPlayback { show: String, segment: String, playing: bool },
     ShowLayout { show: String, segment: String, layout: Option<SetLayoutPair> },
     SceneAdd,
@@ -2129,15 +2129,20 @@ fn control(
                             state.program_revision = revision;
                             persist(&root, &state.project)?;
                         }
-                        RoomCommand::MfmDirection { settings } => {
-                            anyhow::ensure!(state.project.production.sets.contains_key("my-first-million"), "Set unavailable");
+                        RoomCommand::MfmDirection { show, segment, enabled, settings } => {
+                            let production_show = state.project.production.shows.get(show).context("Show unavailable")?;
+                            anyhow::ensure!(production_show.set == "my-first-million" && production_show.segments.iter().any(|s| &s.id == segment), "Segment unavailable");
                             anyhow::ensure!(settings.microphones[0] != settings.microphones[1] &&
                                 settings.microphones.iter().all(|id| id == "microphone" || id == "microphone-2" ||
                                 state.project.inputs.get(id).is_some_and(|input| input.kind == "microphone")),
                                 "Choose a separate microphone source for each host");
                             let mut next = state.project.clone();
+                            let remapped = next.mfm_direction != *settings;
                             next.mfm_direction = settings.clone();
-                            if matches!(state.program_kind.as_str(),"set"|"show") && next.mounted_set.as_deref() == Some("my-first-million") {
+                            let opted_in = next.speaker_segments.entry(show.clone()).or_default();
+                            if *enabled { opted_in.insert(segment.clone()); } else { opted_in.remove(segment); }
+                            if state.program_kind == "show" && next.mounted_set.as_deref() == Some("my-first-million")
+                                && (remapped || next.playing_segment.as_ref().is_some_and(|(id, part)| id == show && part == segment)) {
                                 let revision = state.program_revision + 1;
                                 render.switch_layout(next.live_set()?, revision, &mut visual_cache, &root)?;
                                 state.program_revision = revision;
