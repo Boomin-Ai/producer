@@ -90,6 +90,40 @@ fn main_result() -> Result<Option<serde_json::Value>> {
             .ok_or_else(|| error("USAGE", "missing argument"))
     };
     let v=match arg(0)? {
+        "bundle-run" => {
+            let bundle = producer_interchange::OpenBundle::open(Path::new(arg(1)?))?;
+            let device = ingress::parse(&read(arg(2)?, COMMAND_BYTES)?, COMMAND_BYTES)?;
+            let device = serde_json::from_value(device).map_err(|e|error("DEVICE",e.to_string()))?;
+            let plan = bundle.plan(&device)?;
+            let events = ingress::parse_envelope(arg(4)?.as_bytes(),COMMAND_BYTES)?;
+            let events = serde_json::from_value(events).map_err(|e|error("STRUCTURE",e.to_string()))?;
+            let transport = simulate(&bundle.document,arg(3)?,false,events)?;
+            serde_json::json!({"plan":plan,"transport":transport})
+        }
+        "bundle-edit" => {
+            let bundle = producer_interchange::OpenBundle::open(Path::new(arg(1)?))?;
+            if bundle.revision != arg(2)? {return Err(error("STALE_REVISION","edit base differs from current manifest"));}
+            let cmd = ingress::parse_envelope(&read(arg(3)?,COMMAND_BYTES)?,COMMAND_BYTES)?;
+            let cmd = serde_json::from_value(cmd).map_err(|e|error("COMMAND",e.to_string()))?;
+            let document = commands::apply(&bundle.document,&cmd)?;
+            validate_document(&document)?;
+            serde_json::to_value(document).map_err(|e|error("DOCUMENT",e.to_string()))?
+        }
+        "bundle-schema" => producer_interchange::schema(),
+        "bundle-check" | "bundle-plan" | "bundle-sheet" => {
+            let bundle = producer_interchange::OpenBundle::open(Path::new(arg(1)?))?;
+            match a[0].as_str() {
+                "bundle-plan" => {
+                    let device = ingress::parse(&read(arg(2)?, COMMAND_BYTES)?, COMMAND_BYTES)?;
+                    let device = serde_json::from_value(device).map_err(|e|error("DEVICE",e.to_string()))?;
+                    bundle.plan(&device)?
+                }
+                "bundle-sheet" => bundle.sheet(arg(2)?)?,
+                _ => serde_json::json!({"production":bundle.manifest.production,"revision":bundle.revision,
+                    "workSha256":bundle.work_sha256,"author":bundle.manifest.actors[&bundle.manifest.author].identity,
+                    "parent":bundle.manifest.parent,"authoredAt":bundle.manifest.authored_at}),
+            }
+        }
         "schema"=>schema(),"command-schema"=>commands::schema(),"tool-schema"=>serde_json::to_value(schemars::schema_for!(Request)).unwrap(),
         "fixture"=>serde_json::to_value(fixture::classic_like()).unwrap(),
         "nested-fixture"=>serde_json::to_value(fixture::nested_timeline()).unwrap(),
@@ -102,7 +136,7 @@ fn main_result() -> Result<Option<serde_json::Value>> {
         "simulate"=>{let d=parse_document(&read(arg(1)?,DOCUMENT_BYTES)?)?;let events=serde_json::from_value::<Vec<TimelineEvent>>(ingress::parse_envelope(arg(3)?.as_bytes(),COMMAND_BYTES)?).map_err(|e|error("STRUCTURE",e.to_string()))?;simulate(&d,arg(2)?,false,events)?},
         "simulate-show"=>{let d=parse_document(&read(arg(1)?,DOCUMENT_BYTES)?)?;let events=serde_json::from_value::<Vec<ShowEvent>>(ingress::parse_envelope(arg(3)?.as_bytes(),COMMAND_BYTES)?).map_err(|e|error("STRUCTURE",e.to_string()))?;let grant=Coordinator::new(Snapshot::new(Document::empty("rehearsal", "Rehearsal"))?,MemoryStore::default()).session(true)?.1;simulate_show(&d,arg(2)?,events,grant)?},
         "serve" if arg(1)?=="--store"&&arg(3)?=="--document-id"=>{serve(arg(2)?,arg(4)?)?;return Ok(None);},
-        _=>return Err(error("USAGE","producer-core schema|command-schema|tool-schema|fixture|nested-fixture|layout-fixture|validate FILE|compile FILE|layout FILE SET LAYOUT [INPUTS_JSON]|evaluate FILE SEQUENCE TIME_JSON|simulate FILE SEQUENCE EVENTS_JSON|simulate-show FILE SHOW EVENTS_JSON|serve --store EXPLICIT_DIRECTORY --document-id ID")),
+        _=>return Err(error("USAGE","producer-core bundle-run DIR DEVICE SEQUENCE EVENTS_JSON|bundle-edit DIR BASE_REVISION COMMAND_FILE|bundle-schema|bundle-check DIR|bundle-plan DIR DEVICE_JSON_FILE|bundle-sheet DIR SHOT|schema|command-schema|tool-schema|fixture|nested-fixture|layout-fixture|validate FILE|compile FILE|layout FILE SET LAYOUT [INPUTS_JSON]|evaluate FILE SEQUENCE TIME_JSON|simulate FILE SEQUENCE EVENTS_JSON|simulate-show FILE SHOW EVENTS_JSON|serve --store EXPLICIT_DIRECTORY --document-id ID")),
     };
     Ok(Some(v))
 }

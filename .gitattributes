@@ -31,3 +31,6 @@ src-tauri/src/live/vendor/pphumanseg/pphumanseg.py whitespace=-blank-at-eol
 labs/guest-rtc/native/sfu-subscriber-report.patch whitespace=-blank-at-eol,-space-before-tab
 
 assets/creator-library/sounds/**/catalog.csv -text whitespace=cr-at-eol
+
+# Frozen fixtures are identified and signed over exact bytes on every OS.
+protocol/v1/field-notes/** -text

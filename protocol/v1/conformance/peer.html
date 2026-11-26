@@ -1,0 +1,109 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Field Notes · Producer interoperability vector</title>
+<style>body{background:#10202b;color:white;font:16px system-ui}canvas{display:block;max-width:100%}</style>
+<canvas id="stage" aria-label="Field Notes studio output"></canvas>
+<script type="module">
+// Independent reader/writer for the Field Notes vector. No native runtime or Boomin SDK.
+const load = async path => {
+  const response = await fetch(path);
+  if (!response.ok) throw Error(path + " could not be opened");
+  return response.arrayBuffer();
+};
+const sha = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
+  n => n.toString(16).padStart(2, "0")).join("");
+const json = bytes => JSON.parse(new TextDecoder().decode(bytes));
+const seconds = t => Number(BigInt(t.ticks)) / t.rate; // fixture values are exactly representable
+const ctx = document.querySelector("canvas").getContext("2d", {willReadFrequently:true});
+const local = id => new URL(id, location.href);
+const event = (target, name) => new Promise((resolve, reject) => {
+  target.addEventListener(name, resolve, {once:true});
+  target.addEventListener("error", () => reject(Error("Media decode failed")), {once:true});
+});
+window.runVector=async (maxWidth,orientation,expectedRevision) => {
+  const manifestBytes = await load(local("manifest.json"));
+  const revision = await sha(manifestBytes);
+  if (expectedRevision !== revision) throw Error("Snapshot differs from verified revision");
+  const m=json(manifestBytes);
+  if (m.protocol !== "producer.bundle/1" || Object.values(m.extensions).some(e => e.required))
+    throw Error("Unsupported package requirements");
+  const docBytes = await load(local("production.json"));
+  if (await sha(docBytes) !== m.documentSha256) throw Error("Document integrity");
+  const d = json(docBytes);
+  if (d.schema !== "producer.production/1") throw Error("Unknown document");
+  const show = d.shows[m.entry.show], segment = show.segments.find(s => s.id === m.entry.segment);
+  const layout = d.sets[show.set].layouts[segment[orientation]], q = d.sequences[segment.sequence];
+  const choices = {}, bytes = {};
+  for (const [id, media] of Object.entries(m.assets)) {
+    if (media.original.sha256 !== d.assets[id].hash) throw Error("Original differs");
+    const rep = [media.original, ...media.proxies].find(r => !r.width || r.width <= maxWidth);
+    if (!rep) throw Error("No compatible representation");
+    choices[id] = rep.sha256;
+    bytes[id] = await load(local("blobs/" + rep.sha256));
+    if (await sha(bytes[id]) !== rep.sha256) throw Error("Media integrity");
+  }
+  const canvas = ctx.canvas;
+  canvas.width = layout.width;
+  canvas.height = layout.height;
+  const pictures = layout.root.children.filter(n => n.content.kind === "source");
+  const title = layout.root.children.find(n => n.content.kind === "text");
+  const image = pictures[0], picture = d.sources[image.content.source].asset;
+  const fontId = Object.keys(d.assets).find(id => d.assets[id].kind === "font" && d.assets[id].hash === title.content.font);
+  const font = await new FontFace("FieldType", bytes[fontId]).load();
+  document.fonts.add(font);
+  const video = document.createElement("video");
+  video.muted = true;
+  const ready = event(video,"loadeddata");
+  const url = URL.createObjectURL(new Blob([bytes[picture]], {type:"video/mp4"}));
+  video.src = url;
+  try {
+    await ready;
+    if (video.videoWidth !== [m.assets[picture].original,...m.assets[picture].proxies].find(r => r.sha256 === choices[picture]).width)
+      throw Error("Decoded size differs from declaration");
+    const frames = [];
+    for (const t of [0.5, 2, 4.5, 5]) {
+      const p = q.placements.find(p => p.source === image.content.source && t >= seconds(p.range.start) && t < seconds(p.range.start)+seconds(p.range.duration));
+      const srcTime = seconds(p.sourceIn) + t - seconds(p.range.start);
+      const ready = event(video,"seeked");
+      video.currentTime = srcTime;
+      await ready;
+      const scale = Math.min(image.frame.width/video.videoWidth,image.frame.height/video.videoHeight);
+      ctx.fillStyle = "black"; ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(video,image.frame.x+(image.frame.width-video.videoWidth*scale)/2,
+        image.frame.y+(image.frame.height-video.videoHeight*scale)/2,video.videoWidth*scale,video.videoHeight*scale);
+      ctx.font = title.frame.height + "px FieldType"; ctx.textBaseline="top"; ctx.fillStyle="white";
+      ctx.fillText(title.content.value,title.frame.x,title.frame.y);
+      const rgba = ctx.getImageData(0,0,canvas.width,canvas.height).data;
+      frames.push({placement:p.id,srcTime,pixels:await sha(rgba)});
+    }
+    const rate=48000, mix = new OfflineAudioContext(2,rate*seconds(q.duration),rate);
+    for (const x of m.mix.filter(x=>x.sequence === segment.sequence)) {
+      const route=q.audioRoutes.find(r=>r.id===x.route);
+      if (route.bus !== "program") continue;
+      const buffer=await mix.decodeAudioData(bytes[d.sources[route.source].asset].slice(0));
+      for (const p of q.placements.filter(p=>p.source===route.source)) {
+        const input=mix.createBufferSource(); input.buffer=buffer;
+        const gain=mix.createGain(); gain.gain.value=x.muted ? 0 : 10**(x.gainMillidb/20000);
+        // The vector uses mono sources and centered balance (dual mono).
+        if (x.balancePermille !== 0) throw Error("Peer profile supports centered balance");
+        input.connect(gain).connect(mix.destination);
+        input.start(seconds(p.range.start),seconds(p.sourceIn),seconds(p.range.duration));
+      }
+    }
+    const sound=await mix.startRendering(), samples=sound.getChannelData(0);
+    const peaks=[0,2,5].map(start=>{
+      let peak=0;
+      for(let i=start*rate;i<(start+1)*rate;i++) peak=Math.max(peak,Math.abs(samples[i]));
+      return peak;
+    });
+    // Slip the sponsor insert one second earlier in its source. Duration and references remain intact.
+    const cut=m.shots.reveal.cut;
+    const target=d.sequences[cut.sequence].placements.find(p=>p.id===cut.placement);
+    const slipped=BigInt(target.sourceIn.ticks)-BigInt(target.sourceIn.rate);
+    if (slipped < 0n) throw Error("Insufficient source handle");
+    target.sourceIn.ticks=slipped.toString();
+    return {revision, choices, frames, peaks, samples:sound.length, decodedWidth:video.videoWidth,
+      cues:q.cues.map(c=>[c.id,seconds(c.at)]), document:d, manifest:m, preview:canvas.toDataURL("image/png")};
+  } finally {
+    video.removeAttribute("src"); video.load(); URL.revokeObjectURL(url); document.fonts.delete(font);
+  }
+};
+</script></html>

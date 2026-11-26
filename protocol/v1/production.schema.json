@@ -1,0 +1,2588 @@
+{
+  "$defs": {
+    "Action": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "setParameter",
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/Target"
+            },
+            "value": {
+              "$ref": "#/$defs/Value"
+            }
+          },
+          "required": [
+            "kind",
+            "target",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "cue": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "emitCue",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "cue"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "AnalyticReconstruction": {
+      "additionalProperties": false,
+      "properties": {
+        "period": {
+          "$ref": "#/$defs/Time",
+          "description": "Positive cycle length, between 1 ms and 24 h. This is an effect period,\nnot a decoder range or a second transport."
+        },
+        "scope": {
+          "$ref": "#/$defs/SeedScope"
+        },
+        "seed": {
+          "$ref": "#/$defs/Counter"
+        },
+        "version": {
+          "$ref": "#/$defs/AnalyticVersion"
+        }
+      },
+      "required": [
+        "version",
+        "seed",
+        "scope",
+        "period"
+      ],
+      "type": "object"
+    },
+    "AnalyticVersion": {
+      "enum": [
+        "producer.analytic/1"
+      ],
+      "type": "string"
+    },
+    "AspectConstraint": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/AspectMode"
+        },
+        "ratio": {
+          "$ref": "#/$defs/AspectRatio"
+        }
+      },
+      "required": [
+        "ratio",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "AspectMode": {
+      "oneOf": [
+        {
+          "const": "width",
+          "description": "Preserve width and derive height. Column aspect items use this mode.",
+          "type": "string"
+        },
+        {
+          "const": "height",
+          "description": "Preserve height and derive width. Row aspect items use this mode.",
+          "type": "string"
+        },
+        {
+          "const": "contain",
+          "description": "Fit inside the allocated box without changing sibling allocation.",
+          "type": "string"
+        }
+      ]
+    },
+    "AspectRatio": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "fixed",
+              "type": "string"
+            },
+            "ratio": {
+              "$ref": "#/$defs/Ratio"
+            }
+          },
+          "required": [
+            "kind",
+            "ratio"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Use a qualified control-lane input, or the explicit portable fallback.",
+          "properties": {
+            "fallback": {
+              "$ref": "#/$defs/Ratio"
+            },
+            "kind": {
+              "const": "source",
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "source",
+            "fallback"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Asset": {
+      "additionalProperties": false,
+      "properties": {
+        "available": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Range"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "hash": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/AssetKind"
+        }
+      },
+      "required": [
+        "hash",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "AssetKind": {
+      "enum": [
+        "video",
+        "audio",
+        "image",
+        "geometry",
+        "material",
+        "font"
+      ],
+      "type": "string"
+    },
+    "AudioRoute": {
+      "additionalProperties": false,
+      "properties": {
+        "bus": {
+          "$ref": "#/$defs/Bus"
+        },
+        "id": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "bus"
+      ],
+      "type": "object"
+    },
+    "Authority": {
+      "enum": [
+        "local",
+        "hosted"
+      ],
+      "type": "string"
+    },
+    "Batch": {
+      "additionalProperties": false,
+      "properties": {
+        "geometry": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "instances": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "material": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "geometry",
+        "material",
+        "instances"
+      ],
+      "type": "object"
+    },
+    "Binding": {
+      "additionalProperties": false,
+      "properties": {
+        "expression": {
+          "$ref": "#/$defs/Expr"
+        },
+        "property": {
+          "$ref": "#/$defs/Property"
+        }
+      },
+      "required": [
+        "property",
+        "expression"
+      ],
+      "type": "object"
+    },
+    "Bus": {
+      "enum": [
+        "program",
+        "monitor"
+      ],
+      "type": "string"
+    },
+    "CanvasFit": {
+      "description": "How a room maps its authored sets to an output with different dimensions.",
+      "enum": [
+        "reflow",
+        "contain"
+      ],
+      "type": "string"
+    },
+    "Component": {
+      "additionalProperties": false,
+      "properties": {
+        "authority": {
+          "$ref": "#/$defs/Authority"
+        },
+        "props": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Value"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "root": {
+          "$ref": "#/$defs/Node"
+        },
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "authority",
+        "root"
+      ],
+      "type": "object"
+    },
+    "Content": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "group",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "font": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "text",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "value",
+            "font"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "fit": {
+              "$ref": "#/$defs/Fit"
+            },
+            "kind": {
+              "const": "source",
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "source",
+            "fit"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "definition": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "component",
+              "type": "string"
+            },
+            "pin": {
+              "type": "string"
+            },
+            "props": {
+              "additionalProperties": {
+                "$ref": "#/$defs/Value"
+              },
+              "default": {},
+              "type": "object"
+            }
+          },
+          "required": [
+            "kind",
+            "definition",
+            "pin"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Control": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "compact": {
+          "default": false,
+          "type": "boolean"
+        },
+        "equalWidth": {
+          "default": false,
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "primary": {
+          "default": false,
+          "type": "boolean"
+        },
+        "scope": {
+          "$ref": "#/$defs/ControlScope"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "action",
+        "scope"
+      ],
+      "type": "object"
+    },
+    "ControlScope": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "entireSet",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "layout",
+              "type": "string"
+            },
+            "layout": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "layout"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Counter": {
+      "pattern": "^(0|[1-9][0-9]{0,19})$",
+      "type": "string",
+      "x-nativeRange": "u64"
+    },
+    "Cue": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "$ref": "#/$defs/Time"
+        },
+        "atStart": {
+          "default": false,
+          "type": "boolean"
+        },
+        "eachLoop": {
+          "default": false,
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "at"
+      ],
+      "type": "object"
+    },
+    "Expr": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "op": {
+              "const": "literal",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/Value"
+            }
+          },
+          "required": [
+            "op",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "op": {
+              "const": "input",
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "a": {
+              "$ref": "#/$defs/Expr"
+            },
+            "b": {
+              "$ref": "#/$defs/Expr"
+            },
+            "op": {
+              "const": "add",
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "a",
+            "b"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "a": {
+              "$ref": "#/$defs/Expr"
+            },
+            "b": {
+              "$ref": "#/$defs/Expr"
+            },
+            "op": {
+              "const": "subtract",
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "a",
+            "b"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "a": {
+              "$ref": "#/$defs/Expr"
+            },
+            "b": {
+              "$ref": "#/$defs/Expr"
+            },
+            "op": {
+              "const": "multiply",
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "a",
+            "b"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "a": {
+              "$ref": "#/$defs/Expr"
+            },
+            "b": {
+              "$ref": "#/$defs/Expr"
+            },
+            "op": {
+              "const": "divide",
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "a",
+            "b"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "a": {
+              "$ref": "#/$defs/Expr"
+            },
+            "b": {
+              "$ref": "#/$defs/Expr"
+            },
+            "op": {
+              "const": "less",
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "a",
+            "b"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "a": {
+              "$ref": "#/$defs/Expr"
+            },
+            "b": {
+              "$ref": "#/$defs/Expr"
+            },
+            "op": {
+              "const": "equal",
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "a",
+            "b"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "condition": {
+              "$ref": "#/$defs/Expr"
+            },
+            "no": {
+              "$ref": "#/$defs/Expr"
+            },
+            "op": {
+              "const": "select",
+              "type": "string"
+            },
+            "yes": {
+              "$ref": "#/$defs/Expr"
+            }
+          },
+          "required": [
+            "op",
+            "condition",
+            "yes",
+            "no"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "max": {
+              "$ref": "#/$defs/Expr"
+            },
+            "min": {
+              "$ref": "#/$defs/Expr"
+            },
+            "op": {
+              "const": "clamp",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/Expr"
+            }
+          },
+          "required": [
+            "op",
+            "value",
+            "min",
+            "max"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Fit": {
+      "enum": [
+        "contain",
+        "cover",
+        "stretch"
+      ],
+      "type": "string"
+    },
+    "Flow": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "overlay",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "gap": {
+              "format": "double",
+              "type": "number"
+            },
+            "kind": {
+              "const": "row",
+              "type": "string"
+            },
+            "sizes": {
+              "items": {
+                "$ref": "#/$defs/Size"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "gap",
+            "sizes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "gap": {
+              "format": "double",
+              "type": "number"
+            },
+            "kind": {
+              "const": "column",
+              "type": "string"
+            },
+            "sizes": {
+              "items": {
+                "$ref": "#/$defs/Size"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "gap",
+            "sizes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "columns": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "gap": {
+              "format": "double",
+              "type": "number"
+            },
+            "kind": {
+              "const": "grid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "gap",
+            "columns"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "GeometryScene": {
+      "additionalProperties": false,
+      "properties": {
+        "ambient": {
+          "items": {
+            "format": "float",
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "camera": {
+          "items": {
+            "$ref": "#/$defs/ShotKey"
+          },
+          "type": "array"
+        },
+        "environment": {
+          "description": "Optional digest of a 2:1 equirectangular environment image in the room assets.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lightColor": {
+          "items": {
+            "format": "float",
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "lightDirection": {
+          "items": {
+            "format": "float",
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "objects": {
+          "items": {
+            "$ref": "#/$defs/MeshInstance"
+          },
+          "type": "array"
+        },
+        "portraitCamera": {
+          "items": {
+            "$ref": "#/$defs/ShotKey"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "objects",
+        "camera",
+        "lightDirection",
+        "lightColor",
+        "ambient"
+      ],
+      "type": "object"
+    },
+    "GraphClock": {
+      "oneOf": [
+        {
+          "enum": [
+            "live",
+            "timeline"
+          ],
+          "type": "string"
+        },
+        {
+          "const": "layout",
+          "description": "Geometry camera keys use the layout transition's normalized progress.\nFragment passes continue to use the live clock.",
+          "type": "string"
+        }
+      ]
+    },
+    "GraphInput": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Premultiplied RGBA of the named top-level layout branches in document order.",
+          "properties": {
+            "kind": {
+              "const": "layers",
+              "type": "string"
+            },
+            "nodes": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "nodes"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "pass",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "source",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "asset": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "image",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "asset"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "GraphPass": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "inputs": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/GraphInput"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "geometry",
+              "type": "string"
+            },
+            "scene": {
+              "$ref": "#/$defs/GeometryScene"
+            }
+          },
+          "required": [
+            "kind",
+            "id",
+            "scene"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "fields": {
+              "description": "Optional numeric room field for each parameter. Missing data uses params.",
+              "items": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "maxItems": 4,
+              "minItems": 4,
+              "type": "array"
+            },
+            "id": {
+              "type": "string"
+            },
+            "inputs": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/GraphInput"
+              },
+              "type": "array"
+            },
+            "kind": {
+              "const": "fragment",
+              "type": "string"
+            },
+            "params": {
+              "default": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "items": {
+                "format": "float",
+                "type": "number"
+              },
+              "maxItems": 4,
+              "minItems": 4,
+              "type": "array"
+            },
+            "shader": {
+              "description": "WGSL function body returning straight-alpha RGBA in\nthe set compositor's color space. The runtime supplies uv and globals.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "id",
+            "shader"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "GraphProfile": {
+      "enum": [
+        "producer.render/1",
+        "producer.geometry/1"
+      ],
+      "type": "string"
+    },
+    "Ink": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "description": "sRGB RGB hex, exactly #RRGGBB. Alpha is the separate opacity field.",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "type": "string"
+        },
+        "opacity": {
+          "format": "double",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "color",
+        "opacity"
+      ],
+      "type": "object"
+    },
+    "Interpolation": {
+      "enum": [
+        "easeInOut",
+        "step",
+        "linear"
+      ],
+      "type": "string"
+    },
+    "Key": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "$ref": "#/$defs/Time"
+        },
+        "value": {
+          "$ref": "#/$defs/Value"
+        }
+      },
+      "required": [
+        "at",
+        "value"
+      ],
+      "type": "object"
+    },
+    "Layout": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "orientation": {
+          "$ref": "#/$defs/Orientation"
+        },
+        "root": {
+          "$ref": "#/$defs/Node"
+        },
+        "width": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "orientation",
+        "width",
+        "height",
+        "root"
+      ],
+      "type": "object"
+    },
+    "Mesh": {
+      "oneOf": [
+        {
+          "enum": [
+            "sphere",
+            "torus",
+            "panel",
+            "disc"
+          ],
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "glb": {
+              "properties": {
+                "digest": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "digest"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "glb"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "vertexClip": {
+              "properties": {
+                "digest": {
+                  "type": "string"
+                },
+                "phase": {
+                  "default": 0.0,
+                  "format": "float",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "digest"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "vertexClip"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "MeshInstance": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "items": {
+            "format": "float",
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "emission": {
+          "default": 0.0,
+          "format": "float",
+          "type": "number"
+        },
+        "engraving": {
+          "default": [
+            0.0,
+            0.0
+          ],
+          "description": "UV engraving frequency. Zero selects a smooth surface.",
+          "items": {
+            "format": "float",
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "id": {
+          "type": "string"
+        },
+        "input": {
+          "description": "Slot in the geometry pass's graph inputs, sampled as unlit video.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "mesh": {
+          "$ref": "#/$defs/Mesh"
+        },
+        "metallic": {
+          "format": "float",
+          "type": "number"
+        },
+        "position": {
+          "items": {
+            "format": "float",
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "rotation": {
+          "items": {
+            "format": "float",
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "roughness": {
+          "format": "float",
+          "type": "number"
+        },
+        "scale": {
+          "items": {
+            "format": "float",
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "textureAspect": {
+          "description": "Logical aspect ratio for procedural textures. Defaults to the input pixel aspect.",
+          "format": "float",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "tube": {
+          "default": 0.03999999910593033,
+          "description": "Minor radius of the torus in units of its major radius.",
+          "format": "float",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "mesh",
+        "position",
+        "scale",
+        "rotation",
+        "color",
+        "roughness",
+        "metallic"
+      ],
+      "type": "object"
+    },
+    "Node": {
+      "additionalProperties": false,
+      "properties": {
+        "bindings": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Binding"
+          },
+          "type": "array"
+        },
+        "children": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Node"
+          },
+          "type": "array"
+        },
+        "content": {
+          "$ref": "#/$defs/Content"
+        },
+        "flow": {
+          "$ref": "#/$defs/Flow",
+          "default": {
+            "kind": "overlay"
+          }
+        },
+        "frame": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rect"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "id": {
+          "type": "string"
+        },
+        "placement": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodePlacement"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "style": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SurfaceStyle"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Local surface/typography. Missing style preserves the original contract.\nCoordinates and radii are authored canvas pixels, not CSS or UI points."
+        }
+      },
+      "required": [
+        "id",
+        "content"
+      ],
+      "type": "object"
+    },
+    "NodePlacement": {
+      "additionalProperties": false,
+      "description": "Frame offsets are measured from the parent anchor to this node's pivot.\nFor flow items, the allocated cell is the parent box and offsets are zero.",
+      "properties": {
+        "anchor": {
+          "$ref": "#/$defs/UnitPoint",
+          "default": {
+            "x": 0.0,
+            "y": 0.0
+          }
+        },
+        "aspect": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AspectConstraint"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pivot": {
+          "$ref": "#/$defs/UnitPoint",
+          "default": {
+            "x": 0.0,
+            "y": 0.0
+          }
+        }
+      },
+      "type": "object"
+    },
+    "Orientation": {
+      "description": "Composition/output role; dimensions may be custom, including square.\nShows pair roles, while the room independently chooses each output size.",
+      "enum": [
+        "landscape",
+        "vertical"
+      ],
+      "type": "string"
+    },
+    "Paint": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "graph": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "graph",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "graph"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Digest-backed PNG artwork in the room asset library.",
+          "properties": {
+            "asset": {
+              "type": "string"
+            },
+            "fit": {
+              "$ref": "#/$defs/Fit"
+            },
+            "kind": {
+              "const": "image",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "asset",
+            "fit"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "ink": {
+              "$ref": "#/$defs/Ink"
+            },
+            "kind": {
+              "const": "solid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "ink"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Interpolate straight RGBA over a line across this surface. Alpha is real\ncompositing alpha: lower video layers remain visible through the paint.",
+          "properties": {
+            "angle": {
+              "format": "double",
+              "type": "number"
+            },
+            "from": {
+              "$ref": "#/$defs/Ink"
+            },
+            "kind": {
+              "const": "linear",
+              "type": "string"
+            },
+            "to": {
+              "$ref": "#/$defs/Ink"
+            }
+          },
+          "required": [
+            "kind",
+            "from",
+            "to",
+            "angle"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Animated contour lines. Width is in output pixels, period in seconds.",
+          "properties": {
+            "ink": {
+              "$ref": "#/$defs/Ink"
+            },
+            "kind": {
+              "const": "contours",
+              "type": "string"
+            },
+            "period": {
+              "format": "double",
+              "maximum": 600.0,
+              "minimum": 1.0,
+              "type": "number"
+            },
+            "width": {
+              "format": "double",
+              "maximum": 16.0,
+              "minimum": 0.5,
+              "type": "number"
+            }
+          },
+          "required": [
+            "kind",
+            "ink",
+            "width",
+            "period"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Spatially varied translucent ink with a fine halftone. Evaluated on the\nGPU against production time; no generated images or frame uploads.",
+          "properties": {
+            "cell": {
+              "format": "double",
+              "maximum": 24.0,
+              "minimum": 2.0,
+              "type": "number"
+            },
+            "from": {
+              "$ref": "#/$defs/Ink"
+            },
+            "glow": {
+              "$ref": "#/$defs/Ink"
+            },
+            "kind": {
+              "const": "veil",
+              "type": "string"
+            },
+            "motion": {
+              "format": "double",
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            "to": {
+              "$ref": "#/$defs/Ink"
+            }
+          },
+          "required": [
+            "kind",
+            "from",
+            "to",
+            "glow",
+            "cell",
+            "motion"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Placement": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "looping": {
+          "default": false,
+          "type": "boolean"
+        },
+        "range": {
+          "$ref": "#/$defs/Range"
+        },
+        "source": {
+          "type": "string"
+        },
+        "sourceIn": {
+          "$ref": "#/$defs/Time"
+        },
+        "speed": {
+          "$ref": "#/$defs/Speed",
+          "default": {
+            "denominator": 1,
+            "numerator": 1
+          }
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "range",
+        "sourceIn"
+      ],
+      "type": "object"
+    },
+    "Property": {
+      "enum": [
+        "opacity",
+        "translateX",
+        "translateY",
+        "scale",
+        "rotation",
+        "visibility",
+        "cameraPosition",
+        "cameraTarget",
+        "cameraFov",
+        "materialColor",
+        "materialRoughness",
+        "lightIntensity",
+        "uniform",
+        "instanceOffset"
+      ],
+      "type": "string"
+    },
+    "Range": {
+      "additionalProperties": false,
+      "properties": {
+        "duration": {
+          "$ref": "#/$defs/Time"
+        },
+        "start": {
+          "$ref": "#/$defs/Time"
+        }
+      },
+      "required": [
+        "start",
+        "duration"
+      ],
+      "type": "object"
+    },
+    "Ratio": {
+      "additionalProperties": false,
+      "description": "Integer display ratio. Pixel aspect and rotation must already be normalized\nby the source adapter; these are not raw encoded dimensions.",
+      "properties": {
+        "height": {
+          "format": "uint32",
+          "maximum": 65536,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "width": {
+          "format": "uint32",
+          "maximum": 65536,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "type": "object"
+    },
+    "Rect": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "format": "double",
+          "type": "number"
+        },
+        "width": {
+          "format": "double",
+          "type": "number"
+        },
+        "x": {
+          "format": "double",
+          "type": "number"
+        },
+        "y": {
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "type": "object"
+    },
+    "RenderGraph": {
+      "additionalProperties": false,
+      "description": "Ordered current-frame resource dependencies. Future resource lifetimes and\ncompute/geometry pass kinds require explicit admission in a new profile.",
+      "properties": {
+        "clock": {
+          "$ref": "#/$defs/GraphClock"
+        },
+        "passes": {
+          "items": {
+            "$ref": "#/$defs/GraphPass"
+          },
+          "type": "array"
+        },
+        "profile": {
+          "$ref": "#/$defs/GraphProfile"
+        }
+      },
+      "required": [
+        "profile",
+        "passes"
+      ],
+      "type": "object"
+    },
+    "Role": {
+      "enum": [
+        "hostCamera",
+        "screen",
+        "guest",
+        "microphone"
+      ],
+      "type": "string"
+    },
+    "Scene3d": {
+      "additionalProperties": false,
+      "properties": {
+        "analytic": {
+          "type": "boolean"
+        },
+        "batches": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Batch"
+          },
+          "type": "array"
+        },
+        "parameters": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SceneParameter"
+          },
+          "type": "object"
+        },
+        "reconstruction": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AnalyticReconstruction"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Opt-in reconstruction inputs. Omitted legacy scenes make no promise\nabout an effect clock/seed; admission never invents either one."
+        }
+      },
+      "required": [
+        "parameters",
+        "analytic"
+      ],
+      "type": "object"
+    },
+    "SceneParameter": {
+      "additionalProperties": false,
+      "properties": {
+        "initial": {
+          "$ref": "#/$defs/Value"
+        },
+        "property": {
+          "$ref": "#/$defs/Property"
+        }
+      },
+      "required": [
+        "property",
+        "initial"
+      ],
+      "type": "object"
+    },
+    "SeedScope": {
+      "enum": [
+        "source",
+        "placement"
+      ],
+      "type": "string"
+    },
+    "Segment": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "landscape": {
+          "type": "string"
+        },
+        "sequence": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "vertical": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "landscape",
+        "vertical"
+      ],
+      "type": "object"
+    },
+    "Sequence": {
+      "additionalProperties": false,
+      "properties": {
+        "audioRoutes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AudioRoute"
+          },
+          "type": "array"
+        },
+        "cues": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Cue"
+          },
+          "type": "array"
+        },
+        "duration": {
+          "$ref": "#/$defs/Time"
+        },
+        "instances": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SequenceInstance"
+          },
+          "type": "array"
+        },
+        "placements": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Placement"
+          },
+          "type": "array"
+        },
+        "tracks": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Track"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "duration"
+      ],
+      "type": "object"
+    },
+    "SequenceInstance": {
+      "additionalProperties": false,
+      "description": "A placement owns time mapping, not a copy of the reusable definition.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "looping": {
+          "default": false,
+          "type": "boolean"
+        },
+        "range": {
+          "$ref": "#/$defs/Range"
+        },
+        "sequence": {
+          "type": "string"
+        },
+        "sourceBindings": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SourceBinding"
+          },
+          "type": "array"
+        },
+        "sourceIn": {
+          "$ref": "#/$defs/Time"
+        },
+        "speed": {
+          "$ref": "#/$defs/Speed",
+          "default": {
+            "denominator": 1,
+            "numerator": 1
+          }
+        },
+        "targetBindings": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/TargetBinding"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "sequence",
+        "range",
+        "sourceIn"
+      ],
+      "type": "object"
+    },
+    "Set": {
+      "additionalProperties": false,
+      "properties": {
+        "actions": {
+          "additionalProperties": {
+            "items": {
+              "$ref": "#/$defs/Action"
+            },
+            "type": "array"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "canvasFit": {
+          "$ref": "#/$defs/CanvasFit"
+        },
+        "controls": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Control"
+          },
+          "type": "array"
+        },
+        "graphs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/RenderGraph"
+          },
+          "description": "Named, versioned GPU graphs shared by the layouts in this set.",
+          "type": "object"
+        },
+        "layoutTransitionMs": {
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "layouts": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Layout"
+          },
+          "type": "object"
+        },
+        "outputGraphs": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Layout id to terminal render graph. Older layouts lower to one composite pass.",
+          "type": "object"
+        },
+        "reversibleLayoutTransitions": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Animated layout to resting layout. The animated graph runs from 0 to 1\non entry from its resting layout and from 1 to 0 on return.",
+          "type": "object"
+        },
+        "theme": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "type": "object"
+        }
+      },
+      "required": [
+        "layouts"
+      ],
+      "type": "object"
+    },
+    "ShotKey": {
+      "additionalProperties": false,
+      "properties": {
+        "eye": {
+          "items": {
+            "format": "float",
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "fov": {
+          "format": "float",
+          "type": "number"
+        },
+        "seconds": {
+          "format": "float",
+          "type": "number"
+        },
+        "target": {
+          "items": {
+            "format": "float",
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        }
+      },
+      "required": [
+        "seconds",
+        "eye",
+        "target",
+        "fov"
+      ],
+      "type": "object"
+    },
+    "Show": {
+      "additionalProperties": false,
+      "properties": {
+        "authority": {
+          "$ref": "#/$defs/Authority"
+        },
+        "segments": {
+          "items": {
+            "$ref": "#/$defs/Segment"
+          },
+          "maxItems": 256,
+          "minItems": 1,
+          "type": "array"
+        },
+        "set": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "set",
+        "authority",
+        "segments"
+      ],
+      "type": "object"
+    },
+    "Size": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "fixed",
+              "type": "string"
+            },
+            "pixels": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          "required": [
+            "kind",
+            "pixels"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "weight",
+              "type": "string"
+            },
+            "max": {
+              "format": "double",
+              "type": "number"
+            },
+            "min": {
+              "format": "double",
+              "type": "number"
+            },
+            "weight": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          "required": [
+            "kind",
+            "weight",
+            "min",
+            "max"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Derive the main-axis length from this child's aspect constraint and the\nparent's cross-axis extent. The following siblings reflow accordingly.",
+          "properties": {
+            "kind": {
+              "const": "aspect",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Source": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "live",
+              "type": "string"
+            },
+            "role": {
+              "$ref": "#/$defs/Role"
+            }
+          },
+          "required": [
+            "kind",
+            "role"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "asset": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "player",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "asset"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "graphics",
+              "type": "string"
+            },
+            "scene": {
+              "$ref": "#/$defs/Scene3d"
+            }
+          },
+          "required": [
+            "kind",
+            "scene"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "SourceBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "type": "object"
+    },
+    "Speed": {
+      "additionalProperties": false,
+      "properties": {
+        "denominator": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "numerator": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    },
+    "SurfaceBorder": {
+      "additionalProperties": false,
+      "properties": {
+        "ink": {
+          "$ref": "#/$defs/Ink"
+        },
+        "width": {
+          "format": "double",
+          "maximum": 32.0,
+          "minimum": 0.0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "ink",
+        "width"
+      ],
+      "type": "object"
+    },
+    "SurfaceStyle": {
+      "additionalProperties": false,
+      "properties": {
+        "border": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SurfaceBorder"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fill": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Paint"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "grain": {
+          "default": 0.0,
+          "description": "Static fine luminance texture. No random allocations or animation clock.",
+          "format": "double",
+          "maximum": 0.15,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        "radius": {
+          "default": 0.0,
+          "format": "double",
+          "maximum": 2048.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextStyle"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "Target": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "property": {
+          "$ref": "#/$defs/Property"
+        }
+      },
+      "required": [
+        "path",
+        "property"
+      ],
+      "type": "object"
+    },
+    "TargetBinding": {
+      "additionalProperties": false,
+      "description": "Exact exported-property rebinding; no prefix substitution or arbitrary paths.",
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/Target"
+        },
+        "to": {
+          "$ref": "#/$defs/Target"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "type": "object"
+    },
+    "TextAlign": {
+      "enum": [
+        "left",
+        "center",
+        "right"
+      ],
+      "type": "string"
+    },
+    "TextStyle": {
+      "additionalProperties": false,
+      "properties": {
+        "align": {
+          "$ref": "#/$defs/TextAlign"
+        },
+        "field": {
+          "description": "Named scalar field from the room snapshot. Text content supplies the offline fallback.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fontSize": {
+          "format": "double",
+          "maximum": 512.0,
+          "minimum": 6.0,
+          "type": "number"
+        },
+        "ink": {
+          "$ref": "#/$defs/Ink"
+        },
+        "weight": {
+          "format": "uint16",
+          "maximum": 900,
+          "minimum": 100,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "fontSize",
+        "weight",
+        "ink",
+        "align"
+      ],
+      "type": "object"
+    },
+    "Time": {
+      "additionalProperties": false,
+      "properties": {
+        "rate": {
+          "format": "uint32",
+          "maximum": 1000000000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ticks": {
+          "pattern": "^(0|-?[1-9][0-9]{0,18})$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ticks",
+        "rate"
+      ],
+      "type": "object"
+    },
+    "Track": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "interpolation": {
+          "$ref": "#/$defs/Interpolation"
+        },
+        "keys": {
+          "items": {
+            "$ref": "#/$defs/Key"
+          },
+          "type": "array"
+        },
+        "range": {
+          "$ref": "#/$defs/Range"
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        }
+      },
+      "required": [
+        "id",
+        "target",
+        "range",
+        "keys",
+        "interpolation"
+      ],
+      "type": "object"
+    },
+    "UnitPoint": {
+      "additionalProperties": false,
+      "description": "Normalized parent anchor or local transform pivot, in [0, 1] on each axis.",
+      "properties": {
+        "x": {
+          "format": "double",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        "y": {
+          "format": "double",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "type": "object"
+    },
+    "Value": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "number",
+              "type": "string"
+            },
+            "value": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "bool",
+              "type": "string"
+            },
+            "value": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "text",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "color",
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "vec3",
+              "type": "string"
+            },
+            "value": {
+              "items": {
+                "format": "double",
+                "type": "number"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "Version": {
+      "enum": [
+        "producer.production/1"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "assets": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Asset"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "components": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Component"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "id": {
+      "type": "string"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "default": {},
+      "type": "object"
+    },
+    "schema": {
+      "$ref": "#/$defs/Version"
+    },
+    "sequences": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Sequence"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "sets": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Set"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "shows": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Show"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "sources": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Source"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "title": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "id",
+    "title"
+  ],
+  "title": "Document",
+  "type": "object"
+}

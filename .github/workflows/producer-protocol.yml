@@ -1,0 +1,25 @@
+name: Producer protocol conformance
+on:
+  push:
+    paths: ['protocol/**', 'crates/production-runtime/**', '.github/workflows/producer-protocol.yml']
+  pull_request:
+    paths: ['protocol/**', 'crates/production-runtime/**', '.github/workflows/producer-protocol.yml']
+permissions:
+  contents: read
+jobs:
+  round-trip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: cargo build --locked --manifest-path crates/production-runtime/Cargo.toml -p producer-production-cli
+      - run: npm install --prefix "$RUNNER_TEMP/producer-peer" --no-save playwright-core@1.65.1
+      - name: Verify signed native and browser round trip
+        run: |
+          export NODE_PATH="$RUNNER_TEMP/producer-peer/node_modules"
+          export CHROME_BIN="$(command -v google-chrome)"
+          export PRODUCER_CORE="$PWD/crates/production-runtime/target/debug/producer-core"
+          python3 protocol/v1/conformance/check.py

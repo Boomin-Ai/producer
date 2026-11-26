@@ -1,0 +1,291 @@
+{
+  "protocol": "producer.bundle/1",
+  "production": "urn:uuid:046ada30-75a2-48bb-87f8-34bf9b57f291",
+  "documentSha256": "175301ea9b4bb2d7273da655cf112ad344b5cc9aff8653a7315062257838fca1",
+  "author": "editor",
+  "authoredAt": 1795651200,
+  "parent": null,
+  "entry": {
+    "show": "episode-one",
+    "segment": "opening"
+  },
+  "assets": {
+    "slate": {
+      "original": {
+        "sha256": "58a80ca766e487b69ab1b875ec01935dd1d2c9ee3ef9c8ec2cda0713632e8e56",
+        "format": "h264-mp4",
+        "width": 320,
+        "height": 180
+      },
+      "proxies": [
+        {
+          "sha256": "4a0e1ad17c7a7351bd6ff12679d0d545af2536bde1467fb3ab62523d0307d61f",
+          "format": "h264-mp4",
+          "width": 160,
+          "height": 90
+        }
+      ]
+    },
+    "composition": {
+      "original": {
+        "sha256": "3dbd1b1f6fbbbc3f403a4bef1bab204b1da52355065ba88b0af768d24f09a63c",
+        "format": "png"
+      },
+      "proxies": []
+    },
+    "ident": {
+      "original": {
+        "sha256": "c2884b1ec7b5a50dce10c872b9bdb2fc539ae27fc5ac52fb8869bd9062b6515e",
+        "format": "pcm-wav"
+      },
+      "proxies": []
+    },
+    "typeface": {
+      "original": {
+        "sha256": "83d548cd73ef2e039167db3adb5ea9d7a7870466ffc8a162c9820bc348938aaf",
+        "format": "woff2"
+      },
+      "proxies": []
+    }
+  },
+  "universes": {
+    "field-lab": {
+      "name": "Field Lab",
+      "lore": "A practical field-recording series.",
+      "style": {
+        "palette": [
+          "#10202b",
+          "#d0a253"
+        ]
+      },
+      "setup": {
+        "camera": {
+          "whiteBalanceK": 4300
+        },
+        "lighting": "Warm practicals on a cool surface."
+      }
+    }
+  },
+  "entities": {
+    "host": {
+      "kind": "character",
+      "name": "Robin",
+      "universe": "field-lab",
+      "promptScaffold": "Calm field recordist."
+    },
+    "recorder": {
+      "kind": "prop",
+      "name": "Field recorder",
+      "universe": "field-lab",
+      "promptScaffold": "Compact brass audio recorder."
+    },
+    "workshop": {
+      "kind": "location",
+      "name": "Listening room",
+      "universe": "field-lab",
+      "promptScaffold": "Blue grid workbench."
+    }
+  },
+  "actors": {
+    "editor": {
+      "kind": "person",
+      "name": "Studio Editor",
+      "identity": "editor@field-notes.example"
+    },
+    "sponsor": {
+      "kind": "brand",
+      "name": "North Signal"
+    },
+    "fork-editor": {
+      "name": "Fork Editor",
+      "kind": "person",
+      "identity": "editor@fork.example"
+    }
+  },
+  "shots": {
+    "reveal": {
+      "title": "Product insert",
+      "cut": {
+        "sequence": "main",
+        "placement": "sponsor-cut"
+      },
+      "direction": {
+        "action": "Reveal the brass field recorder against the blue grid.",
+        "lighting": "Soft tungsten key from camera left, cool fill.",
+        "location": "workshop",
+        "cast": [
+          "host",
+          "recorder"
+        ],
+        "camera": {
+          "sensor": "Super 35",
+          "apertureF": 2.8,
+          "shutterAngleDeg": 180,
+          "iso": 800,
+          "focusDistanceM": 1.2,
+          "framing": "product close-up",
+          "angle": "three-quarter high",
+          "pitchDeg": -15,
+          "movement": "slow push-in"
+        },
+        "beats": [
+          {
+            "range": {
+              "start": {
+                "ticks": "0",
+                "rate": 1
+              },
+              "duration": {
+                "ticks": "2",
+                "rate": 1
+              }
+            },
+            "action": "Hold on the product.",
+            "narration": {
+              "speaker": "host",
+              "language": "en-US",
+              "text": "Listen to the room.",
+              "delivery": "Quiet, close to microphone. Let the final word breathe."
+            }
+          },
+          {
+            "range": {
+              "start": {
+                "ticks": "2",
+                "rate": 1
+              },
+              "duration": {
+                "ticks": "1",
+                "rate": 1
+              }
+            },
+            "action": "Finish the push.",
+            "camera": {
+              "focalLengthMm": 55,
+              "framing": "tight detail"
+            }
+          }
+        ],
+        "prompt": "Hold on the recorder.",
+        "mentions": [
+          {
+            "start": 12,
+            "end": 20,
+            "entity": "recorder"
+          }
+        ],
+        "references": [
+          {
+            "asset": "composition",
+            "role": "composition",
+            "instruction": "Match blocking and negative space."
+          },
+          {
+            "asset": "slate",
+            "role": "cameraMotion",
+            "instruction": "Hold the product steady."
+          },
+          {
+            "asset": "ident",
+            "role": "sound",
+            "instruction": "Keep the pulse under the final word."
+          }
+        ]
+      },
+      "intendedModel": {
+        "provider": "ByteDance",
+        "name": "Seedance",
+        "version": "2.0",
+        "parameters": {
+          "generateAudio": true
+        }
+      },
+      "takes": {
+        "slate-one": {
+          "origin": "synthetic",
+          "asset": "slate"
+        }
+      },
+      "selectedTake": "slate-one",
+      "universe": "field-lab"
+    }
+  },
+  "contributions": {
+    "equipment-credit": {
+      "kind": "brandPlacement",
+      "role": "creator",
+      "actor": "sponsor",
+      "cut": {
+        "sequence": "main",
+        "placement": "sponsor-cut"
+      },
+      "featuredEntity": "recorder",
+      "disclosure": "Equipment supplied by North Signal."
+    }
+  },
+  "mix": [
+    {
+      "sequence": "main",
+      "route": "brand-audio",
+      "role": "effects",
+      "gainMillidb": -6000,
+      "balancePermille": 0,
+      "muted": false
+    }
+  ],
+  "extensions": {
+    "ai.boomin": {
+      "required": false,
+      "data": {
+        "collection": "field-notes",
+        "unit": "episode-one"
+      }
+    },
+    "org.sil": {
+      "required": false,
+      "data": {
+        "asset": "typeface",
+        "license": "OFL-1.1",
+        "notice": "Copyright 2022 The Inter Project Authors (https://github.com/rsms/inter-tight)\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\nThis license is copied below, and is also available with a FAQ at:\nhttps://scripts.sil.org/OFL\n\n\n-----------------------------------------------------------\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007\n-----------------------------------------------------------\n\nPREAMBLE\nThe goals of the Open Font License (OFL) are to stimulate worldwide\ndevelopment of collaborative font projects, to support the font creation\nefforts of academic and linguistic communities, and to provide a free and\nopen framework in which fonts may be shared and improved in partnership\nwith others.\n\nThe OFL allows the licensed fonts to be used, studied, modified and\nredistributed freely as long as they are not sold by themselves. The\nfonts, including any derivative works, can be bundled, embedded,\nredistributed and/or sold with any software provided that any reserved\nnames are not used by derivative works. The fonts and derivatives,\nhowever, cannot be released under any other type of license. The\nrequirement for fonts to remain under this license does not apply\nto any document created using the fonts or their derivatives.\n\nDEFINITIONS\n\"Font Software\" refers to the set of files released by the Copyright\nHolder(s) under this license and clearly marked as such. This may\ninclude source files, build scripts and documentation.\n\n\"Reserved Font Name\" refers to any names specified as such after the\ncopyright statement(s).\n\n\"Original Version\" refers to the collection of Font Software components as\ndistributed by the Copyright Holder(s).\n\n\"Modified Version\" refers to any derivative made by adding to, deleting,\nor substituting -- in part or in whole -- any of the components of the\nOriginal Version, by changing formats or by porting the Font Software to a\nnew environment.\n\n\"Author\" refers to any designer, engineer, programmer, technical\nwriter or other person who contributed to the Font Software.\n\nPERMISSION & CONDITIONS\nPermission is hereby granted, free of charge, to any person obtaining\na copy of the Font Software, to use, study, copy, merge, embed, modify,\nredistribute, and sell modified and unmodified copies of the Font\nSoftware, subject to the following conditions:\n\n1) Neither the Font Software nor any of its individual components,\nin Original or Modified Versions, may be sold by itself.\n\n2) Original or Modified Versions of the Font Software may be bundled,\nredistributed and/or sold with any software, provided that each copy\ncontains the above copyright notice and this license. These can be\nincluded either as stand-alone text files, human-readable headers or\nin the appropriate machine-readable metadata fields within text or\nbinary files as long as those fields can be easily viewed by the user.\n\n3) No Modified Version of the Font Software may use the Reserved Font\nName(s) unless explicit written permission is granted by the corresponding\nCopyright Holder. This restriction only applies to the primary font name as\npresented to the users.\n\n4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font\nSoftware shall not be used to promote, endorse or advertise any\nModified Version, except to acknowledge the contribution(s) of the\nCopyright Holder(s) and the Author(s) or with their explicit written\npermission.\n\n5) The Font Software, modified or unmodified, in part or in whole,\nmust be distributed entirely under this license, and must not be\ndistributed under any other license. The requirement for fonts to\nremain under this license does not apply to any document created\nusing the Font Software.\n\nTERMINATION\nThis license becomes null and void if any of the above conditions are\nnot met.\n\nDISCLAIMER\nTHE FONT SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT\nOF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE\nCOPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,\nINCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL\nDAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING\nFROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM\nOTHER DEALINGS IN THE FONT SOFTWARE.\n"
+      }
+    }
+  },
+  "workflow": {
+    "state": "active",
+    "phase": "postproduction",
+    "startedAt": 1795564800,
+    "tasks": {
+      "picture": {
+        "title": "Cut the product insert",
+        "phase": "postproduction",
+        "state": "done",
+        "required": true,
+        "shot": "reveal",
+        "owner": "editor"
+      },
+      "voice": {
+        "title": "Record the narration",
+        "phase": "production",
+        "state": "todo",
+        "required": true,
+        "shot": "reveal",
+        "owner": "editor"
+      }
+    }
+  },
+  "setup": {
+    "brief": "Show how location sound is made.",
+    "camera": {
+      "make": "ARRI",
+      "model": "ALEXA 35"
+    }
+  },
+  "sequenceSetups": {
+    "main": {
+      "camera": {
+        "lens": "50 mm prime",
+        "focalLengthMm": 50
+      }
+    }
+  }
+}

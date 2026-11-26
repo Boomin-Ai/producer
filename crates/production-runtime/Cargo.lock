@@ -321,6 +321,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "producer-interchange"
+version = "0.1.0"
+dependencies = [
+ "producer-production-contract",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2",
+ "uuid",
+]
+
+[[package]]
 name = "producer-native-media"
 version = "0.1.0"
 dependencies = [
@@ -337,6 +349,7 @@ dependencies = [
 name = "producer-production-cli"
 version = "0.1.0"
 dependencies = [
+ "producer-interchange",
  "producer-production-contract",
  "producer-production-core",
  "producer-production-service",

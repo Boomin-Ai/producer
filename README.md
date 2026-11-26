@@ -21,6 +21,10 @@ notarized), Windows, Linux · updates itself.
 > costs you a take, [open an issue](https://github.com/Boomin-Ai/producer/issues)
 > — that is exactly what this beta is for.
 
+## Fork interoperability
+
+The [Producer Protocol v1](protocol/v1/README.md) defines editable production packages, frozen signed revisions, creative reference sheets, and device-local execution. Run the signed Field Notes vector against a fork to check its media, timing, sound and credits.
+
 ## What it does today
 
 **Live**

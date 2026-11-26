@@ -1,0 +1,1275 @@
+{
+  "$defs": {
+    "Actor": {
+      "additionalProperties": false,
+      "properties": {
+        "identity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/ActorKind"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "ActorKind": {
+      "enum": [
+        "person",
+        "entity",
+        "brand"
+      ],
+      "type": "string"
+    },
+    "AudioCapture": {
+      "additionalProperties": false,
+      "properties": {
+        "channels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "distanceM": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "make": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "polarPattern": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "position": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sampleRateHz": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "channels"
+      ],
+      "type": "object"
+    },
+    "Beat": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "camera": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Camera"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "narration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Narration"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "range": {
+          "$ref": "#/$defs/Range"
+        }
+      },
+      "required": [
+        "range",
+        "action"
+      ],
+      "type": "object"
+    },
+    "Camera": {
+      "additionalProperties": false,
+      "properties": {
+        "angle": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "apertureF": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "focalLengthMm": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "focusDistanceM": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "framing": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "iso": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "lens": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "make": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "movement": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pitchDeg": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "rollDeg": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "sensor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "shutterAngleDeg": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "whiteBalanceK": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "yawDeg": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "Contribution": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "type": "string"
+        },
+        "cut": {
+          "$ref": "#/$defs/Cut"
+        },
+        "disclosure": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "featuredEntity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/CreditKind"
+        },
+        "role": {
+          "$ref": "#/$defs/Role"
+        }
+      },
+      "required": [
+        "actor",
+        "role",
+        "kind",
+        "cut"
+      ],
+      "type": "object"
+    },
+    "CreditKind": {
+      "enum": [
+        "brandPlacement",
+        "performance",
+        "production"
+      ],
+      "type": "string"
+    },
+    "Cut": {
+      "additionalProperties": false,
+      "properties": {
+        "placement": {
+          "type": "string"
+        },
+        "sequence": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sequence",
+        "placement"
+      ],
+      "type": "object"
+    },
+    "Decision": {
+      "enum": [
+        "approved",
+        "changesRequested"
+      ],
+      "type": "string"
+    },
+    "Direction": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "beats": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Beat"
+          },
+          "type": "array"
+        },
+        "camera": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Camera"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cast": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "lighting": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mentions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Mention"
+          },
+          "type": "array"
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "references": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Reference"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "action",
+        "prompt"
+      ],
+      "type": "object"
+    },
+    "Entity": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/EntityKind"
+        },
+        "name": {
+          "type": "string"
+        },
+        "origin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResourceOrigin"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "playedBy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "promptScaffold": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "references": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Reference"
+          },
+          "type": "array"
+        },
+        "traits": {
+          "additionalProperties": true,
+          "default": {},
+          "type": "object"
+        },
+        "universe": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "voice": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Voice"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "EntityKind": {
+      "enum": [
+        "character",
+        "location",
+        "prop",
+        "style",
+        "wardrobe"
+      ],
+      "type": "string"
+    },
+    "Entry": {
+      "additionalProperties": false,
+      "properties": {
+        "segment": {
+          "type": "string"
+        },
+        "show": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "show",
+        "segment"
+      ],
+      "type": "object"
+    },
+    "Extension": {
+      "additionalProperties": false,
+      "properties": {
+        "data": true,
+        "required": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "required",
+        "data"
+      ],
+      "type": "object"
+    },
+    "Lifecycle": {
+      "enum": [
+        "planned",
+        "active",
+        "completed",
+        "cancelled"
+      ],
+      "type": "string"
+    },
+    "Media": {
+      "additionalProperties": false,
+      "properties": {
+        "original": {
+          "$ref": "#/$defs/Representation"
+        },
+        "proxies": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Representation"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "original"
+      ],
+      "type": "object"
+    },
+    "Mention": {
+      "additionalProperties": false,
+      "properties": {
+        "end": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "entity": {
+          "type": "string"
+        },
+        "start": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "entity"
+      ],
+      "type": "object"
+    },
+    "Mix": {
+      "additionalProperties": false,
+      "properties": {
+        "balancePermille": {
+          "format": "int16",
+          "maximum": 32767,
+          "minimum": -32768,
+          "type": "integer"
+        },
+        "gainMillidb": {
+          "format": "int32",
+          "type": "integer"
+        },
+        "muted": {
+          "type": "boolean"
+        },
+        "role": {
+          "$ref": "#/$defs/SoundRole"
+        },
+        "route": {
+          "type": "string"
+        },
+        "sequence": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sequence",
+        "route",
+        "role",
+        "gainMillidb",
+        "muted",
+        "balancePermille"
+      ],
+      "type": "object"
+    },
+    "Model": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "default": {},
+          "type": "object"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "provider",
+        "name"
+      ],
+      "type": "object"
+    },
+    "Narration": {
+      "additionalProperties": false,
+      "properties": {
+        "audioAsset": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "delivery": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "pronunciation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "speaker": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "speaker",
+        "language",
+        "text",
+        "delivery"
+      ],
+      "type": "object"
+    },
+    "Origin": {
+      "enum": [
+        "recorded",
+        "generated",
+        "synthetic"
+      ],
+      "type": "string"
+    },
+    "Phase": {
+      "enum": [
+        "development",
+        "preproduction",
+        "production",
+        "postproduction",
+        "review",
+        "delivery"
+      ],
+      "type": "string"
+    },
+    "Range": {
+      "additionalProperties": false,
+      "properties": {
+        "duration": {
+          "$ref": "#/$defs/Time"
+        },
+        "start": {
+          "$ref": "#/$defs/Time"
+        }
+      },
+      "required": [
+        "start",
+        "duration"
+      ],
+      "type": "object"
+    },
+    "RefRole": {
+      "enum": [
+        "subject",
+        "wardrobe",
+        "location",
+        "style",
+        "composition",
+        "firstFrame",
+        "lastFrame",
+        "cameraMotion",
+        "performance",
+        "voice",
+        "sound",
+        "storyboard"
+      ],
+      "type": "string"
+    },
+    "Reference": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "type": "string"
+        },
+        "instruction": {
+          "type": "string"
+        },
+        "range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Range"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "role": {
+          "$ref": "#/$defs/RefRole"
+        }
+      },
+      "required": [
+        "asset",
+        "role",
+        "instruction"
+      ],
+      "type": "object"
+    },
+    "Representation": {
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "type": "string"
+        },
+        "height": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "width": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "sha256",
+        "format"
+      ],
+      "type": "object"
+    },
+    "ResourceOrigin": {
+      "additionalProperties": false,
+      "description": "Provenance of a locally cloned Universe or entity in a specific signed production.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "production": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "production",
+        "revision",
+        "id"
+      ],
+      "type": "object"
+    },
+    "Review": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "type": "string"
+        },
+        "decision": {
+          "$ref": "#/$defs/Decision"
+        },
+        "note": {
+          "type": "string"
+        },
+        "workSha256": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "actor",
+        "decision",
+        "workSha256",
+        "note"
+      ],
+      "type": "object"
+    },
+    "Role": {
+      "enum": [
+        "lead",
+        "editor",
+        "reviewer",
+        "viewer",
+        "creator"
+      ],
+      "type": "string"
+    },
+    "Setup": {
+      "additionalProperties": false,
+      "properties": {
+        "brief": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "camera": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Camera"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lighting": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "Shot": {
+      "additionalProperties": false,
+      "properties": {
+        "cut": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Cut"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "direction": {
+          "$ref": "#/$defs/Direction"
+        },
+        "intendedModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Model"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "plannedDuration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "selectedTake": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "takes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Take"
+          },
+          "type": "object"
+        },
+        "title": {
+          "type": "string"
+        },
+        "universe": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "title",
+        "direction",
+        "takes"
+      ],
+      "type": "object"
+    },
+    "SoundRole": {
+      "enum": [
+        "dialogue",
+        "narration",
+        "music",
+        "effects",
+        "ambience"
+      ],
+      "type": "string"
+    },
+    "Take": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "type": "string"
+        },
+        "camera": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Camera"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "directionSnapshot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Direction"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "microphone": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AudioCapture"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Model"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        },
+        "promptSnapshot": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recipeRevision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "asset",
+        "origin"
+      ],
+      "type": "object"
+    },
+    "Task": {
+      "additionalProperties": false,
+      "properties": {
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "owner": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "phase": {
+          "$ref": "#/$defs/Phase"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "shot": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state": {
+          "$ref": "#/$defs/TaskState"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "phase",
+        "state",
+        "required"
+      ],
+      "type": "object"
+    },
+    "TaskState": {
+      "enum": [
+        "todo",
+        "inProgress",
+        "blocked",
+        "done"
+      ],
+      "type": "string"
+    },
+    "Time": {
+      "additionalProperties": false,
+      "properties": {
+        "rate": {
+          "format": "uint32",
+          "maximum": 1000000000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ticks": {
+          "pattern": "^(0|-?[1-9][0-9]{0,18})$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ticks",
+        "rate"
+      ],
+      "type": "object"
+    },
+    "Universe": {
+      "additionalProperties": false,
+      "properties": {
+        "lore": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "origin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResourceOrigin"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "setup": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Setup"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "style": {
+          "additionalProperties": true,
+          "default": {},
+          "type": "object"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "Version": {
+      "enum": [
+        "producer.bundle/1"
+      ],
+      "type": "string"
+    },
+    "Voice": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "id"
+      ],
+      "type": "object"
+    },
+    "Workflow": {
+      "additionalProperties": false,
+      "properties": {
+        "endedAt": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "phase": {
+          "$ref": "#/$defs/Phase"
+        },
+        "review": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Review"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "startedAt": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "state": {
+          "$ref": "#/$defs/Lifecycle"
+        },
+        "tasks": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Task"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "state",
+        "phase",
+        "tasks"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "actors": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Actor"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "assets": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Media"
+      },
+      "type": "object"
+    },
+    "author": {
+      "type": "string"
+    },
+    "authoredAt": {
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "contributions": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Contribution"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "documentSha256": {
+      "type": "string"
+    },
+    "entities": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Entity"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "entry": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Entry"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "extensions": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Extension"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "mix": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Mix"
+      },
+      "type": "array"
+    },
+    "parent": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "production": {
+      "type": "string"
+    },
+    "protocol": {
+      "$ref": "#/$defs/Version"
+    },
+    "sequenceSetups": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Setup"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "setup": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Setup"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "shots": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Shot"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "universes": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Universe"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "workflow": {
+      "$ref": "#/$defs/Workflow"
+    }
+  },
+  "required": [
+    "protocol",
+    "production",
+    "documentSha256",
+    "authoredAt",
+    "author",
+    "workflow",
+    "assets"
+  ],
+  "title": "Manifest",
+  "type": "object"
+}
