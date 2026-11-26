@@ -25063,13 +25063,8 @@
             },
             {
               "kind": "fragment",
-              "id": "exchange-live-screen",
-              "shader": "let city=textureSample(input0,linear_sampler,uv);\nif (city.r < .98 || city.b < .98 || city.g > .03) {return city;}\nlet t=(frame.info.z % 23.8)/3.4; let k=i32(floor(t)); let u=fract(t);\nlet ease=u*u*(3.-2.*u);\nlet h1=u*(1.-u)*(1.-u)*select(.5,1.,k==0);\nlet h2=u*u*(u-1.)*select(.5,1.,k==6);\nvar eye=vec3<f32>(0.); var aim=vec3<f32>(0.); var fov=0.;\nlet tall=frame.info.y>frame.info.x;\n{ let ids=vec4<i32>(0,1,2,3);\nlet a=select(vec4<f32>(0.),vec4<f32>(1.),ids==vec4<i32>(k));\nlet b=select(vec4<f32>(0.),vec4<f32>(1.),ids==vec4<i32>(k+1));\nlet p=select(vec4<f32>(0.),vec4<f32>(1.),ids==vec4<i32>(max(k-1,0)));\nlet n=select(vec4<f32>(0.),vec4<f32>(1.),ids==vec4<i32>(min(k+2,7)));\nlet blend=a*(1.-ease)+b*ease; let w=blend+(b-p)*h1+(n-a)*h2;\neye+=mat4x3<f32>(vec3<f32>(-1.8,2.65,26.),vec3<f32>(-1.4,3.1,9.),vec3<f32>(-2.75,6.96,-5.35),vec3<f32>(-2.75,6.96,-5.35))*w;\naim+=mat4x3<f32>(vec3<f32>(-0.5,5.,-15.),vec3<f32>(0.9,5.8,-11.),vec3<f32>(4.77,7.,-5.9),vec3<f32>(4.77,7.,-5.9))*w;\nlet wide=vec4<f32>(65.,64.,41.,41.);\nlet high=vec4<f32>(80.,79.,84.,84.);\nfov+=dot(select(wide,high,tall),blend); }\n{ let ids=vec4<i32>(4,5,6,7);\nlet a=select(vec4<f32>(0.),vec4<f32>(1.),ids==vec4<i32>(k));\nlet b=select(vec4<f32>(0.),vec4<f32>(1.),ids==vec4<i32>(k+1));\nlet p=select(vec4<f32>(0.),vec4<f32>(1.),ids==vec4<i32>(max(k-1,0)));\nlet n=select(vec4<f32>(0.),vec4<f32>(1.),ids==vec4<i32>(min(k+2,7)));\nlet blend=a*(1.-ease)+b*ease; let w=blend+(b-p)*h1+(n-a)*h2;\neye+=mat4x3<f32>(vec3<f32>(-2.75,6.96,-5.35),vec3<f32>(-2.75,6.96,-5.35),vec3<f32>(3.8,34.,-2.),vec3<f32>(13.5,52.,20.))*w;\naim+=mat4x3<f32>(vec3<f32>(4.77,7.,-5.9),vec3<f32>(4.77,7.,-5.9),vec3<f32>(-2.,7.,-40.),vec3<f32>(-1.,6.3,-38.))*w;\nlet wide=vec4<f32>(41.,41.,56.,52.);\nlet high=vec4<f32>(84.,84.,78.,77.);\nfov+=dot(select(wide,high,tall),blend); }\n\nlet forward=normalize(aim-eye);\nlet right=normalize(cross(forward,vec3<f32>(0.,1.,0.)));\nlet up=cross(right,forward);\nlet ray=forward+(right*((2.*uv.x-1.)*frame.info.x/frame.info.y)+up*(1.-2.*uv.y))*tan(radians(fov*.5));\nlet hit=eye+ray*((4.77-eye.x)/select(.00001,ray.x,abs(ray.x)>.00001));\nlet local=vec2<f32>(.5+(hit.z+5.9)/6.4,.5-(hit.y-7.)/3.6);\nlet res=vec2<f32>(textureDimensions(input1));\nlet ratio=(6.4/3.6)/(res.x/max(res.y,1.));\nlet sampleUV=.5+(local-.5)*min(vec2<f32>(ratio,1./max(ratio,.001)),vec2<f32>(1.));\nlet feed=textureSampleLevel(input1,linear_sampler,clamp(sampleUV,vec2<f32>(0.),vec2<f32>(1.)),0.);\n\nlet card=textureSampleLevel(input2,linear_sampler,clamp(local,vec2<f32>(0.),vec2<f32>(1.)),0.);\nlet backdrop=mix(vec3<f32>(.045,.105,.135),vec3<f32>(.11,.22,.245),clamp(1.-local.y,0.,1.));\nlet offline=card.rgb+backdrop*(1.-card.a);\nlet visibility=select(0.,feed.a,res.x>1. && res.y>1.);\nreturn vec4<f32>(mix(offline,feed.rgb,visibility),1.);\n",
+              "id": "billboard-feed",
               "inputs": [
-                {
-                  "kind": "pass",
-                  "id": "blue-hour"
-                },
                 {
                   "kind": "source",
                   "id": "camera"
@@ -25079,6 +25074,28 @@
                   "nodes": [
                     "caption"
                   ]
+                }
+              ],
+              "shader": "let res=vec2<f32>(textureDimensions(input0));\nlet ratio=(16./9.)/(res.x/max(res.y,1.));\nlet feedUV=.5+(uv-.5)*min(vec2<f32>(ratio,1./max(ratio,.001)),vec2<f32>(1.));\nlet feed=textureSampleLevel(input0,linear_sampler,feedUV,0.);\nlet card=textureSampleLevel(input1,linear_sampler,uv,0.);\nlet backdrop=mix(vec3<f32>(.045,.105,.135),vec3<f32>(.11,.22,.245),1.-uv.y);\nlet offline=card.rgb+backdrop*(1.-card.a);\nlet visible=select(0.,feed.a,res.x>1. && res.y>1.);\nreturn vec4<f32>(mix(offline,feed.rgb,visible),1.);\n",
+              "params": [
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            {
+              "kind": "fragment",
+              "id": "exchange-live-screen",
+              "shader": "let city=textureSample(input0,linear_sampler,uv);\nif (city.r < .98 || city.b < .98 || city.g > .03) {return city;}\nlet t=(frame.info.z % 23.8)/3.4; let k=i32(floor(t)); let u=fract(t);\nlet ease=u*u*(3.-2.*u);\nlet h1=u*(1.-u)*(1.-u)*select(.5,1.,k==0);\nlet h2=u*u*(u-1.)*select(.5,1.,k==6);\nvar eye=vec3<f32>(0.); var aim=vec3<f32>(0.); var fov=0.;\nlet tall=frame.info.y>frame.info.x;\n{ let ids=vec4<i32>(0,1,2,3);\nlet a=select(vec4<f32>(0.),vec4<f32>(1.),ids==vec4<i32>(k));\nlet b=select(vec4<f32>(0.),vec4<f32>(1.),ids==vec4<i32>(k+1));\nlet p=select(vec4<f32>(0.),vec4<f32>(1.),ids==vec4<i32>(max(k-1,0)));\nlet n=select(vec4<f32>(0.),vec4<f32>(1.),ids==vec4<i32>(min(k+2,7)));\nlet blend=a*(1.-ease)+b*ease; let w=blend+(b-p)*h1+(n-a)*h2;\neye+=mat4x3<f32>(vec3<f32>(-1.8,2.65,26.),vec3<f32>(-1.4,3.1,9.),vec3<f32>(-2.75,6.96,-5.35),vec3<f32>(-2.75,6.96,-5.35))*w;\naim+=mat4x3<f32>(vec3<f32>(-0.5,5.,-15.),vec3<f32>(0.9,5.8,-11.),vec3<f32>(4.77,7.,-5.9),vec3<f32>(4.77,7.,-5.9))*w;\nlet wide=vec4<f32>(65.,64.,41.,41.);\nlet high=vec4<f32>(80.,79.,84.,84.);\nfov+=dot(select(wide,high,tall),blend); }\n{ let ids=vec4<i32>(4,5,6,7);\nlet a=select(vec4<f32>(0.),vec4<f32>(1.),ids==vec4<i32>(k));\nlet b=select(vec4<f32>(0.),vec4<f32>(1.),ids==vec4<i32>(k+1));\nlet p=select(vec4<f32>(0.),vec4<f32>(1.),ids==vec4<i32>(max(k-1,0)));\nlet n=select(vec4<f32>(0.),vec4<f32>(1.),ids==vec4<i32>(min(k+2,7)));\nlet blend=a*(1.-ease)+b*ease; let w=blend+(b-p)*h1+(n-a)*h2;\neye+=mat4x3<f32>(vec3<f32>(-2.75,6.96,-5.35),vec3<f32>(-2.75,6.96,-5.35),vec3<f32>(3.8,34.,-2.),vec3<f32>(13.5,52.,20.))*w;\naim+=mat4x3<f32>(vec3<f32>(4.77,7.,-5.9),vec3<f32>(4.77,7.,-5.9),vec3<f32>(-2.,7.,-40.),vec3<f32>(-1.,6.3,-38.))*w;\nlet wide=vec4<f32>(41.,41.,56.,52.);\nlet high=vec4<f32>(84.,84.,78.,77.);\nfov+=dot(select(wide,high,tall),blend); }\n\nlet forward=normalize(aim-eye);\nlet right=normalize(cross(forward,vec3<f32>(0.,1.,0.)));\nlet up=cross(right,forward);\nlet ray=forward+(right*((2.*uv.x-1.)*frame.info.x/frame.info.y)+up*(1.-2.*uv.y))*tan(radians(fov*.5));\nlet hit=eye+ray*((4.77-eye.x)/select(.00001,ray.x,abs(ray.x)>.00001));\nlet local=vec2<f32>(.5+(hit.z+5.9)/6.4,.5-(hit.y-7.)/3.6);\nreturn textureSampleLevel(input1,linear_sampler,clamp(local,vec2<f32>(0.),vec2<f32>(1.)),0.);\n",
+              "inputs": [
+                {
+                  "kind": "pass",
+                  "id": "blue-hour"
+                },
+                {
+                  "kind": "pass",
+                  "id": "billboard-feed"
                 }
               ],
               "params": [

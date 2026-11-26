@@ -315,13 +315,25 @@ fn upgrade_set_graphs(room: &mut RoomProject) -> Result<()> {
     }
     let Some(set) = room.production.sets.get_mut("meridian-avenue") else { return Ok(()) };
     if !set.layouts.values().all(|l| l.root.children.iter().any(|n| n.id == "caption")) { return Ok(()); }
-    let Some(GraphPass::Fragment {shader, inputs, ..}) = set.graphs.get_mut("city").and_then(|g| g.passes.last_mut()) else { return Ok(()) };
-    if inputs.len() == 2 && format!("{:x}", Sha256::digest(shader.as_bytes())) == "c0edab53ef0a3900e65839c7b612fe8500a9cc3b672208a89e331a8e97b29164" {
+    let Some(graph) = set.graphs.get_mut("city") else { return Ok(()) };
+    let Some(GraphPass::Fragment { shader, inputs, .. }) = graph.passes.last() else { return Ok(()) };
+    if inputs.len() == 2 && graph.passes.len() < 8
+        && matches!(inputs[1], GraphInput::Source { .. })
+        && format!("{:x}", Sha256::digest(shader.as_bytes())) == "c0edab53ef0a3900e65839c7b612fe8500a9cc3b672208a89e331a8e97b29164"
+    {
         let catalog: Catalog = serde_json::from_slice(include_bytes!("../starter-sets/catalog.json"))?;
-        if let Some(GraphPass::Fragment {shader: updated, ..}) = catalog.sets["meridian-avenue"].graphs["city"].passes.last() {
-            shader.clone_from(updated);
-            inputs.push(GraphInput::Layers {nodes:vec!["caption".into()]});
+        let passes = &catalog.sets["meridian-avenue"].graphs["city"].passes;
+        let mut feed = passes[passes.len() - 2].clone();
+        if let GraphPass::Fragment { inputs: feed_inputs, .. } = &mut feed {
+            feed_inputs[0] = inputs[1].clone();
         }
+        // Preserve the existing city pipeline and the studio's chosen camera.
+        let mut screen = passes.last().unwrap().clone();
+        if let GraphPass::Fragment { inputs: screen_inputs, .. } = &mut screen {
+            screen_inputs[0] = inputs[0].clone();
+        }
+        graph.passes.pop();
+        graph.passes.extend([feed, screen]);
     }
     Ok(())
 }
