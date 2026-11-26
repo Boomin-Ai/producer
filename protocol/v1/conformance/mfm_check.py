@@ -28,7 +28,7 @@ def check(core):
     assert len({s["occurrence"] for s in samples}) == 5
     pairs = [(s["landscape"], s["vertical"]) for s in samples]
     assert pairs == [(prefix + "landscape", prefix + "vertical") for prefix in [
-        "", "focus-shaan-", "focus-sam-", "", "", "interview-", "screen-share-", "follow-"
+        "opening-", "focus-shaan-", "focus-sam-", "opening-", "", "interview-", "screen-share-", "follow-"
     ]]
     assert all(s["landscapeGraph"] == s["verticalGraph"] == "stage" for s in samples)
     assert [[c["cue"] for c in s["timeline"]["cues"]] for s in samples[:3]] == [

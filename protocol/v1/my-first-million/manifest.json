@@ -1,9 +1,9 @@
 {
   "protocol": "producer.bundle/1",
   "production": "urn:uuid:2a85a049-4d2c-409a-95bf-8e6204664be6",
-  "parent": null,
-  "authoredAt": 1795651200,
-  "documentSha256": "3462e4df6b5d2ddaa6d93572bddcd5cd1597e31e0d5f41098f2a0fe049d6883d",
+  "parent": "9c191c54e64f3d7f58d97b0be6992f4ce0ca73bfe120a50217207c689cee45c7",
+  "authoredAt": 1795651202,
+  "documentSha256": "d2db1acc3fd703ef2ce611b405188b17e0a2a41a894f2985898b69b97cb08e82",
   "author": "producer-editor",
   "entry": {
     "show": "my-first-million",
@@ -35,6 +35,13 @@
       "original": {
         "sha256": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
         "format": "system-ui"
+      },
+      "proxies": []
+    },
+    "mfm-engraving": {
+      "original": {
+        "sha256": "e2955c917555811c267e66b6aed27fbae4c29e3b1c852d7a353d8d8c5664ffe0",
+        "format": "png"
       },
       "proxies": []
     }

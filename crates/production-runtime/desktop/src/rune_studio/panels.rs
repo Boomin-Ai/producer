@@ -1365,6 +1365,12 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                             });
                         }),
                 );
+                let has_rundown = p.production.shows.values().any(|show|
+                    &show.set == key && show.segments.iter().any(|s| s.sequence.is_some()));
+                if has_rundown {
+                    b = b.child(row().gap(4.).child(button("choose-rundown", "Rundown", !s.show_shots, |s| s.show_shots = false))
+                        .child(button("choose-shots", "Shots", s.show_shots, |s| s.show_shots = true)));
+                }
                 let mut layouts = row().flex_wrap().gap(5.);
                 let slots = super::editor::layout_slots(p, set, &pair);
                 for layout in p.set_layout_choices(key) {
@@ -1376,12 +1382,19 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                     let ready = super::editor::layout_slots(p, set, &chosen)
                         .iter().all(|(_, id)| slot_ready(snap, id));
                     let label = format!("{} · {}", layout.label, if ready { "Ready" } else { "Needs source" });
-                    layouts = layouts.child(row().key(format!("layout-{}", chosen.landscape))
+                    let label_text = if key == "my-first-million" && chosen.landscape == "landscape" { "Two hosts".into() } else { layout.label };
+                    let thumbnail = s.set_library.shot_image(key, &chosen.landscape, 62., 35.);
+                    let mut item = row().key(format!("layout-{}", chosen.landscape))
                         .role("button").label(&label).help(&label).focusable(true)
-                        .h(28.).gap(5.).px(8.).items_center().radius(5.)
-                        .fill(color(if active { 0x193a32 } else { SURFACE })).hover_fill(color(0x24343e))
-                        .child(el().size(6.,6.).radius(3.).fill(color(if ready { MINT } else { 0xe9b666 })))
-                        .child(title(layout.label, 11., 550., if active { MINT } else { TEXT }))
+                        .gap(6.).px(6.).items_center().radius(6.)
+                        .fill(color(if active { theme::TOOL_SELECTED } else { SURFACE })).hover_fill(color(theme::SELECTED_HOVER));
+                    if let Some(image) = thumbnail {
+                        item = item.w((width - 18.).clamp(110., 285.)).h(43.)
+                            .child(image).child(title(label_text, 12., 620., TEXT).grow(1.));
+                    } else {
+                        item = item.h(28.).child(title(label_text, 11., 550., if active { MINT } else { TEXT }));
+                    }
+                    layouts = layouts.child(item.child(el().size(6.,6.).radius(3.).fill(color(if ready { MINT } else { 0xe9b666 })))
                         .on_press(move |s: &mut Studio| {
                             if let Some((show, segment)) = &show_segment {
                                 s.send(RoomCommand::ShowLayout { show: show.clone(), segment: segment.clone(), layout: Some(chosen.clone()) });
@@ -1397,28 +1410,38 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                         },
                     ));
                 }
-                b = b
-                    .child(layouts)
-                    .child(el().h(1.).w_full().fill(color(0x263443)));
+                if !has_rundown || s.show_shots {
+                    b = b.child(layouts);
+                }
                 if let Some((show, segment)) = p.playing_segment.clone().filter(|_| running && p.shot_override.is_some()) {
                     b = b.child(command("follow-show-layout", "Follow rundown shots", false,
                         RoomCommand::ShowLayout { show, segment, layout: None }));
                 }
-                for (show_id, show) in p.production.shows.iter().filter(|(_, show)| &show.set == key
+                for (show_id, show) in p.production.shows.iter().filter(|(_, show)| !s.show_shots && &show.set == key
                     && show.segments.iter().any(|s| s.sequence.is_some())) {
-                    b = b.child(title(format!("Show · {}", crate::model::set_label(show_id)), 12., 600., TEXT));
+                    let mut rundown = col().gap(4.);
                     for segment in show.segments.iter().filter(|s| s.sequence.is_some()) {
                         let id = segment.id.clone();
                         let show = show_id.clone();
                         let current = running && p.playing_segment.as_ref().is_some_and(|(key, part)| key == &show && part == &id);
-                        let label = if current { format!("On air · {}", segment.title) } else { segment.title.clone() };
-                        b = b.child(button(format!("run-{show}-{id}"), label, current, move |s| {
+                        let label = if current { format!("On air · {}", segment.title) } else { format!("Take {}", segment.title) };
+                        let mut part = row().key(format!("run-{show}-{id}")).role("button").label(&label).help(&label)
+                            .focusable(true).h(44.).px(6.).gap(8.).items_center().radius(6.)
+                            .border(1., color(if current { MINT } else { theme::SLIDER_RAIL_COMPACT }))
+                            .fill(color(if current { theme::TOOL_SELECTED } else { SURFACE })).hover_fill(color(theme::SELECTED_HOVER));
+                        if let Some(image) = s.set_library.shot_image(key, &segment.landscape, 54., 31.) {
+                            part = part.child(image);
+                        }
+                        part = part.child(title(segment.title.clone(), 12., 640., TEXT).min_w(0.).grow(1.))
+                            .child(if current { title("On air", 10., 650., MINT) } else { glyph("play", 12., MUTED) });
+                        rundown = rundown.child(part.on_press(move |s: &mut Studio| {
                             if !current {
                                 s.set_selection = None;
                                 s.send(RoomCommand::RunSegment { show: show.clone(), segment: id.clone() });
                             }
                         }));
                     }
+                    b = b.child(rundown);
                 }
                 let missing: std::collections::BTreeSet<_> = slots.iter()
                     .map(|(_, id)| id.clone()).filter(|id| !slot_ready(snap, id)).collect();

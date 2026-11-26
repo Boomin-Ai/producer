@@ -385,7 +385,8 @@ impl Visuals {
                             height: h,
                             font_size: style.map_or(48., |s| s.font_size as f32),
                             weight: style.map_or(600, |s| s.weight as u32),
-                            single_line: u32::from(name.is_some()),
+                            // Field-bound titles use the authored height for multiline copy.
+                            single_line: u32::from(style.is_some_and(|s| name.is_some() && (h as f64) < 2. * s.font_size)),
                             align: style.map_or(0, |s| match s.align {
                                 TextAlign::Left => 0,
                                 TextAlign::Center => 1,

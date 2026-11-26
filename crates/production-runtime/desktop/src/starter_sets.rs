@@ -32,7 +32,7 @@ const LEGACY_RECEIPT: &str = "starter-sets-v1.installed";
 const SPEAKER_RECEIPT: &str = "starter-sets-v2.installed";
 const CLASSIC_RECEIPT: &str = "starter-sets-v4.installed";
 const MFM_RECEIPT: &str = "starter-sets-v5.installed";
-const RECEIPT: &str = "starter-sets-v7.installed";
+const RECEIPT: &str = "starter-sets-v8.installed";
 const RETIRED: [&str; 4] = ["studio", "waves", "podcast", "podcast-studio"];
 const CLASSIC_SKYLINE_HASH: &str = "ab06936944a63d57755ab8f1cc3ee96abaa2ee7a7902efc4d64ae8bc329f4c46";
 const CLASSIC_SKYLINE: &[u8] = include_bytes!("../starter-sets/classic-skyline.png");
@@ -203,7 +203,7 @@ fn add_mfm_focus_shots(room: &mut RoomProject) -> Result<()> {
 
 // Merge the bundled protocol document once. An edited studio keeps its own
 // definitions. A removed starter set stays removed.
-fn install_mfm_rundown(room: &mut RoomProject) -> Result<()> {
+fn install_mfm_rundown(room: &mut RoomProject, assets: &Path) -> Result<()> {
     const ID: &str = "my-first-million";
     let authored: producer_production_contract::Document = serde_json::from_slice(
         include_bytes!("../../../../protocol/v1/my-first-million/production.json"),
@@ -220,7 +220,7 @@ fn install_mfm_rundown(room: &mut RoomProject) -> Result<()> {
         "my-first-million-rundown"
     };
     if (show_key != ID && doc.shows.contains_key(show_key))
-        || authored.sets[ID].layouts.keys().any(|key| !set.layouts.contains_key(key))
+        || legacy.set.layouts.keys().any(|key| !set.layouts.contains_key(key))
         || authored.sequences.iter().any(|(k, v)| doc.sequences.get(k).is_some_and(|s| s != v))
         || authored.assets.iter().any(|(k, v)| doc.assets.get(k).is_some_and(|a| a != v))
         || authored.sources.iter().any(|(k, v)| doc.sources.get(k).is_some_and(|s| s != v))
@@ -230,8 +230,16 @@ fn install_mfm_rundown(room: &mut RoomProject) -> Result<()> {
     let upgraded = if set == &legacy.set || set == &legacy.set.with_output_graphs() {
         authored.sets[ID].clone()
     } else {
-        set.clone().with_output_graphs()
+        let mut customized = set.clone();
+        for key in ["opening-landscape", "opening-vertical"] {
+            customized.layouts.entry(key.into()).or_insert_with(|| authored.sets[ID].layouts[key].clone());
+        }
+        customized.with_output_graphs()
     };
+    let engraving = include_bytes!("../../../../protocol/v1/my-first-million/blobs/e2955c917555811c267e66b6aed27fbae4c29e3b1c852d7a353d8d8c5664ffe0");
+    let hash = &authored.assets["mfm-engraving"].hash;
+    ensure!(format!("{:x}", Sha256::digest(engraving)) == *hash, "Invalid MFM engraving");
+    write_missing(&assets.join(format!("{hash}.png")), engraving)?;
     doc.sets.insert(ID.into(), upgraded);
     doc.shows.insert(show_key.into(), show.clone());
     doc.sequences.extend(authored.sequences);
@@ -300,7 +308,7 @@ pub(crate) fn install(root: &Path) -> Result<()> {
     } else {
         install_my_first_million(&mut room, &assets)?;
     }
-    install_mfm_rundown(&mut room)?;
+    install_mfm_rundown(&mut room, &assets)?;
     room.compile()?;
     ensure!(format!("{:x}", Sha256::digest(CLASSIC_SKYLINE)) == CLASSIC_SKYLINE_HASH, "Invalid Classic skyline");
     write_missing(&assets.join(format!("{CLASSIC_SKYLINE_HASH}.png")), CLASSIC_SKYLINE)?;
@@ -328,7 +336,7 @@ pub(crate) fn install(root: &Path) -> Result<()> {
     write_missing(&root.join(SPEAKER_RECEIPT), b"2\n")?;
     write_missing(&root.join(CLASSIC_RECEIPT), b"4\n")?;
     write_missing(&root.join(MFM_RECEIPT), b"5\n")?;
-    write_missing(&root.join(RECEIPT), b"7\n")
+    write_missing(&root.join(RECEIPT), b"8\n")
 }
 #[cfg(test)]
 mod tests {

@@ -58,6 +58,8 @@ const POSTERS: &[(&str, &[u8])] = &[
     poster!("classic"),
     poster!("my-first-million"),
     poster!("the-producer"),
+    poster!("mfm-opening"), poster!("mfm-conversation"), poster!("mfm-interview"),
+    poster!("mfm-focus-shaan"), poster!("mfm-focus-sam"), poster!("mfm-screen-share"), poster!("mfm-follow"),
 ];
 
 impl Library {
@@ -68,6 +70,14 @@ impl Library {
             .map(|(id, bytes)| (*id, images.load(*bytes)))
             .collect();
         self.images = Some(images);
+    }
+
+    pub(super) fn shot_image(&self, set: &str, landscape: &str, width: f32, height: f32) -> Option<El> {
+        if set != "my-first-million" { return None; }
+        let shot = landscape.strip_suffix("-landscape").unwrap_or("conversation");
+        let key = format!("mfm-{shot}");
+        let image = self.local.get(key.as_str()).filter(|image| image.size().is_some())?;
+        Some(el().size(width, height).clip_rounded(4.).pixels_fit(image.pixels(), SurfaceFit::Fill))
     }
 
     pub fn poll(&mut self) -> bool {
