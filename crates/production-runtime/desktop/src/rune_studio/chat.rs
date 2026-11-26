@@ -177,6 +177,11 @@ impl Chat {
         self.receipts.values().next_back().map(Arc::as_ref)
     }
     fn check_account(&mut self, connect: bool) {
+        self.account_action(move || {
+            if connect { assistant::connect().map(|_| ()) } else { Ok(()) }
+        });
+    }
+    fn account_action(&mut self, operation: impl FnOnce() -> Result<()> + Send + 'static) {
         if self.account_job.is_some() {
             return;
         }
@@ -186,12 +191,7 @@ impl Chat {
         let (tx, rx) = mpsc::channel();
         self.account_job = Some(rx);
         std::thread::spawn(move || {
-            let result = if connect {
-                assistant::connect().map(|_| ())
-            } else {
-                Ok(())
-            };
-            let _ = tx.send(result.and_then(|_| assistant::account_status()));
+            let _ = tx.send(operation().and_then(|_| assistant::account_status()));
         });
     }
     fn start(&mut self, live: &Live, selected: Option<(String, SetLayoutPair)>) {
@@ -1116,6 +1116,11 @@ pub(super) fn panel(s: &Studio, popout: bool) -> El {
             )
             .self_start()
         }
+        Account::Connected => row().gap(5.).items_center()
+            .child(title("ChatGPT connected", 11., 500., MINT))
+            .child(action("assistant-sign-out", "Sign out", false, |s| {
+                s.chat.account_action(assistant::sign_out);
+            }).disabled(chat.busy())),
         state => title(
             state.label(),
             11.,

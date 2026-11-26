@@ -81,6 +81,15 @@ pub fn account_status() -> Result<(bool, bool, Option<String>)> {
         ))
     })
 }
+pub fn sign_out() -> Result<()> {
+    runtime().block_on(async {
+        let client = client().await?;
+        if let Some(id) = client.status().await.active {
+            client.disconnect(&id).await.map_err(anyhow::Error::msg)?;
+        }
+        Ok(())
+    })
+}
 pub fn connect() -> Result<String> {
     runtime().block_on(async {
         let c = client().await?;
