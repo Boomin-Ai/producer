@@ -54,10 +54,8 @@ const POSTERS: &[(&str, &[u8])] = &[
     poster!("atmosphere"),
     poster!("atmosphere-aerie"),
     poster!("meridian-avenue"),
-    poster!("orbital-desk"),
     poster!("classic"),
     poster!("my-first-million"),
-    poster!("the-producer"),
     poster!("mfm-opening"), poster!("mfm-conversation"), poster!("mfm-interview"),
     poster!("mfm-focus-shaan"), poster!("mfm-focus-sam"), poster!("mfm-screen-share"), poster!("mfm-follow"),
 ];
@@ -469,9 +467,9 @@ pub(super) fn view(s: &Studio, width: f32, current: &str) -> El {
             let image = artwork(card_width, library.local.get(id.as_str()), fallback);
             let source = if bundled { "Producer" } else { "This studio" };
             let count = project.set_layout_choices(id).len();
-            let segments = project.production.shows.values().filter(|show| &show.set == id)
-                .map(|show| show.segments.iter().filter(|segment| segment.sequence.is_some()).count())
-                .max().unwrap_or(0);
+            let segments = project.production.shows.get(id).filter(|show| &show.set == id)
+                .or_else(|| project.production.shows.values().find(|show| &show.set == id))
+                .map_or(0, |show| show.segments.len());
             let detail = if segments > 0 {
                 format!("{segments} {} · {count} {}", if segments == 1 { "segment" } else { "segments" },
                     if count == 1 { "shot" } else { "shots" })

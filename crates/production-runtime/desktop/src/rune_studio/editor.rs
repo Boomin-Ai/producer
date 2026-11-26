@@ -174,7 +174,7 @@ impl Editor {
         // A field identifies the same authored copy in every shot and output.
         // Unbound copy is shared only by matching nodes in the paired composition.
         let mut edits = Vec::new();
-        let selected = &self.draft.layouts[layout];
+        let Some(selected) = self.draft.layouts.get(layout) else { return };
         for f in &self.fields {
             let mut node = &selected.root;
             let mut path = vec![node.id.clone()];

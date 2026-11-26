@@ -33,7 +33,7 @@ const SPEAKER_RECEIPT: &str = "starter-sets-v2.installed";
 const CLASSIC_RECEIPT: &str = "starter-sets-v4.installed";
 const MFM_RECEIPT: &str = "starter-sets-v5.installed";
 const RUNDOWN_RECEIPT: &str = "starter-sets-v8.installed";
-const RECEIPT: &str = "starter-sets-v9.installed";
+const RECEIPT: &str = "starter-sets-v10.installed";
 const RETIRED: [&str; 4] = ["studio", "waves", "podcast", "podcast-studio"];
 const CLASSIC_SKYLINE_HASH: &str = "ab06936944a63d57755ab8f1cc3ee96abaa2ee7a7902efc4d64ae8bc329f4c46";
 const CLASSIC_SKYLINE: &[u8] = include_bytes!("../starter-sets/classic-skyline.png");
@@ -133,6 +133,63 @@ fn retire_stock_sets(room: &mut RoomProject) -> Result<()> {
         }
     }
     Ok(())
+}
+
+const REMOVED_LIBRARY_SETS: [&str; 2] = ["orbital-desk", "the-producer"];
+
+fn remove_library_sets(room: &mut RoomProject) {
+    for id in REMOVED_LIBRARY_SETS {
+        if room.production.sets.remove(id).is_none() { continue; }
+        room.set_source_defaults.remove(id);
+        // Detach the removed set from the live desk and every saved studio scene.
+        if room.mounted_set.as_deref() == Some(id) {
+            room.mounted_set = None;
+            room.mounted_layout = None;
+        }
+        for scene in room.room_scenes.values_mut() {
+            if scene.mounted_set.as_deref() == Some(id) {
+                scene.mounted_set = None;
+                scene.mounted_layout = None;
+            }
+        }
+        let replacement = if room.production.sets.contains_key("classic") {
+            "classic".to_owned()
+        } else if let Some(key) = room.production.sets.keys().next() {
+            key.clone()
+        } else {
+            continue;
+        };
+        if room.scene == id { room.scene.clone_from(&replacement); }
+        if room.production.shows.get(id).is_some_and(|show| show.set == id) {
+            room.production.shows.remove(id);
+            room.speaker_segments.remove(id);
+            room.untimed_segments.remove(id);
+        }
+        let pair = room.default_set_selection(&replacement);
+        for show in room.production.shows.values_mut().filter(|show| show.set == id) {
+            show.set.clone_from(&replacement);
+            for segment in &mut show.segments {
+                segment.landscape.clone_from(&pair.landscape);
+                segment.vertical.clone_from(&pair.vertical);
+                for change in &mut segment.layout_changes {
+                    change.landscape.clone_from(&pair.landscape);
+                    change.vertical.clone_from(&pair.vertical);
+                }
+            }
+        }
+        let prefix = format!("sets/{id}/");
+        for sequence in room.production.sequences.values_mut() {
+            sequence.tracks.retain(|track| !track.target.path.starts_with(&prefix));
+            for instance in &mut sequence.instances {
+                instance.target_bindings.retain(|binding| !binding.from.path.starts_with(&prefix) && !binding.to.path.starts_with(&prefix));
+            }
+        }
+        for set in room.production.sets.values_mut() {
+            for actions in set.actions.values_mut() {
+                actions.retain(|a| !matches!(a, producer_production_contract::Action::SetParameter {target, ..} if target.path.starts_with(&prefix)));
+            }
+        }
+    }
 }
 
 fn write_missing(path: &Path, bytes: &[u8]) -> Result<()> {
@@ -332,6 +389,7 @@ pub(crate) fn install(root: &Path) -> Result<()> {
         }
         install_mfm_rundown(&mut room, &assets)?;
     }
+    remove_library_sets(&mut room);
     upgrade_set_graphs(&mut room)?;
     room.compile()?;
     ensure!(format!("{:x}", Sha256::digest(CLASSIC_SKYLINE)) == CLASSIC_SKYLINE_HASH, "Invalid Classic skyline");
@@ -361,7 +419,7 @@ pub(crate) fn install(root: &Path) -> Result<()> {
     write_missing(&root.join(CLASSIC_RECEIPT), b"4\n")?;
     write_missing(&root.join(MFM_RECEIPT), b"5\n")?;
     write_missing(&root.join(RUNDOWN_RECEIPT), b"8\n")?;
-    write_missing(&root.join(RECEIPT), b"9\n")
+    write_missing(&root.join(RECEIPT), b"10\n")
 }
 #[cfg(test)]
 mod tests {
@@ -383,6 +441,7 @@ mod tests {
         room.production.sets.get_mut(id).unwrap().layouts.retain(|k, _| !k.starts_with("focus-"));
         crate::engine::persist(root, &room).unwrap();
         fs::remove_file(root.join(RECEIPT)).unwrap();
+        fs::remove_file(root.join(RUNDOWN_RECEIPT)).unwrap();
         install(root).unwrap();
         let updated: RoomProject = serde_json::from_slice(&fs::read(root.join("room.json")).unwrap()).unwrap();
         assert!(updated.production.shows.contains_key("my-first-million-rundown"));
@@ -413,6 +472,7 @@ mod tests {
         let expected_layout = room.mounted_layout.clone();
         crate::engine::persist(root, &room).unwrap();
         fs::remove_file(root.join(RECEIPT)).unwrap();
+        fs::remove_file(root.join(RUNDOWN_RECEIPT)).unwrap();
         fs::remove_file(root.join(MFM_RECEIPT)).unwrap();
         install(root).unwrap();
         let updated: RoomProject = serde_json::from_slice(&fs::read(root.join("room.json")).unwrap()).unwrap();
@@ -441,8 +501,8 @@ mod tests {
         assert!(!saved.production.sets.contains_key("studio"));
         assert!(!saved.production.sets.contains_key("waves"));
         assert_eq!(saved.mounted_set.as_deref(), Some("classic"));
-        assert_eq!(saved.production.sets.len(), 8);
-        assert_eq!(saved.set_layout_choices("my-first-million").len(), 6);
+        assert_eq!(saved.production.sets.len(), 6);
+        assert_eq!(saved.set_layout_choices("my-first-million").len(), 7);
         let mut show = saved.clone();
         for id in ["opening", "conversation", "guest-interview", "breakdown", "takeaway"] {
             show.enter_segment("my-first-million", id).unwrap();
@@ -451,7 +511,7 @@ mod tests {
             program.compile().unwrap();
         }
         assert_eq!(saved.set_layout_choices(crate::speaker_split::ID).len(), 1);
-        assert!(saved.set_layout_choices("the-producer").len() >= 3);
+        for id in REMOVED_LIBRARY_SETS { assert!(!saved.production.sets.contains_key(id)); }
         for (id, set) in &saved.production.sets {
             let mut candidate = saved.clone();
             candidate.mount_set(Some(id.clone()), None).unwrap();
