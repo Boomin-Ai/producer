@@ -6,7 +6,7 @@ permissions:
   contents: read
 jobs:
   candidate:
-    runs-on: macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 100
     env:
       CARGO_INCREMENTAL: '0'
