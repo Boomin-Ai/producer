@@ -458,8 +458,6 @@ impl Studio {
                 self.headline_notice = None;
                 self.chat = Default::default();
                 self.live = Some(l);
-                self.channels = Default::default();
-                channels::Channels::preferences(self);
                 self.pending = None;
                 self.page = Page::Studio;
                 self.network = Default::default();
@@ -469,6 +467,7 @@ impl Studio {
                 self.source = None;
                 self.pending_trim = None;
                 self.channels = Default::default();
+                channels::Channels::preferences(self);
                 self.show_chat = false;
             }
             Err(e) => self.error = e.to_string(),

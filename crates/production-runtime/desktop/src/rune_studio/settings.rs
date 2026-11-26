@@ -200,7 +200,7 @@ fn email_form(s: &Studio) -> El {
 }
 
 pub(super) fn panel_account(s: &Studio, panel: PanelId) -> El {
-    if s.settings.login_panel != panel || s.settings.profile_open {
+    if s.settings.login_panel != panel || s.settings.profile_open || s.pending_link.is_some() {
         return button(format!("{}-login", panel.key()), "Sign in or sign up", false, move |s| {
             s.settings.login_panel = panel;
             s.settings.profile_open = false;
@@ -328,15 +328,15 @@ fn rail_button(
         .label(label)
         .focusable(true);
     let base = if selected {
-        base.fill(color(0xf7f7f7))
+        base.fill(color(theme::TOOL_SELECTED)).border(1., color(MINT).alpha(0.48))
     } else {
         base
     };
-    base.child(artwork).on_press(f)
+    base.hover_fill(color(theme::ROW)).help(label).child(artwork).on_press(f)
 }
 
 fn icon(name: &str, selected: bool) -> El {
-    rune::icon(glyphs::glyph(name), 18.).color(color(if selected { BG } else { TEXT }))
+    rune::icon(glyphs::glyph(name), 18.).color(color(if selected { MINT } else { TEXT }))
 }
 
 fn detail(label: &str, value: &str) -> El {
@@ -534,7 +534,7 @@ pub(super) fn shell(s: &Studio, width: f32, height: f32) -> El {
         .fill(color(PANEL).alpha(0.25))
         .system_material(rune::SystemMaterial::Glass);
     let mut navigation = row().w(sidebar_width).h_full()
-        .gradient(color(SURFACE).alpha(0.79), color(BG).alpha(0.88))
+        .gradient(color(SURFACE).alpha(0.61), color(BG).alpha(0.76))
         .child(rail);
     let mut sections = if narrow { row().gap(4.) } else { col().gap(4.) };
     if settings {
@@ -620,10 +620,6 @@ pub(super) fn shell(s: &Studio, width: f32, height: f32) -> El {
         .w_full()
         .h_full()
         .child(backdrop)
-        // Production uses vibrant-dark HUD glass. Keep text legible when
-        // the Rune sidebar material picks up a bright desktop or window.
-        .child(el().key("shell-glass-tint").absolute(0., 0.)
-            .w(sidebar_width + CONTENT_RADIUS).h_full().fill(color(0x141414).alpha(0.58)))
         .child(navigation)
         .child(content);
     if !s.settings.profile_open || settings {
