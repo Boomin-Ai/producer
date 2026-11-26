@@ -58,6 +58,7 @@ pub enum Action {
     RequestCode(String),
     Verify(String, String),
     Switch(Login, String),
+    FirstWorkspace(Login, String),
     SignOut,
     Create(Login, String, String),
 }
@@ -291,10 +292,7 @@ async fn resolve(
     selected: Option<String>,
 ) -> Result<Outcome> {
     let brands = boomin::list_brands(API, token).await?;
-    ensure!(
-        !brands.is_empty(),
-        "Create a brand on boomin.ai to open its rooms"
-    );
+    if brands.is_empty() { return Ok(Outcome::Pick(login, brands)); }
     let mut login = login;
     if let Some(slug) = selected {
         login.brand = slug;
@@ -363,6 +361,16 @@ pub fn run(base: &Path, action: Action) -> Result<Outcome> {
                     let _ = delete_generic_password(VAULT, &prev.key);
                 }
                 result
+            }
+            Action::FirstWorkspace(login, name) => {
+                let token = login.token()?;
+                ensure!(!name.trim().is_empty(), "Enter a workspace name");
+                if boomin::list_brands(API, &token).await?.is_empty() {
+                    http()?.post(format!("{API}/v1/app/orgs")).bearer_auth(&token)
+                        .json(&json!({"name":name.trim(), "brandName":name.trim()}))
+                        .send().await?.error_for_status()?;
+                }
+                resolve(base, login, &token, None).await
             }
             Action::Switch(l, slug) => {
                 let t = l.token()?;

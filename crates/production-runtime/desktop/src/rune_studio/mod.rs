@@ -114,7 +114,46 @@ enum Page {
     Studio,
     Settings,
 }
+struct StudioPerformance {
+    sampled: Instant,
+    cpu_seconds: Option<f64>,
+    frames: u64,
+    cpu: Option<f64>,
+    fps: Option<f64>,
+}
+
+impl StudioPerformance {
+    fn new(frames: u64) -> Self {
+        Self { sampled: Instant::now(), cpu_seconds: Self::process_seconds(), frames, cpu: None, fps: None }
+    }
+
+    #[cfg(unix)]
+    fn process_seconds() -> Option<f64> {
+        let mut usage = std::mem::MaybeUninit::uninit();
+        // getrusage initializes the record when it returns success.
+        if unsafe { libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) } != 0 { return None; }
+        let usage = unsafe { usage.assume_init() };
+        let seconds = |t: libc::timeval| t.tv_sec as f64 + t.tv_usec as f64 / 1_000_000.;
+        Some(seconds(usage.ru_utime) + seconds(usage.ru_stime))
+    }
+    #[cfg(not(unix))]
+    fn process_seconds() -> Option<f64> { None }
+
+    fn update(&mut self, counts: [u64; 2]) {
+        let elapsed = self.sampled.elapsed().as_secs_f64();
+        if elapsed < 1. { return; }
+        let frames = counts[0].max(counts[1]);
+        self.fps = frames.checked_sub(self.frames).map(|delta| delta as f64 / elapsed);
+        let cpu = Self::process_seconds();
+        self.cpu = cpu.zip(self.cpu_seconds).map(|(new, old)| 100. * (new - old).max(0.) / elapsed);
+        self.frames = frames;
+        self.cpu_seconds = cpu;
+        self.sampled = Instant::now();
+    }
+}
+
 struct Live {
+    performance: StudioPerformance,
     handle: Arc<Handle>,
     snapshot: Snapshot,
     broadcast_view: (crate::broadcast::Status, bool),
@@ -167,6 +206,7 @@ impl Live {
         )?;
         Ok(Self {
             handle,
+            performance: StudioPerformance::new(snap.output_frames[0].max(snap.output_frames[1])),
             snapshot: snap,
             clip_view: None,
             broadcast_view: Default::default(),
@@ -190,6 +230,7 @@ impl Live {
             }
         }
         if let Some(snapshot) = self.handle.try_snapshot() {
+            self.performance.update(snapshot.output_frames);
             self.snapshot = snapshot;
         }
         self.previewing
@@ -417,6 +458,8 @@ impl Studio {
                 self.headline_notice = None;
                 self.chat = Default::default();
                 self.live = Some(l);
+                self.channels = Default::default();
+                channels::Channels::preferences(self);
                 self.pending = None;
                 self.page = Page::Studio;
                 self.network = Default::default();
@@ -651,10 +694,10 @@ fn desk_view(s: &Studio, cx: &mut Cx<Studio>) -> El {
                 .child(panels::workspace(s, width, height).disabled(true))
                 .child(editor::view(s, width, height));
         }
-        if let Some(sheet) = s.studio_settings {
+        if s.studio_settings == Some(settings::StudioSheet::DeskTheme) {
             return root
                 .child(panels::workspace(s, width, height).disabled(true))
-                .child(settings::studio_overlay(s, width, height, sheet));
+                .child(settings::theme_overlay(s, width, height));
         }
         return root.child(panels::workspace(s, width, height));
     }

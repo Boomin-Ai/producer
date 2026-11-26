@@ -39,7 +39,7 @@ impl Channels {
     pub(super) fn preferences(s: &mut Studio) {
         s.channels.dismiss();
         if s.channels.result.is_none() {
-            match broadcast::list(&s.base) {
+            match s.live.as_ref().map_or_else(|| broadcast::list(&s.base), |l| broadcast::channels(&s.base, &l.handle.root)) {
                 Ok(rows) => s.channels.rows = rows,
                 Err(e) => s.error = e.to_string(),
             }
@@ -69,13 +69,12 @@ impl Channels {
             return;
         }
         let h = s.live.as_ref().map(|l| l.handle.clone());
-        let preferences = s.page == Page::Settings;
         let base = s.base.clone();
         let (tx, rx) = mpsc::channel();
         s.channels.result = Some(rx);
         std::thread::spawn(move || {
             let r = work(&base, h.as_deref()).and_then(|_| match &h {
-                Some(h) if !preferences => broadcast::channels(&base, &h.root),
+                Some(h) => broadcast::channels(&base, &h.root),
                 _ => broadcast::list(&base),
             });
             let _ = tx.send(r);
@@ -101,6 +100,41 @@ impl Channels {
         true
     }
 }
+pub(super) fn indicators(s: &Studio, width: f32) -> El {
+    let status = &s.live.as_ref().unwrap().broadcast_view.0;
+    let mut group = row().key("channel-indicators").items_center().gap(4.).min_w(0.);
+    let limit = if width < 740. { 1 } else if width < 1100. { 2 } else { 3 };
+    let mut count = 0;
+    for destination in s.channels.rows.iter().filter(|d| d.enabled) {
+        count += 1;
+        if count > limit { continue; }
+        let phase = status.destinations.iter().find(|(name, _)| name == &destination.label).map(|(_, phase)| phase.as_str());
+        let (state, ink) = match (status.active, phase) {
+            (true, Some("Sending")) => ("Sending", MINT),
+            (true, Some(p)) if p.starts_with("Connect") => ("Connecting", 0xf4bd68),
+            (true, _) => ("Interrupted", 0xf4bd68),
+            _ => ("Enabled", MUTED),
+        };
+        let description = format!("{} · {state}", destination.label);
+        group = group.child(row().key(format!("enabled-channel-{}", destination.id))
+            .items_center().gap(5.).px(6.).h(23.).max_w(if width < 740. { 68. } else { 128. })
+            .radius(6.).fill(color(theme::ROW)).label(description.clone()).help(description)
+            .child(el().size(5.,5.).radius(3.).fill(color(ink)))
+            .child(title(&destination.label, 10., 600., TEXT).min_w(0.)));
+    }
+    if count > limit { group = group.child(title(format!("+{}", count-limit), 10., 500., MUTED)); }
+    group
+}
+
+pub(super) fn health(status: &broadcast::Status) -> (&'static str, u32) {
+    let sending = status.destinations.iter().filter(|(_, phase)| phase == "Sending").count();
+    if status.error.is_some() { ("Stream interrupted", 0xf4bd68) }
+    else if !status.active { ("Stream offline", MUTED) }
+    else if sending > 0 && sending == status.destinations.len() { ("Stream healthy", MINT) }
+    else if !status.destinations.is_empty() && status.destinations.iter().all(|(_,p)| p.starts_with("Connecting")) { ("Connecting", 0xf4bd68) }
+    else { ("Stream degraded", 0xf4bd68) }
+}
+
 pub(super) fn sheet(s: &Studio, width: f32) -> Option<El> {
     let me = &s.channels;
     if !me.open {

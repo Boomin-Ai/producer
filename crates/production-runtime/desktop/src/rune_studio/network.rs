@@ -672,10 +672,7 @@ pub(super) fn switcher(s: &Studio) -> Option<El> {
 pub(super) fn panel(s: &Studio, mut b: El) -> El {
     let n = &s.network;
     if s.settings.account.is_none() {
-        return b.child(button("network-account", "Sign in to Boomin", false, |s| {
-            s.page = Page::Studios;
-            s.settings.profile_open = true;
-        }));
+        return b.child(super::settings::panel_account(s, PanelId::Network));
     }
     if n.data.requires_membership {
         return b

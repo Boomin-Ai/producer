@@ -150,6 +150,7 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
             false,
             |s| copy_link(s, crate::room_share::LinkKind::Room),
         ))
+        .child(super::channels::indicators(s, w))
         .child(tool("channels", "channels", "Open channels", false, |s| {
             super::channels::Channels::open(s, true)
         }))
@@ -240,8 +241,10 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
         CanvasView::Vertical => ratios[1],
         CanvasView::Both => ratios[0] + ratios[1],
     };
+    let expanded = s.studio_settings == Some(super::settings::StudioSheet::Preferences);
+    let detail_height = if expanded { (h - top - bottom - 179.).clamp(72., 240.) } else { 0. };
     let frame_height = ((available - if view == CanvasView::Both { 8. } else { 0. }) / total)
-        .min((h - top - bottom - 147.).max(40.));
+        .min((h - top - bottom - 147. - detail_height).max(40.));
     for (i, name) in ["Landscape output", "Portrait output"]
         .into_iter()
         .enumerate()
@@ -321,8 +324,8 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
         .child(tool(
             "studio-settings",
             "settings",
-            "Studio settings",
-            false,
+            if expanded { "Close studio settings" } else { "Studio settings" },
+            expanded,
             super::settings::open_studio,
         ));
     if timeline_docked || snap.previewing {
@@ -367,7 +370,15 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
             .self_center(),
         );
     }
-    middle = middle.child(center.child(bar));
+    let controller = if expanded {
+        let width = available.clamp(80., 430.);
+        col().key("expanded-quick-controller").self_center().w(width).min_h(0.)
+            .radius(13.).border(1., color(theme::TRANSPORT_BORDER))
+            .gradient(color(SURFACE).alpha(0.97), color(PANEL).alpha(0.96))
+            .child(super::settings::quick_settings(s, width - 2., detail_height))
+            .child(bar)
+    } else { bar };
+    middle = middle.child(center.child(controller));
     if right > 0. {
         middle = middle
             .child(grip(
@@ -397,11 +408,10 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
             ))
             .child(dock(s, Edge::Bottom, w, w, &ws, [w, h]).h(bottom));
     }
-    let mode = if cfg!(debug_assertions) {
-        "LOCAL / NATIVE DEVELOPMENT"
-    } else {
-        "PRODUCER"
-    };
+    let mode = if cfg!(debug_assertions) { "Native Dev" } else { "Producer" };
+    let fps = l.performance.fps.map_or_else(|| "— fps".into(), |v| format!("{v:.0} fps"));
+    let cpu = l.performance.cpu.map_or_else(|| "CPU —".into(), |v| format!("CPU {v:.0}%"));
+    let (health, ink) = super::channels::health(&l.broadcast_view.0);
     let seam = |y| el().absolute(0., y).w_full().h(1.).fill(color(theme::SEAM));
     let completed = shell.child(body).child(chrome.absolute(0., 0.))
         .child(seam(44.)).child(seam((h - 25.).max(0.))).child(
@@ -409,20 +419,15 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
             .h(24.)
             .px(10.)
             .items_center()
-            .child(title(mode, 10., 500., MUTED))
+            .gap(10.)
+            .child(title(mode, 10., 600., MUTED))
+            .child(title(if snap.recording { "Recording" } else { "Studio" }, 10., 550., if snap.recording { 0xff6672 } else { MUTED }))
             .child(el().grow(1.))
-            .child(title(
-                format!(
-                    "{} · CPU submit p99 {:.2} ms",
-                    if snap.recording { "Recording" } else { "Idle" },
-                    snap.cpu_p99_ms
-                ),
-                10.,
-                450.,
-                MUTED,
-            ))
+            .child(title(fps, 10., 550., TEXT).help("Measured program frames per second"))
+            .child(title(cpu, 10., 550., TEXT).help(format!("Process CPU, one core = 100% · Frame submission p99 {:.2} ms", snap.cpu_p99_ms)))
             .child(el().grow(1.))
-            .child(title("Metal · Rune · Rust runtime", 10., 450., MUTED)),
+            .child(el().size(6.,6.).radius(3.).fill(color(ink)))
+            .child(title(health, 10., 550., ink)),
     );
     let mut completed = completed;
     if !s.editing_docks {
@@ -2860,21 +2865,12 @@ fn dock_picker(
             let edge = ws.panels[&id].edge;
             let dock = &ws.docks[&edge];
             let shown = ws.visible(id) && !dock.hidden && !(edge.side() && dock.collapsed);
-            menu = menu.child(command(
-                format!("toggle-{}", id.key()),
-                id.label(),
-                shown,
-                RoomCommand::Workspace {
-                    command: if shown {
-                        WorkspaceCommand::Visibility {
-                            panel: id,
-                            visible: false,
-                        }
-                    } else {
-                        WorkspaceCommand::Activate { panel: id }
-                    },
-                },
-            ));
+            menu = menu.child(button(format!("toggle-{}", id.key()), id.label(), shown, move |s| {
+                let command = if shown { WorkspaceCommand::Visibility { panel: id, visible: false } }
+                    else { WorkspaceCommand::Activate { panel: id } };
+                s.send(RoomCommand::Workspace { command });
+                if id == PanelId::Assistant && !shown { toggle_docks(s); }
+            }));
         }
         return Some(
             menu.child(command(
@@ -3010,6 +3006,7 @@ fn dock_picker(
                             command: WorkspaceCommand::Move { panel: id, edge },
                         });
                         s.panel_menu = None;
+                        if id == PanelId::Assistant { toggle_docks(s); }
                     }),
             );
         }

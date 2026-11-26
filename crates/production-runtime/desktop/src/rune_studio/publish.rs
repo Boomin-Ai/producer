@@ -1388,10 +1388,7 @@ pub(super) fn panel(s: &Studio, mut b: El, split: bool, hidden_header: bool) -> 
     let queued = s.live.as_ref().and_then(|l| l.clip_view.as_ref())
         .map(|(_, queued)| queued.as_slice()).unwrap_or_default();
     if !signed {
-        b = b.child(button("publish-login", "Sign in to Boomin", false, |s| {
-            s.page = Page::Studios;
-            s.settings.profile_open = true;
-        }));
+        b = b.child(super::settings::panel_account(s, PanelId::Publish));
         return local_list(s, b.child(subhead("Local clip queue")), queued);
     }
     let tab = |key: &str, name: String, selected, action: fn(&mut Studio)| button(key.to_owned(), name, selected, action).px(6.).h(25.);
