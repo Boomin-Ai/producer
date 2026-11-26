@@ -60,11 +60,15 @@ test)
   ;;
 compile)
   cargo build ${cargo_target[@]+"${cargo_target[@]}"} --locked --manifest-path "$desktop/Cargo.toml" --release
+  cargo build ${cargo_target[@]+"${cargo_target[@]}"} --locked --manifest-path crates/production-runtime/Cargo.toml -p producer-production-cli --release --target-dir "$desktop/target"
+  cp "$release_dir/producer-core" "$bin/producer-core"
+  mkdir -p "$app/Contents/Resources/protocol"
+  ditto protocol/v1 "$app/Contents/Resources/protocol/v1"
   cp "$release_dir/producer-native-room" "$bin/producer"
   ditto assets/starter-audio "$app/Contents/Resources/starter-audio"
   # Rune's release binary omits headless tooling. Test the signed application through
   # its normal launch and run the scripted Rune checks with a tooling build.
-  for exe in producer producer-rtc gh ffmpeg; do [[ "$(lipo -archs "$bin/$exe")" == arm64 ]]; done
+  for exe in producer producer-core producer-rtc gh ffmpeg; do [[ "$(lipo -archs "$bin/$exe")" == arm64 ]]; done
   plutil -replace CFBundleShortVersionString -string "$VERSION" "$app/Contents/Info.plist"
   plutil -replace CFBundleVersion -string "$VERSION" "$app/Contents/Info.plist"
   plutil -replace LSMinimumSystemVersion -string 13.0 "$app/Contents/Info.plist"
@@ -83,7 +87,7 @@ sign)
   rm "$RUNNER_TEMP/cert.p12"
   security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ci "$kc" >/dev/null
   printf '%s' "$PROFILE_B64" | base64 -D > "$app/Contents/embedded.provisionprofile"
-  for exe in producer-rtc gh ffmpeg; do
+  for exe in producer-core producer-rtc gh ffmpeg; do
     bash scripts/codesign-with-retry.sh --force --options runtime --timestamp --sign "$SIGN_IDENT" "$bin/$exe"
   done
   bash scripts/codesign-with-retry.sh --force --options runtime --timestamp --entitlements .github/macos/producer.entitlements --sign "$SIGN_IDENT" "$app"

@@ -80,13 +80,13 @@ def copy_payload(src, dst, manifest):
     blobs.mkdir()
     if (src / "blobs").is_symlink():
         raise ValueError("Blob directory cannot be a symlink")
-    for media in manifest["assets"].values():
-        for rep in [media["original"], *media.get("proxies", [])]:
-            digest = rep["sha256"]
-            if not re.fullmatch(r"[a-f0-9]{64}", digest):
-                raise ValueError("Invalid blob digest")
-            if not (blobs / digest).exists():
-                shutil.copyfile(regular(src / "blobs" / digest), blobs / digest)
+    digests = {rep["sha256"] for media in manifest["assets"].values()
+               for rep in [media["original"], *media.get("proxies", [])]}
+    digests.update(s["arrangementSha256"] for s in manifest.get("musicSessions", {}).values())
+    for digest in digests:
+        if not re.fullmatch(r"[a-f0-9]{64}", digest):
+            raise ValueError("Invalid blob digest")
+        shutil.copyfile(regular(src / "blobs" / digest), blobs / digest)
     return hashlib.sha256(doc).hexdigest()
 
 

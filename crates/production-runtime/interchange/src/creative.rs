@@ -76,6 +76,7 @@ fn generation_model(m: &Model) -> Result<()> {
     label(&m.name, "model.name")
 }
 fn direction(s: &Direction, m: &Manifest, d: &Document, duration: Time) -> Result<()> {
+    if let Some(env) = &s.environment { super::session::environment(env,m)?; }
     if let Some(c) = &s.camera {
         camera(c, "shot.camera")?;
     }
@@ -110,6 +111,7 @@ fn direction(s: &Direction, m: &Manifest, d: &Document, duration: Time) -> Resul
         previous = mention.end;
     }
     for beat in &s.beats {
+        if let Some(env) = &beat.environment { super::session::environment(env,m)?; }
         check(
             beat.range.start >= Time::ZERO && beat.range.end()? <= duration,
             "beat.range",
@@ -147,6 +149,7 @@ pub fn validate(m: &Manifest, d: &Document) -> Result<()> {
         .chain(m.sequence_setups.values())
         .chain(m.universes.values().filter_map(|u| u.setup.as_ref()))
     {
+        if let Some(env) = &setup.environment { super::session::environment(env,m)?; }
         if let Some(c) = &setup.camera {
             camera(c, "setup.camera")?;
         }
@@ -191,6 +194,7 @@ pub fn validate(m: &Manifest, d: &Document) -> Result<()> {
         references(&e.references, d)?;
     }
     for s in m.shots.values() {
+        for take in s.takes.values() { if let Some(env) = &take.capture_environment { super::session::environment(env,m)?; } }
         if let Some(u) = &s.universe {
             lookup(&m.universes, u, "shot.universe")?;
         }

@@ -40,6 +40,7 @@ fn main() {
     let duration = d.sequences[placements].duration;
     d.sequences.get_mut(placements).unwrap().placements = (0..count)
         .map(|i| Placement {
+            envelopes: Default::default(),
             id: format!("fx-{i}"),
             source: "stage".into(),
             range: Range {

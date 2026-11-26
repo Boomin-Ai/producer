@@ -118,6 +118,8 @@ impl CanvasFit {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Set {
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub participant_inputs: BTreeMap<Id, ParticipantInput>,
     #[serde(default, skip_serializing_if = "CanvasFit::is_reflow")]
     pub canvas_fit: CanvasFit,
     /// Named, versioned GPU graphs shared by the layouts in this set.
@@ -139,6 +141,45 @@ pub struct Set {
     pub actions: BTreeMap<Id, Vec<Action>>,
     #[serde(default)]
     pub controls: Vec<Control>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ParticipantInput {
+    pub actor: Id,
+    pub source: Id,
+    pub track: ParticipantTrack,
+    pub required: bool,
+    /// Empty applies to every layout.
+    #[serde(default)]
+    pub layouts: Vec<Id>,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum ParticipantTrack { Audio, Video }
+
+impl Set {
+    /// New and edited layouts always have an explicit terminal graph. Identity
+    /// composition reuses the native scene pass and needs no additional texture.
+    pub fn with_output_graphs(mut self) -> Self {
+        if self.layouts.keys().all(|id| self.output_graphs.contains_key(id)) { return self; }
+        let mut name = String::from("compose");
+        let mut suffix = 0;
+        while self.graphs.get(&name).is_some_and(|g| !g.is_composite()) {
+            suffix += 1;
+            name = format!("compose-{suffix}");
+        }
+        self.graphs.entry(name.clone()).or_insert_with(|| RenderGraph {
+            profile: GraphProfile::V1, clock: GraphClock::Timeline,
+            passes: vec![GraphPass::Composite { id: "out".into() }],
+        });
+        for layout in self.layouts.keys() {
+            self.output_graphs.entry(layout.clone()).or_insert_with(|| name.clone());
+        }
+        self
+    }
+}
+impl RenderGraph {
+    pub fn is_composite(&self) -> bool { matches!(self.passes.as_slice(), [GraphPass::Composite { .. }]) }
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -396,6 +437,8 @@ pub enum GraphProfile {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 pub enum GraphPass {
+    /// Terminal composition of the authored layout in document order.
+    Composite { id: Id },
     Geometry {
         id: Id,
         #[serde(default)]
@@ -418,7 +461,7 @@ pub enum GraphPass {
 }
 impl GraphPass {
     pub fn inputs(&self) -> &[GraphInput] {
-        match self { Self::Geometry {inputs,..} | Self::Fragment {inputs,..} => inputs }
+        match self { Self::Composite {..} => &[], Self::Geometry {inputs,..} | Self::Fragment {inputs,..} => inputs }
     }
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
@@ -647,6 +690,8 @@ pub struct SourceBinding {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Placement {
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub envelopes: BTreeMap<EnvelopeParameter, ClipEnvelope>,
     pub id: Id,
     pub source: Id,
     pub range: Range,
@@ -656,6 +701,20 @@ pub struct Placement {
     #[serde(default)]
     pub looping: bool,
 }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ClipEnvelope {
+    pub interpolation: Interpolation,
+    pub keys: Vec<EnvelopeKey>,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EnvelopeKey { pub at: Time, pub value: f64 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum EnvelopeParameter { Gain, Opacity, Saturation, RedGain, GreenGain, BlueGain }
+
 impl Placement {
     /// Maps a finite file player. Live sources never call this file-time mapping.
     pub fn source_time(&self, parent: Time, available: Range) -> crate::Result<Option<Time>> {
@@ -741,13 +800,32 @@ pub struct Show {
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct LayoutChange {
+    pub at: Time,
+    pub landscape: Id,
+    pub vertical: Id,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Segment {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub layout_changes: Vec<LayoutChange>,
     pub id: Id,
     pub title: String,
     pub landscape: Id,
     pub vertical: Id,
     #[serde(default)]
     pub sequence: Option<Id>,
+}
+impl Segment {
+    /// Exact boundary selects the incoming layout. No allocations or cue replay.
+    pub fn layouts_at(&self, position: Time) -> (&str, &str) {
+        let index = self.layout_changes.partition_point(|change| change.at <= position);
+        match index.checked_sub(1).map(|i| &self.layout_changes[i]) {
+            Some(change) => (&change.landscape, &change.vertical),
+            None => (&self.landscape, &self.vertical),
+        }
+    }
 }
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]

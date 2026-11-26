@@ -2616,7 +2616,7 @@ dependencies = [
 
 [[package]]
 name = "producer-native-room"
-version = "0.4.97"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

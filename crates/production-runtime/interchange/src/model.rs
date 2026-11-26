@@ -39,6 +39,8 @@ pub struct Manifest {
     pub contributions: Map<Contribution>,
     #[serde(default)]
     pub mix: Vec<Mix>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub music_sessions: Map<MusicSession>,
     #[serde(default)]
     pub extensions: Map<Extension>,
 }
@@ -70,6 +72,8 @@ pub struct Representation {
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Setup {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub environment: Option<Environment>,
     pub camera: Option<Camera>,
     pub lighting: Option<String>,
     pub brief: Option<String>,
@@ -246,6 +250,8 @@ pub struct Narration {
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Beat {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub environment: Option<Environment>,
     pub range: Range,
     pub action: String,
     pub camera: Option<Camera>,
@@ -255,6 +261,8 @@ pub struct Beat {
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Direction {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub environment: Option<Environment>,
     pub action: String,
     pub camera: Option<Camera>,
     pub lighting: Option<String>,
@@ -299,6 +307,8 @@ pub enum Origin {
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Take {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capture_environment: Option<Environment>,
     pub microphone: Option<AudioCapture>,
     pub asset: String,
     pub origin: Origin,
@@ -432,3 +442,44 @@ pub struct AudioCapture {
     pub sample_rate_hz: Option<u32>,
     pub channels: Vec<String>,
 }
+
+/// Musical events use the DAWproject score clock. The stem placement and sync
+/// cue are addressed on the exact native sequence clock.
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MusicSession {
+    pub arrangement_sha256: String,
+    pub rendered_from: String,
+    pub cut: Cut,
+    pub picture_cue: String,
+    pub sample_rate_hz: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Environment {
+    pub location: Option<String>,
+    pub coordinates: Option<Coordinates>,
+    pub setting: Option<Setting>,
+    pub day_part: Option<DayPart>,
+    /// Signed Unix seconds. Optional for fictional scenes and unknown shoot times.
+    pub unix_seconds: Option<i64>,
+    pub utc_offset_minutes: Option<i16>,
+    pub time_zone: Option<String>,
+    pub weather: Option<String>,
+    pub ambience: Option<String>,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Coordinates { pub latitude: f64, pub longitude: f64, pub elevation_m: Option<f64> }
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum Setting { Interior, Exterior, Mixed, Virtual }
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum DayPart { Dawn, Morning, Midday, Afternoon, GoldenHour, Dusk, Night }
+
+/// Receiver-controlled observations; the package cannot assert a participant is present.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GuestObservation { pub actor: String, pub audio: bool, pub video: bool }

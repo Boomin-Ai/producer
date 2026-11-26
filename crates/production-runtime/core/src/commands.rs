@@ -228,8 +228,8 @@ pub fn apply_with_scratch(
                         replace(&mut d.components, id, value.clone())?
                     }
                     Operation::RemoveComponent { id } => remove(&mut d.components, id)?,
-                    Operation::AddSet { id, value } => add(&mut d.sets, id, value.clone())?,
-                    Operation::ReplaceSet { id, value } => replace(&mut d.sets, id, value.clone())?,
+                    Operation::AddSet { id, value } => add(&mut d.sets, id, value.clone().with_output_graphs())?,
+                    Operation::ReplaceSet { id, value } => replace(&mut d.sets, id, value.clone().with_output_graphs())?,
                     Operation::RemoveSet { id } => remove(&mut d.sets, id)?,
                     Operation::AddSequence { id, value } => {
                         add(&mut d.sequences, id, value.clone())?

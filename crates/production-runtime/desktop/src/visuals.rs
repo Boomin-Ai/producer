@@ -32,6 +32,20 @@ impl VisualCache {
     }
 
     pub fn prepare(&mut self, project: &RoomProject, plan: &Plan) -> Result<Arc<Visuals>> {
+        self.prepare_layout(project, plan, true)
+    }
+
+    fn prepare_layout(&mut self, project: &RoomProject, plan: &Plan, follow_segment: bool) -> Result<Arc<Visuals>> {
+        let pair = project.output_layout_pair();
+        let mut segments = project.production.shows.values()
+            .filter(|show| show.set == project.scene)
+            .flat_map(|show| &show.segments)
+            .filter(|segment| segment.sequence.as_deref() == Some("main")
+                && segment.landscape == pair.landscape && segment.vertical == pair.vertical);
+        let schedule = if follow_segment {
+            segments.next().filter(|first| !first.layout_changes.is_empty()
+                && segments.all(|s| s.layout_changes == first.layout_changes))
+        } else { None };
         // Editorial cuts and panel changes do not invalidate static text or
         // surface resources. Node indices are included because render records
         // index the plan, rather than looking up string paths every frame.
@@ -87,7 +101,7 @@ impl VisualCache {
             .collect();
         let key = format!(
             "{:x}",
-            Sha256::digest(serde_json::to_vec(&(&project.scene, project.output_layouts(), project.production.sets.get(&project.scene).map(|s| (&s.graphs,&s.output_graphs,s.canvas_fit)), weather_desk, places_guest, selected, targets, camera_slots, project.rtc_video_slot(), &project.production.assets, &fields))?)
+            Sha256::digest(serde_json::to_vec(&(&project.scene, schedule.map(|s| (&s.layout_changes, &plan.digest)), project.output_layouts(), project.production.sets.get(&project.scene).map(|s| (&s.graphs,&s.output_graphs,s.canvas_fit)), weather_desk, places_guest, selected, targets, camera_slots, project.rtc_video_slot(), &project.production.assets, &fields))?)
         );
         if let Some(index) = self.entries.iter().position(|(cached, _)| cached == &key) {
             let entry = self.entries.remove(index).unwrap();
@@ -95,7 +109,29 @@ impl VisualCache {
             self.entries.push_front(entry);
             return Ok(prepared);
         }
-        let prepared = Arc::new(Visuals::prepare(project, plan, &fields, places_guest)?);
+        let mut prepared = Visuals::prepare(project, plan, &fields, places_guest)?;
+        if let Some(segment) = schedule {
+            let mut pairs = std::collections::BTreeMap::new();
+            for change in &segment.layout_changes {
+                let next = if change.landscape == pair.landscape && change.vertical == pair.vertical {
+                    None
+                } else {
+                    let key = (change.landscape.as_str(), change.vertical.as_str());
+                    if !pairs.contains_key(&key) {
+                        anyhow::ensure!(pairs.len() < 16, "Native output supports 16 distinct scheduled layout pairs per segment");
+                        let mut alternate = project.clone();
+                        alternate.mounted_set = Some(project.scene.clone());
+                        alternate.mounted_layout = Some(crate::model::SetLayoutPair {
+                            landscape: change.landscape.clone(), vertical: change.vertical.clone(),
+                        });
+                        pairs.insert(key, self.prepare_layout(&alternate, plan, false)?);
+                    }
+                    pairs.get(&key).cloned()
+                };
+                prepared.schedule.push((change.at, next));
+            }
+        }
+        let prepared = Arc::new(prepared);
         self.entries.push_front((key, prepared.clone()));
         self.entries.truncate(3);
         Ok(prepared)
@@ -112,6 +148,9 @@ struct Element {
     content: Option<Draw>,
 }
 pub struct Visuals {
+    pub pair: crate::model::SetLayoutPair,
+    // None reuses the opening pair without introducing an Arc cycle.
+    schedule: Vec<(producer_production_contract::Time, Option<Arc<Visuals>>)> ,
     outputs: [Vec<Element>; 2],
     viewport: [CanvasTransform; 2],
     terminal: [Option<Draw>; 2],
@@ -191,6 +230,10 @@ fn live_slot(project: &RoomProject, source: &str) -> Result<Option<u32>> {
     })
 }
 impl Visuals {
+    pub fn at(self: &Arc<Self>, time: producer_production_contract::Time) -> &Arc<Self> {
+        let end = self.schedule.partition_point(|(at, _)| *at <= time);
+        self.schedule[..end].last().and_then(|(_, pair)| pair.as_ref()).unwrap_or(self)
+    }
     pub fn has_guest_slot(&self, output: usize) -> bool { self.guest_slots[output] }
     pub fn has_speaker_split(&self) -> bool { self.speaker_split }
     fn prepare(project: &RoomProject, plan: &Plan, fields: &crate::weather::Fields, places_guest: bool) -> Result<Self> {
@@ -380,7 +423,7 @@ impl Visuals {
                     content,
                 });
             }
-            if let Some(graph) = set.output_graphs.get(name) {
+            if let Some(graph) = set.output_graphs.get(name).filter(|id| !set.graphs[*id].is_composite()) {
                 anyhow::ensure!(count < MAX_DRAWS, "no room for output graph");
                 jobs.push((None, graph.as_str(), size.width, size.height));
             }
@@ -404,6 +447,7 @@ impl Visuals {
                 for pass in &definition.passes {
                     let inputs=pass.inputs();
                     let (id, geometry, source, entry, params) = match pass {
+                        GraphPass::Composite { .. } => bail!("composite must be a terminal layout graph"),
                         GraphPass::Geometry { id,scene,.. } => {
                             graph_pixels += u64::from(width) * u64::from(height);
                             anyhow::ensure!(graph_pixels <= MAX_GRAPH_SURFACE_PIXELS,"geometry depth target exceeds graph budget");
@@ -516,6 +560,8 @@ impl Visuals {
         }
         let text = TextCache::with_graphs(&specs, &graph_specs)?;
         Ok(Self {
+            pair: project.output_layout_pair(),
+            schedule: Vec::new(),
             outputs,
             viewport,
             guest_slots,

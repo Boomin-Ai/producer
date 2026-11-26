@@ -90,6 +90,22 @@ fn main_result() -> Result<Option<serde_json::Value>> {
             .ok_or_else(|| error("USAGE", "missing argument"))
     };
     let v=match arg(0)? {
+        "bundle-readiness" => {
+            let bundle = producer_interchange::OpenBundle::open(Path::new(arg(1)?))?;
+            let observations = ingress::parse(&read(arg(4)?, COMMAND_BYTES)?, COMMAND_BYTES)?;
+            let observations = serde_json::from_value(observations).map_err(|e|error("BINDINGS",e.to_string()))?;
+            bundle.readiness(arg(2)?,arg(3)?,&observations)?
+        }
+        "bundle-show" => {
+            let bundle = producer_interchange::OpenBundle::open(Path::new(arg(1)?))?;
+            let show = arg(2)?;
+            let events = ingress::parse_envelope(arg(3)?.as_bytes(),COMMAND_BYTES)?;
+            let events = serde_json::from_value(events).map_err(|e|error("EVENTS",e.to_string()))?;
+            let grant = Coordinator::new(Snapshot::new(Document::empty("rehearsal","Rehearsal"))?, MemoryStore::default()).session(true)?.1;
+            let mut result = simulate_show(&bundle.document,show,events,grant)?;
+            result["revision"] = serde_json::json!(bundle.revision);
+            result
+        }
         "bundle-run" => {
             let bundle = producer_interchange::OpenBundle::open(Path::new(arg(1)?))?;
             let device = ingress::parse(&read(arg(2)?, COMMAND_BYTES)?, COMMAND_BYTES)?;
@@ -136,7 +152,7 @@ fn main_result() -> Result<Option<serde_json::Value>> {
         "simulate"=>{let d=parse_document(&read(arg(1)?,DOCUMENT_BYTES)?)?;let events=serde_json::from_value::<Vec<TimelineEvent>>(ingress::parse_envelope(arg(3)?.as_bytes(),COMMAND_BYTES)?).map_err(|e|error("STRUCTURE",e.to_string()))?;simulate(&d,arg(2)?,false,events)?},
         "simulate-show"=>{let d=parse_document(&read(arg(1)?,DOCUMENT_BYTES)?)?;let events=serde_json::from_value::<Vec<ShowEvent>>(ingress::parse_envelope(arg(3)?.as_bytes(),COMMAND_BYTES)?).map_err(|e|error("STRUCTURE",e.to_string()))?;let grant=Coordinator::new(Snapshot::new(Document::empty("rehearsal", "Rehearsal"))?,MemoryStore::default()).session(true)?.1;simulate_show(&d,arg(2)?,events,grant)?},
         "serve" if arg(1)?=="--store"&&arg(3)?=="--document-id"=>{serve(arg(2)?,arg(4)?)?;return Ok(None);},
-        _=>return Err(error("USAGE","producer-core bundle-run DIR DEVICE SEQUENCE EVENTS_JSON|bundle-edit DIR BASE_REVISION COMMAND_FILE|bundle-schema|bundle-check DIR|bundle-plan DIR DEVICE_JSON_FILE|bundle-sheet DIR SHOT|schema|command-schema|tool-schema|fixture|nested-fixture|layout-fixture|validate FILE|compile FILE|layout FILE SET LAYOUT [INPUTS_JSON]|evaluate FILE SEQUENCE TIME_JSON|simulate FILE SEQUENCE EVENTS_JSON|simulate-show FILE SHOW EVENTS_JSON|serve --store EXPLICIT_DIRECTORY --document-id ID")),
+        _=>return Err(error("USAGE","producer-core bundle-readiness DIR SET LAYOUT OBSERVATIONS_FILE|bundle-show DIR SHOW EVENTS_JSON|bundle-run DIR DEVICE SEQUENCE EVENTS_JSON|bundle-edit DIR BASE_REVISION COMMAND_FILE|bundle-schema|bundle-check DIR|bundle-plan DIR DEVICE_JSON_FILE|bundle-sheet DIR SHOT|schema|command-schema|tool-schema|fixture|nested-fixture|layout-fixture|validate FILE|compile FILE|layout FILE SET LAYOUT [INPUTS_JSON]|evaluate FILE SEQUENCE TIME_JSON|simulate FILE SEQUENCE EVENTS_JSON|simulate-show FILE SHOW EVENTS_JSON|serve --store EXPLICIT_DIRECTORY --document-id ID")),
     };
     Ok(Some(v))
 }

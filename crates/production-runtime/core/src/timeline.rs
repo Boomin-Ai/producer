@@ -21,6 +21,8 @@ pub struct PlayerSample {
     pub path: String,
     pub source: String,
     pub live: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub controls: Option<ClipControls>,
     pub source_time: Option<Time>,
 }
 #[derive(Debug, Clone, Serialize)]
@@ -54,6 +56,7 @@ fn fail(code: &str, message: &str) -> Error {
     Error::new(code, "timeline", message)
 }
 impl Timeline {
+    pub fn position(&self, at: OutputInstant) -> Result<Time> { self.transport.position(at) }
     pub fn is_active(&self) -> bool {
         self.active
     }
@@ -155,6 +158,7 @@ impl Timeline {
                     path: p.path.clone(),
                     source: p.source.clone(),
                     live: p.available.is_none(),
+                    controls: if self.active && !p.envelopes.is_empty() { p.controls_at(position).map_err(|_| fail("TIME_UNREPRESENTABLE","clip automation time"))? } else { None },
                     source_time: if self.active {
                         p.sample(position).map_err(|_| {
                             fail("TIME_UNREPRESENTABLE", "file source time outside profile")

@@ -2936,7 +2936,7 @@ fn render_loop(
             }
         }
         let wanted = ((host - origin - 0.04).max(0.) * 48000.) as i64;
-        let measure_speakers = !preview && visuals.has_speaker_split();
+        let measure_speakers = !preview && visuals.at(position).has_speaker_split();
         if wanted - audio_cursor > 4800 {
             clock_skipped += (wanted - audio_cursor) as u64;
             audio_cursor = wanted / 480 * 480;
@@ -3013,6 +3013,17 @@ fn render_loop(
                         &mut movie_pcm,
                         1.,
                     );
+                    if seq.players.iter().any(|p| p.source == source && p.envelopes.contains_key(&producer_production_contract::EnvelopeParameter::Gain)) {
+                        let start = OutputInstant(Counter(audio_cursor.max(0) as u64 * 1_000_000_000 / 48000));
+                        let content = transport.position(start)?;
+                        for (i, frame) in movie_pcm.chunks_exact_mut(2).enumerate() {
+                            let time = content.checked_add(Time::new(i as i64, 48000)?)?;
+                            let level = seq.players.iter().filter(|p| p.source == source)
+                                .find_map(|p| p.controls_at(time).ok().flatten()).map_or(0., |c| c.gain as f32);
+                            frame[0] *= level;
+                            frame[1] *= level;
+                        }
+                    }
                     mix_metered_channel(&mut pcm, &movie_pcm, gain, peak);
                 }
             }
@@ -3106,7 +3117,7 @@ fn render_loop(
                 frames[slot] = guest.frame();
                 active[slot] = true;
             }
-            if editor && (visuals.has_guest_slot(0) || visuals.has_guest_slot(1)) {
+            if editor && (visuals.at(position).has_guest_slot(0) || visuals.at(position).has_guest_slot(1)) {
                 if let Some(slot) = project.rtc_video_slot() {
                     frames[slot] = handle.rtc_feed.try_lock().ok().and_then(|feed| feed.as_ref().and_then(|guest| guest.frame()));
                     active[slot] = true;
@@ -3147,14 +3158,14 @@ fn render_loop(
             if reversible_layout.as_ref().zip(phase).is_some_and(|(blend, phase)| blend.done(phase)) {
                 reversible_layout = None;
             }
-            let frame_visuals = reversible_layout.as_ref().map_or(&visuals, |blend| &blend.visuals);
+            let frame_visuals = reversible_layout.as_ref().map_or(visuals.at(position), |blend| &blend.visuals);
             let music=handle.studio_audio.dj_visual.bands();
             let mut dj_title=None;
             let graph_progress = reversible_layout.as_ref().zip(phase)
                 .map(|(_, phase)| phase * phase * (3. - 2. * phase));
             let resting_layouts = project.production.sets.get(&project.scene)
                 .map(|set| &set.reversible_layout_transitions);
-            for (i, (layout, size)) in project.output_layouts().into_iter()
+            for (i, (layout, size)) in frame_visuals.pair.ids().into_iter().zip([project.canvas.landscape, project.canvas.vertical])
                 .enumerate()
             {
                 frame_visuals.draw_transition(
@@ -3193,6 +3204,16 @@ fn render_loop(
                     draw.reserved = 1; // Fit the decoded guest inside this program slot.
                     draw.source = slot as u32;
                     draws[i].push(draw);
+                }
+                for (slot, source) in [(2, "movie"), (3, "take")] {
+                    if let Some(clip) = seq.players.iter().filter(|p| p.source == source && !p.envelopes.is_empty())
+                        .find_map(|p| p.controls_at(position).ok().flatten()) {
+                        for draw in draws[i].iter_mut().filter(|d| d.kind == 1 && d.source == slot) {
+                            draw.opacity *= clip.opacity as f32;
+                            let [r, g, b] = clip.color_gain;
+                            draw.clip_grade = [(r-1.) as f32, (g-1.) as f32, (b-1.) as f32, (clip.saturation-1.) as f32];
+                        }
+                    }
                 }
                 take_draws[i] = draws[i]
                     .iter()

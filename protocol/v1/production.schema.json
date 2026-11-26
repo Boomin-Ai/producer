@@ -273,6 +273,25 @@
       ],
       "type": "string"
     },
+    "ClipEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "interpolation": {
+          "$ref": "#/$defs/Interpolation"
+        },
+        "keys": {
+          "items": {
+            "$ref": "#/$defs/EnvelopeKey"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "interpolation",
+        "keys"
+      ],
+      "type": "object"
+    },
     "Component": {
       "additionalProperties": false,
       "properties": {
@@ -485,6 +504,23 @@
       "required": [
         "id",
         "at"
+      ],
+      "type": "object"
+    },
+    "EnvelopeKey": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "$ref": "#/$defs/Time"
+        },
+        "value": {
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "at",
+        "value"
       ],
       "type": "object"
     },
@@ -965,6 +1001,24 @@
       "oneOf": [
         {
           "additionalProperties": false,
+          "description": "Terminal composition of the authored layout in document order.",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "composite",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "properties": {
             "id": {
               "type": "string"
@@ -1126,6 +1180,26 @@
         "width",
         "height",
         "root"
+      ],
+      "type": "object"
+    },
+    "LayoutChange": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "$ref": "#/$defs/Time"
+        },
+        "landscape": {
+          "type": "string"
+        },
+        "vertical": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "at",
+        "landscape",
+        "vertical"
       ],
       "type": "object"
     },
@@ -1562,9 +1636,72 @@
         }
       ]
     },
+    "ParticipantInput": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "type": "string"
+        },
+        "layouts": {
+          "default": [],
+          "description": "Empty applies to every layout.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "source": {
+          "type": "string"
+        },
+        "track": {
+          "$ref": "#/$defs/ParticipantTrack"
+        }
+      },
+      "required": [
+        "actor",
+        "source",
+        "track",
+        "required"
+      ],
+      "type": "object"
+    },
+    "ParticipantTrack": {
+      "enum": [
+        "audio",
+        "video"
+      ],
+      "type": "string"
+    },
     "Placement": {
       "additionalProperties": false,
       "properties": {
+        "envelopes": {
+          "additionalProperties": false,
+          "properties": {
+            "blueGain": {
+              "$ref": "#/$defs/ClipEnvelope"
+            },
+            "gain": {
+              "$ref": "#/$defs/ClipEnvelope"
+            },
+            "greenGain": {
+              "$ref": "#/$defs/ClipEnvelope"
+            },
+            "opacity": {
+              "$ref": "#/$defs/ClipEnvelope"
+            },
+            "redGain": {
+              "$ref": "#/$defs/ClipEnvelope"
+            },
+            "saturation": {
+              "$ref": "#/$defs/ClipEnvelope"
+            }
+          },
+          "type": "object"
+        },
         "id": {
           "type": "string"
         },
@@ -1784,6 +1921,12 @@
         "landscape": {
           "type": "string"
         },
+        "layoutChanges": {
+          "items": {
+            "$ref": "#/$defs/LayoutChange"
+          },
+          "type": "array"
+        },
         "sequence": {
           "default": null,
           "type": [
@@ -1953,6 +2096,12 @@
             "type": "string"
           },
           "description": "Layout id to terminal render graph. Older layouts lower to one composite pass.",
+          "type": "object"
+        },
+        "participantInputs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ParticipantInput"
+          },
           "type": "object"
         },
         "reversibleLayoutTransitions": {

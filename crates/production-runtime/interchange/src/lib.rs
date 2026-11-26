@@ -1,5 +1,6 @@
 //! Producer Protocol v1. A production is an editable, offline package with verified bytes.
 mod creative;
+mod session;
 pub mod model;
 use contract::{Document, Error, Result, DOCUMENT_BYTES};
 use model::*;
@@ -277,6 +278,10 @@ impl OpenBundle {
                 hashes.insert(&repr.sha256);
             }
         }
+        for score in m.music_sessions.values() {
+            check(valid_hash(&score.arrangement_sha256), "musicSessions", "invalid score digest")?;
+            hashes.insert(&score.arrangement_sha256);
+        }
         if !hashes.is_empty() {
             check(
                 root.join("blobs")
@@ -328,6 +333,7 @@ impl OpenBundle {
             fonts_present(node, &fonts)?;
         }
         creative::validate(m, d)?;
+        session::validate_sessions(m, d, root)?;
         Ok(())
     }
     pub fn plan(&self, device: &Device) -> Result<Value> {
@@ -415,6 +421,7 @@ impl OpenBundle {
         }
         let mut setup = serde_json::Map::new();
         let mut camera = serde_json::Map::new();
+        let mut environment = serde_json::Map::new();
         fn overlay(map: &mut serde_json::Map<String, Value>, value: Value) {
             if let Value::Object(fields) = value {
                 map.extend(fields.into_iter().filter(|(_, v)| !v.is_null()));
@@ -435,6 +442,7 @@ impl OpenBundle {
             )
         {
             overlay(&mut setup, json!(defaults));
+            if let Some(env) = &defaults.environment { overlay(&mut environment, json!(env)); }
             if let Some(c) = &defaults.camera {
                 overlay(&mut camera, json!(c));
             }
@@ -445,11 +453,16 @@ impl OpenBundle {
         if let Some(light) = &dir.lighting {
             setup.insert("lighting".into(), json!(light));
         }
+        if let Some(id) = &dir.location { environment.insert("location".into(), json!(id)); }
+        if let Some(env) = &dir.environment { overlay(&mut environment,json!(env)); }
+        setup.insert("environment".into(), json!(environment));
         setup.insert("camera".into(), json!(camera));
         let resolved_beats: Vec<_> = dir.beats.iter().map(|b| {
+            let mut beat_env = environment.clone();
+            if let Some(env) = &b.environment { overlay(&mut beat_env,json!(env)); }
             let mut effective = camera.clone();
             if let Some(c) = &b.camera { overlay(&mut effective,json!(c)); }
-            json!({"range":b.range,"camera":effective,"action":b.action,"narration":b.narration})
+            json!({"range":b.range,"environment":beat_env,"camera":effective,"action":b.action,"narration":b.narration})
         }).collect();
         let actors: BTreeMap<_, _> = credits
             .values()

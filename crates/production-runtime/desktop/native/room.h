@@ -3,7 +3,7 @@
 typedef void (*NRFrameCallback)(void*, uint32_t, void*, double, uint64_t);
 typedef void (*NRAudioCallback)(void*, const float*, uint32_t, double);
 typedef void (*NRStatusCallback)(void*, uint32_t, const char*);
-typedef struct { float rect[4], uv[4], color[4]; float color_to[4], border[4], metrics[4], surface[4], accent[4], material[4]; float opacity; uint32_t kind, source, reserved, group; } NRDraw;
+typedef struct { float rect[4], uv[4], color[4]; float color_to[4], border[4], metrics[4], surface[4], accent[4], material[4], clip_grade[4]; float opacity; uint32_t kind, source, reserved, group; } NRDraw;
 typedef struct { int64_t start,duration; int32_t rate,duration_rate; uint32_t media; } NRSpan;
 typedef struct { uint32_t width,height,kind; } NRRecordTrack;
 typedef int (*NRSegmentCallback)(void*,uint64_t,uint32_t,uint32_t,const void*,size_t,const NRSpan*,size_t);

@@ -23,3 +23,10 @@ jobs:
           export CHROME_BIN="$(command -v google-chrome)"
           export PRODUCER_CORE="$PWD/crates/production-runtime/target/debug/producer-core"
           python3 protocol/v1/conformance/check.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify show, participant readiness and editable DAW return
+        run: |
+          python -m pip install numpy==2.2.6 dawdreamer==0.9.0
+          python protocol/v1/conformance/session_check.py --core crates/production-runtime/target/debug/producer-core

@@ -27,6 +27,10 @@ pub fn inspect(set: &producer_production_contract::Set) -> Result<serde_json::Va
     for (name, graph) in &set.graphs {
         let mut passes = Vec::new();
         for pass in &graph.passes {
+            if let GraphPass::Composite { id } = pass {
+                passes.push(serde_json::json!({"pass":id,"kind":"composite"}));
+                continue;
+            }
             if let GraphPass::Geometry { id,scene,.. } = pass {
                 passes.push(serde_json::json!({"pass":id,"kind":"geometry","meshInstances":scene.objects.len()}));
                 continue;

@@ -73,6 +73,8 @@ pub struct TrackPlan {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerPlan {
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub envelopes: BTreeMap<EnvelopeParameter, ClipEnvelope>,
     pub path: String,
     pub source: String,
     pub range: Range,
@@ -180,7 +182,40 @@ impl SequencePlan {
         Ok(())
     }
 }
+/// Compiled clip control values. RGB gains and saturation operate on linear RGB.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipControls { pub gain: f64, pub opacity: f64, pub saturation: f64, pub color_gain: [f64;3] }
+impl Default for ClipControls {
+    fn default() -> Self { Self { gain:1., opacity:1., saturation:1., color_gain:[1.;3] } }
+}
 impl PlayerPlan {
+    /// Evaluate on elapsed placement time, independently of source trim and speed.
+    pub fn controls_at(&self, root: Time) -> std::result::Result<Option<ClipControls>, EvalError> {
+        let ancestors = if self.available.is_some() { &self.maps[..self.maps.len()-1] } else { &self.maps[..] };
+        let Some(time) = temporal::map_chain(ancestors,root).map_err(|_| EvalError::TimeRange)? else { return Ok(None) };
+        if !self.range.contains(time).map_err(|_| EvalError::TimeRange)? { return Ok(None) }
+        let t = time.checked_sub(self.range.start).map_err(|_| EvalError::TimeRange)?;
+        let mut result = ClipControls::default();
+        for (param, lane) in &self.envelopes {
+            let next = lane.keys.partition_point(|k| k.at <= t);
+            let a = &lane.keys[next-1];
+            let mut value = a.value;
+            if let Some(b) = lane.keys.get(next).filter(|_| lane.interpolation != Interpolation::Step) {
+                let ratio = |x: Time, y: Time| (x.ticks() as i128 * y.rate() as i128 - y.ticks() as i128 * x.rate() as i128) as f64 / x.rate() as f64;
+                let mut w = ratio(t,a.at) / ratio(b.at,a.at);
+                if lane.interpolation == Interpolation::EaseInOut { w = w*w*(3.-2.*w); }
+                value += (b.value-a.value)*w;
+            }
+            match param {
+                EnvelopeParameter::Gain => result.gain = value, EnvelopeParameter::Opacity => result.opacity = value,
+                EnvelopeParameter::Saturation => result.saturation = value, EnvelopeParameter::RedGain => result.color_gain[0] = value,
+                EnvelopeParameter::GreenGain => result.color_gain[1] = value, EnvelopeParameter::BlueGain => result.color_gain[2] = value,
+            }
+        }
+        Ok(Some(result))
+    }
+
     /// Floating-point conversion happens only at the external decoder boundary;
     /// all mapping and source visibility decisions are evaluated exactly first.
     pub fn media_seconds(&self, root: Time) -> std::result::Result<Option<f64>, EvalError> {
@@ -514,6 +549,7 @@ pub(crate) fn sequence(
             });
         }
         players.push(PlayerPlan {
+            envelopes: p.template.envelopes.clone(),
             path: p.path,
             source: p.source,
             range: p.template.range,

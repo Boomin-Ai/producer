@@ -346,6 +346,7 @@ impl RoomProject {
             },
         );
         let set = Set {
+            participant_inputs: Default::default(),
             canvas_fit: Default::default(),
             graphs: Default::default(),
             output_graphs: Default::default(),
@@ -374,6 +375,7 @@ impl RoomProject {
                 instances: vec![],
                 placements: vec![
                     Placement {
+                        envelopes: Default::default(),
                         id: "screen-clip".into(),
                         source: "screen".into(),
                         range: Range {
@@ -385,6 +387,7 @@ impl RoomProject {
                         looping: false,
                     },
                     Placement {
+                        envelopes: Default::default(),
                         id: "camera-clip".into(),
                         source: "camera".into(),
                         range: Range {
@@ -396,6 +399,7 @@ impl RoomProject {
                         looping: false,
                     },
                     Placement {
+                        envelopes: Default::default(),
                         id: "movie-clip".into(),
                         source: "movie".into(),
                         range: Range {
@@ -407,6 +411,7 @@ impl RoomProject {
                         looping: false,
                     },
                     Placement {
+                        envelopes: Default::default(),
                         id: "mic-clip".into(),
                         source: "microphone".into(),
                         range: Range {
@@ -461,6 +466,7 @@ impl RoomProject {
                 set: "studio".into(),
                 authority: Authority::Local,
                 segments: vec![Segment {
+                layout_changes: Vec::new(),
                     id: "teaching".into(),
                     title: "Live teaching".into(),
                     landscape: "landscape".into(),
@@ -577,6 +583,7 @@ impl RoomProject {
     fn add_input_lane(&mut self, source: &str, kind: &str, label: &str) -> Result<()> {
         let seq = self.production.sequences.get_mut("main").context("Missing timeline")?;
         seq.placements.push(Placement {
+            envelopes: Default::default(),
             id: format!("{source}-clip"),
             source: source.into(),
             range: Range {
@@ -889,6 +896,7 @@ impl RoomProject {
                 bail!("Committed clip must be at least 50ms");
             }
             let p = Placement {
+                envelopes: Default::default(),
                 id: "take-clip".into(),
                 source: "take".into(),
                 range,
@@ -1271,6 +1279,7 @@ impl RoomProject {
                 continue;
             }
             seq.placements.push(Placement {
+                envelopes: Default::default(),
                 id: format!("live-{id}"),
                 source: id.clone(),
                 range: Range {

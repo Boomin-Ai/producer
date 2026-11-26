@@ -355,6 +355,17 @@ fn preferences(s: &Studio, name: &str, narrow: bool) -> El {
         Section::App => {
             let mut body = body.child(detail("Workspace", name))
                 .child(detail("Build", env!("CARGO_PKG_VERSION")))
+                .child(button("protocol-guide", "Explore the Producer Protocol", false, |s| {
+                    let installed = std::env::current_exe().ok().and_then(|exe|
+                        exe.parent()?.parent().map(|contents| contents.join("Resources/protocol/v1/index.html")));
+                    let path = installed.filter(|p| p.is_file()).or_else(|| {
+                        let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../protocol/v1/index.html");
+                        (cfg!(debug_assertions) && source.is_file()).then_some(source)
+                    });
+                    if !path.is_some_and(|p| std::process::Command::new("/usr/bin/open").arg(p).spawn().is_ok()) {
+                        s.switch_notice = Some("The protocol guide could not be opened.".into());
+                    }
+                }).self_start())
                 .child(button("shortcuts", if s.settings.shortcuts { "▾  Keyboard shortcuts" } else { "▸  Keyboard shortcuts" },
                     false, |s| s.settings.shortcuts = !s.settings.shortcuts).self_start());
             if s.settings.shortcuts {

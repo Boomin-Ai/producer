@@ -104,6 +104,7 @@ pub fn document(id: &str, nested: bool) -> Document {
     d.sets.insert(
         "pressure".into(),
         Set {
+            participant_inputs: Default::default(),
             canvas_fit: Default::default(),
             graphs: Default::default(),
             output_graphs: Default::default(),
@@ -145,6 +146,7 @@ pub fn document(id: &str, nested: bool) -> Document {
             .collect(),
         placements: (0..if nested { 128 } else { 768 })
             .map(|i| Placement {
+                envelopes: Default::default(),
                 id: format!("fx-{i}"),
                 source: "stage".into(),
                 range: range(duration),

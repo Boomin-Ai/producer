@@ -79,18 +79,25 @@ An unfinished production can be frozen and signed. Check it out to a fresh direc
 
 The signing namespace separates production signatures from other uses of the same key. Resolve the manifest author through `actors[author].identity` and verify using a **receiver-controlled** allowed-signers file. A bundled public key cannot establish trust in its own issuer. The sample public signer file is a pin for this test vector. It contains no private keys. A verifying client may accept an individual snapshot without its ancestors. To claim a verified line of descent, verify signatures, production UUID, parent hashes and nondecreasing authored times for every edge.
 
-## Boomin mapping and agent operations
+## Show execution
 
-| Boomin source | Portable meaning |
-| --- | --- |
-| `universes`, `universe_entities`, `universe_entity_files` | World, typed creative entity, ordered references. Resolve files into package assets. Tenant-local IDs are provenance. |
-| Series collection, episode unit, `unit_parts` | Show context, production work and authored shot/segment/slide intent. The playable segment's sequence supplies timing. |
-| `promptDoc`, `unit_part_entities`, `unit_part_takes` | Prompt and UTF-16 mentions, cast links and alternate results with model/prompt receipts. |
-| `content_collaborators` | A credited actor can be a person, entity, or brand. Producer additionally identifies the exact timed placement. |
-| Unit stage, per-part status, unit review comments | Distribution state, creative progress and human review are separate. A scheduled Boomin post alone cannot complete or approve a production. |
-| `boomin.workspace.v2` | The bundled adapter exports entities and one prompt sheet with typed local references. An installer resolves its own slots and access grants. |
+[Explore the Listening Room in the offline show monitor](index.html). The corresponding signed [example document](listening-room/production.json) and [manifest](listening-room/manifest.json) can be opened directly by an implementation.
 
-The offline adapter emits the actual Boomin workspace resource shape. It projects the shot sheet into `objects.entities` and `objects.prompt_sheets`. A receiver can retain the complete signed Producer package alongside this projection. Uploading media, provisioning an account, installing a template in Boomin and making a paid model call are explicit adapter actions. The portable sample includes optional `ai.boomin` metadata. An implementation can exchange, edit and verify the whole production without contacting Boomin.
+A **show** specifies an ordered rundown and its **set**. The set supplies spatial layouts, render graphs, and participant input requirements. Each **segment** is an editorial occurrence with a starting landscape and vertical layout and an optional sequence. A **sequence** is an independently addressable timeline with rational timing, placements, nested sequences, automation, cues, and program routes. Multiple segments can refer to one layout or sequence. A segment can switch layouts repeatedly without changing its identity or resetting transport.
+
+Entries in `layoutChanges` take effect at their exact sequence timestamp. The incoming layout owns the boundary. Each output resolves its layout through the set’s `outputGraphs`. A graph orders the composition, fragment, or geometry passes and names their inputs. A receiver may implement an identity composite directly in its existing compositor. Seeking evaluates current layouts and continuous controls without dispatching historical cues. The native harness is responsible for device bindings, media decoding, GPU allocation and permissions.
+
+A set may require a particular actor’s guest audio track and make their video optional. Availability is observed by the receiving harness. Each observation must match the source, actor, and track. `bundle-readiness DIR SET LAYOUT OBSERVATIONS_FILE` evaluates these preconditions. `bundle-show DIR SHOW EVENTS_JSON` evaluates segment progression, selected output graphs, player positions and automation. Verify the signature before trusting either result.
+
+## Sound, picture and setting
+
+A music session binds a content-addressed DAWproject 1.0 score to a PCM stem placement, its sample rate and a named picture cue. The DAW exchanges the intact arrangement archive, including editable MIDI and instrument state. The rendered stem permits playback on devices without the original instruments. A score revision and its rendered stem travel in the same signed manifest. Timing inside the arrangement may be beat-based while a picture marker uses seconds. A score edit produces a new revision with the original parent. Third-party plug-ins and their licenses are resolved by the receiving host.
+
+A cut may author gain, opacity, saturation and RGB gains as step, linear or eased envelopes on elapsed placement time. Keys start at zero and increase strictly. Gain and RGB values are linear multipliers, opacity ranges from zero to one, and saturation is a multiplier about luminance. Color processing uses the source working space. A location entity, WGS84 coordinates, setting, day part, weather, ambience and civil time can describe the intended setting. A take can record its observed capture environment independently.
+
+Use `adapters/daw.py export` to hand off the score and stem, then `import` to validate and stage a returned edit for signing. The Listening Room test uses an independent headless DAW to change tempo and instrument, reopens the eight notes and compares the returned PCM with a second render. Use the test script with Python 3.12, NumPy and DawDreamer 0.9.0.
+
+## Agent operations
 
 Agents can discover the native vocabulary through `producer-core schema`, `command-schema` and `tool-schema`. They can propose transactions through the existing production service, including sequence replacement, and evaluate an edit using native compile/simulate. Changes to a checked-out production become portable when frozen into a child snapshot. A bundle contains data and references. Loading one must never execute a shell command, upload a clip, bind hardware or publish a show as a side effect.
 
@@ -103,7 +110,6 @@ cargo build --locked --manifest-path crates/production-runtime/Cargo.toml -p pro
 export PRODUCER_CORE="$PWD/crates/production-runtime/target/debug/producer-core"
 python3 protocol/v1/snapshot.py verify protocol/v1/field-notes --trust protocol/v1/conformance/fixture-signers
 "$PRODUCER_CORE" bundle-sheet protocol/v1/field-notes reveal
-python3 protocol/v1/adapters/boomin.py protocol/v1/field-notes reveal
 ```
 
 Use `bundle-run DIR DEVICE_JSON SEQUENCE EVENTS_JSON` to evaluate a verified package with its local media plan. `bundle-edit DIR EXPECTED_REVISION COMMAND_JSON` applies a native typed edit and emits a replacement production document for a draft. A stale revision fails before editing. Use `bundle-check DIR` for structural validation and integrity. Use `snapshot.py verify` for signer verification and `--parent DIR` to check the direct ancestor. Use `checkout SOURCE DRAFT --trust FILE` to create a writable child and `freeze DRAFT NEW --parent SOURCE --key KEY --trust FILE` to sign it into a fresh directory. Supply at least one trusted principal for each signer in a collaboration. Anyone with the trusted public keys can verify archived snapshots offline.

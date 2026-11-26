@@ -629,6 +629,7 @@ fn media_decoder_clock_does_not_blink_after_fractional_loops() {
         duration: t(3833, 600),
     };
     let player = PlayerPlan {
+        envelopes: Default::default(),
         path: "main/movie".into(),
         source: "movie".into(),
         range: Range {

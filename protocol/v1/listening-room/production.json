@@ -1,0 +1,600 @@
+{
+  "schema": "producer.production/1",
+  "id": "studio-session",
+  "title": "The Listening Room",
+  "assets": {
+    "slate": {
+      "kind": "video",
+      "hash": "58a80ca766e487b69ab1b875ec01935dd1d2c9ee3ef9c8ec2cda0713632e8e56",
+      "available": {
+        "start": {
+          "ticks": "0",
+          "rate": 1
+        },
+        "duration": {
+          "ticks": "6",
+          "rate": 1
+        }
+      }
+    },
+    "composition": {
+      "kind": "image",
+      "hash": "3dbd1b1f6fbbbc3f403a4bef1bab204b1da52355065ba88b0af768d24f09a63c"
+    },
+    "ident": {
+      "kind": "audio",
+      "hash": "c2884b1ec7b5a50dce10c872b9bdb2fc539ae27fc5ac52fb8869bd9062b6515e",
+      "available": {
+        "start": {
+          "ticks": "0",
+          "rate": 1
+        },
+        "duration": {
+          "ticks": "3",
+          "rate": 1
+        }
+      }
+    },
+    "typeface": {
+      "kind": "font",
+      "hash": "83d548cd73ef2e039167db3adb5ea9d7a7870466ffc8a162c9820bc348938aaf"
+    },
+    "music": {
+      "kind": "audio",
+      "hash": "5653913f268e9f131729fb3f285c062ef463d2c5a22141186c9af1613bf5cd1f",
+      "available": {
+        "start": {
+          "ticks": "0",
+          "rate": 1
+        },
+        "duration": {
+          "ticks": "6",
+          "rate": 1
+        }
+      }
+    }
+  },
+  "sources": {
+    "host": {
+      "kind": "live",
+      "role": "hostCamera"
+    },
+    "guest": {
+      "kind": "live",
+      "role": "guest"
+    },
+    "picture": {
+      "kind": "player",
+      "asset": "slate"
+    },
+    "sting": {
+      "kind": "player",
+      "asset": "ident"
+    },
+    "keys": {
+      "kind": "player",
+      "asset": "music"
+    }
+  },
+  "sets": {
+    "desk": {
+      "layouts": {
+        "wide": {
+          "orientation": "landscape",
+          "width": 320,
+          "height": 180,
+          "root": {
+            "id": "stage",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "width": 320,
+              "height": 180
+            },
+            "content": {
+              "kind": "group"
+            },
+            "children": [
+              {
+                "id": "recording",
+                "frame": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 320,
+                  "height": 180
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "picture",
+                  "fit": "contain"
+                }
+              },
+              {
+                "id": "title",
+                "frame": {
+                  "x": 10,
+                  "y": 8,
+                  "width": 300,
+                  "height": 24
+                },
+                "content": {
+                  "kind": "text",
+                  "value": "FIELD NOTES",
+                  "font": "83d548cd73ef2e039167db3adb5ea9d7a7870466ffc8a162c9820bc348938aaf"
+                }
+              }
+            ]
+          }
+        },
+        "tall": {
+          "orientation": "vertical",
+          "width": 180,
+          "height": 320,
+          "root": {
+            "id": "stage",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "width": 180,
+              "height": 320
+            },
+            "content": {
+              "kind": "group"
+            },
+            "children": [
+              {
+                "id": "recording",
+                "frame": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 180,
+                  "height": 320
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "picture",
+                  "fit": "contain"
+                }
+              },
+              {
+                "id": "title",
+                "frame": {
+                  "x": 10,
+                  "y": 8,
+                  "width": 160,
+                  "height": 24
+                },
+                "content": {
+                  "kind": "text",
+                  "value": "FIELD NOTES",
+                  "font": "83d548cd73ef2e039167db3adb5ea9d7a7870466ffc8a162c9820bc348938aaf"
+                }
+              }
+            ]
+          }
+        },
+        "live-wide": {
+          "orientation": "landscape",
+          "width": 320,
+          "height": 180,
+          "root": {
+            "id": "stage",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "width": 320,
+              "height": 180
+            },
+            "content": {
+              "kind": "group"
+            },
+            "children": [
+              {
+                "id": "recording",
+                "frame": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 320,
+                  "height": 180
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "host",
+                  "fit": "contain"
+                }
+              },
+              {
+                "id": "title",
+                "frame": {
+                  "x": 10,
+                  "y": 8,
+                  "width": 300,
+                  "height": 24
+                },
+                "content": {
+                  "kind": "text",
+                  "value": "FIELD NOTES",
+                  "font": "83d548cd73ef2e039167db3adb5ea9d7a7870466ffc8a162c9820bc348938aaf"
+                }
+              }
+            ]
+          }
+        },
+        "live-tall": {
+          "orientation": "vertical",
+          "width": 180,
+          "height": 320,
+          "root": {
+            "id": "stage",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "width": 180,
+              "height": 320
+            },
+            "content": {
+              "kind": "group"
+            },
+            "children": [
+              {
+                "id": "recording",
+                "frame": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 180,
+                  "height": 320
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "host",
+                  "fit": "contain"
+                }
+              },
+              {
+                "id": "title",
+                "frame": {
+                  "x": 10,
+                  "y": 8,
+                  "width": 160,
+                  "height": 24
+                },
+                "content": {
+                  "kind": "text",
+                  "value": "FIELD NOTES",
+                  "font": "83d548cd73ef2e039167db3adb5ea9d7a7870466ffc8a162c9820bc348938aaf"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "graphs": {
+        "compose": {
+          "profile": "producer.render/1",
+          "clock": "timeline",
+          "passes": [
+            {
+              "id": "out",
+              "kind": "composite"
+            }
+          ]
+        },
+        "insert-grade": {
+          "profile": "producer.render/1",
+          "clock": "timeline",
+          "passes": [
+            {
+              "id": "grade",
+              "kind": "fragment",
+              "inputs": [
+                {
+                  "kind": "layers",
+                  "nodes": [
+                    "recording",
+                    "title"
+                  ]
+                }
+              ],
+              "shader": "let c = textureSample(input0,linear_sampler,uv); return vec4<f32>(c.rgb * vec3<f32>(1.0,0.94,0.88),c.a);"
+            }
+          ]
+        }
+      },
+      "outputGraphs": {
+        "wide": "insert-grade",
+        "tall": "insert-grade",
+        "live-wide": "compose",
+        "live-tall": "compose"
+      },
+      "participantInputs": {
+        "audio": {
+          "actor": "robin",
+          "source": "guest",
+          "required": true,
+          "track": "audio",
+          "layouts": [
+            "live-wide",
+            "live-tall"
+          ]
+        },
+        "video": {
+          "actor": "robin",
+          "source": "guest",
+          "required": false,
+          "track": "video",
+          "layouts": [
+            "live-wide",
+            "live-tall"
+          ]
+        }
+      }
+    }
+  },
+  "sequences": {
+    "main": {
+      "duration": {
+        "ticks": "6",
+        "rate": 1
+      },
+      "placements": [
+        {
+          "id": "open",
+          "source": "picture",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "2",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          }
+        },
+        {
+          "id": "sponsor-cut",
+          "source": "picture",
+          "range": {
+            "start": {
+              "ticks": "2",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "3",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "2",
+            "rate": 1
+          },
+          "envelopes": {
+            "saturation": {
+              "interpolation": "linear",
+              "keys": [
+                {
+                  "at": {
+                    "ticks": "0",
+                    "rate": 1
+                  },
+                  "value": 0
+                },
+                {
+                  "at": {
+                    "ticks": "1",
+                    "rate": 1
+                  },
+                  "value": 1
+                }
+              ]
+            },
+            "redGain": {
+              "interpolation": "linear",
+              "keys": [
+                {
+                  "at": {
+                    "ticks": "0",
+                    "rate": 1
+                  },
+                  "value": 1
+                },
+                {
+                  "at": {
+                    "ticks": "3",
+                    "rate": 1
+                  },
+                  "value": 1.1
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "outro",
+          "source": "picture",
+          "range": {
+            "start": {
+              "ticks": "5",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "1",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "5",
+            "rate": 1
+          }
+        },
+        {
+          "id": "sonic-ident",
+          "source": "sting",
+          "range": {
+            "start": {
+              "ticks": "2",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "3",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          }
+        },
+        {
+          "id": "score",
+          "source": "keys",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "6",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          },
+          "envelopes": {
+            "gain": {
+              "interpolation": "linear",
+              "keys": [
+                {
+                  "at": {
+                    "ticks": "0",
+                    "rate": 1
+                  },
+                  "value": 0
+                },
+                {
+                  "at": {
+                    "ticks": "1",
+                    "rate": 1
+                  },
+                  "value": 1
+                },
+                {
+                  "at": {
+                    "ticks": "5",
+                    "rate": 1
+                  },
+                  "value": 1
+                },
+                {
+                  "at": {
+                    "ticks": "6",
+                    "rate": 1
+                  },
+                  "value": 0
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "cues": [
+        {
+          "id": "sponsor-in",
+          "at": {
+            "ticks": "2",
+            "rate": 1
+          }
+        },
+        {
+          "id": "sponsor-out",
+          "at": {
+            "ticks": "5",
+            "rate": 1
+          }
+        }
+      ],
+      "audioRoutes": [
+        {
+          "id": "brand-audio",
+          "source": "sting",
+          "bus": "program"
+        },
+        {
+          "id": "guest-microphone",
+          "source": "guest",
+          "bus": "program"
+        },
+        {
+          "id": "music-bed",
+          "source": "keys",
+          "bus": "program"
+        }
+      ]
+    },
+    "teaser": {
+      "duration": {
+        "ticks": "3",
+        "rate": 1
+      },
+      "instances": [
+        {
+          "id": "excerpt",
+          "sequence": "main",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "3",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "2",
+            "rate": 1
+          }
+        }
+      ]
+    }
+  },
+  "shows": {
+    "episode-one": {
+      "set": "desk",
+      "authority": "local",
+      "segments": [
+        {
+          "id": "opening",
+          "title": "Opening",
+          "landscape": "live-wide",
+          "vertical": "live-tall",
+          "sequence": "main",
+          "layoutChanges": [
+            {
+              "at": {
+                "ticks": "2",
+                "rate": 1
+              },
+              "landscape": "wide",
+              "vertical": "tall"
+            },
+            {
+              "at": {
+                "ticks": "5",
+                "rate": 1
+              },
+              "landscape": "live-wide",
+              "vertical": "live-tall"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

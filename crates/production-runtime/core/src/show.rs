@@ -116,6 +116,8 @@ pub struct ShowSample {
     pub segment: Option<String>,
     pub landscape: Option<String>,
     pub vertical: Option<String>,
+    pub landscape_graph: Option<String>,
+    pub vertical_graph: Option<String>,
     pub paused: bool,
     pub overrides: usize,
     pub override_token: Option<Counter>,
@@ -137,6 +139,7 @@ pub struct ShowRun {
     document: String,
     id: String,
     definition: Show,
+    output_graphs: Arc<BTreeMap<String,String>>,
     plan: Arc<Plan>,
     grant: RevokeFence,
     output: OutputClock,
@@ -222,6 +225,7 @@ impl ShowRun {
             execution: uuid::Uuid::new_v4().to_string(),
             document: document.id.clone(),
             id: id.into(),
+            output_graphs: Arc::new(document.sets[&definition.set].output_graphs.clone()),
             definition,
             drivers: Vec::with_capacity(256),
             frame_slots,
@@ -315,7 +319,9 @@ impl ShowRun {
         self.ownership
             .relate(scope, self.set_resource, Relation::Borrow)?;
         let segment = &self.definition.segments[index];
-        for layout in [&segment.landscape, &segment.vertical] {
+        let layouts: std::collections::BTreeSet<_> = [&segment.landscape, &segment.vertical].into_iter()
+            .chain(segment.layout_changes.iter().flat_map(|c| [&c.landscape, &c.vertical])).collect();
+        for layout in layouts {
             let path = format!("sets/{}/layouts/{layout}", self.definition.set);
             self.ownership.relate(
                 scope,
@@ -642,6 +648,7 @@ impl ShowRun {
         cleanup: Option<Cleanup>,
     ) -> ShowSample {
         let s = self.selected.map(|i| &self.definition.segments[i]);
+        let layouts = self.presentation_at(at);
         ShowSample {
             execution: self.execution.clone(),
             document: self.document.clone(),
@@ -654,8 +661,10 @@ impl ShowRun {
             active: self.active,
             closed: self.closed,
             segment: s.map(|s| s.id.clone()),
-            landscape: s.map(|s| s.landscape.clone()),
-            vertical: s.map(|s| s.vertical.clone()),
+            landscape: layouts.map(|(wide, _)| wide.to_owned()),
+            vertical: layouts.map(|(_, tall)| tall.to_owned()),
+            landscape_graph: layouts.and_then(|(wide, _)| self.output_graphs.get(wide)).cloned(),
+            vertical_graph: layouts.and_then(|(_, tall)| self.output_graphs.get(tall)).cloned(),
             paused: !self.pauses.is_empty(),
             overrides: self.overrides.count(),
             override_token: token,
@@ -664,6 +673,12 @@ impl ShowRun {
             cleanup,
             timeline,
         }
+    }
+    /// Borrow the active layout IDs directly from the compiled rundown.
+    pub fn presentation_at(&self, at: OutputInstant) -> Option<(&str, &str)> {
+        let segment = &self.definition.segments[self.selected?];
+        let position = match &self.timeline { Some(t) => t.position(at).ok()?, None => Time::ZERO };
+        Some(segment.layouts_at(position))
     }
     /// Control-lane inspection remains available after close so the adapter
     /// can identify and acknowledge a resource even if no run was started.

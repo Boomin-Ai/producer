@@ -245,7 +245,7 @@ impl Walker<'_> {
             let paint_ok = match &s.fill {
                 None => true,
                 Some(Paint::Graph { graph }) => path.split('/').nth(1)
-                    .and_then(|id| self.d.sets.get(id)).is_some_and(|set| set.graphs.get(graph).is_some_and(|g| g.passes.iter().all(|p| {!p.inputs().iter().any(|i|matches!(i,GraphInput::Layers{..}))}))),
+                    .and_then(|id| self.d.sets.get(id)).is_some_and(|set| set.graphs.get(graph).is_some_and(|g| !g.is_composite() && g.passes.iter().all(|p| {!p.inputs().iter().any(|i|matches!(i,GraphInput::Layers{..}))}))),
                 Some(Paint::Image { asset, .. }) => self.d.assets.get(asset).is_some_and(|a| a.kind == AssetKind::Image),
                 Some(Paint::Solid { ink: i }) => ink(i),
                 Some(Paint::Contours { ink: i, width, period }) => {
@@ -587,6 +587,17 @@ pub fn validate_with_scratch(
         }
     }
     for (id, set) in &d.sets {
+        keys(&set.participant_inputs, id)?;
+        let mut bindings = std::collections::BTreeMap::new();
+        for input in set.participant_inputs.values() {
+            if !valid_id(&input.actor) || !matches!(d.sources.get(&input.source),Some(Source::Live { role: Role::Guest }))
+                || input.layouts.iter().any(|l| !set.layouts.contains_key(l)) {
+                return Err(err(id,"invalid participant input"));
+            }
+            if bindings.insert(&input.source, &input.actor).is_some_and(|a| a != &input.actor) {
+                return Err(err(id,"guest source bound to multiple actors"));
+            }
+        }
         keys(&set.layouts, id)?;
         keys(&set.theme, id)?;
         for (layout, graph) in &set.output_graphs {
@@ -607,6 +618,13 @@ pub fn validate_with_scratch(
             let mut used = std::collections::BTreeSet::new();
             for pass in &graph.passes {
                 let id = match pass {
+                    GraphPass::Composite { id } => {
+                        if !graph.is_composite() || graph.profile != GraphProfile::V1
+                            || !set.output_graphs.values().any(|output| output == name) {
+                            return Err(err(&path, "composite must be a terminal layout graph"));
+                        }
+                        id
+                    }
                     GraphPass::Fragment { id,shader,params,fields,.. } => {
                         if shader.trim().is_empty() || shader.len()>8192
                             || fields.iter().flatten().any(|f|!valid_id(f))
@@ -826,6 +844,14 @@ pub fn validate_with_scratch(
         }
         let mut player_maps: BTreeMap<&str, Vec<&Placement>> = BTreeMap::new();
         for p in &seq.placements {
+            for (parameter, lane) in &p.envelopes {
+                let max = match parameter { EnvelopeParameter::Opacity => 1., _ => 4. };
+                if lane.keys.len() > 4096 || lane.keys.first().map(|k| k.at) != Some(Time::ZERO)
+                    || lane.keys.windows(2).any(|p| p[0].at >= p[1].at)
+                    || lane.keys.iter().any(|k| k.at > p.range.duration || !k.value.is_finite() || !(0. ..=max).contains(&k.value)) {
+                    return Err(err(&p.id,"invalid clip automation key or range"));
+                }
+            }
             let end = p.range.end()?;
             p.speed.validate()?;
             if p.range.start < Time::ZERO || end > seq.duration {
@@ -897,6 +923,18 @@ pub fn validate_with_scratch(
             return Err(err(id, "Show requires 1..256 segments"));
         }
         for s in &show.segments {
+            if !s.layout_changes.is_empty() {
+                let seq = s.sequence.as_ref().and_then(|id| d.sequences.get(id))
+                    .ok_or_else(|| err(&s.id, "layout changes require a sequence clock"))?;
+                if s.layout_changes.len() > 4096 || s.layout_changes.windows(2).any(|w| w[0].at >= w[1].at)
+                    || s.layout_changes.iter().any(|c| c.at < Time::ZERO || c.at >= seq.duration
+                        || set.layouts.get(&c.landscape).map(|l| l.orientation) != Some(Orientation::Landscape)
+                        || set.layouts.get(&c.vertical).map(|l| l.orientation) != Some(Orientation::Vertical))
+                    || std::iter::once((&s.landscape, &s.vertical)).chain(s.layout_changes.iter().map(|c| (&c.landscape,&c.vertical)))
+                        .any(|(a,b)| !set.output_graphs.contains_key(a) || !set.output_graphs.contains_key(b)) {
+                    return Err(err(&s.id,"invalid timed layout or missing output graph"));
+                }
+            }
             if set.layouts.get(&s.landscape).map(|l| l.orientation) != Some(Orientation::Landscape)
                 || set.layouts.get(&s.vertical).map(|l| l.orientation)
                     != Some(Orientation::Vertical)

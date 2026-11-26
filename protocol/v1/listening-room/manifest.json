@@ -1,0 +1,309 @@
+{
+  "protocol": "producer.bundle/1",
+  "production": "urn:uuid:a0450574-720c-4f29-a871-9cf0082c7ff0",
+  "documentSha256": "ae28247dfb9d632778397f5685a316b421f4b5c70bf7eaf425512491d9dab069",
+  "author": "session-editor",
+  "authoredAt": 1795651200,
+  "parent": null,
+  "entry": {
+    "show": "episode-one",
+    "segment": "opening"
+  },
+  "assets": {
+    "slate": {
+      "original": {
+        "sha256": "58a80ca766e487b69ab1b875ec01935dd1d2c9ee3ef9c8ec2cda0713632e8e56",
+        "format": "h264-mp4",
+        "width": 320,
+        "height": 180
+      },
+      "proxies": [
+        {
+          "sha256": "4a0e1ad17c7a7351bd6ff12679d0d545af2536bde1467fb3ab62523d0307d61f",
+          "format": "h264-mp4",
+          "width": 160,
+          "height": 90
+        }
+      ]
+    },
+    "composition": {
+      "original": {
+        "sha256": "3dbd1b1f6fbbbc3f403a4bef1bab204b1da52355065ba88b0af768d24f09a63c",
+        "format": "png"
+      },
+      "proxies": []
+    },
+    "ident": {
+      "original": {
+        "sha256": "c2884b1ec7b5a50dce10c872b9bdb2fc539ae27fc5ac52fb8869bd9062b6515e",
+        "format": "pcm-wav"
+      },
+      "proxies": []
+    },
+    "typeface": {
+      "original": {
+        "sha256": "83d548cd73ef2e039167db3adb5ea9d7a7870466ffc8a162c9820bc348938aaf",
+        "format": "woff2"
+      },
+      "proxies": []
+    },
+    "music": {
+      "original": {
+        "sha256": "5653913f268e9f131729fb3f285c062ef463d2c5a22141186c9af1613bf5cd1f",
+        "format": "pcm-wav"
+      },
+      "proxies": []
+    }
+  },
+  "universes": {
+    "field-lab": {
+      "name": "Field Lab",
+      "lore": "A practical field-recording series.",
+      "style": {
+        "palette": [
+          "#10202b",
+          "#d0a253"
+        ]
+      },
+      "setup": {
+        "camera": {
+          "whiteBalanceK": 4300
+        },
+        "lighting": "Warm practicals on a cool surface."
+      }
+    }
+  },
+  "entities": {
+    "host": {
+      "kind": "character",
+      "name": "Robin",
+      "universe": "field-lab",
+      "promptScaffold": "Calm field recordist."
+    },
+    "recorder": {
+      "kind": "prop",
+      "name": "Field recorder",
+      "universe": "field-lab",
+      "promptScaffold": "Compact brass audio recorder."
+    },
+    "workshop": {
+      "kind": "location",
+      "name": "Listening room",
+      "universe": "field-lab",
+      "promptScaffold": "Blue grid workbench."
+    }
+  },
+  "actors": {
+    "editor": {
+      "kind": "person",
+      "name": "Studio Editor",
+      "identity": "editor@field-notes.example"
+    },
+    "sponsor": {
+      "kind": "brand",
+      "name": "North Signal"
+    },
+    "fork-editor": {
+      "name": "Fork Editor",
+      "kind": "person",
+      "identity": "editor@fork.example"
+    },
+    "session-editor": {
+      "name": "Listening Room Editor",
+      "kind": "person",
+      "identity": "studio@producer.example"
+    },
+    "robin": {
+      "name": "Robin",
+      "kind": "person"
+    }
+  },
+  "shots": {
+    "reveal": {
+      "title": "Product insert",
+      "cut": {
+        "sequence": "main",
+        "placement": "sponsor-cut"
+      },
+      "direction": {
+        "action": "Reveal the brass field recorder against the blue grid.",
+        "lighting": "Soft tungsten key from camera left, cool fill.",
+        "location": "workshop",
+        "cast": [
+          "host",
+          "recorder"
+        ],
+        "camera": {
+          "sensor": "Super 35",
+          "apertureF": 2.8,
+          "shutterAngleDeg": 180,
+          "iso": 800,
+          "focusDistanceM": 1.2,
+          "framing": "product close-up",
+          "angle": "three-quarter high",
+          "pitchDeg": -15,
+          "movement": "slow push-in"
+        },
+        "beats": [
+          {
+            "range": {
+              "start": {
+                "ticks": "0",
+                "rate": 1
+              },
+              "duration": {
+                "ticks": "2",
+                "rate": 1
+              }
+            },
+            "action": "Hold on the product.",
+            "narration": {
+              "speaker": "host",
+              "language": "en-US",
+              "text": "Listen to the room.",
+              "delivery": "Quiet, close to microphone. Let the final word breathe."
+            }
+          },
+          {
+            "range": {
+              "start": {
+                "ticks": "2",
+                "rate": 1
+              },
+              "duration": {
+                "ticks": "1",
+                "rate": 1
+              }
+            },
+            "action": "Finish the push.",
+            "camera": {
+              "focalLengthMm": 55,
+              "framing": "tight detail"
+            }
+          }
+        ],
+        "prompt": "Hold on the recorder.",
+        "mentions": [
+          {
+            "start": 12,
+            "end": 20,
+            "entity": "recorder"
+          }
+        ],
+        "references": [
+          {
+            "asset": "composition",
+            "role": "composition",
+            "instruction": "Match blocking and negative space."
+          },
+          {
+            "asset": "slate",
+            "role": "cameraMotion",
+            "instruction": "Hold the product steady."
+          },
+          {
+            "asset": "ident",
+            "role": "sound",
+            "instruction": "Keep the pulse under the final word."
+          }
+        ]
+      },
+      "intendedModel": {
+        "provider": "ByteDance",
+        "name": "Seedance",
+        "version": "2.0",
+        "parameters": {
+          "generateAudio": true
+        }
+      },
+      "takes": {
+        "slate-one": {
+          "origin": "synthetic",
+          "asset": "slate"
+        }
+      },
+      "selectedTake": "slate-one",
+      "universe": "field-lab"
+    }
+  },
+  "contributions": {
+    "equipment-credit": {
+      "kind": "brandPlacement",
+      "role": "creator",
+      "actor": "sponsor",
+      "cut": {
+        "sequence": "main",
+        "placement": "sponsor-cut"
+      },
+      "featuredEntity": "recorder",
+      "disclosure": "Equipment supplied by North Signal."
+    }
+  },
+  "mix": [
+    {
+      "sequence": "main",
+      "route": "brand-audio",
+      "role": "effects",
+      "gainMillidb": -6000,
+      "balancePermille": 0,
+      "muted": false
+    }
+  ],
+  "workflow": {
+    "state": "active",
+    "phase": "postproduction",
+    "startedAt": 1795564800,
+    "tasks": {
+      "picture": {
+        "title": "Cut the product insert",
+        "phase": "postproduction",
+        "state": "done",
+        "required": true,
+        "shot": "reveal",
+        "owner": "editor"
+      },
+      "voice": {
+        "title": "Record the narration",
+        "phase": "production",
+        "state": "todo",
+        "required": true,
+        "shot": "reveal",
+        "owner": "editor"
+      }
+    }
+  },
+  "setup": {
+    "brief": "Show how location sound is made.",
+    "camera": {
+      "make": "ARRI",
+      "model": "ALEXA 35"
+    },
+    "environment": {
+      "setting": "interior",
+      "location": "workshop",
+      "dayPart": "dusk",
+      "timeZone": "America/Denver",
+      "ambience": "Quiet room tone"
+    }
+  },
+  "sequenceSetups": {
+    "main": {
+      "camera": {
+        "lens": "50 mm prime",
+        "focalLengthMm": 50
+      }
+    }
+  },
+  "musicSessions": {
+    "score": {
+      "arrangementSha256": "84d5ff06ae9a761c91f0102284879aca37bf60574d43f2e26e814e04949f3436",
+      "renderedFrom": "84d5ff06ae9a761c91f0102284879aca37bf60574d43f2e26e814e04949f3436",
+      "pictureCue": "sponsor-in",
+      "cut": {
+        "sequence": "main",
+        "placement": "score"
+      },
+      "sampleRateHz": 48000
+    }
+  }
+}

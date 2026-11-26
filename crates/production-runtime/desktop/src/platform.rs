@@ -39,6 +39,8 @@ pub struct Draw {
     pub accent: [f32; 4],
     /// Material kind, halftone cell pixels, motion strength, continuous production time.
     pub material: [f32; 4],
+    /// Relative RGB gains and saturation. All zeros preserve the source.
+    pub clip_grade: [f32; 4],
     pub opacity: f32,
     pub kind: u32,
     pub source: u32,
@@ -57,6 +59,7 @@ impl Draw {
             surface: [0.; 4],
             accent: [0.; 4],
             material: [0.; 4],
+            clip_grade: [0.; 4],
             opacity: 1.,
             kind: 0,
             source: 0,

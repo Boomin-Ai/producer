@@ -121,6 +121,7 @@ pub fn responsive_layout() -> Document {
     d.sets.insert(
         "teaching".into(),
         Set {
+            participant_inputs: Default::default(),
             canvas_fit: Default::default(),
             graphs: Default::default(),
             output_graphs: Default::default(),
@@ -290,6 +291,7 @@ pub fn classic_like() -> Document {
         property: Property::Opacity,
     };
     let mut set = Set {
+        participant_inputs: Default::default(),
         canvas_fit: Default::default(),
         graphs: Default::default(),
             output_graphs: Default::default(),
@@ -331,6 +333,7 @@ pub fn classic_like() -> Document {
         duration: range.duration,
         placements: vec![
             Placement {
+                envelopes: Default::default(),
                 id: "clip-a".into(),
                 source: "player-a".into(),
                 range,
@@ -339,6 +342,7 @@ pub fn classic_like() -> Document {
                 looping: false,
             },
             Placement {
+                envelopes: Default::default(),
                 id: "clip-b".into(),
                 source: "player-b".into(),
                 range,
@@ -403,6 +407,7 @@ pub fn classic_like() -> Document {
             set: "classic".into(),
             authority: Authority::Local,
             segments: vec![Segment {
+                layout_changes: Vec::new(),
                 id: "opening".into(),
                 title: "Your first signal".into(),
                 landscape: "wide".into(),
@@ -441,6 +446,7 @@ pub fn analytic_reconstruction() -> Document {
             .unwrap()
             .placements
             .push(Placement {
+                envelopes: Default::default(),
                 id: source.into(),
                 source: source.into(),
                 range: Range {
@@ -496,6 +502,7 @@ pub fn nested_timeline() -> Document {
         interpolation: Interpolation::Linear,
     });
     pulse.placements.push(Placement {
+        envelopes: Default::default(),
         id: "movie".into(),
         source: "player-a".into(),
         range,

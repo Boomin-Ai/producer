@@ -100,6 +100,16 @@
             }
           ]
         },
+        "environment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Environment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "narration": {
           "anyOf": [
             {
@@ -269,6 +279,31 @@
       ],
       "type": "object"
     },
+    "Coordinates": {
+      "additionalProperties": false,
+      "properties": {
+        "elevationM": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "latitude": {
+          "format": "double",
+          "type": "number"
+        },
+        "longitude": {
+          "format": "double",
+          "type": "number"
+        }
+      },
+      "required": [
+        "latitude",
+        "longitude"
+      ],
+      "type": "object"
+    },
     "CreditKind": {
       "enum": [
         "brandPlacement",
@@ -292,6 +327,18 @@
         "placement"
       ],
       "type": "object"
+    },
+    "DayPart": {
+      "enum": [
+        "dawn",
+        "morning",
+        "midday",
+        "afternoon",
+        "goldenHour",
+        "dusk",
+        "night"
+      ],
+      "type": "string"
     },
     "Decision": {
       "enum": [
@@ -329,6 +376,16 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "environment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Environment"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "lighting": {
           "type": [
@@ -458,6 +515,83 @@
       ],
       "type": "object"
     },
+    "Environment": {
+      "additionalProperties": false,
+      "properties": {
+        "ambience": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "coordinates": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Coordinates"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dayPart": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DayPart"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "location": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "setting": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Setting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timeZone": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unixSeconds": {
+          "description": "Signed Unix seconds. Optional for fictional scenes and unknown shoot times.",
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "utcOffsetMinutes": {
+          "format": "int16",
+          "maximum": 32767,
+          "minimum": -32768,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "weather": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "Extension": {
       "additionalProperties": false,
       "properties": {
@@ -584,6 +718,37 @@
       "required": [
         "provider",
         "name"
+      ],
+      "type": "object"
+    },
+    "MusicSession": {
+      "additionalProperties": false,
+      "description": "Musical events use the DAWproject score clock. The stem placement and sync\ncue are addressed on the exact native sequence clock.",
+      "properties": {
+        "arrangementSha256": {
+          "type": "string"
+        },
+        "cut": {
+          "$ref": "#/$defs/Cut"
+        },
+        "pictureCue": {
+          "type": "string"
+        },
+        "renderedFrom": {
+          "type": "string"
+        },
+        "sampleRateHz": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "arrangementSha256",
+        "renderedFrom",
+        "cut",
+        "pictureCue",
+        "sampleRateHz"
       ],
       "type": "object"
     },
@@ -792,6 +957,15 @@
       ],
       "type": "string"
     },
+    "Setting": {
+      "enum": [
+        "interior",
+        "exterior",
+        "mixed",
+        "virtual"
+      ],
+      "type": "string"
+    },
     "Setup": {
       "additionalProperties": false,
       "properties": {
@@ -805,6 +979,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/Camera"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "environment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Environment"
             },
             {
               "type": "null"
@@ -905,6 +1089,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/Camera"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "captureEnvironment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Environment"
             },
             {
               "type": "null"
@@ -1213,6 +1407,12 @@
         "$ref": "#/$defs/Mix"
       },
       "type": "array"
+    },
+    "musicSessions": {
+      "additionalProperties": {
+        "$ref": "#/$defs/MusicSession"
+      },
+      "type": "object"
     },
     "parent": {
       "type": [
