@@ -1408,6 +1408,85 @@ fn host_direction_settings(s: &Studio, snap: &Snapshot, show: &str, segment: &st
     }
     b
 }
+pub(super) fn edit_set_button() -> El {
+    tool("edit-set", "settings", "Edit set", false, super::editor::open).size(22., 22.)
+}
+
+fn set_controls_header(snap: &Snapshot, key: &str, pair: &crate::model::SetLayoutPair, on: bool, width: f32) -> El {
+    let project = &snap.project;
+    let mut heading = row().items_center().gap(6.)
+        .child(title(crate::model::set_label(key), 18., 650., TEXT).grow(1.));
+    if project.workspace.panels[&PanelId::Controls].header == crate::workspace::HeaderMode::Hidden {
+        heading = heading.child(edit_set_button());
+    }
+
+    let mut status = row().key("set-header-status").items_center().gap(5.);
+    let active = snap.program_segment.as_ref()
+        .filter(|_| snap.program_kind == "show")
+        .and_then(|(id, segment)| {
+            let show = project.production.shows.get(id)?;
+            (show.set == key).then_some((id, segment, show))
+        });
+    if let Some((show_id, current, show)) = active {
+        let running = snap.program_playing;
+        let finished = !running && show.segments.last().is_some_and(|last| {
+            &last.id == current && project.segment_duration(show_id, last)
+                .is_some_and(|duration| snap.program_position >= duration)
+        });
+        let label = if running { "Running" } else if finished { "Finished" } else { "Paused" };
+        if running {
+            status = status.child(el().size(6., 6.).radius(3.).fill(color(MINT)));
+        }
+        status = status
+            .child(title(label, 11., 600., if running { MINT } else { TEXT }))
+            .child(title(show_clock(snap.show_elapsed), 11., 600., TEXT).key("set-show-time"))
+            .child(title("·", 11., 500., MUTED));
+    } else if project.production.shows.values().any(|show| show.set == key) {
+        status = status.child(title("Ready", 11., 600., TEXT)).child(title("·", 11., 500., MUTED));
+    }
+    status = status.child(title(if on { "On output" } else { "Prepared" }, 10., 500., MUTED));
+
+    let scene = project.active_scene.clone();
+    let set_id = key.to_owned();
+    let layouts = pair.clone();
+    let action_label = if on { "Switch output to studio scene" } else { "Show set on output" };
+    let mut action = row().key("control-set-output").role("button").focusable(true)
+        .label(action_label).help(action_label).h(24.).px(6.).gap(4.).items_center().radius(5.)
+        .fill(color(SURFACE)).hover_fill(color(theme::GRIP_HOVER))
+        .child(glyph(if on { "back" } else { "studio" }, 12., MUTED));
+    if width >= 245. {
+        action = action.child(title(if on { "Studio scene" } else { "Take set" }, 10., 580., TEXT));
+    }
+    action = action.on_press(move |s: &mut Studio| {
+        s.set_selection = Some((scene.clone(), set_id.clone(), layouts.clone()));
+        s.send(RoomCommand::SetMount {
+            id: (!on).then(|| set_id.clone()),
+            layout: (!on).then(|| layouts.clone()),
+        });
+    });
+    let mut header = col().key("set-controls-header").min_w(0.).gap(5.)
+        .child(heading)
+        .child(row().items_center().flex_wrap().gap(4.).child(status).child(el().grow(1.)).child(action));
+
+    if !on {
+        let output = match snap.program_kind.as_str() {
+            "timeline" => "Timeline on output".into(),
+            "show" => "Show on output".into(),
+            "set" => project.mounted_set.as_deref()
+                .map(|id| format!("On output · {}", crate::model::set_label(id)))
+                .unwrap_or_else(|| "Studio scene on output".into()),
+            _ => "Studio scene on output".into(),
+        };
+        header = header.child(title(output, 10., 500., MUTED));
+        if snap.program_kind == "set" && project.mounted_set.is_some() {
+            header = header.child(button("configure-output-set", "Configure set on output", false, |s| {
+                s.set_selection = None;
+            }).self_start());
+        }
+    }
+    header.child(el().key("set-header-divider").h(1.).w_full().fill(color(theme::SEAM)))
+}
+
 fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
     let l = s.live.as_ref().unwrap();
     let snap = &l.snapshot;
@@ -1423,84 +1502,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 let running = snap.program_kind == "show" && p.mounted_set.as_ref() == Some(key);
                 let pair = if running || (snap.active_host_shot.is_some() && p.mounted_set.as_ref() == Some(key)) { snap.program_layout.clone().unwrap_or(pair) } else { pair };
                 let on = running || (snap.program_kind == "set" && (l.handle.is_set_on_output(key, &pair, set) || (snap.active_host_shot.is_some() && p.mounted_set.as_ref() == Some(key))));
-                let badge = el()
-                    .self_start()
-                    .px(6.)
-                    .py(2.)
-                    .radius(5.)
-                    .fill(color(0x102521))
-                    .border(1., color(0x276954))
-                    .child(title(
-                        if on { "ON OUTPUT" } else { "PREPARED" },
-                        9.,
-                        600.,
-                        MINT,
-                    ));
-                b = b.gap(8.).child(
-                    row()
-                        .items_start()
-                        .gap(6.)
-                        .child(col().min_w(0.).grow(1.).gap(4.).child(badge).child(title(
-                            crate::model::set_label(key),
-                            15.,
-                            600.,
-                            TEXT,
-                        )))
-                        .child(
-                            tool(
-                                "edit-set",
-                                "settings",
-                                "Edit Set",
-                                false,
-                                super::editor::open,
-                            )
-                            .size(30., 30.),
-                        ),
-                );
-                let scene = p.active_scene.clone();
-                let k = key.clone();
-                let chosen = pair.clone();
-                let status = match snap.program_kind.as_str() {
-                    "timeline" => "Timeline on output".into(),
-                    "show" => "Show on output".into(),
-                    "set" => p
-                        .mounted_set
-                        .as_deref()
-                        .map(|id| format!("On output · {}", crate::model::set_label(id)))
-                        .unwrap_or_else(|| "Studio scene".into()),
-                    _ => "Studio scene".into(),
-                };
-                if !on {
-                    b = b.child(title(status, 11., 500., MUTED));
-                    if snap.program_kind == "set" && p.mounted_set.is_some() {
-                        b = b.child(button("configure-output-set", "Configure set on output", false, |s| {
-                            s.set_selection = None;
-                        }));
-                    }
-                }
-                let take_label = if on { "Return to studio scene" } else { "Show set on output" };
-                b = b.child(
-                    row()
-                        .key("control-set-output")
-                        .role("button")
-                        .label(take_label)
-                        .h(32.)
-                        .px(8.)
-                        .items_center()
-                        .radius(5.)
-                        .border(1., color(0x263443))
-                        .fill(color(SURFACE))
-                        .child(el().size(6., 6.).radius(3.).fill(color(MINT)))
-                        .child(el().grow(1.))
-                        .child(title(take_label, 12., 500., TEXT))
-                        .on_press(move |s: &mut Studio| {
-                            s.set_selection = Some((scene.clone(), k.clone(), chosen.clone()));
-                            s.send(RoomCommand::SetMount {
-                                id: (!on).then(|| k.clone()),
-                                layout: (!on).then(|| chosen.clone()),
-                            });
-                        }),
-                );
+                b = b.gap(8.).child(set_controls_header(snap, key, &pair, on, width));
                 for (id, show) in p.production.shows.iter().filter(|(_, show)| &show.set == key) {
                     if let Some(transport) = show_controller(s, snap, id, show, set) {
                         b = b.child(transport);

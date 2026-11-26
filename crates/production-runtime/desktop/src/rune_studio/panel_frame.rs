@@ -18,6 +18,10 @@ pub(super) fn surface(id: PanelId, panel: &Panel) -> El {
 pub(super) fn header(s: &Studio, id: PanelId, mode: HeaderMode, split: bool) -> Option<El> {
     if id == PanelId::Publish && mode == HeaderMode::Hidden { return None; }
     let action = match id {
+        PanelId::Controls if mode != HeaderMode::Hidden && s.live.as_ref().is_some_and(|l| {
+            let p = &l.snapshot.project;
+            p.mounted_set.is_some() || p.production.sets.keys().any(|id| id != "room-scene")
+        }) => Some(panels::edit_set_button()),
         PanelId::Sources | PanelId::Scenes => Some(panels::list_add(id)),
         PanelId::Publish => publish::header_actions(s, split),
         PanelId::Assistant => Some(chat::logs_button()),
@@ -37,8 +41,12 @@ pub(super) fn header(s: &Studio, id: PanelId, mode: HeaderMode, split: bool) -> 
     let mut bar = row().items_center().gap(4.).key(format!("frame-heading-{}", id.key()));
     if mode != HeaderMode::Hidden {
         let compact = mode == HeaderMode::Compact;
-        bar = bar.h(if compact { 22. } else { 30. })
-            .child(title(id.label(), if compact { 11. } else { 15. }, 650., TEXT));
+        if id == PanelId::Controls {
+            bar = bar.h(22.).child(title(id.label(), 11., 550., MUTED));
+        } else {
+            bar = bar.h(if compact { 22. } else { 30. })
+                .child(title(id.label(), if compact { 11. } else { 15. }, 650., TEXT));
+        }
     }
     bar = bar.child(el().grow(1.));
     if mode == HeaderMode::Standard {
