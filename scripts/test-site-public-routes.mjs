@@ -253,12 +253,12 @@ const release={tag_name:'v0.4.88',draft:false,prerelease:false,assets:[
  {id:11,name:'Producer-setup.exe',size:456,browser_download_url:'https://github.com/Boomin-Ai/producer/releases/download/v0.4.88/Producer-setup.exe'},
 ]};
 test('stable installer downloads and metadata keep precedence and their existing envelopes',async()=>{
- const siliconTag='native-silicon-0.4.96';
- const newAsset={id:20,name:'Producer_0.4.96_aarch64.dmg',size:789,browser_download_url:`https://github.com/Boomin-Ai/producer/releases/download/${siliconTag}/Producer_0.4.96_aarch64.dmg`};
+ const siliconTag='native-silicon-0.4.97';
+ const newAsset={id:20,name:'Producer_0.4.97_aarch64.dmg',size:789,browser_download_url:`https://github.com/Boomin-Ai/producer/releases/download/${siliconTag}/Producer_0.4.97_aarch64.dmg`};
  const upstream=url=>String(url).endsWith('/releases/latest')?json(release):
   String(url).endsWith(`/releases/tags/${siliconTag}`)?json({...release,tag_name:siliconTag,assets:[newAsset]}):new Response('INSTALLER');
  const meta=await request('/download/meta.json',{upstream});assert.equal(meta.response.status,200);assert.equal(JSON.parse(meta.text).version,'v0.4.88');assert.equal(meta.assets.length,0);assert.equal(meta.calls.length,2);
- assert.deepEqual(JSON.parse(meta.text).platforms.macos,{name:newAsset.name,size:789,version:'0.4.96'});
+ assert.deepEqual(JSON.parse(meta.text).platforms.macos,{name:newAsset.name,size:789,version:'0.4.97'});
  const mac=await request('/download/macos',{upstream});assert.equal(mac.response.status,200);
  assert.ok(mac.calls[0].url.endsWith(`/releases/tags/${siliconTag}`));assert.match(mac.calls[1].url,/\?ck=20$/);
  const download=await request('/download/windows',{upstream});assert.equal(download.response.status,200);assert.equal(download.text,'INSTALLER');assert.equal(download.calls.length,2);assert.equal(download.assets.length,0);
