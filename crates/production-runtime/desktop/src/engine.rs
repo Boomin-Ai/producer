@@ -58,7 +58,9 @@ pub enum RoomCommand {
     OperationOutcome { #[serde(rename="operationId")] operation_id:String },
     RevokePermission { permission:String, #[serde(rename="permissionEpoch")] permission_epoch:u64, #[serde(default,rename="operationId")] operation_id:Option<String> },
     GrantPermission { permission:String, #[serde(rename="permissionEpoch")] permission_epoch:u64 },
-    RunSegment { show: String, segment: String, #[serde(default)] paused: bool },
+    RunSegment { show: String, segment: String, #[serde(default)] paused: bool, #[serde(default)] restart: bool },
+    SegmentTiming { show: String, segment: String, timed: bool },
+    MfmDirection { settings: crate::model::HostDirection },
     ShowPlayback { show: String, segment: String, playing: bool },
     ShowLayout { show: String, segment: String, layout: Option<SetLayoutPair> },
     SceneAdd,
@@ -246,6 +248,9 @@ pub struct Snapshot {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub program_layout: Option<SetLayoutPair>,
     pub program_playing: bool,
+    pub show_elapsed: f64,
+    pub segment_elapsed: f64,
+    pub active_host_shot: Option<usize>,
     pub set_motion_playing: bool,
     pub set_motion_position: f64,
     pub program_kind: String,
@@ -665,6 +670,7 @@ struct VideoDiagnostics {
 }
 #[derive(Clone, Default)]
 struct RenderStats {
+    active_host_shot: Option<usize>,
     clock_revision: u64,
     finished_show_revision: Option<u64>,
     set_motion_playing: bool,
@@ -698,8 +704,13 @@ impl RenderStats {
             s.program_position = self.position;
             s.program_playing = self.playing;
         }
+        s.active_host_shot = self.active_host_shot.filter(|_| self.clock_revision == s.program_revision);
         s.program_segment = s.project.playing_segment.clone().filter(|_| s.program_kind == "show");
         s.program_layout = s.program_segment.as_ref().and_then(|_| s.project.show_layout_at(s.program_position));
+        if let Some(i) = s.active_host_shot {
+            let host = ["shaan","sam"][i];
+            s.program_layout = Some(SetLayoutPair { landscape: format!("focus-{host}-landscape"), vertical: format!("focus-{host}-vertical") });
+        }
         s.set_motion_playing = self.set_motion_playing;
         s.set_motion_position = self.set_motion_position;
         s.render_frames = self.render_frames;
@@ -988,6 +999,7 @@ pub(crate) fn initial_room(root: &Path) -> Result<(Arc<Handle>,Receiver<Envelope
         program_segment: None,
         program_layout: None,
         program_playing: true,
+        show_elapsed: 0., segment_elapsed: 0., active_host_shot: None,
         set_motion_playing: true,
         set_motion_position: 0.,
         program_kind: "set".into(),
@@ -1217,7 +1229,7 @@ fn apply(
         | RoomCommand::SceneAdd
         | RoomCommand::SceneSelect { .. }
         | RoomCommand::SetMount { .. }
-        | RoomCommand::RunSegment { .. } | RoomCommand::ShowLayout { .. } | RoomCommand::ShowPlayback { .. }
+        | RoomCommand::RunSegment { .. } | RoomCommand::ShowLayout { .. } | RoomCommand::ShowPlayback { .. } | RoomCommand::SegmentTiming { .. } | RoomCommand::MfmDirection { .. }
         | RoomCommand::SetMotion { .. }
         | RoomCommand::Play
         | RoomCommand::Pause
@@ -1825,6 +1837,12 @@ fn control(
     let mut field_check=Instant::now();
     let mut preview_field_cache=crate::visuals::VisualCache::default();
     let mut handled_show_end = None;
+    let mut run_clock = crate::show_playback::RunClock::default();
+    let update_run_time = |clock: &crate::show_playback::RunClock, state: &mut Snapshot| {
+        let (show, segment) = clock.elapsed(Instant::now());
+        state.show_elapsed = show.as_secs_f64();
+        state.segment_elapsed = segment.as_secs_f64();
+    };
     let mut broadcast_poll=Instant::now();
     while !handle.closed.load(Ordering::Acquire) {
         if broadcast_poll.elapsed()>=Duration::from_millis(250){broadcast_poll=Instant::now();let media=handle.media.lock().unwrap().clone();if let Some(m)=media{m.broadcast.poll();}}
@@ -1851,16 +1869,19 @@ fn control(
         history.observe(&observed,rtc_staged,&live,state.program_revision)?;
         // A completed sequence belongs to one specific program revision. An old
         // frame must never advance a segment that the operator has already cut.
+        if state.program_kind != "show" { run_clock.leave(); }
+        update_run_time(&run_clock, &mut state);
         let ended = render.stats.try_lock().ok().and_then(|stats| stats.finished_show_revision);
         let boundary = ended.filter(|rev| state.program_kind == "show" && state.program_playing
             && *rev == state.program_revision && Some(*rev) != handled_show_end);
         let advance = boundary.and_then(|rev| {
             let (show, current) = state.project.playing_segment.as_ref()?;
             let mut segments = state.project.production.shows.get(show)?.segments.iter();
-            segments.find(|s| &s.id == current)?;
+            let segment = segments.find(|s| &s.id == current)?;
+            state.project.segment_duration(show, segment)?;
             handled_show_end = Some(rev);
-            Some(match segments.find(|s| s.sequence.is_some()) {
-                Some(next) => RoomCommand::RunSegment { show: show.clone(), segment: next.id.clone(), paused: false },
+            Some(match segments.next() {
+                Some(next) => RoomCommand::RunSegment { show: show.clone(), segment: next.id.clone(), paused: false, restart: false },
                 None => RoomCommand::ShowPlayback { show: show.clone(), segment: current.clone(), playing: false },
             })
         });
@@ -2056,7 +2077,7 @@ fn control(
                     | RoomCommand::MarqueeReveal { .. }
                     | RoomCommand::Headline { .. }
                     | RoomCommand::SetMount { .. }
-                    | RoomCommand::RunSegment { .. } | RoomCommand::ShowLayout { .. } | RoomCommand::ShowPlayback { .. }
+                    | RoomCommand::RunSegment { .. } | RoomCommand::ShowLayout { .. } | RoomCommand::ShowPlayback { .. } | RoomCommand::SegmentTiming { .. } | RoomCommand::MfmDirection { .. }
             ) {
                 let result = (|| -> Result<()> {
                     match &envelope.command {
@@ -2108,11 +2129,40 @@ fn control(
                             state.program_revision = revision;
                             persist(&root, &state.project)?;
                         }
+                        RoomCommand::MfmDirection { settings } => {
+                            anyhow::ensure!(state.project.production.sets.contains_key("my-first-million"), "Set unavailable");
+                            anyhow::ensure!(settings.microphones[0] != settings.microphones[1] &&
+                                settings.microphones.iter().all(|id| id == "microphone" || id == "microphone-2" ||
+                                state.project.inputs.get(id).is_some_and(|input| input.kind == "microphone")),
+                                "Choose a separate microphone source for each host");
+                            let mut next = state.project.clone();
+                            next.mfm_direction = settings.clone();
+                            if matches!(state.program_kind.as_str(),"set"|"show") && next.mounted_set.as_deref() == Some("my-first-million") {
+                                let revision = state.program_revision + 1;
+                                render.switch_layout(next.live_set()?, revision, &mut visual_cache, &root)?;
+                                state.program_revision = revision;
+                            }
+                            state.project = next;
+                            persist(&root, &state.project)?;
+                        }
+                        RoomCommand::SegmentTiming { show, segment, timed } => {
+                            let part = state.project.production.shows.get(show)
+                                .and_then(|s| s.segments.iter().find(|p| &p.id == segment)).context("Segment unavailable")?;
+                            anyhow::ensure!(!timed || part.sequence.is_some(), "This segment has no authored duration");
+                            if *timed {
+                                if let Some(ids) = state.project.untimed_segments.get_mut(show) { ids.remove(segment); }
+                            } else {
+                                state.project.untimed_segments.entry(show.clone()).or_default().insert(segment.clone());
+                            }
+                            handled_show_end = None;
+                            persist(&root, &state.project)?;
+                        }
                         RoomCommand::ShowPlayback { show, segment, playing } => {
                             anyhow::ensure!(state.program_kind == "show" &&
                                 state.project.playing_segment.as_ref() == Some(&(show.clone(), segment.clone())),
                                 "The selected segment is no longer on output");
                             render.request(if *playing { RenderOp::Play } else { RenderOp::Pause })?;
+                            run_clock.set_playing(*playing, Instant::now());
                             state.program_playing = *playing;
                         }
                         RoomCommand::ShowLayout { show, segment, layout } => {
@@ -2172,6 +2222,9 @@ fn control(
                             state.project = next;
                             state.program_kind = if state.project.playing_segment.is_some() { "show" } else if has_set { "set" } else { "room" }.into();
                             state.program_revision += 1;
+                            if let RoomCommand::RunSegment { show, restart, paused, .. } = &envelope.command {
+                                run_clock.enter(show, *restart, !paused, Instant::now());
+                            } else { run_clock.leave(); }
                             state.program_segment = state.project.playing_segment.clone();
                             state.program_layout = state.program_segment.as_ref().and_then(|_| state.project.show_layout_at(state.program_position));
                             state.previewing = false;
@@ -2228,6 +2281,7 @@ fn control(
                     Ok(())
                 })();
                 state.assistant_context = state.project.assistant_context();
+                update_run_time(&run_clock, &mut state);
                 state.error = result.err().map(|err| err.to_string());
                 *handle.snapshot.lock().unwrap() = state.clone();
                 if let Some(tx) = envelope.reply {
@@ -2531,7 +2585,7 @@ fn control(
                         // Hardware and output size are explicit live room operations.
                         // Timeline edits never enter this branch.
                         if state.program_kind != "timeline" {
-                            publish(&render, &root, state.project.live_set()?, state.program_position, true, state.program_revision + 1, &mut visual_cache)?;
+                            publish(&render, &root, state.project.live_set()?, state.program_position, state.program_playing, state.program_revision + 1, &mut visual_cache)?;
                             state.program_revision += 1;
                         } else {
                             bail!("Return to a live Set before changing output size or device bindings");
@@ -2667,13 +2721,15 @@ fn render_loop(
     let origin = native.shared.origin;
     let mut transport = Transport::new(plan.sequences["main"].duration, now(origin))?
         .with_host_timebase(48000)?;
-    transport.looping = !project.rendering_show;
+    transport.looping = !project.rendering_show || project.active_segment()?.is_some_and(|s| s.sequence.is_none());
     if !preview {
         transport.play(now(origin))?;
     }
     let mut chart_mix = 0f32;
     let mut chart_tick = platform::host_time();
     let mut speaker_focus = crate::speaker_split::Focus::default();
+    let mut director = crate::host_director::Director::default();
+    let mut director_revision = None;
     let mut headline_opacity = f32::from(project.production.sets.get(&project.scene)
         .is_some_and(crate::headline::visible));
     let mut set_motion = SetMotionClock::Timeline;
@@ -2762,7 +2818,7 @@ fn render_loop(
                     } => {
                         native.prepare([next.canvas.landscape, next.canvas.vertical])?;
                         transport.duration = next_plan.sequences["main"].duration;
-                        transport.looping = !next.rendering_show;
+                        transport.looping = !next.rendering_show || next.active_segment()?.is_some_and(|s| s.sequence.is_none());
                         transport.seek(position, now(origin))?;
                         if playing {
                             transport.resume("operator", now(origin))?;
@@ -3015,6 +3071,14 @@ fn render_loop(
             }
         }
         let wanted = ((host - origin - 0.04).max(0.) * 48000.) as i64;
+        let eligible = !preview && visuals.host_shots.iter().all(Option::is_some)
+            && project.mfm_direction.microphones.iter().all(|id| id == "microphone" || inputs.contains_key(id));
+        let direct = eligible && state.playing;
+        let current_director = eligible.then_some(revision);
+        if director_revision != current_director {
+            director = crate::host_director::Director::default();
+            director_revision = current_director;
+        }
         let measure_speakers = !preview && visuals.at(position).has_speaker_split();
         if wanted - audio_cursor > 4800 {
             clock_skipped += (wanted - audio_cursor) as u64;
@@ -3041,6 +3105,13 @@ fn render_loop(
 
             if let Some(input)=&guest {input.host_mic(&mut pcm,origin+audio_cursor as f64/48000.);}
             raw_mic.copy_from_slice(&pcm);
+            let mut voices = [0.; 2];
+            let microphones = &project.mfm_direction.microphones;
+            if direct {
+                if let Some(i) = microphones.iter().position(|id| id == "microphone") {
+                    voices[i] = director.input(i, &raw_mic, gain);
+                }
+            }
             for sample in &mut pcm {
                 microphone_peak = microphone_peak.max(sample.abs());
                 *sample = (*sample * gain).clamp(-1., 1.);
@@ -3062,11 +3133,17 @@ fn render_loop(
                 let _ = input
                     .audio
                     .mix(input.shared.fence, audio_cursor, &mut movie_pcm, 1.);
+                if direct {
+                    if let Some(i) = microphones.iter().position(|id| id == source) {
+                        voices[i] = director.input(i, &movie_pcm, gain);
+                    }
+                }
                 if !input_peaks.contains_key(source) {
                     input_peaks.insert(source.clone(), 0.);
                 }
                 mix_metered_channel(&mut pcm, &movie_pcm, gain, input_peaks.get_mut(source).unwrap());
             }
+            if direct { director.observe(voices); }
             let host_level = if measure_speakers && guest.is_some() {
                 crate::speaker_split::rms(&pcm)
             } else {
@@ -3237,7 +3314,10 @@ fn render_loop(
             if reversible_layout.as_ref().zip(phase).is_some_and(|(blend, phase)| blend.done(phase)) {
                 reversible_layout = None;
             }
-            let frame_visuals = reversible_layout.as_ref().map_or(visuals.at(position), |blend| &blend.visuals);
+            state.active_host_shot = if eligible { director.selected } else { None };
+            let directed_visuals = state.active_host_shot.and_then(|i| visuals.host_shots[i].as_ref());
+            let frame_visuals = reversible_layout.as_ref().map(|blend| &blend.visuals)
+                .or(directed_visuals).unwrap_or_else(|| visuals.at(position));
             let music=handle.studio_audio.dj_visual.bands();
             let mut dj_title=None;
             let graph_progress = reversible_layout.as_ref().zip(phase)

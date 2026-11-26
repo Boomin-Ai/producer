@@ -1274,58 +1274,74 @@ pub(super) fn clip_actions(s: &Studio) -> Option<El> {
 }
 fn show_clock(seconds: f64) -> String {
     let seconds = seconds.max(0.) as u64;
-    format!("{}:{:02}", seconds / 60, seconds % 60)
+    if seconds >= 3600 { format!("{}:{:02}:{:02}", seconds / 3600, seconds / 60 % 60, seconds % 60) }
+    else { format!("{}:{:02}", seconds / 60, seconds % 60) }
 }
 
 fn show_controller(s: &Studio, snap: &Snapshot, show_id: &str,
     show: &producer_production_contract::Show, set: &producer_production_contract::Set) -> Option<El> {
-    let segments: Vec<_> = show.segments.iter().filter(|s| s.sequence.is_some()).collect();
+    let segments = &show.segments;
     let active = snap.program_kind == "show" && snap.project.playing_segment.as_ref()
         .is_some_and(|(id, _)| id == show_id);
     let index = snap.project.playing_segment.as_ref().filter(|_| active)
         .and_then(|(_, id)| segments.iter().position(|part| &part.id == id)).unwrap_or(0);
-    let current = *segments.get(index)?;
-    let duration = snap.project.production.sequences.get(current.sequence.as_ref()?)?.duration.as_f64();
-    let elapsed = if active { snap.program_position.clamp(0., duration) } else { 0. };
+    let current = segments.get(index)?;
+    let duration = snap.project.segment_duration(show_id, current);
+    let elapsed = if !active { 0. } else if let Some(limit) = duration {
+        snap.program_position.clamp(0., limit)
+    } else { snap.segment_elapsed };
     let playing = active && snap.program_playing;
-    let finished = active && index + 1 == segments.len() && elapsed >= duration;
+    let finished = active && index + 1 == segments.len() && duration.is_some_and(|d| elapsed >= d);
     let expanded = s.expanded_rundown.as_deref() == Some(show_id);
-    let run = |i: usize, paused: bool| RoomCommand::RunSegment {
-        show: show_id.to_owned(), segment: segments[i].id.clone(), paused,
+    let run = |i: usize, paused: bool, restart: bool| RoomCommand::RunSegment {
+        show: show_id.to_owned(), segment: segments[i].id.clone(), paused, restart,
     };
-    let play = if !active || finished { run(0, false) } else {
+    let play = if !active || finished { run(0, false, true) } else {
         RoomCommand::ShowPlayback { show: show_id.to_owned(), segment: current.id.clone(), playing: !playing }
     };
     let toggle = if playing { ("pause", "Pause show") } else if active && !finished {
         ("play", "Resume show")
     } else { ("play", "Play show") };
     let id = show_id.to_owned();
-    let mut header = row().key(format!("rundown-{show_id}")).role("button").focusable(true)
+    let header = row().key(format!("rundown-{show_id}")).role("button").focusable(true)
         .label(format!("{} rundown · {}", if expanded { "Collapse" } else { "Expand" }, current.title))
         .help(if expanded { "Hide other segments" } else { "Show all segments" })
-        .items_center().gap(7.).px(6.).h(46.).radius(6.).hover_fill(color(theme::SELECTED_HOVER));
-    if let Some(image) = s.set_library.shot_image(&show.set, set, &current.landscape, 53., 30.) {
-        header = header.child(image);
-    }
-    let status = if !active { "Ready" } else if finished { "Finished" } else if playing { "Playing" } else { "Paused" };
-    header = header.child(col().min_w(0.).grow(1.).gap(2.)
-        .child(title(format!("{}   ·   {} / {}", if active { status } else { "Rundown" }, index + 1, segments.len()), 10., 560., MUTED))
-        .child(title(current.title.clone(), 13., 650., TEXT)))
-        .child(glyph(if expanded { "chevron-up" } else { "chevron-down" }, 14., MUTED))
+        .items_center().gap(6.).px(8.).h(30.).radius(5.).hover_fill(color(theme::SELECTED_HOVER))
+        .child(glyph("timeline", 14., MUTED)).child(title("Segments", 13., 650., TEXT).grow(1.))
+        .child(title(format!("Segment {} of {}", index + 1, segments.len()), 10., 550., MUTED))
+        .child(glyph(if expanded { "chevron-up" } else { "chevron-down" }, 13., MUTED))
         .on_press(move |s: &mut Studio| s.expanded_rundown = (!expanded).then(|| id.clone()));
+    let status = if !active { "READY" } else if finished { "FINISHED" } else if playing { "PLAYING" } else { "PAUSED" };
+    let mut summary = row().items_center().gap(7.);
+    if let Some(image) = s.set_library.shot_image(&show.set, set, &current.landscape, 54., 31.) { summary = summary.child(image); }
+    summary = summary.child(col().min_w(0.).gap(2.).grow(1.)
+        .child(title(status, 9., 650., if playing { MINT } else { MUTED }))
+        .child(title(current.title.clone(), 13., 650., TEXT)));
+    let mut timing = row().key("segment-time").items_center().gap(7.);
+    if let Some(limit) = duration {
+        timing = timing.child(el().grow(1.).h(4.).radius(2.).clip_rounded(2.).fill(color(theme::SLIDER_RAIL_COMPACT))
+            .child(el().h_full().w_frac((elapsed / limit.max(0.001)).clamp(0.,1.) as f32).fill(color(MINT))))
+            .child(title(format!("{} / {}",show_clock(elapsed),show_clock(limit)), 11., 620., TEXT));
+    } else {
+        timing = timing.child(title("Open-ended", 10., 520., MUTED).grow(1.))
+            .child(title(show_clock(elapsed), 11., 620., TEXT));
+    }
     let control = |name: &str, icon: &str, label: &str, accent: bool, command: RoomCommand, available: bool| {
         send_tool(&format!("show-{show_id}-{name}"), icon, label, accent, command)
             .size(30., 27.).opacity(if available { 1. } else { 0.32 }).disabled(!available)
     };
-    let transport = row().items_center().gap(3.).px(6.).h(32.)
-        .child(control("previous", "previous", "Previous segment", false, run(index.saturating_sub(1), !playing), active && index > 0))
+    let transport = row().items_center().gap(3.).h(31.)
+        .child(control("previous", "previous", "Previous segment", false, run(index.saturating_sub(1), !playing, false), active && index > 0))
         .child(control("play-pause", toggle.0, toggle.1, true, play, true))
-        .child(control("next", "next-track", "Next segment", false, run((index + 1).min(segments.len()-1), !playing), active && index + 1 < segments.len()))
-        .child(control("restart", "restart", "Restart show from the first segment", false, run(0, false), active))
+        .child(control("next", "next-track", "Next segment", false, run((index + 1).min(segments.len()-1), !playing, false), active && index + 1 < segments.len()))
+        .child(control("restart", "restart", "Restart show from the first segment", false, run(0, false, true), active))
         .child(el().min_w(0.).grow(1.))
-        .child(title(show_clock(elapsed), 11., 650., TEXT).help(format!("{status} · {} of {}", show_clock(elapsed), show_clock(duration))));
+        .child(col().gap(1.).child(title("Show time", 9., 550., MUTED))
+            .child(title(show_clock(if active { snap.show_elapsed } else { 0. }), 11., 650., TEXT)));
+    let player = col().gap(7.).px(7.).py(6.).min_w(0.).radius(6.)
+        .fill(color(theme::TOOL)).child(summary).child(timing).child(transport);
     let mut panel = col().gap(3.).py(4.).min_w(0.).radius(8.)
-        .border(1., color(theme::SLIDER_RAIL_COMPACT)).fill(color(SURFACE)).child(header).child(transport);
+        .border(1., color(theme::SLIDER_RAIL_COMPACT)).fill(color(SURFACE)).px(4.).child(header).child(player);
     if expanded {
         for (i, segment) in segments.iter().enumerate() {
             let is_current = i == index;
@@ -1336,13 +1352,58 @@ fn show_controller(s: &Studio, snap: &Snapshot, show_id: &str,
                 .child(title(format!("{:02}", i + 1), 10., 550., MUTED))
                 .child(title(segment.title.clone(), 11., 600., if is_current { MINT } else { TEXT }).grow(1.).min_w(0.))
                 .child(if is_current && active { el().size(6.,6.).radius(3.).fill(color(MINT)) } else { glyph("play", 10., MUTED) });
-            let cmd = run(i, false);
+            let cmd = run(i, false, false);
             panel = panel.child(item.on_press(move |s: &mut Studio| {
                 if !is_current || !active { s.send(cmd.clone()); }
             }));
         }
     }
+    if expanded && current.sequence.is_some() {
+        panel = panel.child(row().items_center().gap(4.).px(5.)
+            .child(title("Timing", 10., 560., MUTED).grow(1.))
+            .child(command(format!("segment-timing-{show_id}"), if duration.is_some() { "Timed" } else { "Open-ended" },
+                duration.is_some(), RoomCommand::SegmentTiming { show: show_id.into(), segment: current.id.clone(), timed: duration.is_none() })
+                .help(if duration.is_some() { "Make this segment open-ended" } else { "Use the authored duration" })));
+    }
     Some(panel)
+}
+fn host_direction_settings(s: &Studio, snap: &Snapshot) -> El {
+    let settings = &snap.project.mfm_direction;
+    let mut next = settings.clone();
+    next.enabled = !next.enabled;
+    let mut b = col().gap(4.).child(row().gap(4.).items_center()
+        .child(glyph("waveform", 15., MUTED))
+        .child(title("Follow active speaker", 12., 600., TEXT).grow(1.))
+        .child(command("auto-host-shots", if settings.enabled { "On" } else { "Off" }, settings.enabled,
+            RoomCommand::MfmDirection { settings: next }).help("Cut between Shaan and Sam in the two-host shot"))
+        .child(tool("host-mic-settings", "settings", "Assign host microphones", s.host_mic_settings,
+            |s| s.host_mic_settings = !s.host_mic_settings).size(25.,25.)));
+    let p = &snap.project;
+    if s.host_mic_settings {
+        let mut candidates: Vec<_> = p.inputs.iter().filter(|(_,b)| b.kind == "microphone")
+            .map(|(id,_)| id.clone()).collect();
+        candidates.extend(settings.microphones.iter().cloned());
+        candidates.extend(["microphone".to_owned(),"microphone-2".to_owned()]);
+        candidates.sort(); candidates.dedup();
+        for (i, name) in ["Shaan", "Sam"].iter().enumerate() {
+            let current = &settings.microphones[i];
+            let mut new = settings.clone();
+            let at = candidates.iter().position(|id| id == current).unwrap_or(0);
+            new.microphones[i] = candidates[(at+1)%candidates.len()].clone();
+            if new.microphones[0] == new.microphones[1] { new.microphones[1-i] = current.clone(); }
+            let mic = p.lanes.iter().find(|l| &l.source == current).map(|l| l.label.clone())
+                .unwrap_or_else(|| current.clone());
+            b = b.child(row().gap(5.).items_center().child(title(*name, 11., 560., MUTED).grow(1.))
+                .child(command(format!("host-mic-{i}"), mic, false, RoomCommand::MfmDirection {settings:new})
+                    .help("Cycle microphone assignment")));
+        }
+    }
+    if settings.enabled && settings.microphones.iter().any(|id| id != "microphone" && !p.inputs.contains_key(id)) {
+        b = b.child(title("Add a second microphone in Sources.", 11., 520., MUTED));
+    } else if settings.enabled && settings.microphones.iter().any(|id| p.lanes.iter().find(|l| &l.source == id).is_some_and(|l| l.muted || l.gain <= 0.)) {
+        b = b.child(title("Unmute the host microphones in Mixer.", 11., 520., MUTED));
+    }
+    b
 }
 fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
     let l = s.live.as_ref().unwrap();
@@ -1357,7 +1418,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 let key = &selected;
                 let set = &p.production.sets[key];
                 let running = snap.program_kind == "show" && p.mounted_set.as_ref() == Some(key);
-                let pair = if running { p.show_layout_at(snap.program_position).unwrap_or(pair) } else { pair };
+                let pair = if running || (snap.active_host_shot.is_some() && p.mounted_set.as_ref() == Some(key)) { snap.program_layout.clone().unwrap_or(pair) } else { pair };
                 let on = running || (snap.program_kind == "set" && l.handle.is_set_on_output(key, &pair, set));
                 let badge = el()
                     .self_start()
@@ -1442,6 +1503,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                         b = b.child(transport);
                     }
                 }
+                if key == "my-first-million" { b = b.child(host_direction_settings(s, snap)); }
                 let mut shot_header = row().items_center().gap(6.).child(title("Shots", 12., 640., TEXT).grow(1.));
                 if let Some((show, segment)) = p.playing_segment.clone().filter(|_| running && p.shot_override.is_some()) {
                     shot_header = shot_header.child(command("follow-show-layout", "Follow rundown", false,

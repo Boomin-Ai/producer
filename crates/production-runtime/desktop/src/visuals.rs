@@ -37,6 +37,7 @@ impl VisualCache {
 
     fn prepare_layout(&mut self, project: &RoomProject, plan: &Plan, follow_segment: bool) -> Result<Arc<Visuals>> {
         let pair = project.output_layout_pair();
+        let host_shots = follow_segment && project.mfm_direction.enabled && project.supports_host_shots();
         let schedule = if follow_segment && project.rendering_show && project.shot_override.is_none() {
             project.active_segment()?.filter(|s| !s.layout_changes.is_empty())
         } else { None };
@@ -95,7 +96,7 @@ impl VisualCache {
             .collect();
         let key = format!(
             "{:x}",
-            Sha256::digest(serde_json::to_vec(&(&project.scene, schedule.map(|s| (&s.layout_changes, &plan.digest)), project.output_layouts(), project.production.sets.get(&project.scene).map(|s| (&s.graphs,&s.output_graphs,s.canvas_fit)), weather_desk, places_guest, selected, targets, camera_slots, project.rtc_video_slot(), &project.production.assets, &fields))?)
+            Sha256::digest(serde_json::to_vec(&(&project.scene, host_shots.then_some(&plan.digest), schedule.map(|s| (&s.layout_changes, &plan.digest)), project.output_layouts(), project.production.sets.get(&project.scene).map(|s| (&s.graphs,&s.output_graphs,s.canvas_fit)), weather_desk, places_guest, selected, targets, camera_slots, project.rtc_video_slot(), &project.production.assets, &fields))?)
         );
         if let Some(index) = self.entries.iter().position(|(cached, _)| cached == &key) {
             let entry = self.entries.remove(index).unwrap();
@@ -125,6 +126,16 @@ impl VisualCache {
                 prepared.schedule.push((change.at, next));
             }
         }
+        if host_shots {
+            let mut alternate = project.clone();
+            let mut prepare_host = |host: &str| -> Result<Option<Arc<Visuals>>> {
+                let pair = crate::model::SetLayoutPair { landscape: format!("focus-{host}-landscape"), vertical: format!("focus-{host}-vertical") };
+                if !pair.exists_in(&project.production.sets[&project.scene]) { return Ok(None); }
+                alternate.mounted_layout = Some(pair);
+                self.prepare_layout(&alternate, plan, false).map(Some)
+            };
+            prepared.host_shots = [prepare_host("shaan")?, prepare_host("sam")?];
+        }
         let prepared = Arc::new(prepared);
         self.entries.push_front((key, prepared.clone()));
         self.entries.truncate(3);
@@ -142,6 +153,7 @@ struct Element {
     content: Option<Draw>,
 }
 pub struct Visuals {
+    pub host_shots: [Option<Arc<Visuals>>; 2],
     pub pair: crate::model::SetLayoutPair,
     // None reuses the opening pair without introducing an Arc cycle.
     schedule: Vec<(producer_production_contract::Time, Option<Arc<Visuals>>)> ,
@@ -558,6 +570,7 @@ impl Visuals {
         Ok(Self {
             pair: project.output_layout_pair(),
             schedule: Vec::new(),
+            host_shots: [None, None],
             outputs,
             viewport,
             guest_slots,

@@ -284,6 +284,7 @@ struct Studio {
     city_worker: Option<mpsc::Receiver<anyhow::Result<Vec<crate::weather::Place>>>>,
     headline: TextEdit,
     expanded_rundown: Option<String>,
+    host_mic_settings: bool,
     headline_notice: Option<(String, &'static str)>,
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     camera: crate::virtual_camera::Camera,
@@ -361,6 +362,7 @@ impl Studio {
             city_worker: None,
             headline: TextEdit::new(""),
             expanded_rundown: None,
+            host_mic_settings: false,
             headline_notice: None,
             #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
             camera: Default::default(),

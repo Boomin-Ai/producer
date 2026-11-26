@@ -157,9 +157,25 @@ impl std::ops::DerefMut for ProductionDocument {
     fn deref_mut(&mut self) -> &mut Document { Arc::make_mut(&mut self.0) }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields, rename_all = "camelCase")]
+pub struct HostDirection {
+    pub enabled: bool,
+    pub microphones: [String; 2],
+}
+impl Default for HostDirection {
+    fn default() -> Self {
+        Self { enabled: false, microphones: ["microphone".into(), "microphone-2".into()] }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct RoomProject {
+    #[serde(default)]
+    pub mfm_direction: HostDirection,
+    #[serde(default)]
+    pub untimed_segments: BTreeMap<String, std::collections::BTreeSet<String>>,
     /// Program selection belongs to this running harness. Reopening a studio
     /// never restarts an editorial segment merely because its set is mounted.
     #[serde(skip)]
@@ -484,6 +500,8 @@ impl RoomProject {
             },
         );
         Self {
+            mfm_direction: HostDirection::default(),
+            untimed_segments: BTreeMap::new(),
             playing_segment: None,
             shot_override: None,
             rendering_show: false,
@@ -804,10 +822,20 @@ impl RoomProject {
         Some(SetLayoutPair { landscape: landscape.into(), vertical: vertical.into() })
     }
 
+    pub fn segment_duration(&self, show: &str, segment: &Segment) -> Option<f64> {
+        if self.untimed_segments.get(show).is_some_and(|ids| ids.contains(&segment.id)) { return None; }
+        self.production.sequences.get(segment.sequence.as_ref()?).map(|seq| seq.duration.as_f64())
+    }
+
+    // Editorial shots (screen, guest, opener and CTA) have priority over the two-host camera director.
+    pub fn supports_host_shots(&self) -> bool {
+        self.scene == "my-first-million" && self.mounted_set.as_deref() == Some("my-first-million")
+            && self.shot_override.is_none() && self.mounted_layout.as_ref().is_some_and(|pair| pair == &SetLayoutPair::default())
+    }
+
     pub fn enter_segment(&mut self, show_id: &str, segment_id: &str) -> Result<()> {
         let show = self.production.shows.get(show_id).context("Show unavailable")?;
         let segment = show.segments.iter().find(|s| s.id == segment_id).context("Segment unavailable")?;
-        anyhow::ensure!(segment.sequence.is_some(), "This segment has no editorial sequence");
         let set = show.set.clone();
         let opening = SetLayoutPair { landscape: segment.landscape.clone(), vertical: segment.vertical.clone() };
         self.mount_set(Some(set.clone()), Some(opening))?;
@@ -1319,12 +1347,12 @@ impl RoomProject {
             next.production.sets.insert("room-scene".into(), set);
             next.scene = "room-scene".into();
         }
-        if next.active_segment()?.is_some() {
+        if let Some(timed_media) = next.active_segment()?.map(|s| s.sequence.is_some()) {
             if let Some(pair) = &next.shot_override {
                 next.mounted_layout = Some(pair.clone());
             }
             next.rendering_show = true;
-            return Ok(next);
+            if timed_media { return Ok(next); }
         }
         let document = &mut *next.production;
         let seq = document.sequences
