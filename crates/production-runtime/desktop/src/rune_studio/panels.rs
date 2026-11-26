@@ -1324,6 +1324,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 let chosen = pair.clone();
                 let status = match snap.program_kind.as_str() {
                     "timeline" => "Timeline on output".into(),
+                    "show" => "Show on output".into(),
                     "set" => p
                         .mounted_set
                         .as_deref()
@@ -1394,6 +1395,16 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 b = b
                     .child(layouts)
                     .child(el().h(1.).w_full().fill(color(0x263443)));
+                for (show_id, show) in p.production.shows.iter().filter(|(_, show)| &show.set == key
+                    && show.segments.iter().any(|s| !s.layout_changes.is_empty())) {
+                    b = b.child(title(format!("Show · {}", crate::model::set_label(show_id)), 12., 600., TEXT));
+                    for segment in show.segments.iter().filter(|s| s.sequence.is_some()) {
+                        let id = segment.id.clone();
+                        let show = show_id.clone();
+                        b = b.child(button(format!("run-{show}-{id}"), format!("Play {}", segment.title),
+                            false, move |s| s.send(RoomCommand::RunSegment { show: show.clone(), segment: id.clone() })));
+                    }
+                }
                 let missing: std::collections::BTreeSet<_> = slots.iter()
                     .map(|(_, id)| id.clone()).filter(|id| !slot_ready(snap, id)).collect();
                 for id in missing {

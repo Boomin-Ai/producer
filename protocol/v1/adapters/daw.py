@@ -72,6 +72,9 @@ def exchange(args):
                 if audio.getframerate() != session["sampleRateHz"]:
                     raise ValueError("Returned stem sample rate differs from the session")
             score_hash = put_blob(work / "blobs", args.returned / "score.dawproject")
+            digest = put_blob(work / "blobs", stem)
+            if score_hash != session["arrangementSha256"] and digest == doc["assets"][asset]["hash"]:
+                raise ValueError("The score changed. Return a freshly rendered stem with the edit.")
             session["arrangementSha256"] = score_hash
             session["renderedFrom"] = score_hash
             session["renderedFrom"] = session["arrangementSha256"]
@@ -81,6 +84,8 @@ def exchange(args):
                 raise ValueError("Shared stem belongs to another session")
             doc["assets"][asset]["hash"] = digest
             manifest["assets"][asset]["original"]["sha256"] = digest
+            if digest != load(args.bundle / "production.json")["assets"][asset]["hash"]:
+                manifest["assets"][asset]["proxies"] = []
             manifest["author"] = args.author
             save(work / "production.json", doc)
             manifest["documentSha256"] = hashlib.sha256((work / "production.json").read_bytes()).hexdigest()

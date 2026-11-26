@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -25,7 +26,7 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def run(core):
+def run(core, evidence=None):
     src = V1 / "listening-room"
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -49,6 +50,12 @@ def run(core):
         call(*adapter, "import", src, "score", draft, "--trust", trust, "--returned", handoff, "--author", "fork-editor")
         frozen = call(*snap, "freeze", draft, child, "--parent", src, "--key", key, "--trust", trust)
         assert frozen["parent"] == base["revision"]
+        comparison = call(*snap, "compare", child, "--parent", src, "--trust", trust)
+        score = comparison["musicSessions"]["score"]
+        assert score["before"]["tempoBpm"] == "120" and score["after"]["tempoBpm"] == "96"
+        assert score["before"]["instruments"] == ["Bell"] and score["after"]["instruments"] == ["Reed"]
+        assert score["before"]["noteDataSha256"] == score["after"]["noteDataSha256"]
+        assert any(row["id"] == "sponsor-in" and row["at"] == {"ticks":"2","rate":1} for row in comparison["preservedTiming"])
         call(*adapter, "export", child, "score", reopened, "--trust", trust)
         new = inspect_score(reopened / "score.dawproject")
         assert old[:2] == ("120", "bell") and new[:2] == ("96", "reed")
@@ -72,6 +79,11 @@ def run(core):
         assert int(onset["ticks"]) * rate // onset["rate"] == int(new[3]["time"]) * rate == 96000
         controls = lambda i, name: next(p["controls"] for p in samples[i]["timeline"]["players"] if p.get("controls") and p["source"] == name)
         assert controls(3,"picture")["saturation"] == .5 and controls(4,"keys")["gain"] == .5
+        if evidence:
+            evidence.mkdir()
+            shutil.copytree(child, evidence / "returned")
+            shutil.copyfile(trust, evidence / "trusted-signers")
+            write(evidence/"revision-report.json", comparison)
         print(json.dumps({"tempoBpm":[120,96],"instruments":["bell","reed"],"notes":len(new[2]),
                           "pcmFrames":size,"pictureCueSample":96000,"sampleRate":rate,"segmentsVisited":1,
                           "graphSelections":[s["landscapeGraph"] for s in samples],"returnedRevision":frozen["revision"]}, indent=2))
@@ -80,4 +92,6 @@ def run(core):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--core", default=os.environ.get("PRODUCER_CORE","producer-core"))
-    run(parser.parse_args().core)
+    parser.add_argument("--evidence", type=Path, help="Fresh directory for verified child, public keys and comparison")
+    args = parser.parse_args()
+    run(args.core, args.evidence)

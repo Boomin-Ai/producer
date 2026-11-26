@@ -58,6 +58,7 @@ pub enum RoomCommand {
     OperationOutcome { #[serde(rename="operationId")] operation_id:String },
     RevokePermission { permission:String, #[serde(rename="permissionEpoch")] permission_epoch:u64, #[serde(default,rename="operationId")] operation_id:Option<String> },
     GrantPermission { permission:String, #[serde(rename="permissionEpoch")] permission_epoch:u64 },
+    RunSegment { show: String, segment: String },
     SceneAdd,
     SceneRemove {
         id: String,
@@ -2070,7 +2071,8 @@ fn control(
                             state.program_revision = revision;
                             persist(&root, &state.project)?;
                         }
-                        RoomCommand::MarqueeReveal { .. }
+                        RoomCommand::RunSegment { .. }
+                        | RoomCommand::MarqueeReveal { .. }
                         | RoomCommand::SetMount { .. }
                         | RoomCommand::SceneSelect { .. }
                         | RoomCommand::SceneRemove { .. } => {
@@ -2083,6 +2085,7 @@ fn control(
                                     let set=next.production.sets.get_mut(id).context("Missing set")?;
                                     crate::marquee::apply(set,text)?;
                                 }
+                                RoomCommand::RunSegment { show, segment } => next.enter_segment(show, segment)?,
                                 RoomCommand::SetMount { id, layout } => {
                                     next.mount_set(id.clone(), layout.clone())?;
                                 }
@@ -2106,7 +2109,7 @@ fn control(
                                 publish(&render, &root, live, 0., true, revision, &mut visual_cache)?;
                             }
                             state.project = next;
-                            state.program_kind = if has_set { "set" } else { "room" }.into();
+                            state.program_kind = if state.project.playing_segment.is_some() { "show" } else if has_set { "set" } else { "room" }.into();
                             state.program_revision += 1;
                             state.previewing = false;
                             if let Some(p) = &preview {
@@ -2531,7 +2534,7 @@ fn control(
         if observed["sessionId"]==state.producer_rtc["sessionId"] && state.producer_rtc["role"]=="host" {state.producer_rtc["stageTimeMs"]=history.elapsed_ms().into();}
         if peer.is_some() {if let Some(guest)=&observed_guest {state.producer_rtc["programAudio"]=guest.program_audio_vitals();}}
         (state.guest_audio_received, state.guest_video_received) = observed_guest.as_ref().map(|g| g.recent_media()).unwrap_or_default();
-        state.assistant_context["monitor"] = serde_json::json!({"previewing":state.previewing,"programKind":state.program_kind,"programRevision":state.program_revision,"commands":["monitor","sendToOutput","setMount"],"policy":"Timeline play/seek/edit are preview-only. Only sendToOutput or setMount changes program. Recording always reads program."});
+        state.assistant_context["monitor"] = serde_json::json!({"previewing":state.previewing,"programKind":state.program_kind,"programRevision":state.program_revision,"commands":["monitor","sendToOutput","setMount","runSegment"],"policy":"Timeline play/seek/edit are preview-only. Only sendToOutput or setMount changes program. Recording always reads program."});
         *handle.snapshot.lock().unwrap() = state.clone();
     }
     // A window can close immediately after a dock edit. Save accepted workspace

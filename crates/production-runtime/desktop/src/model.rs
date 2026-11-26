@@ -160,6 +160,12 @@ impl std::ops::DerefMut for ProductionDocument {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct RoomProject {
+    /// Program selection belongs to this running harness. Reopening a studio
+    /// never restarts an editorial segment merely because its set is mounted.
+    #[serde(skip)]
+    pub playing_segment: Option<(String, String)>,
+    #[serde(skip)]
+    pub rendering_show: bool,
     #[serde(default)]
     pub room_scenes: BTreeMap<String, RoomScene>,
     #[serde(default = "default_active_scene")]
@@ -476,6 +482,8 @@ impl RoomProject {
             },
         );
         Self {
+            playing_segment: None,
+            rendering_show: false,
             mounted_set: default_mounted_set(),
             mounted_layout: None,
             version: 1,
@@ -747,7 +755,7 @@ impl RoomProject {
                 && layout.root.frame.as_ref().is_none_or(|f| f.width == size.width as f64 && f.height == size.height as f64)
         }) {
             // The compiler validates this exact document before producing its plan.
-            return Ok(Arc::new(compile::compile(&self.production)?));
+            return self.select_compiled_sequence(compile::compile(&self.production)?);
         }
         validate_document(&self.production)?;
         let mut render = self.production.clone();
@@ -765,8 +773,38 @@ impl RoomProject {
                 }
             }
         }
-        Ok(Arc::new(compile::compile(&render)?))
+        self.select_compiled_sequence(compile::compile(&render)?)
     }
+    fn select_compiled_sequence(&self, mut plan: compile::Plan) -> Result<Arc<compile::Plan>> {
+        if self.rendering_show {
+            let segment = self.active_segment()?.context("No segment selected for program")?;
+            if let Some(id) = &segment.sequence {
+                let compiled = plan.sequences.get(id).context("Missing segment sequence")?.clone();
+                plan.sequences.insert("main".into(), compiled);
+            }
+        }
+        Ok(Arc::new(plan))
+    }
+
+    pub fn active_segment(&self) -> Result<Option<&producer_production_contract::Segment>> {
+        let Some((show_id, segment_id)) = &self.playing_segment else { return Ok(None) };
+        let show = self.production.shows.get(show_id).context("Show unavailable")?;
+        anyhow::ensure!(show.set == self.scene, "Show and mounted set differ");
+        Ok(Some(show.segments.iter().find(|s| &s.id == segment_id).context("Segment unavailable")?))
+    }
+
+    pub fn enter_segment(&mut self, show_id: &str, segment_id: &str) -> Result<()> {
+        let show = self.production.shows.get(show_id).context("Show unavailable")?;
+        let segment = show.segments.iter().find(|s| s.id == segment_id).context("Segment unavailable")?;
+        anyhow::ensure!(segment.sequence.is_some(), "This segment has no editorial sequence");
+        let set = show.set.clone();
+        let opening = SetLayoutPair { landscape: segment.landscape.clone(), vertical: segment.vertical.clone() };
+        self.mount_set(Some(set.clone()), Some(opening))?;
+        self.scene = set;
+        self.playing_segment = Some((show_id.into(), segment_id.into()));
+        Ok(())
+    }
+
     pub fn command(&mut self, c: commands::Command) -> Result<()> {
         let next = commands::apply(&self.production, &c)?;
         let old = std::mem::replace(&mut self.production, ProductionDocument(Arc::new(next)));
@@ -1158,6 +1196,7 @@ impl RoomProject {
         let mounted = scene.mounted_set.clone();
         let layout = scene.mounted_layout.clone();
         self.remember_scene_set();
+        self.playing_segment = None;
         self.active_scene = id.into();
         self.mounted_set = mounted;
         self.mounted_layout = layout;
@@ -1231,6 +1270,7 @@ impl RoomProject {
         } else {
             None
         };
+        self.playing_segment = None;
         self.mounted_set = id;
         self.mounted_layout = selected;
         self.remember_scene_set();
@@ -1265,6 +1305,10 @@ impl RoomProject {
                 .unwrap_or_else(Self::bare_composition);
             next.production.sets.insert("room-scene".into(), set);
             next.scene = "room-scene".into();
+        }
+        if next.active_segment()?.is_some() {
+            next.rendering_show = true;
+            return Ok(next);
         }
         let document = &mut *next.production;
         let seq = document.sequences
@@ -1536,6 +1580,30 @@ mod tests {
         assert!(r.trim("take-clip", 0., 10., 2.).is_err());
         r.compile().unwrap();
     }
+    #[test]
+    fn selecting_a_segment_preserves_its_cuts_and_keeps_preview_independent() {
+        let mut room = RoomProject::demo();
+        let (show, first) = room.production.shows.iter().next().map(|(id,s)| (id.clone(),s.segments[0].clone())).unwrap();
+        let mut second = first.clone();
+        second.id = "interview".into();
+        second.sequence = Some("interview-cut".into());
+        let mut sequence = room.production.sequences["main"].clone();
+        sequence.cues.clear();
+        room.production.sequences.insert("interview-cut".into(), sequence.clone());
+        room.production.shows.get_mut(&show).unwrap().segments.push(second);
+        room.enter_segment(&show, "interview").unwrap();
+        let program = room.live_set().unwrap();
+        assert_eq!(program.active_segment().unwrap().unwrap().id, "interview");
+        assert_eq!(program.output_layout_pair(), room.output_layout_pair());
+        assert_eq!(program.compile().unwrap().sequences["main"].cues.len(), 0);
+        assert_eq!(room.production.sequences["main"].placements, program.production.sequences["main"].placements);
+        assert!(!room.rendering_show && program.rendering_show);
+        let mut restored: RoomProject = serde_json::from_slice(&serde_json::to_vec(&room).unwrap()).unwrap();
+        assert!(restored.active_segment().unwrap().is_none());
+        restored.enter_segment(&show,&first.id).unwrap();
+        assert_eq!(restored.active_segment().unwrap().unwrap().id, first.id);
+    }
+
     #[test]
     fn live_set_ignores_editorial_cuts_without_mutating_the_draft() {
         let mut room = RoomProject::demo();

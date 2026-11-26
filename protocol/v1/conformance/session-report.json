@@ -1,0 +1,171 @@
+{
+  "protocol": "producer.revision-report/1",
+  "parent": "56d7d46f42d5291c1f23fdead56bbe5dd9fd8b0ed9052e581472b846e5a824b8",
+  "revision": "a945a61278c115d7c8cbbc7d77e6e406aaf74df25b4639c873864f1268bcf241",
+  "author": "editor@fork.example",
+  "changes": [
+    {
+      "path": "/production/assets/music/hash",
+      "op": "changed",
+      "before": "5653913f268e9f131729fb3f285c062ef463d2c5a22141186c9af1613bf5cd1f",
+      "after": "cdf69397156bc4cc165847bd7c6ddc758ab54da8cfb4af5b325ba4db1685214e"
+    },
+    {
+      "path": "/manifest/assets/music/original/sha256",
+      "op": "changed",
+      "before": "5653913f268e9f131729fb3f285c062ef463d2c5a22141186c9af1613bf5cd1f",
+      "after": "cdf69397156bc4cc165847bd7c6ddc758ab54da8cfb4af5b325ba4db1685214e"
+    },
+    {
+      "path": "/manifest/author",
+      "op": "changed",
+      "before": "session-editor",
+      "after": "fork-editor"
+    },
+    {
+      "path": "/manifest/authoredAt",
+      "op": "changed",
+      "before": 1795651200,
+      "after": 1795712588
+    },
+    {
+      "path": "/manifest/documentSha256",
+      "op": "changed",
+      "before": "ae28247dfb9d632778397f5685a316b421f4b5c70bf7eaf425512491d9dab069",
+      "after": "367a80404c8c52ec5932c4e44c07f82db144fc3478f3c0eb02bf3ba6576ef519"
+    },
+    {
+      "path": "/manifest/musicSessions/score/arrangementSha256",
+      "op": "changed",
+      "before": "84d5ff06ae9a761c91f0102284879aca37bf60574d43f2e26e814e04949f3436",
+      "after": "c65c57762a7d02cc9d0ec304d31337dfc19b9a603c4a956baecdbea64ed7053d"
+    },
+    {
+      "path": "/manifest/musicSessions/score/renderedFrom",
+      "op": "changed",
+      "before": "84d5ff06ae9a761c91f0102284879aca37bf60574d43f2e26e814e04949f3436",
+      "after": "c65c57762a7d02cc9d0ec304d31337dfc19b9a603c4a956baecdbea64ed7053d"
+    },
+    {
+      "path": "/manifest/parent",
+      "op": "changed",
+      "before": null,
+      "after": "56d7d46f42d5291c1f23fdead56bbe5dd9fd8b0ed9052e581472b846e5a824b8"
+    }
+  ],
+  "musicSessions": {
+    "score": {
+      "before": {
+        "tempoBpm": "120",
+        "instruments": [
+          "Bell"
+        ],
+        "notes": 8,
+        "noteDataSha256": "f4a1a1995c83f33c853e00fa61f7fd4f3a42fdffcfe83d06ccb6652732d14ee8"
+      },
+      "after": {
+        "tempoBpm": "96",
+        "instruments": [
+          "Reed"
+        ],
+        "notes": 8,
+        "noteDataSha256": "f4a1a1995c83f33c853e00fa61f7fd4f3a42fdffcfe83d06ccb6652732d14ee8"
+      }
+    }
+  },
+  "preservedTiming": [
+    {
+      "sequence": "main",
+      "kind": "placements",
+      "id": "open",
+      "range": {
+        "start": {
+          "ticks": "0",
+          "rate": 1
+        },
+        "duration": {
+          "ticks": "2",
+          "rate": 1
+        }
+      }
+    },
+    {
+      "sequence": "main",
+      "kind": "placements",
+      "id": "sponsor-cut",
+      "range": {
+        "start": {
+          "ticks": "2",
+          "rate": 1
+        },
+        "duration": {
+          "ticks": "3",
+          "rate": 1
+        }
+      }
+    },
+    {
+      "sequence": "main",
+      "kind": "placements",
+      "id": "outro",
+      "range": {
+        "start": {
+          "ticks": "5",
+          "rate": 1
+        },
+        "duration": {
+          "ticks": "1",
+          "rate": 1
+        }
+      }
+    },
+    {
+      "sequence": "main",
+      "kind": "placements",
+      "id": "sonic-ident",
+      "range": {
+        "start": {
+          "ticks": "2",
+          "rate": 1
+        },
+        "duration": {
+          "ticks": "3",
+          "rate": 1
+        }
+      }
+    },
+    {
+      "sequence": "main",
+      "kind": "placements",
+      "id": "score",
+      "range": {
+        "start": {
+          "ticks": "0",
+          "rate": 1
+        },
+        "duration": {
+          "ticks": "6",
+          "rate": 1
+        }
+      }
+    },
+    {
+      "sequence": "main",
+      "kind": "cues",
+      "id": "sponsor-in",
+      "at": {
+        "ticks": "2",
+        "rate": 1
+      }
+    },
+    {
+      "sequence": "main",
+      "kind": "cues",
+      "id": "sponsor-out",
+      "at": {
+        "ticks": "5",
+        "rate": 1
+      }
+    }
+  ]
+}

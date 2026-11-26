@@ -92,6 +92,12 @@ def copy_payload(src, dst, manifest):
 
 def run(args):
     src = args.source
+    if args.command == "compare":
+        from revisions import report
+        before = verify(args, args.parent)
+        after = verify(args, src)
+        lineage(after, before)
+        return report(args.parent, src, before, after, bounded)
     if args.command == "verify":
         receipt = verify(args, src)
         if args.parent:
@@ -136,14 +142,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--core", default=os.environ.get("PRODUCER_CORE", "producer-core"))
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ["verify", "checkout", "freeze"]:
+    for name in ["verify", "compare", "checkout", "freeze"]:
         cmd = commands.add_parser(name)
         cmd.add_argument("source", type=Path)
         cmd.add_argument("--trust", type=Path, required=True, help="local OpenSSH allowed_signers file")
-        if name != "verify":
+        if name in ("checkout", "freeze"):
             cmd.add_argument("destination", type=Path)
-        if name in ("verify", "freeze"):
-            cmd.add_argument("--parent", type=Path)
+        if name in ("verify", "compare", "freeze"):
+            cmd.add_argument("--parent", type=Path, required=name == "compare")
         if name == "freeze":
             cmd.add_argument("--key", type=Path, required=True)
             cmd.add_argument("--at", type=int, help="authored UTC epoch seconds")

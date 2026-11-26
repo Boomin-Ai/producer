@@ -97,6 +97,10 @@ A cut may author gain, opacity, saturation and RGB gains as step, linear or ease
 
 Use `adapters/daw.py export` to hand off the score and stem, then `import` to validate and stage a returned edit for signing. The Listening Room test uses an independent headless DAW to change tempo and instrument, reopens the eight notes and compares the returned PCM with a second render. Use the test script with Python 3.12, NumPy and DawDreamer 0.9.0.
 
+## Revision comparison
+
+After receiving an edited package, run `snapshot.py compare CHILD --parent BASE --trust FILE` before summarizing the edit. It verifies both signatures and their parent relationship, compares objects by stable ID, and reports retained placement ranges and cue times. Music comparisons include the declared tempo, instruments, note count and a fingerprint of the note attributes. The report is derived locally from the two revisions and can be reproduced by another harness. Release notes describe changes to the protocol implementation itself.
+
 ## Agent operations
 
 Agents can discover the native vocabulary through `producer-core schema`, `command-schema` and `tool-schema`. They can propose transactions through the existing production service, including sequence replacement, and evaluate an edit using native compile/simulate. Changes to a checked-out production become portable when frozen into a child snapshot. A bundle contains data and references. Loading one must never execute a shell command, upload a clip, bind hardware or publish a show as a side effect.

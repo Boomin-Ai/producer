@@ -37,14 +37,8 @@ impl VisualCache {
 
     fn prepare_layout(&mut self, project: &RoomProject, plan: &Plan, follow_segment: bool) -> Result<Arc<Visuals>> {
         let pair = project.output_layout_pair();
-        let mut segments = project.production.shows.values()
-            .filter(|show| show.set == project.scene)
-            .flat_map(|show| &show.segments)
-            .filter(|segment| segment.sequence.as_deref() == Some("main")
-                && segment.landscape == pair.landscape && segment.vertical == pair.vertical);
-        let schedule = if follow_segment {
-            segments.next().filter(|first| !first.layout_changes.is_empty()
-                && segments.all(|s| s.layout_changes == first.layout_changes))
+        let schedule = if follow_segment && project.rendering_show {
+            project.active_segment()?.filter(|s| !s.layout_changes.is_empty())
         } else { None };
         // Editorial cuts and panel changes do not invalidate static text or
         // surface resources. Node indices are included because render records
