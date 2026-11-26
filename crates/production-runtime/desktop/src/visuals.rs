@@ -145,6 +145,7 @@ impl VisualCache {
 struct Element {
     key: String,
     wave_border: bool,
+    framing_subject: Option<crate::model::MfmSubject>,
     speaker_region: Option<Region>,
     depth: usize,
     tracks: Vec<(usize, Property)>,
@@ -425,7 +426,18 @@ impl Visuals {
                 if count > MAX_DRAWS {
                     bail!("Native visual draw budget exceeded; working output retained");
                 }
+                let framing_subject = if project.scene == "my-first-million" {
+                    use crate::model::MfmSubject;
+                    n.source.as_deref().and_then(MfmSubject::from_source).or_else(|| {
+                        match n.style.as_ref()?.fill.as_ref()? {
+                            Paint::Image { asset, .. } if asset == "my-first-million-shaan" => Some(MfmSubject::Shaan),
+                            Paint::Image { asset, .. } if asset == "my-first-million-sam" => Some(MfmSubject::Sam),
+                            _ => None,
+                        }
+                    })
+                } else { None };
                 outputs[out].push(Element {
+                    framing_subject,
                     key: key.to_owned(), wave_border, speaker_region, node: index, depth, tracks,
                     fill,
                     content,
@@ -592,7 +604,7 @@ impl Visuals {
         camera_wave: bool,
         out: &mut Vec<Draw>,
     ) {
-        self.draw_transition(plan,samples,output,size,frames,active,production_seconds,production_seconds,production_seconds,camera_wave,out,None,None,CENTER)
+        self.draw_transition(plan,samples,output,size,frames,active,production_seconds,production_seconds,production_seconds,camera_wave,out,None,None,CENTER,[100; 3])
     }
     pub fn draw_transition(
         &self,
@@ -610,6 +622,7 @@ impl Visuals {
         transition: Option<(&LayoutBlend,f32)>,
         graph_progress: Option<f32>,
         speaker_share: f32,
+        framing: [u16; 3],
     ) {
         out.clear();
         let progress = graph_progress.unwrap_or_else(|| transition.map_or(1., |(_, p)| p));
@@ -674,6 +687,17 @@ impl Visuals {
                         continue;
                     };
                     fit_source(&mut d, node.fit, frame.width, frame.height, size);
+                }
+                if let Some(subject) = e.framing_subject {
+                    if matches!(d.kind, 1 | 3) {
+                        let percent = framing[subject as usize];
+                        if percent > 100 {
+                            let factor = 100. / f32::from(percent.min(300));
+                            let [x, y, width, height] = d.uv;
+                            d.uv = [x + width * (1. - factor) * 0.5, y + height * (1. - factor) * 0.5,
+                                width * factor, height * factor];
+                        }
+                    }
                 }
                 let center = pose.point([(d.rect[0]+0.5*d.rect[2])*w,(d.rect[1]+0.5*d.rect[3])*h]);
                 d.rect[2] *= pose.scale;
@@ -884,7 +908,7 @@ mod resource_tests {
             assert!(visuals.has_guest_slot(output));
             visuals.draw_transition(
                 &plan, &[], output, size, &std::array::from_fn(|_| None), [false; 8],
-                0., 0., 0., false, &mut draws, None, None, 0.64,
+                0., 0., 0., false, &mut draws, None, None, 0.64, [100; 3],
             );
             assert_eq!(draws.len(), 3);
             for region in [Region::Host, Region::Guest, Region::Divider] {

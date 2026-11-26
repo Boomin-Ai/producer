@@ -67,6 +67,7 @@ pub enum RoomCommand {
     SceneRemove {
         id: String,
     },
+    MfmZoom { layout: SetLayoutPair, subject: crate::model::MfmSubject, percent: u16 },
     CameraGrade { source: String, grade: crate::model::CameraGrade },
     SourceRemove {
         source: String,
@@ -283,6 +284,7 @@ impl Snapshot {
 }
 pub struct Handle {
     grades: crate::platform::GradeSlots,
+    framing: std::sync::RwLock<Arc<crate::model::MfmFraming>>,
     pub studio_audio: crate::studio_audio::Desk,
     pub waiting_guests: Mutex<Vec<crate::room_share::WaitingGuest>>,
     pub root:PathBuf,
@@ -1028,6 +1030,7 @@ pub(crate) fn initial_room(root: &Path) -> Result<(Arc<Handle>,Receiver<Envelope
     };
     let (tx, rx) = mpsc::sync_channel(16);
     let handle = Arc::new(Handle {
+        framing: std::sync::RwLock::new(Arc::new(snapshot.project.mfm_framing.clone())),
         grades: Arc::new(std::sync::RwLock::new(snapshot.project.grade_slots())),
         studio_audio: crate::studio_audio::Desk::open(root)?,
         waiting_guests: Mutex::default(),
@@ -1171,6 +1174,9 @@ fn apply(
             }
             if kind == "camera" { state.cameras = devices; } else { state.microphones = devices; }
             changed = true;
+        }
+        RoomCommand::MfmZoom { layout, subject, percent } => {
+            changed = state.project.set_mfm_zoom(&layout, subject, percent)?;
         }
         RoomCommand::CameraGrade { source, grade } => {
             state.project.validate_grade(&source, grade)?;
@@ -2500,6 +2506,7 @@ fn control(
                 RoomCommand::SourceRemove{source} if source=="microphone" => Some(false),
                 _ => None,
             };
+            let framing_only = matches!(&envelope.command, RoomCommand::MfmZoom { .. });
             let grade_only = matches!(&envelope.command, RoomCommand::CameraGrade { .. });
             let gain_only = matches!(&envelope.command, RoomCommand::Gain { .. });
             let workspace_only = matches!(
@@ -2557,7 +2564,10 @@ fn control(
                 &mut prepared_plan,
             ) }
             .and_then(|changed| {
-                if changed && grade_only {
+                if changed && framing_only {
+                    persist(&root, &state.project)?;
+                    *handle.framing.write().unwrap() = Arc::new(state.project.mfm_framing.clone());
+                } else if changed && grade_only {
                     persist(&root, &state.project)?;
                 } else if changed && gain_only {
                     // Mixer changes do not alter layout, capture, transport or
@@ -2704,6 +2714,7 @@ fn render_loop(
     mut visuals: Arc<crate::visuals::Visuals>,
     preview_output: Option<Arc<Mutex<Option<Arc<Shared>>>>>,
 ) -> Result<()> {
+    let mut framing = handle.framing.read().unwrap().clone();
     let preview = preview_output.is_some();
     let editor = preview_output.as_ref().is_some_and(|output| Arc::ptr_eq(output, &handle.set_edit_media));
     let mut program_clock: Option<crate::program_clock::Clock> = None;
@@ -3323,6 +3334,12 @@ fn render_loop(
             let directed_visuals = state.active_host_shot.and_then(|i| visuals.host_shots[i].as_ref());
             let frame_visuals = reversible_layout.as_ref().map(|blend| &blend.visuals)
                 .or(directed_visuals).unwrap_or_else(|| visuals.at(position));
+            let mfm = project.scene == "my-first-million";
+            if mfm {
+                if let Ok(current) = handle.framing.try_read() {
+                    if !Arc::ptr_eq(&framing, &current) { framing = current.clone(); }
+                }
+            }
             let music=handle.studio_audio.dj_visual.bands();
             let mut dj_title=None;
             let graph_progress = reversible_layout.as_ref().zip(phase)
@@ -3347,6 +3364,7 @@ fn render_loop(
                     layout_blend.as_ref().map(|b|(b,b.phase(host))),
                     graph_progress,
                     speaker_share,
+                    if mfm { framing.get(layout).copied().unwrap_or([100; 3]) } else { [100; 3] },
                 );
                 for draw in draws[i].iter_mut().filter(|d| d.kind == 5) {
                     draw.opacity = headline_opacity * headline_opacity * (3. - 2. * headline_opacity);

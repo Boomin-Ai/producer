@@ -270,18 +270,14 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
     let sharing = snap.frame_age_ms[1] >= 0.;
     let timeline = &ws.panels[&PanelId::Timeline];
     let timeline_docked = timeline.visible && !ws.docks[&timeline.edge].hidden;
-    let mut bar = row()
-        .key("program-transport")
-        .self_center()
-        .items_center()
-        .justify_center()
-        .flex_wrap()
-        .max_w((w - left - right - 20.).max(120.))
-        .gap(4.)
-        .padding(4.)
-        .radius(24.)
-        .border(1., color(0x243240))
-        .fill(color(0x05090e))
+    let mut bar = row().key("program-transport").items_center().flex_wrap().gap(4.);
+    bar = if expanded {
+        bar.w_full().px(9.).py(6.).fill(color(theme::TRANSPORT))
+    } else {
+        bar.self_center().justify_center().padding(3.).radius(10.).border(1., color(theme::TRANSPORT_BORDER))
+            .fill(color(PANEL)).max_w((w - left - right - 20.).max(120.))
+    };
+    let mut bar = bar
         .child(send_tool(
             "mic",
             "mic",
@@ -344,15 +340,18 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
             RoomCommand::Monitor { preview: true },
         ).help("Preview the timeline in the studio monitors"));
     }
-    let bar = bar.child(send_tool(
-            "transport-record",
-            "record",
-            if snap.recording { "Stop recording" } else { "Start recording" },
-            snap.recording,
-            RoomCommand::Record {
-                enabled: !snap.recording,
-            },
-        ));
+    let record_command = RoomCommand::Record { enabled: !snap.recording };
+    let record_label = if snap.recording { "Stop recording" } else { "Record" };
+    let bar = if expanded {
+        bar.child(el().grow(1.).min_w(0.))
+            .child(row().key("transport-record").role("button").focusable(true).label(record_label)
+                .items_center().gap(5.).h(29.).px(8.).radius(6.).fill(color(PANEL)).hover_fill(color(SURFACE))
+                .child(glyph("record", 14., 0xff5e69)).child(title(record_label, 11., 600., TEXT))
+                .on_press(move |s: &mut Studio| s.send(record_command.clone())))
+    } else {
+        bar.child(send_tool("transport-record", "record",
+            if snap.recording { "Stop recording" } else { "Start recording" }, snap.recording, record_command))
+    };
     let mut center = col()
         .grow(1.)
         .min_w(0.)
@@ -373,7 +372,7 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
     let controller = if expanded {
         let width = available.clamp(80., 430.);
         col().key("expanded-quick-controller").self_center().w(width).min_h(0.)
-            .radius(13.).border(1., color(theme::TRANSPORT_BORDER))
+            .radius(10.).clip_rounded(10.).border(1., color(theme::TRANSPORT_BORDER))
             .gradient(color(SURFACE).alpha(0.97), color(PANEL).alpha(0.96))
             .child(super::settings::quick_settings(s, width - 2., detail_height))
             .child(bar)
@@ -524,8 +523,8 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
             return completed.child(sheet);
         }
     }
-    if let Some(source) = &s.source {
-        return completed.child(source_popout(s, source, w, h));
+    if let Some((source, owner, anchor)) = &s.source {
+        return completed.child(source_popout(s, source, ws.panels[owner].edge, anchor, w, h));
     }
     if let Some(sheet) = super::channels::sheet(s, w) {
         completed.child(sheet)
@@ -560,10 +559,17 @@ fn source_kind<'a>(p: &'a crate::model::RoomProject, source: &'a str) -> &'a str
         _ => source,
     }
 }
-fn open_source(s: &mut Studio, source: &str, anchor: Option<[f32; 2]>) {
+pub(super) fn dock_popover_side(edge: Edge) -> rune::Side {
+    match edge {
+        Edge::Top => rune::Side::Bottom,
+        Edge::Bottom => rune::Side::Top,
+        Edge::Left => rune::Side::Right,
+        Edge::Right => rune::Side::Left,
+    }
+}
+fn open_source(s: &mut Studio, source: &str, owner: PanelId, anchor: String) {
     s.camera_info = Default::default();
-    s.source = Some(source.into());
-    s.source_anchor = anchor;
+    s.source = Some((source.into(), owner, anchor));
     let Some(l) = &s.live else {
         return;
     };
@@ -586,7 +592,7 @@ fn open_source(s: &mut Studio, source: &str, anchor: Option<[f32; 2]>) {
         }
     }
 }
-fn source_popout(s: &Studio, source: &str, w: f32, h: f32) -> El {
+fn source_popout(s: &Studio, source: &str, edge: Edge, anchor: &str, w: f32, h: f32) -> El {
     let snap = &s.live.as_ref().unwrap().snapshot;
     let p = &snap.project;
     let kind = source_kind(p, source);
@@ -597,27 +603,14 @@ fn source_popout(s: &Studio, source: &str, w: f32, h: f32) -> El {
         "add" => "Add source",
         _ => "Source settings",
     };
-    let edge = p.workspace.panels[&PanelId::Sources].edge;
     let width = 300_f32.min(w - 16.);
     let max_h = (h - 96.).clamp(96., 420.);
-    let [ax, ay] = s.source_anchor.unwrap_or([w - width - 20., 72.]);
-    let x = (if edge == Edge::Right {
-        ax - width - 8.
-    } else {
-        ax + 8.
-    })
-    .clamp(8., (w - width - 8.).max(8.));
-    let y = (if edge == Edge::Bottom {
-        ay - max_h - 8.
-    } else {
-        ay + 8.
-    })
-    .clamp(48., (h - max_h - 32.).max(48.));
     let mut pick = col()
         .key("source-popout")
         .role("dialog")
         .label(heading)
-        .absolute(x, y)
+        .anchored_fit(anchor.to_owned(), dock_popover_side(edge), rune::Align::Start, 6.)
+        .modal(true, |s: &mut Studio| s.source = None)
         .w(width)
         .max_h(max_h)
         .padding(9.)
@@ -730,12 +723,10 @@ fn source_popout(s: &Studio, source: &str, w: f32, h: f32) -> El {
             ("Choose display", ScreenCaptureTarget::Display),
             ("Stop sharing", ScreenCaptureTarget::Stop),
         ] {
-            pick = pick.child(command(
-                label,
-                label,
-                false,
-                RoomCommand::ScreenCapture { target },
-            ));
+            pick = pick.child(button(label, label, false, move |s| {
+                s.source = None;
+                s.send(RoomCommand::ScreenCapture { target: target.clone() });
+            }));
         }
     } else {
         pick = pick.child(
@@ -871,15 +862,7 @@ fn source_popout(s: &Studio, source: &str, w: f32, h: f32) -> El {
             .disabled(snap.recording || snap.take.busy()),
         );
     }
-    el().absolute(0., 0.)
-        .size(w, h)
-        .child(
-            el().key("source-dismiss")
-                .absolute(0., 0.)
-                .size(w, h)
-                .on_press(|s: &mut Studio| s.source = None),
-        )
-        .child(pick.scroll(Default::default()))
+    pick.scroll(Default::default())
 }
 fn p_mic(s: &Snapshot) -> (f32, bool) {
     s.project
@@ -1017,12 +1000,8 @@ fn studio_list(snap: &Snapshot, id: PanelId, compact: bool) -> El {
                 .label(format!("{} settings", lane.label))
                 .focusable(true)
                 .child(glyph("settings", 14., MUTED))
-                .on_press_tx(move |s: &mut Studio, tx| {
-                    open_source(
-                        s,
-                        &source,
-                        tx.press_point().map(|p| [p.window_x, p.window_y]),
-                    )
+                .on_press(move |s: &mut Studio| {
+                    open_source(s, &source, PanelId::Sources, format!("device-{source}"));
                 });
             list = list.child(
                 tile(format!("source-row-{}", lane.id), selected)
@@ -1057,7 +1036,7 @@ pub(super) fn list_add(id: PanelId) -> El {
         )
     } else {
         tool("add-source", "plus", "Add source", false, |s| {
-            open_source(s, "add", None)
+            open_source(s, "add", PanelId::Sources, "add-source".into())
         })
     }
     ).size(24., 24.)
@@ -1499,6 +1478,30 @@ fn set_controls_header(snap: &Snapshot, key: &str, pair: &crate::model::SetLayou
     header.child(el().key("set-header-divider").h(1.).w_full().fill(color(theme::SEAM)))
 }
 
+fn set_disclosure(id: &str, name: &str, detail: &str, open: bool, toggle: impl Fn(&mut Studio) + 'static) -> El {
+    row().key(id.to_owned()).label(format!("{} {name}", if open { "Collapse" } else { "Expand" }))
+        .role("button").focusable(true).items_center().gap(5.).h(27.).px(5.).radius(5.)
+        .hover_fill(color(SURFACE)).child(title(name, 12., 640., TEXT))
+        .child(title(detail, 10., 500., MUTED).grow(1.))
+        .child(glyph(if open { "chevron-up" } else { "chevron-down" }, 13., MUTED)).on_press(toggle)
+}
+
+fn mfm_zoom_control(pair: &crate::model::SetLayoutPair, subject: crate::model::MfmSubject, percent: u16) -> El {
+    let label = subject.label();
+    let prefix = format!("shot-zoom-{}", label.replace(' ', "-").to_lowercase());
+    let op = |percent| RoomCommand::MfmZoom { layout: pair.clone(), subject, percent };
+    let step = |direction: &str, glyph: &str, next| {
+        command(format!("{prefix}-{direction}"), glyph, false, op(next)).size(22., 23.).padding(0.)
+            .label(format!("Zoom {label} {direction}")).disabled(next == percent)
+    };
+    row().w_full().items_center().gap(3.)
+        .child(title(label, 11., 550., TEXT).grow(1.))
+        .child(step("out", "−", percent.saturating_sub(10).max(100)))
+        .child(command(format!("{prefix}-reset"), format!("{:.1}×", f32::from(percent)/100.), false, op(100))
+            .size(32., 23.).padding(0.).help(format!("Reset {label} zoom")))
+        .child(step("in", "+", (percent + 10).min(300)))
+}
+
 fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
     let l = s.live.as_ref().unwrap();
     let snap = &l.snapshot;
@@ -1528,9 +1531,18 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                     .filter_map(|(id, show)| show_controller(s, snap, id, show, set)).collect();
                 let has_show = !players.is_empty();
                 b = b.gap(8.);
-                let mut shot_header = row().items_center().gap(6.).child(title("Shots", 12., 640., TEXT).grow(1.));
+                let shots_open = !s.folded_shots.contains(key);
+                let layout_open = s.expanded_layout_controls.contains(key);
+                let choices = p.set_layout_choices(key);
+                let active_shot = choices.iter().find(|choice| choice.pair == pair)
+                    .map(|choice| if key == "my-first-million" && pair.landscape == "landscape" { "Two hosts" } else { &choice.label }).unwrap_or("");
+                let owner = key.clone();
+                let mut shots = col().min_w(0.).gap(4.).child(set_disclosure("set-shots-toggle", "Shots",
+                    if shots_open { "" } else { active_shot }, shots_open, move |s| {
+                        if shots_open { s.folded_shots.insert(owner.clone()); } else { s.folded_shots.remove(&owner); }
+                    }));
                 if let Some((show, segment)) = p.playing_segment.clone().filter(|_| running && p.shot_override.is_some()) {
-                    shot_header = shot_header.child(command("follow-show-layout", "Follow rundown", false,
+                    shots = shots.child(command("follow-show-layout", "Follow rundown", false,
                         RoomCommand::ShowLayout { show, segment, layout: None }));
                 }
                 let shot_area = if shelf {
@@ -1540,7 +1552,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 let shot_width = ((shot_area - (columns - 1.) * 5.) / columns).clamp(76., 230.);
                 let mut layouts = row().flex_wrap().gap(5.);
                 let slots = super::editor::layout_slots(p, set, &pair);
-                for layout in p.set_layout_choices(key) {
+                for layout in choices.into_iter().filter(|_| shots_open) {
                     let k = key.clone();
                     let scene = p.active_scene.clone();
                     let chosen = layout.pair;
@@ -1579,15 +1591,15 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                         },
                     ));
                 }
-                let shots = col().min_w(0.).gap(6.).child(shot_header).child(layouts);
+                if shots_open { shots = shots.child(layouts); }
                 let missing: std::collections::BTreeSet<_> = slots.iter()
                     .map(|(_, id)| id.clone()).filter(|id| !slot_ready(snap, id)).collect();
                 for id in missing {
                     use producer_production_contract::{Role, Source};
                     let repair_key = format!("configure-slot-{id}");
                     let action = match p.production.sources.get(&id) {
-                        Some(Source::Live { role: Role::Screen }) => command(repair_key, "Share a screen…", false,
-                            RoomCommand::ScreenCapture { target: ScreenCaptureTarget::Any }),
+                        Some(Source::Live { role: Role::Screen }) => button(repair_key.clone(), "Share a screen…", false,
+                            move |s| open_source(s, &id, PanelId::Controls, repair_key.clone())),
                         Some(Source::Live { role: Role::Guest }) if p.rtc_video_slot().is_none() =>
                             title("Remove an extra camera in Sources to make space for guest video.", 11., 500., MUTED),
                         Some(Source::Live { role: Role::Guest }) => {
@@ -1616,13 +1628,15 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                                     camera: id == "camera", mic: id == "microphone", screen: false,
                                 })
                             } else {
-                                button(repair_key, label, false, move |s| open_source(s, &id, None))
+                                button(repair_key.clone(), label, false, move |s| open_source(s, &id, PanelId::Controls, repair_key.clone()))
                             }
                         }
-                        _ => button(repair_key, "Choose media…", false, move |s| open_source(s, &id, None)),
+                        _ => button(repair_key.clone(), "Choose media…", false, move |s| open_source(s, &id, PanelId::Controls, repair_key.clone())),
                     };
                     b = b.child(action);
                 }
+                let mut sources = b;
+                let mut b = col().gap(5.);
                 let uses = |uniform: &str| {
                     on && pair.ids().iter().any(|id|set.output_graphs.get(*id).and_then(|g|set.graphs.get(g)).is_some_and(|g|g.passes.iter().any(|pass|matches!(pass,producer_production_contract::GraphPass::Fragment{shader,..} if shader.contains(uniform)))))
                 };
@@ -1979,13 +1993,36 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                         },
                     ));
                 }
+                let mfm = key == "my-first-million";
+                let layout_controls = mfm || uses("frame.controls.x") || uses("frame.controls.z") || uses("frame.screenPan")
+                    || (on && pair.ids().iter().any(|id| crate::headline::supports(set, id)))
+                    || set.theme.contains_key("marquee") || set.theme.contains_key("weather-desk") || (on && pair.has_flythrough(set))
+                    || (on && set.theme.contains_key("quiz")) || (set.theme.contains_key("ipo-chart") && uses("frame.controls.y"));
+                if layout_controls {
+                    if mfm && layout_open {
+                        use crate::model::MfmSubject;
+                        let framing = p.mfm_framing.get(&pair.landscape).copied().unwrap_or([100; 3]);
+                        for subject in [MfmSubject::Shaan, MfmSubject::Sam, MfmSubject::Screen] {
+                            if slots.iter().any(|(_, id)| MfmSubject::from_source(id) == Some(subject)) {
+                                b = b.child(mfm_zoom_control(&pair, subject, framing[subject as usize]));
+                            }
+                        }
+                    }
+                    let owner = key.clone();
+                    let mut sections = col().gap(4.).min_w(0.).child(set_disclosure("set-layout-toggle", "Layout controls", "",
+                        layout_open, move |s| {
+                            if layout_open { s.expanded_layout_controls.remove(&owner); } else { s.expanded_layout_controls.insert(owner.clone()); }
+                        }));
+                    if layout_open { sections = sections.child(b); }
+                    shots = sections.child(el().w_full().h(1.).fill(color(theme::SEAM))).child(shots);
+                }
                 if !slots.is_empty() {
-                    b = b
+                    sources = sources
                         .child(el().h(1.).w_full().fill(color(0x263443)))
                         .child(title("Sources", 12., 600., TEXT));
                     for (slot, src) in slots {
                         let name = super::editor::source_name(p, &src);
-                        b = b.child(
+                        sources = sources.child(
                             row()
                                 .items_center()
                                 .gap(6.)
@@ -2005,19 +2042,19 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                     if has_show {
                         let rundown = players.into_iter().fold(col().gap(6.), |column, player| column.child(player));
                         columns = columns
-                            .child(pane("set-overview-column", overview_width, col().gap(8.).child(header).child(b)))
+                            .child(pane("set-overview-column", overview_width, col().gap(8.).child(header).child(sources)))
                             .child(seam()).child(pane("set-segments-column", center_width, rundown))
                             .child(seam()).child(pane("set-shots-column", end_width, shots));
                     } else {
                         columns = columns
                             .child(pane("set-overview-column", overview_width, header))
                             .child(seam()).child(pane("set-shots-column", center_width, shots))
-                            .child(seam()).child(pane("set-settings-column", end_width, b));
+                            .child(seam()).child(pane("set-settings-column", end_width, sources));
                     }
                     return columns.scroll_x();
                 }
                 let stack = players.into_iter().fold(col().gap(8.).child(header), |column, player| column.child(player));
-                return stack.child(shots).child(b);
+                return stack.child(shots).child(sources);
             } else {
                 b = b.child(title(
                     "No Sets in this studio",

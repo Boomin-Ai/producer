@@ -390,7 +390,7 @@ fn layout_preferences(s: &Studio) -> El {
 }
 
 fn preferences(s: &Studio, name: &str, narrow: bool) -> El {
-    let body = col().w_full().padding(if narrow { 16. } else { 40. }).gap(8.);
+    let body = col().w_full().padding(if narrow { 6. } else { 40. }).gap(if narrow { 5. } else { 8. });
     match s.settings.section {
         Section::App => {
             let mut body = body.child(detail("Workspace", name))
@@ -420,7 +420,7 @@ fn preferences(s: &Studio, name: &str, narrow: bool) -> El {
 
 pub(super) fn quick_settings(s: &Studio, width: f32, height: f32) -> El {
     let name = s.settings.account.as_ref().map_or("Local workspace", |a| a.name.as_str());
-    let mut tabs = row().flex_wrap().gap(4.).items_center();
+    let mut tabs = row().flex_wrap().gap(3.).items_center();
     for section in [Section::App, Section::Integrations, Section::Output] {
         let label = section.labels().0;
         tabs = tabs.child(button(format!("prefs-{label}"), label, s.settings.section == section, move |s| {
@@ -429,7 +429,8 @@ pub(super) fn quick_settings(s: &Studio, width: f32, height: f32) -> El {
         }).h(24.));
     }
     col().key("quick-settings-details").label("Studio settings").w(width).h(height)
-        .min_h(0.).gap(4.).padding(5.).child(tabs)
+        .min_h(0.).gap(5.).px(9.).py(6.)
+        .child(row().flex_wrap().items_center().gap(6.).child(title("Studio settings", 13., 650., TEXT).grow(1.)).child(tabs))
         .child(col().h(0.).grow(1.).min_h(0.).w_full().child(preferences(s, name, true))
             .scroll(Default::default()))
 }
@@ -524,8 +525,7 @@ pub(super) fn shell(s: &Studio, width: f32, height: f32) -> El {
     let nav_width = if narrow { 0. } else { 300. };
     let sidebar_width = 72. + if settings { nav_width } else { 0. };
     const CONTENT_RADIUS: f32 = 16.;
-    // Extend the rail material beneath the rounded inner corners.
-    // Rounded content corners expose the same material as the navigation rail.
+    // Paint one continuous tint over the native material, including the cutouts in the content surface.
     let backdrop = el()
         .key("shell-material")
         .absolute(0., 0.)
@@ -533,9 +533,9 @@ pub(super) fn shell(s: &Studio, width: f32, height: f32) -> El {
         .h_full()
         .fill(color(PANEL).alpha(0.25))
         .system_material(rune::SystemMaterial::Glass);
-    let mut navigation = row().w(sidebar_width).h_full()
-        .gradient(color(SURFACE).alpha(0.61), color(BG).alpha(0.76))
-        .child(rail);
+    let tint = el().key("shell-material-tint").absolute(0., 0.).w(sidebar_width + CONTENT_RADIUS).h_full()
+        .gradient(color(SURFACE).alpha(0.76), color(BG).alpha(0.84));
+    let mut navigation = row().w(sidebar_width).h_full().child(rail);
     let mut sections = if narrow { row().gap(4.) } else { col().gap(4.) };
     if settings {
         for section in [Section::App, Section::Integrations, Section::Output] {
@@ -620,6 +620,7 @@ pub(super) fn shell(s: &Studio, width: f32, height: f32) -> El {
         .w_full()
         .h_full()
         .child(backdrop)
+        .child(tint)
         .child(navigation)
         .child(content);
     if !s.settings.profile_open || settings {

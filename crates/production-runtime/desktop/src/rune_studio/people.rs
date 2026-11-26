@@ -521,7 +521,7 @@ pub(super) fn popover(s: &Studio, height: f32) -> El {
         .key("people-connections-popout")
         .role("dialog")
         .label("People settings")
-        .anchored_fit("people-session", rune::Side::Bottom, rune::Align::End, 5.)
+        .anchored_fit("people-session", panels::dock_popover_side(live.snapshot.project.workspace.panels[&PanelId::People].edge), rune::Align::Start, 5.)
         .w(260.)
         .max_h((height - 54.).max(1.))
         .padding(9.)

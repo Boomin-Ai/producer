@@ -168,11 +168,30 @@ impl Default for HostDirection {
     }
 }
 
+/// Optical framing within an authored slot. Each shot stores its own crop for both outputs.
+pub type MfmFraming = BTreeMap<String, [u16; 3]>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MfmSubject { Shaan, Sam, Screen }
+
+impl MfmSubject {
+    pub fn from_source(id: &str) -> Option<Self> {
+        match id { "camera" => Some(Self::Shaan), "camera-2" => Some(Self::Sam),
+            "screen" => Some(Self::Screen), _ => None }
+    }
+    pub fn label(self) -> &'static str {
+        match self { Self::Shaan => "Shaan", Self::Sam => "Sam", Self::Screen => "Screen share" }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct RoomProject {
     #[serde(default)]
     pub mfm_direction: HostDirection,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub mfm_framing: MfmFraming,
     #[serde(default)]
     pub speaker_segments: BTreeMap<String, std::collections::BTreeSet<String>>,
     #[serde(default)]
@@ -224,6 +243,26 @@ impl CameraGrade {
     }
 }
 impl RoomProject {
+    pub fn set_mfm_zoom(&mut self, pair: &SetLayoutPair, subject: MfmSubject, percent: u16) -> Result<bool> {
+        let set = self.production.sets.get("my-first-million").context("My First Million is unavailable")?;
+        anyhow::ensure!(pair.exists_in(set) && (100..=300).contains(&percent), "Invalid shot or zoom");
+        fn has_subject(node: &Node, subject: MfmSubject) -> bool {
+            matches!(&node.content, Content::Source { source, .. } if MfmSubject::from_source(source) == Some(subject))
+                || node.children.iter().any(|child| has_subject(child, subject))
+        }
+        anyhow::ensure!(pair.ids().iter().any(|id| has_subject(&set.layouts[*id].root, subject)), "Source is absent from this shot");
+        let mut changed = false;
+        for id in pair.ids() {
+            let mut values = self.mfm_framing.get(id).copied().unwrap_or([100; 3]);
+            if values[subject as usize] == percent { continue; }
+            values[subject as usize] = percent;
+            if values == [100; 3] { self.mfm_framing.remove(id); }
+            else { self.mfm_framing.insert(id.into(), values); }
+            changed = true;
+        }
+        Ok(changed)
+    }
+
     pub fn validate_grade(&self, source: &str, grade: CameraGrade) -> Result<()> {
         anyhow::ensure!(matches!(self.production.sources.get(source), Some(Source::Live { role: Role::HostCamera })), "Select a camera source");
         anyhow::ensure!(grade.valid(), "Camera grade outside its allowed range");
@@ -502,6 +541,7 @@ impl RoomProject {
         );
         Self {
             mfm_direction: HostDirection::default(),
+            mfm_framing: Default::default(),
             speaker_segments: BTreeMap::new(),
             untimed_segments: BTreeMap::new(),
             playing_segment: None,
