@@ -799,7 +799,7 @@ impl RoomProject {
     pub fn show_layout_at(&self, seconds: f64) -> Option<SetLayoutPair> {
         let segment = self.active_segment().ok()??;
         if let Some(pair) = &self.shot_override { return Some(pair.clone()); }
-        let time = Time::new((seconds * 1_000_000.).round() as i64, 1_000_000).ok()?;
+        let time = time(seconds).ok()?;
         let (landscape, vertical) = segment.layouts_at(time);
         Some(SetLayoutPair { landscape: landscape.into(), vertical: vertical.into() })
     }

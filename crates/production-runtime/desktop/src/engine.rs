@@ -1210,6 +1210,7 @@ fn apply(
         | RoomCommand::SceneAdd
         | RoomCommand::SceneSelect { .. }
         | RoomCommand::SetMount { .. }
+        | RoomCommand::RunSegment { .. } | RoomCommand::ShowLayout { .. }
         | RoomCommand::SetMotion { .. }
         | RoomCommand::Play
         | RoomCommand::Pause
@@ -1655,7 +1656,7 @@ fn prepare_publish(root:&Path,project:RoomProject,position:f64,playing:bool,revi
         None
     };
     let position = model::time(position)?;
-    if position > project.production.sequences["main"].duration {
+    if position > plan.sequences["main"].duration {
         bail!("Playhead outside timeline");
     }
     Ok(RenderOp::Publish {
@@ -2029,6 +2030,7 @@ fn control(
                     | RoomCommand::MarqueeReveal { .. }
                     | RoomCommand::Headline { .. }
                     | RoomCommand::SetMount { .. }
+                    | RoomCommand::RunSegment { .. } | RoomCommand::ShowLayout { .. }
             ) {
                 let result = (|| -> Result<()> {
                     match &envelope.command {
@@ -2625,7 +2627,7 @@ fn render_loop(
     }
     native.prepare([project.canvas.landscape, project.canvas.vertical])?;
     let origin = native.shared.origin;
-    let mut transport = Transport::new(project.production.sequences["main"].duration, now(origin))?
+    let mut transport = Transport::new(plan.sequences["main"].duration, now(origin))?
         .with_host_timebase(48000)?;
     transport.looping = true;
     if !preview {
@@ -2721,7 +2723,7 @@ fn render_loop(
                         take: next_take,
                     } => {
                         native.prepare([next.canvas.landscape, next.canvas.vertical])?;
-                        transport.duration = next.production.sequences["main"].duration;
+                        transport.duration = next_plan.sequences["main"].duration;
                         transport.seek(position, now(origin))?;
                         if playing {
                             transport.resume("operator", now(origin))?;
@@ -2790,7 +2792,7 @@ fn render_loop(
                         layout_blend=None;
                         reversible_layout = None;
                         visuals = next_visuals;
-                        transport.duration = next.production.sequences["main"].duration;
+                        transport.duration = next_plan.sequences["main"].duration;
                         let sequence_changed = project.production.sequences.get("main")
                             != next.production.sequences.get("main");
                         project = next;
@@ -2877,7 +2879,7 @@ fn render_loop(
                         project = next;
                         plan = next_plan;
                         revision = next_revision;
-                        transport.duration = project.production.sequences["main"].duration;
+                        transport.duration = plan.sequences["main"].duration;
                         samples.resize(plan.sequences["main"].tracks.len(), None);
                     }
                     RenderOp::Record(session, header) => {
