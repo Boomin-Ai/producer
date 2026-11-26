@@ -233,7 +233,7 @@ pub(super) fn trigger(s: &Studio) -> El {
     .size(26., 26.)
 }
 pub(super) fn guest_link(s: &mut Studio) {
-    panels::copy_link(s, crate::room_share::LinkKind::Guest);
+    panels::copy_link(s, crate::room_share::LinkKind::Guest, Some(PanelId::People), "guest-link");
 }
 
 pub(super) fn audience_live(s: &Studio) -> bool {
@@ -248,7 +248,7 @@ fn audience_controls(s: &Studio, mut controls: El) -> El {
     {
         controls = controls.child(
             button("audience-link", "Copy audience link", false, |s| {
-                panels::copy_link(s, crate::room_share::LinkKind::Audience);
+                panels::copy_link(s, crate::room_share::LinkKind::Audience, Some(PanelId::People), "audience-link");
             })
             .disabled(!audience_live(s)),
         );

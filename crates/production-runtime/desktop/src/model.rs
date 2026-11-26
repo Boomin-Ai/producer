@@ -759,6 +759,7 @@ impl RoomProject {
         Ok(())
     }
     pub fn validate(&self) -> Result<()> {
+        anyhow::ensure!(self.mfm_framing.values().flatten().all(|v| (100..=300).contains(v)), "Shot zoom must be 100–300%");
         self.validate_room()?;
         validate_document(&self.production)?;
         Ok(())

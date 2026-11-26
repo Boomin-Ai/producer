@@ -297,7 +297,7 @@ struct Studio {
     channels: channels::Channels,
     naming: bool,
     starter_images: Option<[rune::Image; Starter::ALL.len()]>,
-    pending_link: Option<crate::room_share::LinkKind>,
+    pending_link: Option<(crate::room_share::LinkKind, Option<PanelId>, String)>,
     activity: bool,
     switch_notice: Option<&'static str>,
     show_chat: bool,
@@ -507,8 +507,8 @@ impl Studio {
         accounts |= publish::poll(self) | network::poll(self) | self.set_library.poll();
         accounts |= people::poll_direct_invitation(self);
         if self.settings.account.is_some() {
-            if let Some(kind) = self.pending_link.take() {
-                panels::copy_link(self, kind);
+            if let Some((kind, panel, anchor)) = self.pending_link.take() {
+                panels::copy_link(self, kind, panel, &anchor);
                 accounts = true;
             }
         }

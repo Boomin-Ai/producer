@@ -28,7 +28,7 @@ pub(super) fn tool(id: &str, g: &str, label: &str, on: bool, act: impl Fn(&mut S
 pub(super) fn send_tool(id: &str, g: &str, label: &str, on: bool, c: RoomCommand) -> El {
     tool(id, g, label, on, move |s| s.send(c.clone()))
 }
-pub(super) fn copy_link(s: &mut Studio, kind: crate::room_share::LinkKind) {
+pub(super) fn copy_link(s: &mut Studio, kind: crate::room_share::LinkKind, panel: Option<PanelId>, anchor: &str) {
     let Some(live) = &s.live else { return };
     if matches!(kind, crate::room_share::LinkKind::Audience) && !super::people::audience_live(s) {
         return;
@@ -58,7 +58,7 @@ pub(super) fn copy_link(s: &mut Studio, kind: crate::room_share::LinkKind) {
         .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
         .is_some_and(|v| v["nativeAccount"] != true);
     if !legacy && s.settings.account.is_none() {
-        s.pending_link = Some(kind);
+        s.pending_link = Some((kind, panel, anchor.into()));
         s.activity = false;
         return;
     }
@@ -148,7 +148,7 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
             "link",
             "Copy studio link",
             false,
-            |s| copy_link(s, crate::room_share::LinkKind::Room),
+            |s| copy_link(s, crate::room_share::LinkKind::Room, None, "studio-link"),
         ))
         .child(super::channels::indicators(s, w))
         .child(tool("channels", "channels", "Open channels", false, |s| {
@@ -494,8 +494,10 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
     } else {
         completed
     };
-    if s.pending_link.is_some() {
-        let mut dialog = toolbar_dropdown("boomin-connect", "studio-link", rune::Align::End, 336.)
+    if let Some((_, panel, anchor)) = &s.pending_link {
+        let side = panel.map_or(rune::Side::Bottom, |id| dock_popover_side(ws.panels[&id].edge));
+        let mut dialog = col().key("boomin-connect").w(336.).radius(8.).fill(color(PANEL))
+            .anchored_fit(anchor.clone(), side, rune::Align::Start, 6.)
             .max_h(h - 64.).padding(8.).gap(5.)
             .modal(true, |s: &mut Studio| s.pending_link = None)
             .child(super::settings::account(s).scroll(Default::default()));
@@ -1050,11 +1052,11 @@ fn strip(s: &Studio, id: PanelId, edge: Edge) -> El {
         PanelId::Sources | PanelId::Scenes => return studio_list(snap, id, true),
         PanelId::Mixer => return super::mixer::channels(s, true),
         PanelId::People => {
-            r = r.child(button("Guest link","Invite a guest",false,super::people::guest_link))
+            r = r.child(button("guest-link","Invite a guest",false,super::people::guest_link))
                 .child(super::people::trigger(s));
             if super::people::audience_live(s) {
-                r = r.child(button("Audience link","Audience link",false,
-                    |s| copy_link(s,crate::room_share::LinkKind::Audience)));
+                r = r.child(button("audience-link","Audience link",false,
+                    |s| copy_link(s,crate::room_share::LinkKind::Audience,Some(PanelId::People),"audience-link")));
             }
         }
         PanelId::Controls => {
@@ -1452,29 +1454,26 @@ fn set_controls_header(snap: &Snapshot, key: &str, pair: &crate::model::SetLayou
             layout: (!on).then(|| layouts.clone()),
         });
     });
-    let mut header = col().key("set-controls-header").min_w(0.).gap(5.).child(heading);
-    header = if shelf {
-        header.child(status).child(action.self_start())
-    } else {
-        header.child(row().items_center().flex_wrap().gap(4.).child(status).child(el().grow(1.)).child(action))
+    let output = match snap.program_kind.as_str() {
+        "timeline" => "Timeline on output".into(),
+        "show" => "Show on output".into(),
+        "set" => project.mounted_set.as_deref().map(|id| format!("On output · {}", crate::model::set_label(id)))
+            .unwrap_or_else(|| "Studio scene on output".into()),
+        _ => "Studio scene on output".into(),
     };
-
-    if !on {
-        let output = match snap.program_kind.as_str() {
-            "timeline" => "Timeline on output".into(),
-            "show" => "Show on output".into(),
-            "set" => project.mounted_set.as_deref()
-                .map(|id| format!("On output · {}", crate::model::set_label(id)))
-                .unwrap_or_else(|| "Studio scene on output".into()),
-            _ => "Studio scene on output".into(),
-        };
-        header = header.child(title(output, 10., 500., MUTED));
-        if snap.program_kind == "set" && project.mounted_set.is_some() {
-            header = header.child(button("configure-output-set", "Configure set on output", false, |s| {
-                s.set_selection = None;
-            }).self_start());
-        }
+    let mut actions = row().items_center().h(24.).gap(3.);
+    if !on && snap.program_kind == "set" && project.mounted_set.is_some() {
+        actions = actions.child(tool("configure-output-set", "studio", "Configure set on output", false,
+            |s| s.set_selection = None).size(22., 22.).help(output.clone()));
     }
+    actions = actions.child(action);
+    let status = status.min_w(0.).h(16.).help(output);
+    let header = col().key("set-controls-header").min_w(0.).gap(5.).child(heading.h(23.));
+    let header = if shelf {
+        header.child(status).child(actions.self_start())
+    } else {
+        header.child(row().h(24.).items_center().gap(4.).child(status.grow(1.)).child(actions))
+    };
     header.child(el().key("set-header-divider").h(1.).w_full().fill(color(theme::SEAM)))
 }
 
@@ -1537,14 +1536,15 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 let active_shot = choices.iter().find(|choice| choice.pair == pair)
                     .map(|choice| if key == "my-first-million" && pair.landscape == "landscape" { "Two hosts" } else { &choice.label }).unwrap_or("");
                 let owner = key.clone();
-                let mut shots = col().min_w(0.).gap(4.).child(set_disclosure("set-shots-toggle", "Shots",
+                let mut shot_heading = row().items_center().h(27.).gap(3.).child(set_disclosure("set-shots-toggle", "Shots",
                     if shots_open { "" } else { active_shot }, shots_open, move |s| {
                         if shots_open { s.folded_shots.insert(owner.clone()); } else { s.folded_shots.remove(&owner); }
-                    }));
+                    }).grow(1.).min_w(0.));
                 if let Some((show, segment)) = p.playing_segment.clone().filter(|_| running && p.shot_override.is_some()) {
-                    shots = shots.child(command("follow-show-layout", "Follow rundown", false,
-                        RoomCommand::ShowLayout { show, segment, layout: None }));
+                    shot_heading = shot_heading.child(send_tool("follow-show-layout", "back", "Follow rundown", false,
+                        RoomCommand::ShowLayout { show, segment, layout: None }).size(23., 23.));
                 }
+                let mut shots = col().min_w(0.).gap(4.).child(shot_heading);
                 let shot_area = if shelf {
                     if has_show { end_width } else { center_width }
                 } else { width - 20. };
@@ -1605,8 +1605,8 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                         Some(Source::Live { role: Role::Guest }) => {
                             let copying = s.people.copying_invitation();
                             let mut invitation = col().gap(4.).child(button(
-                                repair_key, if copying { "Copying invitation…" } else { "Invite a guest…" }, false,
-                                |s| copy_link(s, crate::room_share::LinkKind::Guest))
+                                repair_key.clone(), if copying { "Copying invitation…" } else { "Invite a guest…" }, false,
+                                move |s| copy_link(s, crate::room_share::LinkKind::Guest, Some(PanelId::Controls), &repair_key))
                                 .disabled(s.people.busy()));
                             if let Some(feedback) = s.people.invitation_feedback(&snap.producer_rtc) {
                                 invitation = invitation.child(feedback);
