@@ -1272,6 +1272,78 @@ pub(super) fn clip_actions(s: &Studio) -> Option<El> {
                         ),
                 )
 }
+fn show_clock(seconds: f64) -> String {
+    let seconds = seconds.max(0.) as u64;
+    format!("{}:{:02}", seconds / 60, seconds % 60)
+}
+
+fn show_controller(s: &Studio, snap: &Snapshot, show_id: &str,
+    show: &producer_production_contract::Show, set: &producer_production_contract::Set) -> Option<El> {
+    let segments: Vec<_> = show.segments.iter().filter(|s| s.sequence.is_some()).collect();
+    let active = snap.program_kind == "show" && snap.project.playing_segment.as_ref()
+        .is_some_and(|(id, _)| id == show_id);
+    let index = snap.project.playing_segment.as_ref().filter(|_| active)
+        .and_then(|(_, id)| segments.iter().position(|part| &part.id == id)).unwrap_or(0);
+    let current = *segments.get(index)?;
+    let duration = snap.project.production.sequences.get(current.sequence.as_ref()?)?.duration.as_f64();
+    let elapsed = if active { snap.program_position.clamp(0., duration) } else { 0. };
+    let playing = active && snap.program_playing;
+    let finished = active && index + 1 == segments.len() && elapsed >= duration;
+    let expanded = s.expanded_rundown.as_deref() == Some(show_id);
+    let run = |i: usize, paused: bool| RoomCommand::RunSegment {
+        show: show_id.to_owned(), segment: segments[i].id.clone(), paused,
+    };
+    let play = if !active || finished { run(0, false) } else {
+        RoomCommand::ShowPlayback { show: show_id.to_owned(), segment: current.id.clone(), playing: !playing }
+    };
+    let toggle = if playing { ("pause", "Pause show") } else if active && !finished {
+        ("play", "Resume show")
+    } else { ("play", "Play show") };
+    let id = show_id.to_owned();
+    let mut header = row().key(format!("rundown-{show_id}")).role("button").focusable(true)
+        .label(format!("{} rundown · {}", if expanded { "Collapse" } else { "Expand" }, current.title))
+        .help(if expanded { "Hide other segments" } else { "Show all segments" })
+        .items_center().gap(7.).px(6.).h(46.).radius(6.).hover_fill(color(theme::SELECTED_HOVER));
+    if let Some(image) = s.set_library.shot_image(&show.set, set, &current.landscape, 53., 30.) {
+        header = header.child(image);
+    }
+    let status = if !active { "Ready" } else if finished { "Finished" } else if playing { "Playing" } else { "Paused" };
+    header = header.child(col().min_w(0.).grow(1.).gap(2.)
+        .child(title(format!("{}   ·   {} / {}", if active { status } else { "Rundown" }, index + 1, segments.len()), 10., 560., MUTED))
+        .child(title(current.title.clone(), 13., 650., TEXT)))
+        .child(glyph(if expanded { "chevron-up" } else { "chevron-down" }, 14., MUTED))
+        .on_press(move |s: &mut Studio| s.expanded_rundown = (!expanded).then(|| id.clone()));
+    let control = |name: &str, icon: &str, label: &str, accent: bool, command: RoomCommand, available: bool| {
+        send_tool(&format!("show-{show_id}-{name}"), icon, label, accent, command)
+            .size(30., 27.).opacity(if available { 1. } else { 0.32 }).disabled(!available)
+    };
+    let transport = row().items_center().gap(3.).px(6.).h(32.)
+        .child(control("previous", "previous", "Previous segment", false, run(index.saturating_sub(1), !playing), active && index > 0))
+        .child(control("play-pause", toggle.0, toggle.1, true, play, true))
+        .child(control("next", "next-track", "Next segment", false, run((index + 1).min(segments.len()-1), !playing), active && index + 1 < segments.len()))
+        .child(control("restart", "restart", "Restart show from the first segment", false, run(0, false), active))
+        .child(el().min_w(0.).grow(1.))
+        .child(title(show_clock(elapsed), 11., 650., TEXT).help(format!("{status} · {} of {}", show_clock(elapsed), show_clock(duration))));
+    let mut panel = col().gap(3.).py(4.).min_w(0.).radius(8.)
+        .border(1., color(theme::SLIDER_RAIL_COMPACT)).fill(color(SURFACE)).child(header).child(transport);
+    if expanded {
+        for (i, segment) in segments.iter().enumerate() {
+            let is_current = i == index;
+            let item = row().key(format!("run-{show_id}-{}", segment.id)).role("button").focusable(true)
+                .label(format!("{} · {}", if is_current && active { status } else { "Take" }, segment.title))
+                .items_center().gap(7.).px(8.).h(29.).radius(4.)
+                .fill(color(if is_current { theme::TOOL_SELECTED } else { SURFACE })).hover_fill(color(theme::SELECTED_HOVER))
+                .child(title(format!("{:02}", i + 1), 10., 550., MUTED))
+                .child(title(segment.title.clone(), 11., 600., if is_current { MINT } else { TEXT }).grow(1.).min_w(0.))
+                .child(if is_current && active { el().size(6.,6.).radius(3.).fill(color(MINT)) } else { glyph("play", 10., MUTED) });
+            let cmd = run(i, false);
+            panel = panel.child(item.on_press(move |s: &mut Studio| {
+                if !is_current || !active { s.send(cmd.clone()); }
+            }));
+        }
+    }
+    Some(panel)
+}
 fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
     let l = s.live.as_ref().unwrap();
     let snap = &l.snapshot;
@@ -1365,16 +1437,22 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                             });
                         }),
                 );
-                let has_rundown = p.production.shows.values().any(|show|
-                    &show.set == key && show.segments.iter().any(|s| s.sequence.is_some()));
-                if has_rundown {
-                    b = b.child(row().gap(4.).child(button("choose-rundown", "Rundown", !s.show_shots, |s| s.show_shots = false))
-                        .child(button("choose-shots", "Shots", s.show_shots, |s| s.show_shots = true)));
+                for (id, show) in p.production.shows.iter().filter(|(_, show)| &show.set == key) {
+                    if let Some(transport) = show_controller(s, snap, id, show, set) {
+                        b = b.child(transport);
+                    }
                 }
+                let mut shot_header = row().items_center().gap(6.).child(title("Shots", 12., 640., TEXT).grow(1.));
+                if let Some((show, segment)) = p.playing_segment.clone().filter(|_| running && p.shot_override.is_some()) {
+                    shot_header = shot_header.child(command("follow-show-layout", "Follow rundown", false,
+                        RoomCommand::ShowLayout { show, segment, layout: None }));
+                }
+                b = b.child(shot_header);
+                let columns = ((width - 14.) / 128.).floor().clamp(1., 4.);
+                let shot_width = ((width - 20. - (columns - 1.) * 5.) / columns).clamp(76., 230.);
                 let mut layouts = row().flex_wrap().gap(5.);
                 let slots = super::editor::layout_slots(p, set, &pair);
-                let shots = if !has_rundown || s.show_shots { p.set_layout_choices(key) } else { Vec::new() };
-                for layout in shots {
+                for layout in p.set_layout_choices(key) {
                     let k = key.clone();
                     let scene = p.active_scene.clone();
                     let chosen = layout.pair;
@@ -1384,14 +1462,15 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                         .iter().all(|(_, id)| slot_ready(snap, id));
                     let label = format!("{} · {}", layout.label, if ready { "Ready" } else { "Needs source" });
                     let label_text = if key == "my-first-million" && chosen.landscape == "landscape" { "Two hosts".into() } else { layout.label };
-                    let thumbnail = s.set_library.shot_image(key, set, &chosen.landscape, 62., 35.);
+                    let thumbnail = s.set_library.shot_image(key, set, &chosen.landscape, 40., 23.);
                     let mut item = row().key(format!("layout-{}", chosen.landscape))
                         .role("button").label(&label).help(&label).focusable(true)
-                        .gap(6.).px(6.).items_center().radius(6.)
+                        .gap(4.).px(4.).items_center().radius(5.)
+                        .border(1., color(if active { MINT } else { theme::SLIDER_RAIL_COMPACT }))
                         .fill(color(if active { theme::TOOL_SELECTED } else { SURFACE })).hover_fill(color(theme::SELECTED_HOVER));
                     if let Some(image) = thumbnail {
-                        item = item.w((width - 18.).clamp(110., 285.)).h(43.)
-                            .child(image).child(title(label_text, 12., 620., TEXT).grow(1.));
+                        item = item.w(shot_width).h(34.)
+                            .child(image).child(title(label_text, 11., 580., TEXT).grow(1.));
                     } else {
                         item = item.h(28.).child(title(label_text, 11., 550., if active { MINT } else { TEXT }));
                     }
@@ -1411,39 +1490,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                         },
                     ));
                 }
-                if !has_rundown || s.show_shots {
-                    b = b.child(layouts);
-                }
-                if let Some((show, segment)) = p.playing_segment.clone().filter(|_| running && p.shot_override.is_some()) {
-                    b = b.child(command("follow-show-layout", "Follow rundown shots", false,
-                        RoomCommand::ShowLayout { show, segment, layout: None }));
-                }
-                for (show_id, show) in p.production.shows.iter().filter(|(_, show)| !s.show_shots && &show.set == key
-                    && show.segments.iter().any(|s| s.sequence.is_some())) {
-                    let mut rundown = col().gap(4.);
-                    for segment in show.segments.iter().filter(|s| s.sequence.is_some()) {
-                        let id = segment.id.clone();
-                        let show = show_id.clone();
-                        let current = running && p.playing_segment.as_ref().is_some_and(|(key, part)| key == &show && part == &id);
-                        let label = if current { format!("On air · {}", segment.title) } else { format!("Take {}", segment.title) };
-                        let mut part = row().key(format!("run-{show}-{id}")).role("button").label(&label).help(&label)
-                            .focusable(true).h(44.).px(6.).gap(8.).items_center().radius(6.)
-                            .border(1., color(if current { MINT } else { theme::SLIDER_RAIL_COMPACT }))
-                            .fill(color(if current { theme::TOOL_SELECTED } else { SURFACE })).hover_fill(color(theme::SELECTED_HOVER));
-                        if let Some(image) = s.set_library.shot_image(key, set, &segment.landscape, 54., 31.) {
-                            part = part.child(image);
-                        }
-                        part = part.child(title(segment.title.clone(), 12., 640., TEXT).min_w(0.).grow(1.))
-                            .child(if current { title("On air", 10., 650., MINT) } else { glyph("play", 12., MUTED) });
-                        rundown = rundown.child(part.on_press(move |s: &mut Studio| {
-                            if !current {
-                                s.set_selection = None;
-                                s.send(RoomCommand::RunSegment { show: show.clone(), segment: id.clone() });
-                            }
-                        }));
-                    }
-                    b = b.child(rundown);
-                }
+                b = b.child(layouts);
                 let missing: std::collections::BTreeSet<_> = slots.iter()
                     .map(|(_, id)| id.clone()).filter(|id| !slot_ready(snap, id)).collect();
                 for id in missing {

@@ -58,7 +58,8 @@ pub enum RoomCommand {
     OperationOutcome { #[serde(rename="operationId")] operation_id:String },
     RevokePermission { permission:String, #[serde(rename="permissionEpoch")] permission_epoch:u64, #[serde(default,rename="operationId")] operation_id:Option<String> },
     GrantPermission { permission:String, #[serde(rename="permissionEpoch")] permission_epoch:u64 },
-    RunSegment { show: String, segment: String },
+    RunSegment { show: String, segment: String, #[serde(default)] paused: bool },
+    ShowPlayback { show: String, segment: String, playing: bool },
     ShowLayout { show: String, segment: String, layout: Option<SetLayoutPair> },
     SceneAdd,
     SceneRemove {
@@ -664,6 +665,7 @@ struct VideoDiagnostics {
 }
 #[derive(Clone, Default)]
 struct RenderStats {
+    finished_show_revision: Option<u64>,
     set_motion_playing: bool,
     set_motion_position: f64,
     input_status: std::collections::BTreeMap<String, InputStatus>,
@@ -1210,7 +1212,7 @@ fn apply(
         | RoomCommand::SceneAdd
         | RoomCommand::SceneSelect { .. }
         | RoomCommand::SetMount { .. }
-        | RoomCommand::RunSegment { .. } | RoomCommand::ShowLayout { .. }
+        | RoomCommand::RunSegment { .. } | RoomCommand::ShowLayout { .. } | RoomCommand::ShowPlayback { .. }
         | RoomCommand::SetMotion { .. }
         | RoomCommand::Play
         | RoomCommand::Pause
@@ -1817,6 +1819,7 @@ fn control(
     let mut last_fields=Default::default();
     let mut field_check=Instant::now();
     let mut preview_field_cache=crate::visuals::VisualCache::default();
+    let mut handled_show_end = None;
     let mut broadcast_poll=Instant::now();
     while !handle.closed.load(Ordering::Acquire) {
         if broadcast_poll.elapsed()>=Duration::from_millis(250){broadcast_poll=Instant::now();let media=handle.media.lock().unwrap().clone();if let Some(m)=media{m.broadcast.poll();}}
@@ -1841,7 +1844,25 @@ fn control(
         }
         let live=handle.program.lock().unwrap().clone();
         history.observe(&observed,rtc_staged,&live,state.program_revision)?;
-        let incoming = rx.recv_timeout(Duration::from_millis(50));
+        // A completed sequence belongs to one specific program revision. An old
+        // frame must never advance a segment that the operator has already cut.
+        let ended = render.stats.try_lock().ok().and_then(|stats| stats.finished_show_revision);
+        let boundary = ended.filter(|rev| state.program_kind == "show" && state.program_playing
+            && *rev == state.program_revision && Some(*rev) != handled_show_end);
+        let advance = boundary.and_then(|rev| {
+            let (show, current) = state.project.playing_segment.as_ref()?;
+            let mut segments = state.project.production.shows.get(show)?.segments.iter();
+            segments.find(|s| &s.id == current)?;
+            handled_show_end = Some(rev);
+            Some(match segments.find(|s| s.sequence.is_some()) {
+                Some(next) => RoomCommand::RunSegment { show: show.clone(), segment: next.id.clone(), paused: false },
+                None => RoomCommand::ShowPlayback { show: show.clone(), segment: current.clone(), playing: false },
+            })
+        });
+        let incoming = match advance {
+            Some(command) => Ok(Envelope { command, reply: None }),
+            None => rx.recv_timeout(Duration::from_millis(50)),
+        };
         if warmer.as_ref().is_some_and(|worker| worker.is_finished()) {
             if let Ok(cache) = warmer.take().unwrap().join() {
                 if warmed_set.as_ref() == Some(&live.scene) { visual_cache.merge_warmed(cache); }
@@ -2030,7 +2051,7 @@ fn control(
                     | RoomCommand::MarqueeReveal { .. }
                     | RoomCommand::Headline { .. }
                     | RoomCommand::SetMount { .. }
-                    | RoomCommand::RunSegment { .. } | RoomCommand::ShowLayout { .. }
+                    | RoomCommand::RunSegment { .. } | RoomCommand::ShowLayout { .. } | RoomCommand::ShowPlayback { .. }
             ) {
                 let result = (|| -> Result<()> {
                     match &envelope.command {
@@ -2082,6 +2103,13 @@ fn control(
                             state.program_revision = revision;
                             persist(&root, &state.project)?;
                         }
+                        RoomCommand::ShowPlayback { show, segment, playing } => {
+                            anyhow::ensure!(state.program_kind == "show" &&
+                                state.project.playing_segment.as_ref() == Some(&(show.clone(), segment.clone())),
+                                "The selected segment is no longer on output");
+                            render.request(if *playing { RenderOp::Play } else { RenderOp::Pause })?;
+                            state.program_playing = *playing;
+                        }
                         RoomCommand::ShowLayout { show, segment, layout } => {
                             anyhow::ensure!(state.program_kind == "show"
                                 && state.project.playing_segment.as_ref() == Some(&(show.clone(), segment.clone())),
@@ -2110,7 +2138,7 @@ fn control(
                                     let set=next.production.sets.get_mut(id).context("Missing set")?;
                                     crate::marquee::apply(set,text)?;
                                 }
-                                RoomCommand::RunSegment { show, segment } => next.enter_segment(show, segment)?,
+                                RoomCommand::RunSegment { show, segment, .. } => next.enter_segment(show, segment)?,
                                 RoomCommand::SetMount { id, layout } => {
                                     next.mount_set(id.clone(), layout.clone())?;
                                 }
@@ -2131,7 +2159,10 @@ fn control(
                             {
                                 render.switch_layout(live, revision, &mut visual_cache, &root)?;
                             } else {
-                                publish(&render, &root, live, 0., true, revision, &mut visual_cache)?;
+                                let playing = !matches!(envelope.command, RoomCommand::RunSegment { paused: true, .. });
+                                publish(&render, &root, live, 0., playing, revision, &mut visual_cache)?;
+                                state.program_position = 0.;
+                                state.program_playing = playing;
                             }
                             state.project = next;
                             state.program_kind = if state.project.playing_segment.is_some() { "show" } else if has_set { "set" } else { "room" }.into();
@@ -2559,7 +2590,7 @@ fn control(
         if observed["sessionId"]==state.producer_rtc["sessionId"] && state.producer_rtc["role"]=="host" {state.producer_rtc["stageTimeMs"]=history.elapsed_ms().into();}
         if peer.is_some() {if let Some(guest)=&observed_guest {state.producer_rtc["programAudio"]=guest.program_audio_vitals();}}
         (state.guest_audio_received, state.guest_video_received) = observed_guest.as_ref().map(|g| g.recent_media()).unwrap_or_default();
-        state.assistant_context["monitor"] = serde_json::json!({"previewing":state.previewing,"programKind":state.program_kind,"programRevision":state.program_revision,"commands":["monitor","sendToOutput","setMount","runSegment"],"policy":"Timeline play/seek/edit are preview-only. Only sendToOutput or setMount changes program. Recording always reads program."});
+        state.assistant_context["monitor"] = serde_json::json!({"previewing":state.previewing,"programKind":state.program_kind,"programRevision":state.program_revision,"commands":["monitor","sendToOutput","setMount","runSegment","showPlayback","showLayout"],"policy":"Timeline play/seek/edit target preview. Show playback controls the current program segment. Recording reads program."});
         *handle.snapshot.lock().unwrap() = state.clone();
     }
     // A window can close immediately after a dock edit. Save accepted workspace
@@ -2629,7 +2660,7 @@ fn render_loop(
     let origin = native.shared.origin;
     let mut transport = Transport::new(plan.sequences["main"].duration, now(origin))?
         .with_host_timebase(48000)?;
-    transport.looping = true;
+    transport.looping = !project.rendering_show;
     if !preview {
         transport.play(now(origin))?;
     }
@@ -2724,6 +2755,7 @@ fn render_loop(
                     } => {
                         native.prepare([next.canvas.landscape, next.canvas.vertical])?;
                         transport.duration = next_plan.sequences["main"].duration;
+                        transport.looping = !next.rendering_show;
                         transport.seek(position, now(origin))?;
                         if playing {
                             transport.resume("operator", now(origin))?;
@@ -2913,6 +2945,8 @@ fn render_loop(
         let host = platform::host_time();
         let position = transport.position(now(origin))?;
         state.position = position.as_f64();
+        state.finished_show_revision = (!preview && project.rendering_show && state.playing
+            && position == transport.duration).then_some(revision);
         let seq = &plan.sequences["main"];
         let source_times = [
             active_source_time(seq, "camera", position)?,
