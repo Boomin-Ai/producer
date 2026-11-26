@@ -4,7 +4,7 @@
 // published Sets are visibility-gated by the API. Other paths use static assets.
 
 const REPO = "Boomin-Ai/producer";
-const APPLE_SILICON_RELEASE = "native-silicon-0.4.97";
+const APPLE_SILICON_RELEASE = "native-silicon-0.5.0";
 
 const PLATFORMS = {
   "macos": [/aarch64.*\.dmg$/i],
