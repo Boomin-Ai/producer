@@ -182,7 +182,7 @@ pub(super) fn rows(s: &Studio, set: &str, pair: &SetLayoutPair, slots: &[Slot]) 
                 13.,
                 MUTED,
             ))
-            .on_press(move |s| {
+            .on_press(move |s: &mut Studio| {
                 s.slot_picker = if expanded {
                     None
                 } else {

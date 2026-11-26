@@ -851,7 +851,7 @@ impl RoomProject {
                     // Timing belongs to the authored role. The set supplies the input
                     // that occupies that role in this studio, including remote guests.
                     let bindings = crate::set_slots::bindings(&self.production.sets[&self.scene]);
-                    for player in &mut compiled.players {
+                    for player in &mut Arc::make_mut(&mut compiled).players {
                         let slot = match player.source.as_str() {
                             "camera" => "node/stage/shaan",
                             "camera-2" => "node/stage/sam",
