@@ -1,5 +1,7 @@
 //! Two isolated microphones at the mixer's 48 kHz, ten-millisecond cadence.
 //! This detector runs before music, inserts, or the other microphone are mixed.
+use webrtc_vad::{SampleRate, Vad, VadMode};
+
 #[derive(Clone, Copy, Default)]
 struct SpeechBand {
     previous: f32,
@@ -23,6 +25,7 @@ impl SpeechBand {
 
 pub struct Director {
     bands: [SpeechBand; 2],
+    vad: [Vad; 2],
     floor: [f32; 2],
     envelope: [f32; 2],
     candidate: Option<usize>,
@@ -36,6 +39,9 @@ impl Default for Director {
     fn default() -> Self {
         Self {
             bands: [SpeechBand::default(); 2],
+            vad: std::array::from_fn(|_| {
+                Vad::new_with_rate_and_mode(SampleRate::Rate48kHz, VadMode::Aggressive)
+            }),
             floor: [0.0025; 2],
             envelope: [0.; 2],
             candidate: None,
@@ -47,12 +53,39 @@ impl Default for Director {
     }
 }
 impl Director {
+    pub fn reset(&mut self) {
+        for vad in &mut self.vad {
+            vad.reset();
+            vad.set_sample_rate(SampleRate::Rate48kHz);
+            vad.set_mode(VadMode::Aggressive);
+        }
+        self.bands = [SpeechBand::default(); 2];
+        self.floor = [0.0025; 2];
+        self.envelope = [0.; 2];
+        self.candidate = None;
+        self.selected = None;
+        self.consecutive = 0;
+        self.dwell = 0;
+        self.quiet = 0;
+    }
+
     pub fn input(&mut self, index: usize, pcm: &[f32], gain: f32) -> f32 {
-        if gain <= 0. {
-            self.bands[index] = SpeechBand::default();
+        let mut mono = [0i16; 480];
+        if pcm.len() != mono.len() * 2 {
             return 0.;
         }
-        self.bands[index].level(pcm)
+        if gain > 0. {
+            for (sample, frame) in mono.iter_mut().zip(pcm.chunks_exact(2)) {
+                *sample = ((0.5 * (frame[0] + frame[1])).clamp(-1., 1.) * 32767.) as i16;
+            }
+        }
+        let voice = self.vad[index].is_voice_segment(&mono).unwrap_or(false);
+        let level = self.bands[index].level(pcm);
+        if voice && gain > 0. {
+            level
+        } else {
+            0.
+        }
     }
     pub fn observe(&mut self, levels: [f32; 2]) {
         let mut speech = [0.; 2];
@@ -87,7 +120,13 @@ impl Director {
             self.candidate = candidate;
         }
         if let Some(host) = candidate {
-            self.consecutive = self.consecutive.saturating_add(1);
+            // Release smoothing carries a syllable across small gaps, but its
+            // tail is not new evidence. A single click must never earn a cut.
+            if levels[host] > (self.floor[host] * 2.4 + 0.003).max(0.008) {
+                self.consecutive = self.consecutive.saturating_add(1);
+            } else {
+                self.consecutive = self.consecutive.saturating_sub(1);
+            }
             let attack = if self.selected.is_some() { 38 } else { 26 };
             if self.selected != Some(host) && self.dwell == 0 && self.consecutive >= attack {
                 self.selected = Some(host);

@@ -10,6 +10,7 @@ build = "build.rs"
 [workspace]
 
 [dependencies]
+webrtc-vad = "=0.4.0"
 rune = { git = "https://github.com/anomalyco/rune", rev = "5d70a78dcaa141ee9e33f100caa79d86e7553754", default-features = false, features = ["metal-backend", "embedded-fonts", "native-file-dialog"] }
 thiserror = "2"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

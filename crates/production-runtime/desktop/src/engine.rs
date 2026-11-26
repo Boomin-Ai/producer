@@ -3076,7 +3076,7 @@ fn render_loop(
         let direct = eligible && state.playing;
         let current_director = eligible.then_some(revision);
         if director_revision != current_director {
-            director = crate::host_director::Director::default();
+            director.reset();
             director_revision = current_director;
         }
         let measure_speakers = !preview && visuals.at(position).has_speaker_split();

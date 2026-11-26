@@ -1419,7 +1419,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 let set = &p.production.sets[key];
                 let running = snap.program_kind == "show" && p.mounted_set.as_ref() == Some(key);
                 let pair = if running || (snap.active_host_shot.is_some() && p.mounted_set.as_ref() == Some(key)) { snap.program_layout.clone().unwrap_or(pair) } else { pair };
-                let on = running || (snap.program_kind == "set" && l.handle.is_set_on_output(key, &pair, set));
+                let on = running || (snap.program_kind == "set" && (l.handle.is_set_on_output(key, &pair, set) || (snap.active_host_shot.is_some() && p.mounted_set.as_ref() == Some(key))));
                 let badge = el()
                     .self_start()
                     .px(6.)
@@ -1520,6 +1520,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                     let chosen = layout.pair;
                     let show_segment = p.playing_segment.clone().filter(|_| running);
                     let active = chosen == pair;
+                    let snap_directed = snap.active_host_shot.is_some();
                     let ready = super::editor::layout_slots(p, set, &chosen)
                         .iter().all(|(_, id)| slot_ready(snap, id));
                     let label = format!("{} · {}", layout.label, if ready { "Ready" } else { "Needs source" });
@@ -1540,7 +1541,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                         .on_press(move |s: &mut Studio| {
                             if let Some((show, segment)) = &show_segment {
                                 s.send(RoomCommand::ShowLayout { show: show.clone(), segment: segment.clone(), layout: Some(chosen.clone()) });
-                            } else if !active {
+                            } else if !active || snap_directed {
                                 s.set_selection = Some((scene.clone(), k.clone(), chosen.clone()));
                                 if on {
                                     s.send(RoomCommand::SetMount {
