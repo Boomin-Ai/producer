@@ -884,8 +884,12 @@ mod tests {
         assert!((d.uv[2] - 0.31640625).abs() < 0.0001);
     }
     #[test]
-    fn native_draw_abi_is_sixteen_byte_sized() {
-        assert_eq!(std::mem::size_of::<Draw>(), 164);
+    fn draw_matches_native_shader_prefix_and_compositor_stride() {
+        use std::mem::{offset_of, size_of};
+        assert_eq!(offset_of!(Draw, clip_grade), 144);
+        assert_eq!(offset_of!(Draw, opacity), 160);
+        assert_eq!(offset_of!(Draw, group), 176);
+        assert_eq!(size_of::<Draw>(), 180);
     }
 }
 
