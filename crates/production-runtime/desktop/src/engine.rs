@@ -59,6 +59,7 @@ pub enum RoomCommand {
     RevokePermission { permission:String, #[serde(rename="permissionEpoch")] permission_epoch:u64, #[serde(default,rename="operationId")] operation_id:Option<String> },
     GrantPermission { permission:String, #[serde(rename="permissionEpoch")] permission_epoch:u64 },
     RunSegment { show: String, segment: String },
+    ShowLayout { show: String, segment: String, layout: Option<SetLayoutPair> },
     SceneAdd,
     SceneRemove {
         id: String,
@@ -239,6 +240,10 @@ pub struct Snapshot {
     pub revision: u64,
     pub previewing: bool,
     pub program_position: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub program_segment: Option<(String, String)>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub program_layout: Option<SetLayoutPair>,
     pub program_playing: bool,
     pub set_motion_playing: bool,
     pub set_motion_position: f64,
@@ -685,6 +690,8 @@ impl RenderStats {
     fn merge(&self, s: &mut Snapshot) {
         s.input_status = self.input_status.clone();
         s.program_position = self.position;
+        s.program_segment = s.project.playing_segment.clone().filter(|_| s.program_kind == "show");
+        s.program_layout = s.program_segment.as_ref().and_then(|_| s.project.show_layout_at(self.position));
         s.program_playing = self.playing;
         s.set_motion_playing = self.set_motion_playing;
         s.set_motion_position = self.set_motion_position;
@@ -971,6 +978,8 @@ pub(crate) fn initial_room(root: &Path) -> Result<(Arc<Handle>,Receiver<Envelope
         revision: 1,
         previewing: false,
         program_position: 0.,
+        program_segment: None,
+        program_layout: None,
         program_playing: true,
         set_motion_playing: true,
         set_motion_position: 0.,
@@ -2070,6 +2079,20 @@ fn control(
                             state.revision += 1;
                             state.program_revision = revision;
                             persist(&root, &state.project)?;
+                        }
+                        RoomCommand::ShowLayout { show, segment, layout } => {
+                            anyhow::ensure!(state.program_kind == "show"
+                                && state.project.playing_segment.as_ref() == Some(&(show.clone(), segment.clone())),
+                                "The selected segment is no longer on output");
+                            let mut next = state.project.clone();
+                            let set = &next.production.sets[&next.scene];
+                            anyhow::ensure!(layout.as_ref().is_none_or(|pair| pair.exists_in(set)),
+                                "Unknown shot for this set");
+                            next.shot_override = layout.clone();
+                            let revision = state.program_revision + 1;
+                            render.switch_layout(next.live_set()?, revision, &mut visual_cache, &root)?;
+                            state.project = next;
+                            state.program_revision = revision;
                         }
                         RoomCommand::RunSegment { .. }
                         | RoomCommand::MarqueeReveal { .. }

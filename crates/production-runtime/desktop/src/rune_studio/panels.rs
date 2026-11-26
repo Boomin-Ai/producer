@@ -1284,7 +1284,9 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
             if let Some((selected, pair)) = super::editor::selection(s, p) {
                 let key = &selected;
                 let set = &p.production.sets[key];
-                let on = snap.program_kind == "set" && l.handle.is_set_on_output(key, &pair, set);
+                let running = snap.program_kind == "show" && p.mounted_set.as_ref() == Some(key);
+                let pair = if running { p.show_layout_at(snap.program_position).unwrap_or(pair) } else { pair };
+                let on = running || (snap.program_kind == "set" && l.handle.is_set_on_output(key, &pair, set));
                 let badge = el()
                     .self_start()
                     .px(6.)
@@ -1369,6 +1371,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                     let k = key.clone();
                     let scene = p.active_scene.clone();
                     let chosen = layout.pair;
+                    let show_segment = p.playing_segment.clone().filter(|_| running);
                     let active = chosen == pair;
                     let ready = super::editor::layout_slots(p, set, &chosen)
                         .iter().all(|(_, id)| slot_ready(snap, id));
@@ -1380,7 +1383,9 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                         .child(el().size(6.,6.).radius(3.).fill(color(if ready { MINT } else { 0xe9b666 })))
                         .child(title(layout.label, 11., 550., if active { MINT } else { TEXT }))
                         .on_press(move |s: &mut Studio| {
-                            if !active {
+                            if let Some((show, segment)) = &show_segment {
+                                s.send(RoomCommand::ShowLayout { show: show.clone(), segment: segment.clone(), layout: Some(chosen.clone()) });
+                            } else if !active {
                                 s.set_selection = Some((scene.clone(), k.clone(), chosen.clone()));
                                 if on {
                                     s.send(RoomCommand::SetMount {
@@ -1395,14 +1400,24 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 b = b
                     .child(layouts)
                     .child(el().h(1.).w_full().fill(color(0x263443)));
+                if let Some((show, segment)) = p.playing_segment.clone().filter(|_| running && p.shot_override.is_some()) {
+                    b = b.child(command("follow-show-layout", "Follow rundown shots", false,
+                        RoomCommand::ShowLayout { show, segment, layout: None }));
+                }
                 for (show_id, show) in p.production.shows.iter().filter(|(_, show)| &show.set == key
-                    && show.segments.iter().any(|s| !s.layout_changes.is_empty())) {
+                    && show.segments.iter().any(|s| s.sequence.is_some())) {
                     b = b.child(title(format!("Show · {}", crate::model::set_label(show_id)), 12., 600., TEXT));
                     for segment in show.segments.iter().filter(|s| s.sequence.is_some()) {
                         let id = segment.id.clone();
                         let show = show_id.clone();
-                        b = b.child(button(format!("run-{show}-{id}"), format!("Play {}", segment.title),
-                            false, move |s| s.send(RoomCommand::RunSegment { show: show.clone(), segment: id.clone() })));
+                        let current = running && p.playing_segment.as_ref().is_some_and(|(key, part)| key == &show && part == &id);
+                        let label = if current { format!("On air · {}", segment.title) } else { segment.title.clone() };
+                        b = b.child(button(format!("run-{show}-{id}"), label, current, move |s| {
+                            if !current {
+                                s.set_selection = None;
+                                s.send(RoomCommand::RunSegment { show: show.clone(), segment: id.clone() });
+                            }
+                        }));
                     }
                 }
                 let missing: std::collections::BTreeSet<_> = slots.iter()

@@ -37,7 +37,7 @@ impl VisualCache {
 
     fn prepare_layout(&mut self, project: &RoomProject, plan: &Plan, follow_segment: bool) -> Result<Arc<Visuals>> {
         let pair = project.output_layout_pair();
-        let schedule = if follow_segment && project.rendering_show {
+        let schedule = if follow_segment && project.rendering_show && project.shot_override.is_none() {
             project.active_segment()?.filter(|s| !s.layout_changes.is_empty())
         } else { None };
         // Editorial cuts and panel changes do not invalidate static text or
@@ -357,7 +357,8 @@ impl Visuals {
                 if let Some(text) = &n.text {
                     // The current adapter has one explicit portable system-font
                     // asset. Other fonts must gain a real loader, never silently substitute.
-                    if n.font.as_deref() != Some(&"0".repeat(64)) {
+                    const SYSTEM_UI_DESCRIPTOR: &str = "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530";
+                    if !n.font.as_deref().is_some_and(|hash| hash == SYSTEM_UI_DESCRIPTOR || hash == "0000000000000000000000000000000000000000000000000000000000000000") {
                         bail!("Native text requires the qualified system-font asset");
                     }
                     let (w, h) = (n.frame.width.ceil() as u32, n.frame.height.ceil() as u32);

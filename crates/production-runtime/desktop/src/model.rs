@@ -93,7 +93,7 @@ impl Default for SetLayoutPair {
 }
 
 impl SetLayoutPair {
-    fn exists_in(&self, set: &Set) -> bool {
+    pub(crate) fn exists_in(&self, set: &Set) -> bool {
         set.layouts.get(&self.landscape).is_some_and(|layout| layout.orientation == Orientation::Landscape)
             && set.layouts.get(&self.vertical).is_some_and(|layout| layout.orientation == Orientation::Vertical)
     }
@@ -164,6 +164,8 @@ pub struct RoomProject {
     /// never restarts an editorial segment merely because its set is mounted.
     #[serde(skip)]
     pub playing_segment: Option<(String, String)>,
+    #[serde(skip)]
+    pub shot_override: Option<SetLayoutPair>,
     #[serde(skip)]
     pub rendering_show: bool,
     #[serde(default)]
@@ -483,6 +485,7 @@ impl RoomProject {
         );
         Self {
             playing_segment: None,
+            shot_override: None,
             rendering_show: false,
             mounted_set: default_mounted_set(),
             mounted_layout: None,
@@ -791,6 +794,14 @@ impl RoomProject {
         let show = self.production.shows.get(show_id).context("Show unavailable")?;
         anyhow::ensure!(show.set == self.scene, "Show and mounted set differ");
         Ok(Some(show.segments.iter().find(|s| &s.id == segment_id).context("Segment unavailable")?))
+    }
+
+    pub fn show_layout_at(&self, seconds: f64) -> Option<SetLayoutPair> {
+        let segment = self.active_segment().ok()??;
+        if let Some(pair) = &self.shot_override { return Some(pair.clone()); }
+        let time = Time::new((seconds * 1_000_000.).round() as i64, 1_000_000).ok()?;
+        let (landscape, vertical) = segment.layouts_at(time);
+        Some(SetLayoutPair { landscape: landscape.into(), vertical: vertical.into() })
     }
 
     pub fn enter_segment(&mut self, show_id: &str, segment_id: &str) -> Result<()> {
@@ -1197,6 +1208,7 @@ impl RoomProject {
         let layout = scene.mounted_layout.clone();
         self.remember_scene_set();
         self.playing_segment = None;
+        self.shot_override = None;
         self.active_scene = id.into();
         self.mounted_set = mounted;
         self.mounted_layout = layout;
@@ -1213,7 +1225,7 @@ impl RoomProject {
     pub fn draft_layout_choices(&self,id:&str,set:&Set)->Vec<SetLayoutChoice>{
         let mut named = Vec::new();
         for show in self.production.shows.values().filter(|show| show.set == id) {
-            for segment in &show.segments {
+            for segment in show.segments.iter().filter(|s| s.sequence.is_none()) {
                 let pair = SetLayoutPair {
                     landscape: segment.landscape.clone(),
                     vertical: segment.vertical.clone(),
@@ -1271,6 +1283,7 @@ impl RoomProject {
             None
         };
         self.playing_segment = None;
+        self.shot_override = None;
         self.mounted_set = id;
         self.mounted_layout = selected;
         self.remember_scene_set();
@@ -1307,6 +1320,9 @@ impl RoomProject {
             next.scene = "room-scene".into();
         }
         if next.active_segment()?.is_some() {
+            if let Some(pair) = &next.shot_override {
+                next.mounted_layout = Some(pair.clone());
+            }
             next.rendering_show = true;
             return Ok(next);
         }

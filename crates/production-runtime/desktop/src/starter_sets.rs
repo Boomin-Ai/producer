@@ -32,7 +32,7 @@ const LEGACY_RECEIPT: &str = "starter-sets-v1.installed";
 const SPEAKER_RECEIPT: &str = "starter-sets-v2.installed";
 const CLASSIC_RECEIPT: &str = "starter-sets-v4.installed";
 const MFM_RECEIPT: &str = "starter-sets-v5.installed";
-const RECEIPT: &str = "starter-sets-v6.installed";
+const RECEIPT: &str = "starter-sets-v7.installed";
 const RETIRED: [&str; 4] = ["studio", "waves", "podcast", "podcast-studio"];
 const CLASSIC_SKYLINE_HASH: &str = "ab06936944a63d57755ab8f1cc3ee96abaa2ee7a7902efc4d64ae8bc329f4c46";
 const CLASSIC_SKYLINE: &[u8] = include_bytes!("../starter-sets/classic-skyline.png");
@@ -180,7 +180,7 @@ fn add_mfm_focus_shots(room: &mut RoomProject) -> Result<()> {
     let (Some(set), Some(show)) = (doc.sets.get_mut(id), doc.shows.get_mut(id)) else {
         return Ok(());
     };
-    if show.set != id {
+    if show.set != id || show.segments.iter().any(|s| s.sequence.is_some()) {
         return Ok(());
     }
     let stock: crate::studio_presets::AuthoredStudio =
@@ -198,6 +198,45 @@ fn add_mfm_focus_shots(room: &mut RoomProject) -> Result<()> {
         show.segments.insert(position, shot);
         position += 1;
     }
+    Ok(())
+}
+
+// Merge the bundled protocol document once. An edited studio keeps its own
+// definitions. A removed starter set stays removed.
+fn install_mfm_rundown(room: &mut RoomProject) -> Result<()> {
+    const ID: &str = "my-first-million";
+    let authored: producer_production_contract::Document = serde_json::from_slice(
+        include_bytes!("../../../../protocol/v1/my-first-million/production.json"),
+    )?;
+    let legacy: crate::studio_presets::AuthoredStudio =
+        serde_json::from_slice(include_bytes!("../starter-sets/my-first-million.json"))?;
+    let doc = &mut *room.production;
+    let Some(set) = doc.sets.get(ID) else { return Ok(()) };
+    let Some(existing) = doc.shows.get(ID) else { return Ok(()) };
+    let show = &authored.shows[ID];
+    let show_key = if existing == &legacy.show || existing == show {
+        ID
+    } else {
+        "my-first-million-rundown"
+    };
+    if (show_key != ID && doc.shows.contains_key(show_key))
+        || authored.sets[ID].layouts.keys().any(|key| !set.layouts.contains_key(key))
+        || authored.sequences.iter().any(|(k, v)| doc.sequences.get(k).is_some_and(|s| s != v))
+        || authored.assets.iter().any(|(k, v)| doc.assets.get(k).is_some_and(|a| a != v))
+        || authored.sources.iter().any(|(k, v)| doc.sources.get(k).is_some_and(|s| s != v))
+    {
+        return Ok(());
+    }
+    let upgraded = if set == &legacy.set || set == &legacy.set.with_output_graphs() {
+        authored.sets[ID].clone()
+    } else {
+        set.clone().with_output_graphs()
+    };
+    doc.sets.insert(ID.into(), upgraded);
+    doc.shows.insert(show_key.into(), show.clone());
+    doc.sequences.extend(authored.sequences);
+    doc.assets.extend(authored.assets);
+    doc.sources.extend(authored.sources);
     Ok(())
 }
 
@@ -261,6 +300,7 @@ pub(crate) fn install(root: &Path) -> Result<()> {
     } else {
         install_my_first_million(&mut room, &assets)?;
     }
+    install_mfm_rundown(&mut room)?;
     room.compile()?;
     ensure!(format!("{:x}", Sha256::digest(CLASSIC_SKYLINE)) == CLASSIC_SKYLINE_HASH, "Invalid Classic skyline");
     write_missing(&assets.join(format!("{CLASSIC_SKYLINE_HASH}.png")), CLASSIC_SKYLINE)?;
@@ -288,7 +328,7 @@ pub(crate) fn install(root: &Path) -> Result<()> {
     write_missing(&root.join(SPEAKER_RECEIPT), b"2\n")?;
     write_missing(&root.join(CLASSIC_RECEIPT), b"4\n")?;
     write_missing(&root.join(MFM_RECEIPT), b"5\n")?;
-    write_missing(&root.join(RECEIPT), b"6\n")
+    write_missing(&root.join(RECEIPT), b"7\n")
 }
 #[cfg(test)]
 mod tests {
@@ -300,6 +340,10 @@ mod tests {
         install(root).unwrap();
         let mut room: RoomProject = serde_json::from_slice(&fs::read(root.join("room.json")).unwrap()).unwrap();
         let id = "my-first-million";
+        let old: crate::studio_presets::AuthoredStudio =
+            serde_json::from_slice(include_bytes!("../starter-sets/my-first-million.json")).unwrap();
+        room.production.sets.insert(id.into(), old.set);
+        room.production.shows.insert(id.into(), old.show);
         let show = room.production.shows.get_mut(id).unwrap();
         show.segments.retain(|s| !s.id.starts_with("focus-"));
         show.segments[0].title = "Custom conversation".into();
@@ -308,6 +352,7 @@ mod tests {
         fs::remove_file(root.join(RECEIPT)).unwrap();
         install(root).unwrap();
         let updated: RoomProject = serde_json::from_slice(&fs::read(root.join("room.json")).unwrap()).unwrap();
+        assert!(updated.production.shows.contains_key("my-first-million-rundown"));
         assert_eq!(updated.mounted_set, room.mounted_set);
         assert_eq!(updated.production.shows[id].segments[0].title, "Custom conversation");
         for (i, host, expected) in [(1, "focus-shaan", "camera"), (2, "focus-sam", "camera-2")] {
@@ -364,7 +409,14 @@ mod tests {
         assert!(!saved.production.sets.contains_key("waves"));
         assert_eq!(saved.mounted_set.as_deref(), Some("classic"));
         assert_eq!(saved.production.sets.len(), 8);
-        assert!(saved.set_layout_choices("my-first-million").len() == 6);
+        assert_eq!(saved.set_layout_choices("my-first-million").len(), 6);
+        let mut show = saved.clone();
+        for id in ["opening", "conversation", "guest-interview", "breakdown", "takeaway"] {
+            show.enter_segment("my-first-million", id).unwrap();
+            let program = show.live_set().unwrap();
+            assert!(program.rendering_show);
+            program.compile().unwrap();
+        }
         assert_eq!(saved.set_layout_choices(crate::speaker_split::ID).len(), 1);
         assert!(saved.set_layout_choices("the-producer").len() >= 3);
         for (id, set) in &saved.production.sets {

@@ -1,0 +1,5854 @@
+{
+  "schema": "producer.production/1",
+  "id": "my-first-million",
+  "title": "My First Million",
+  "assets": {
+    "my-first-million-logo": {
+      "kind": "image",
+      "hash": "af872ad05a446f6d8661648ad6002e97e7771889bf7538b93af881645cdc55a4"
+    },
+    "my-first-million-sam": {
+      "kind": "image",
+      "hash": "fc460ea4ea73815d72fce4e5c2c3215e7827378cc4d768fbbdf3f6400f696b29"
+    },
+    "my-first-million-shaan": {
+      "kind": "image",
+      "hash": "9c815096c2fd896c5a591593ca70aa5226229171e816bf7a6b73f44622d5c9b5"
+    },
+    "system-ui": {
+      "kind": "font",
+      "hash": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530"
+    }
+  },
+  "sources": {
+    "camera": {
+      "kind": "live",
+      "role": "hostCamera"
+    },
+    "camera-2": {
+      "kind": "live",
+      "role": "hostCamera"
+    },
+    "screen": {
+      "kind": "live",
+      "role": "screen"
+    },
+    "microphone": {
+      "kind": "live",
+      "role": "microphone"
+    },
+    "rtc-guest": {
+      "kind": "live",
+      "role": "guest"
+    }
+  },
+  "sets": {
+    "my-first-million": {
+      "canvasFit": "contain",
+      "layoutTransitionMs": 240,
+      "layouts": {
+        "landscape": {
+          "orientation": "landscape",
+          "width": 1280,
+          "height": 720,
+          "root": {
+            "id": "stage",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "width": 1280,
+              "height": 720
+            },
+            "content": {
+              "kind": "group"
+            },
+            "style": {
+              "fill": {
+                "kind": "solid",
+                "ink": {
+                  "color": "#171716",
+                  "opacity": 1
+                }
+              }
+            },
+            "children": [
+              {
+                "id": "masthead",
+                "frame": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1280,
+                  "height": 96
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "logo",
+                "frame": {
+                  "x": 26,
+                  "y": 17,
+                  "width": 222,
+                  "height": 60
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-logo",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "masthead-rule",
+                "frame": {
+                  "x": 275,
+                  "y": 17,
+                  "width": 2,
+                  "height": 62
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#DCD4BD",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "episode-topic",
+                "frame": {
+                  "x": 302,
+                  "y": 27,
+                  "width": 954,
+                  "height": 54
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "What would you build with $1,000?"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 36,
+                    "weight": 790,
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-episode-topic"
+                  }
+                }
+              },
+              {
+                "id": "shaan-backdrop",
+                "frame": {
+                  "x": 22,
+                  "y": 114,
+                  "width": 610,
+                  "height": 479
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-portrait",
+                "frame": {
+                  "x": 22,
+                  "y": 114,
+                  "width": 610,
+                  "height": 479
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-shaan",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "shaan",
+                "frame": {
+                  "x": 22,
+                  "y": 114,
+                  "width": 610,
+                  "height": 479
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "shaan-nameplate",
+                "frame": {
+                  "x": 22,
+                  "y": 593,
+                  "width": 610,
+                  "height": 59
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-accent",
+                "frame": {
+                  "x": 36,
+                  "y": 607,
+                  "width": 4,
+                  "height": 29
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-name",
+                "frame": {
+                  "x": 51,
+                  "y": 599,
+                  "width": 571,
+                  "height": 51
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Shaan Puri"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 31,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-shaan-name"
+                  }
+                }
+              },
+              {
+                "id": "sam-backdrop",
+                "frame": {
+                  "x": 648,
+                  "y": 114,
+                  "width": 610,
+                  "height": 479
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-portrait",
+                "frame": {
+                  "x": 648,
+                  "y": 114,
+                  "width": 610,
+                  "height": 479
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-sam",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "sam",
+                "frame": {
+                  "x": 648,
+                  "y": 114,
+                  "width": 610,
+                  "height": 479
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera-2",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "sam-nameplate",
+                "frame": {
+                  "x": 648,
+                  "y": 593,
+                  "width": 610,
+                  "height": 59
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-accent",
+                "frame": {
+                  "x": 662,
+                  "y": 607,
+                  "width": 4,
+                  "height": 29
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-name",
+                "frame": {
+                  "x": 677,
+                  "y": 599,
+                  "width": 571,
+                  "height": 51
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Sam Parr"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 31,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-sam-name"
+                  }
+                }
+              },
+              {
+                "id": "footer-rule",
+                "frame": {
+                  "x": 24,
+                  "y": 671,
+                  "width": 1232,
+                  "height": 1
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#4A473F",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "follow-label",
+                "frame": {
+                  "x": 24,
+                  "y": 684,
+                  "width": 260,
+                  "height": 32
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Follow the show"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 18,
+                    "weight": 630,
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-follow-label"
+                  }
+                }
+              },
+              {
+                "id": "follow-destination",
+                "frame": {
+                  "x": 926,
+                  "y": 684,
+                  "width": 330,
+                  "height": 32
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "mfmpod.com"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 18,
+                    "weight": 720,
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    },
+                    "align": "right",
+                    "field": "mfm-follow-destination"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "vertical": {
+          "orientation": "vertical",
+          "width": 720,
+          "height": 1280,
+          "root": {
+            "id": "stage",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "width": 720,
+              "height": 1280
+            },
+            "content": {
+              "kind": "group"
+            },
+            "style": {
+              "fill": {
+                "kind": "solid",
+                "ink": {
+                  "color": "#171716",
+                  "opacity": 1
+                }
+              }
+            },
+            "children": [
+              {
+                "id": "masthead",
+                "frame": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 720,
+                  "height": 184
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "logo",
+                "frame": {
+                  "x": 28,
+                  "y": 20,
+                  "width": 222,
+                  "height": 60
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-logo",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "masthead-rule",
+                "frame": {
+                  "x": 28,
+                  "y": 94,
+                  "width": 664,
+                  "height": 2
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#DCD4BD",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "episode-topic",
+                "frame": {
+                  "x": 28,
+                  "y": 112,
+                  "width": 664,
+                  "height": 60
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "What would you build with $1,000?"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 35,
+                    "weight": 790,
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-episode-topic"
+                  }
+                }
+              },
+              {
+                "id": "shaan-backdrop",
+                "frame": {
+                  "x": 22,
+                  "y": 204,
+                  "width": 676,
+                  "height": 422
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-portrait",
+                "frame": {
+                  "x": 22,
+                  "y": 204,
+                  "width": 676,
+                  "height": 422
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-shaan",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "shaan",
+                "frame": {
+                  "x": 22,
+                  "y": 204,
+                  "width": 676,
+                  "height": 422
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "shaan-nameplate",
+                "frame": {
+                  "x": 22,
+                  "y": 626,
+                  "width": 676,
+                  "height": 59
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-accent",
+                "frame": {
+                  "x": 36,
+                  "y": 640,
+                  "width": 4,
+                  "height": 29
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-name",
+                "frame": {
+                  "x": 51,
+                  "y": 632,
+                  "width": 637,
+                  "height": 51
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Shaan Puri"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 31,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-shaan-name"
+                  }
+                }
+              },
+              {
+                "id": "sam-backdrop",
+                "frame": {
+                  "x": 22,
+                  "y": 699,
+                  "width": 676,
+                  "height": 422
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-portrait",
+                "frame": {
+                  "x": 22,
+                  "y": 699,
+                  "width": 676,
+                  "height": 422
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-sam",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "sam",
+                "frame": {
+                  "x": 22,
+                  "y": 699,
+                  "width": 676,
+                  "height": 422
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera-2",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "sam-nameplate",
+                "frame": {
+                  "x": 22,
+                  "y": 1121,
+                  "width": 676,
+                  "height": 59
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-accent",
+                "frame": {
+                  "x": 36,
+                  "y": 1135,
+                  "width": 4,
+                  "height": 29
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-name",
+                "frame": {
+                  "x": 51,
+                  "y": 1127,
+                  "width": 637,
+                  "height": 51
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Sam Parr"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 31,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-sam-name"
+                  }
+                }
+              },
+              {
+                "id": "footer-rule",
+                "frame": {
+                  "x": 28,
+                  "y": 1204,
+                  "width": 664,
+                  "height": 1
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#4A473F",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "follow-label",
+                "frame": {
+                  "x": 28,
+                  "y": 1217,
+                  "width": 260,
+                  "height": 40
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Follow the show"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 25,
+                    "weight": 630,
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-follow-label"
+                  }
+                }
+              },
+              {
+                "id": "follow-destination",
+                "frame": {
+                  "x": 362,
+                  "y": 1217,
+                  "width": 330,
+                  "height": 40
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "mfmpod.com"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 25,
+                    "weight": 720,
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    },
+                    "align": "right",
+                    "field": "mfm-follow-destination"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "focus-shaan-landscape": {
+          "orientation": "landscape",
+          "width": 1280,
+          "height": 720,
+          "root": {
+            "id": "stage",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "width": 1280,
+              "height": 720
+            },
+            "content": {
+              "kind": "group"
+            },
+            "style": {
+              "fill": {
+                "kind": "solid",
+                "ink": {
+                  "color": "#171716",
+                  "opacity": 1
+                }
+              }
+            },
+            "children": [
+              {
+                "id": "masthead",
+                "frame": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1280,
+                  "height": 96
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "logo",
+                "frame": {
+                  "x": 26,
+                  "y": 17,
+                  "width": 222,
+                  "height": 60
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-logo",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "masthead-rule",
+                "frame": {
+                  "x": 275,
+                  "y": 17,
+                  "width": 2,
+                  "height": 62
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#DCD4BD",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "episode-topic",
+                "frame": {
+                  "x": 302,
+                  "y": 27,
+                  "width": 954,
+                  "height": 54
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "What would you build with $1,000?"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 36,
+                    "weight": 790,
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-episode-topic"
+                  }
+                }
+              },
+              {
+                "id": "shaan-backdrop",
+                "frame": {
+                  "x": 22,
+                  "y": 114,
+                  "width": 1236,
+                  "height": 479
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-portrait",
+                "frame": {
+                  "x": 22,
+                  "y": 114,
+                  "width": 1236,
+                  "height": 479
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-shaan",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "shaan",
+                "frame": {
+                  "x": 22,
+                  "y": 114,
+                  "width": 1236,
+                  "height": 479
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "shaan-nameplate",
+                "frame": {
+                  "x": 22,
+                  "y": 593,
+                  "width": 1236,
+                  "height": 59
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-accent",
+                "frame": {
+                  "x": 36,
+                  "y": 607,
+                  "width": 4,
+                  "height": 29
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-name",
+                "frame": {
+                  "x": 51,
+                  "y": 599,
+                  "width": 1197,
+                  "height": 51
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Shaan Puri"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 31,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-shaan-name"
+                  }
+                }
+              },
+              {
+                "id": "footer-rule",
+                "frame": {
+                  "x": 24,
+                  "y": 671,
+                  "width": 1232,
+                  "height": 1
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#4A473F",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "follow-label",
+                "frame": {
+                  "x": 24,
+                  "y": 684,
+                  "width": 260,
+                  "height": 32
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Follow the show"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 18,
+                    "weight": 630,
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-follow-label"
+                  }
+                }
+              },
+              {
+                "id": "follow-destination",
+                "frame": {
+                  "x": 926,
+                  "y": 684,
+                  "width": 330,
+                  "height": 32
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "mfmpod.com"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 18,
+                    "weight": 720,
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    },
+                    "align": "right",
+                    "field": "mfm-follow-destination"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "focus-shaan-vertical": {
+          "orientation": "vertical",
+          "width": 720,
+          "height": 1280,
+          "root": {
+            "id": "stage",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "width": 720,
+              "height": 1280
+            },
+            "content": {
+              "kind": "group"
+            },
+            "style": {
+              "fill": {
+                "kind": "solid",
+                "ink": {
+                  "color": "#171716",
+                  "opacity": 1
+                }
+              }
+            },
+            "children": [
+              {
+                "id": "masthead",
+                "frame": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 720,
+                  "height": 184
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "logo",
+                "frame": {
+                  "x": 28,
+                  "y": 20,
+                  "width": 222,
+                  "height": 60
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-logo",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "masthead-rule",
+                "frame": {
+                  "x": 28,
+                  "y": 94,
+                  "width": 664,
+                  "height": 2
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#DCD4BD",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "episode-topic",
+                "frame": {
+                  "x": 28,
+                  "y": 112,
+                  "width": 664,
+                  "height": 60
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "What would you build with $1,000?"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 35,
+                    "weight": 790,
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-episode-topic"
+                  }
+                }
+              },
+              {
+                "id": "shaan-backdrop",
+                "frame": {
+                  "x": 22,
+                  "y": 204,
+                  "width": 676,
+                  "height": 917
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-portrait",
+                "frame": {
+                  "x": 22,
+                  "y": 204,
+                  "width": 676,
+                  "height": 917
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-shaan",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "shaan",
+                "frame": {
+                  "x": 22,
+                  "y": 204,
+                  "width": 676,
+                  "height": 917
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "shaan-nameplate",
+                "frame": {
+                  "x": 22,
+                  "y": 1121,
+                  "width": 676,
+                  "height": 59
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-accent",
+                "frame": {
+                  "x": 36,
+                  "y": 1135,
+                  "width": 4,
+                  "height": 29
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-name",
+                "frame": {
+                  "x": 51,
+                  "y": 1127,
+                  "width": 637,
+                  "height": 51
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Shaan Puri"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 31,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-shaan-name"
+                  }
+                }
+              },
+              {
+                "id": "footer-rule",
+                "frame": {
+                  "x": 28,
+                  "y": 1204,
+                  "width": 664,
+                  "height": 1
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#4A473F",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "follow-label",
+                "frame": {
+                  "x": 28,
+                  "y": 1217,
+                  "width": 260,
+                  "height": 40
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Follow the show"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 25,
+                    "weight": 630,
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-follow-label"
+                  }
+                }
+              },
+              {
+                "id": "follow-destination",
+                "frame": {
+                  "x": 362,
+                  "y": 1217,
+                  "width": 330,
+                  "height": 40
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "mfmpod.com"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 25,
+                    "weight": 720,
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    },
+                    "align": "right",
+                    "field": "mfm-follow-destination"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "focus-sam-landscape": {
+          "orientation": "landscape",
+          "width": 1280,
+          "height": 720,
+          "root": {
+            "id": "stage",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "width": 1280,
+              "height": 720
+            },
+            "content": {
+              "kind": "group"
+            },
+            "style": {
+              "fill": {
+                "kind": "solid",
+                "ink": {
+                  "color": "#171716",
+                  "opacity": 1
+                }
+              }
+            },
+            "children": [
+              {
+                "id": "masthead",
+                "frame": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1280,
+                  "height": 96
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "logo",
+                "frame": {
+                  "x": 26,
+                  "y": 17,
+                  "width": 222,
+                  "height": 60
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-logo",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "masthead-rule",
+                "frame": {
+                  "x": 275,
+                  "y": 17,
+                  "width": 2,
+                  "height": 62
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#DCD4BD",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "episode-topic",
+                "frame": {
+                  "x": 302,
+                  "y": 27,
+                  "width": 954,
+                  "height": 54
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "What would you build with $1,000?"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 36,
+                    "weight": 790,
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-episode-topic"
+                  }
+                }
+              },
+              {
+                "id": "sam-backdrop",
+                "frame": {
+                  "x": 22,
+                  "y": 114,
+                  "width": 1236,
+                  "height": 479
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-portrait",
+                "frame": {
+                  "x": 22,
+                  "y": 114,
+                  "width": 1236,
+                  "height": 479
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-sam",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "sam",
+                "frame": {
+                  "x": 22,
+                  "y": 114,
+                  "width": 1236,
+                  "height": 479
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera-2",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "sam-nameplate",
+                "frame": {
+                  "x": 22,
+                  "y": 593,
+                  "width": 1236,
+                  "height": 59
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-accent",
+                "frame": {
+                  "x": 36,
+                  "y": 607,
+                  "width": 4,
+                  "height": 29
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-name",
+                "frame": {
+                  "x": 51,
+                  "y": 599,
+                  "width": 1197,
+                  "height": 51
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Sam Parr"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 31,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-sam-name"
+                  }
+                }
+              },
+              {
+                "id": "footer-rule",
+                "frame": {
+                  "x": 24,
+                  "y": 671,
+                  "width": 1232,
+                  "height": 1
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#4A473F",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "follow-label",
+                "frame": {
+                  "x": 24,
+                  "y": 684,
+                  "width": 260,
+                  "height": 32
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Follow the show"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 18,
+                    "weight": 630,
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-follow-label"
+                  }
+                }
+              },
+              {
+                "id": "follow-destination",
+                "frame": {
+                  "x": 926,
+                  "y": 684,
+                  "width": 330,
+                  "height": 32
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "mfmpod.com"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 18,
+                    "weight": 720,
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    },
+                    "align": "right",
+                    "field": "mfm-follow-destination"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "focus-sam-vertical": {
+          "orientation": "vertical",
+          "width": 720,
+          "height": 1280,
+          "root": {
+            "id": "stage",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "width": 720,
+              "height": 1280
+            },
+            "content": {
+              "kind": "group"
+            },
+            "style": {
+              "fill": {
+                "kind": "solid",
+                "ink": {
+                  "color": "#171716",
+                  "opacity": 1
+                }
+              }
+            },
+            "children": [
+              {
+                "id": "masthead",
+                "frame": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 720,
+                  "height": 184
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "logo",
+                "frame": {
+                  "x": 28,
+                  "y": 20,
+                  "width": 222,
+                  "height": 60
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-logo",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "masthead-rule",
+                "frame": {
+                  "x": 28,
+                  "y": 94,
+                  "width": 664,
+                  "height": 2
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#DCD4BD",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "episode-topic",
+                "frame": {
+                  "x": 28,
+                  "y": 112,
+                  "width": 664,
+                  "height": 60
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "What would you build with $1,000?"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 35,
+                    "weight": 790,
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-episode-topic"
+                  }
+                }
+              },
+              {
+                "id": "sam-backdrop",
+                "frame": {
+                  "x": 22,
+                  "y": 204,
+                  "width": 676,
+                  "height": 917
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-portrait",
+                "frame": {
+                  "x": 22,
+                  "y": 204,
+                  "width": 676,
+                  "height": 917
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-sam",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "sam",
+                "frame": {
+                  "x": 22,
+                  "y": 204,
+                  "width": 676,
+                  "height": 917
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera-2",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "sam-nameplate",
+                "frame": {
+                  "x": 22,
+                  "y": 1121,
+                  "width": 676,
+                  "height": 59
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-accent",
+                "frame": {
+                  "x": 36,
+                  "y": 1135,
+                  "width": 4,
+                  "height": 29
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-name",
+                "frame": {
+                  "x": 51,
+                  "y": 1127,
+                  "width": 637,
+                  "height": 51
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Sam Parr"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 31,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-sam-name"
+                  }
+                }
+              },
+              {
+                "id": "footer-rule",
+                "frame": {
+                  "x": 28,
+                  "y": 1204,
+                  "width": 664,
+                  "height": 1
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#4A473F",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "follow-label",
+                "frame": {
+                  "x": 28,
+                  "y": 1217,
+                  "width": 260,
+                  "height": 40
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Follow the show"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 25,
+                    "weight": 630,
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-follow-label"
+                  }
+                }
+              },
+              {
+                "id": "follow-destination",
+                "frame": {
+                  "x": 362,
+                  "y": 1217,
+                  "width": 330,
+                  "height": 40
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "mfmpod.com"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 25,
+                    "weight": 720,
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    },
+                    "align": "right",
+                    "field": "mfm-follow-destination"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "interview-landscape": {
+          "orientation": "landscape",
+          "width": 1280,
+          "height": 720,
+          "root": {
+            "id": "stage",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "width": 1280,
+              "height": 720
+            },
+            "content": {
+              "kind": "group"
+            },
+            "style": {
+              "fill": {
+                "kind": "solid",
+                "ink": {
+                  "color": "#171716",
+                  "opacity": 1
+                }
+              }
+            },
+            "children": [
+              {
+                "id": "masthead",
+                "frame": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1280,
+                  "height": 96
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "logo",
+                "frame": {
+                  "x": 26,
+                  "y": 17,
+                  "width": 222,
+                  "height": 60
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-logo",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "masthead-rule",
+                "frame": {
+                  "x": 275,
+                  "y": 17,
+                  "width": 2,
+                  "height": 62
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#DCD4BD",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "episode-topic",
+                "frame": {
+                  "x": 302,
+                  "y": 27,
+                  "width": 954,
+                  "height": 54
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "What would you build with $1,000?"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 36,
+                    "weight": 790,
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-episode-topic"
+                  }
+                }
+              },
+              {
+                "id": "shaan-backdrop",
+                "frame": {
+                  "x": 22,
+                  "y": 114,
+                  "width": 397,
+                  "height": 216
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-portrait",
+                "frame": {
+                  "x": 22,
+                  "y": 114,
+                  "width": 397,
+                  "height": 216
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-shaan",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "shaan",
+                "frame": {
+                  "x": 22,
+                  "y": 114,
+                  "width": 397,
+                  "height": 216
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "shaan-nameplate",
+                "frame": {
+                  "x": 22,
+                  "y": 330,
+                  "width": 397,
+                  "height": 46
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-accent",
+                "frame": {
+                  "x": 36,
+                  "y": 341,
+                  "width": 4,
+                  "height": 23
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-name",
+                "frame": {
+                  "x": 51,
+                  "y": 336,
+                  "width": 358,
+                  "height": 38
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Shaan Puri"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 24,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-shaan-name"
+                  }
+                }
+              },
+              {
+                "id": "sam-backdrop",
+                "frame": {
+                  "x": 22,
+                  "y": 390,
+                  "width": 397,
+                  "height": 216
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-portrait",
+                "frame": {
+                  "x": 22,
+                  "y": 390,
+                  "width": 397,
+                  "height": 216
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-sam",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "sam",
+                "frame": {
+                  "x": 22,
+                  "y": 390,
+                  "width": 397,
+                  "height": 216
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera-2",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "sam-nameplate",
+                "frame": {
+                  "x": 22,
+                  "y": 606,
+                  "width": 397,
+                  "height": 46
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-accent",
+                "frame": {
+                  "x": 36,
+                  "y": 617,
+                  "width": 4,
+                  "height": 23
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-name",
+                "frame": {
+                  "x": 51,
+                  "y": 612,
+                  "width": 358,
+                  "height": 38
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Sam Parr"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 24,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-sam-name"
+                  }
+                }
+              },
+              {
+                "id": "guest-backdrop",
+                "frame": {
+                  "x": 435,
+                  "y": 114,
+                  "width": 823,
+                  "height": 479
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#292821",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "guest-wave-0",
+                "frame": {
+                  "x": 814,
+                  "y": 334,
+                  "width": 8,
+                  "height": 38
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#635D4B",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "guest-wave-1",
+                "frame": {
+                  "x": 830,
+                  "y": 316,
+                  "width": 8,
+                  "height": 74
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#635D4B",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "guest-wave-2",
+                "frame": {
+                  "x": 846,
+                  "y": 298,
+                  "width": 8,
+                  "height": 110
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#635D4B",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "guest-wave-3",
+                "frame": {
+                  "x": 862,
+                  "y": 322,
+                  "width": 8,
+                  "height": 63
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#635D4B",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "guest-wave-4",
+                "frame": {
+                  "x": 878,
+                  "y": 338,
+                  "width": 8,
+                  "height": 30
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#635D4B",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "guest",
+                "frame": {
+                  "x": 435,
+                  "y": 114,
+                  "width": 823,
+                  "height": 479
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "rtc-guest",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "guest-nameplate",
+                "frame": {
+                  "x": 435,
+                  "y": 593,
+                  "width": 823,
+                  "height": 59
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "guest-accent",
+                "frame": {
+                  "x": 449,
+                  "y": 607,
+                  "width": 4,
+                  "height": 29
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "guest-name",
+                "frame": {
+                  "x": 464,
+                  "y": 599,
+                  "width": 784,
+                  "height": 51
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Guest"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 31,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-guest-name"
+                  }
+                }
+              },
+              {
+                "id": "footer-rule",
+                "frame": {
+                  "x": 24,
+                  "y": 671,
+                  "width": 1232,
+                  "height": 1
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#4A473F",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "follow-label",
+                "frame": {
+                  "x": 24,
+                  "y": 684,
+                  "width": 260,
+                  "height": 32
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Follow the show"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 18,
+                    "weight": 630,
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-follow-label"
+                  }
+                }
+              },
+              {
+                "id": "follow-destination",
+                "frame": {
+                  "x": 926,
+                  "y": 684,
+                  "width": 330,
+                  "height": 32
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "mfmpod.com"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 18,
+                    "weight": 720,
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    },
+                    "align": "right",
+                    "field": "mfm-follow-destination"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "interview-vertical": {
+          "orientation": "vertical",
+          "width": 720,
+          "height": 1280,
+          "root": {
+            "id": "stage",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "width": 720,
+              "height": 1280
+            },
+            "content": {
+              "kind": "group"
+            },
+            "style": {
+              "fill": {
+                "kind": "solid",
+                "ink": {
+                  "color": "#171716",
+                  "opacity": 1
+                }
+              }
+            },
+            "children": [
+              {
+                "id": "masthead",
+                "frame": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 720,
+                  "height": 184
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "logo",
+                "frame": {
+                  "x": 28,
+                  "y": 20,
+                  "width": 222,
+                  "height": 60
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-logo",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "masthead-rule",
+                "frame": {
+                  "x": 28,
+                  "y": 94,
+                  "width": 664,
+                  "height": 2
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#DCD4BD",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "episode-topic",
+                "frame": {
+                  "x": 28,
+                  "y": 112,
+                  "width": 664,
+                  "height": 60
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "What would you build with $1,000?"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 35,
+                    "weight": 790,
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-episode-topic"
+                  }
+                }
+              },
+              {
+                "id": "guest-backdrop",
+                "frame": {
+                  "x": 22,
+                  "y": 204,
+                  "width": 676,
+                  "height": 516
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#292821",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "guest-wave-0",
+                "frame": {
+                  "x": 328,
+                  "y": 442,
+                  "width": 8,
+                  "height": 41
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#635D4B",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "guest-wave-1",
+                "frame": {
+                  "x": 344,
+                  "y": 422,
+                  "width": 8,
+                  "height": 80
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#635D4B",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "guest-wave-2",
+                "frame": {
+                  "x": 360,
+                  "y": 403,
+                  "width": 8,
+                  "height": 118
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#635D4B",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "guest-wave-3",
+                "frame": {
+                  "x": 376,
+                  "y": 428,
+                  "width": 8,
+                  "height": 68
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#635D4B",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "guest-wave-4",
+                "frame": {
+                  "x": 392,
+                  "y": 446,
+                  "width": 8,
+                  "height": 33
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#635D4B",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "guest",
+                "frame": {
+                  "x": 22,
+                  "y": 204,
+                  "width": 676,
+                  "height": 516
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "rtc-guest",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "guest-nameplate",
+                "frame": {
+                  "x": 22,
+                  "y": 720,
+                  "width": 676,
+                  "height": 59
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "guest-accent",
+                "frame": {
+                  "x": 36,
+                  "y": 734,
+                  "width": 4,
+                  "height": 29
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "guest-name",
+                "frame": {
+                  "x": 51,
+                  "y": 726,
+                  "width": 637,
+                  "height": 51
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Guest"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 31,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-guest-name"
+                  }
+                }
+              },
+              {
+                "id": "shaan-backdrop",
+                "frame": {
+                  "x": 22,
+                  "y": 795,
+                  "width": 331,
+                  "height": 339
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-portrait",
+                "frame": {
+                  "x": 22,
+                  "y": 795,
+                  "width": 331,
+                  "height": 339
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-shaan",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "shaan",
+                "frame": {
+                  "x": 22,
+                  "y": 795,
+                  "width": 331,
+                  "height": 339
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "shaan-nameplate",
+                "frame": {
+                  "x": 22,
+                  "y": 1134,
+                  "width": 331,
+                  "height": 46
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-accent",
+                "frame": {
+                  "x": 36,
+                  "y": 1145,
+                  "width": 4,
+                  "height": 23
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-name",
+                "frame": {
+                  "x": 51,
+                  "y": 1140,
+                  "width": 292,
+                  "height": 38
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Shaan Puri"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 24,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-shaan-name"
+                  }
+                }
+              },
+              {
+                "id": "sam-backdrop",
+                "frame": {
+                  "x": 367,
+                  "y": 795,
+                  "width": 331,
+                  "height": 339
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-portrait",
+                "frame": {
+                  "x": 367,
+                  "y": 795,
+                  "width": 331,
+                  "height": 339
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-sam",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "sam",
+                "frame": {
+                  "x": 367,
+                  "y": 795,
+                  "width": 331,
+                  "height": 339
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera-2",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "sam-nameplate",
+                "frame": {
+                  "x": 367,
+                  "y": 1134,
+                  "width": 331,
+                  "height": 46
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-accent",
+                "frame": {
+                  "x": 381,
+                  "y": 1145,
+                  "width": 4,
+                  "height": 23
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-name",
+                "frame": {
+                  "x": 396,
+                  "y": 1140,
+                  "width": 292,
+                  "height": 38
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Sam Parr"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 24,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-sam-name"
+                  }
+                }
+              },
+              {
+                "id": "footer-rule",
+                "frame": {
+                  "x": 28,
+                  "y": 1204,
+                  "width": 664,
+                  "height": 1
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#4A473F",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "follow-label",
+                "frame": {
+                  "x": 28,
+                  "y": 1217,
+                  "width": 260,
+                  "height": 40
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Follow the show"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 25,
+                    "weight": 630,
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-follow-label"
+                  }
+                }
+              },
+              {
+                "id": "follow-destination",
+                "frame": {
+                  "x": 362,
+                  "y": 1217,
+                  "width": 330,
+                  "height": 40
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "mfmpod.com"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 25,
+                    "weight": 720,
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    },
+                    "align": "right",
+                    "field": "mfm-follow-destination"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "screen-share-landscape": {
+          "orientation": "landscape",
+          "width": 1280,
+          "height": 720,
+          "root": {
+            "id": "stage",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "width": 1280,
+              "height": 720
+            },
+            "content": {
+              "kind": "group"
+            },
+            "style": {
+              "fill": {
+                "kind": "solid",
+                "ink": {
+                  "color": "#171716",
+                  "opacity": 1
+                }
+              }
+            },
+            "children": [
+              {
+                "id": "masthead",
+                "frame": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1280,
+                  "height": 96
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "logo",
+                "frame": {
+                  "x": 26,
+                  "y": 17,
+                  "width": 222,
+                  "height": 60
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-logo",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "masthead-rule",
+                "frame": {
+                  "x": 275,
+                  "y": 17,
+                  "width": 2,
+                  "height": 62
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#DCD4BD",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "episode-topic",
+                "frame": {
+                  "x": 302,
+                  "y": 27,
+                  "width": 954,
+                  "height": 54
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "What would you build with $1,000?"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 36,
+                    "weight": 790,
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-episode-topic"
+                  }
+                }
+              },
+              {
+                "id": "screen-mat",
+                "frame": {
+                  "x": 22,
+                  "y": 114,
+                  "width": 943,
+                  "height": 538
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#25251F",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "screen-share",
+                "frame": {
+                  "x": 22,
+                  "y": 114,
+                  "width": 943,
+                  "height": 538
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "screen",
+                  "fit": "contain"
+                }
+              },
+              {
+                "id": "shaan-backdrop",
+                "frame": {
+                  "x": 981,
+                  "y": 114,
+                  "width": 277,
+                  "height": 216
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-portrait",
+                "frame": {
+                  "x": 981,
+                  "y": 114,
+                  "width": 277,
+                  "height": 216
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-shaan",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "shaan",
+                "frame": {
+                  "x": 981,
+                  "y": 114,
+                  "width": 277,
+                  "height": 216
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "shaan-nameplate",
+                "frame": {
+                  "x": 981,
+                  "y": 330,
+                  "width": 277,
+                  "height": 46
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-accent",
+                "frame": {
+                  "x": 995,
+                  "y": 341,
+                  "width": 4,
+                  "height": 23
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-name",
+                "frame": {
+                  "x": 1010,
+                  "y": 336,
+                  "width": 238,
+                  "height": 38
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Shaan Puri"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 24,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-shaan-name"
+                  }
+                }
+              },
+              {
+                "id": "sam-backdrop",
+                "frame": {
+                  "x": 981,
+                  "y": 390,
+                  "width": 277,
+                  "height": 216
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-portrait",
+                "frame": {
+                  "x": 981,
+                  "y": 390,
+                  "width": 277,
+                  "height": 216
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-sam",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "sam",
+                "frame": {
+                  "x": 981,
+                  "y": 390,
+                  "width": 277,
+                  "height": 216
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera-2",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "sam-nameplate",
+                "frame": {
+                  "x": 981,
+                  "y": 606,
+                  "width": 277,
+                  "height": 46
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-accent",
+                "frame": {
+                  "x": 995,
+                  "y": 617,
+                  "width": 4,
+                  "height": 23
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-name",
+                "frame": {
+                  "x": 1010,
+                  "y": 612,
+                  "width": 238,
+                  "height": 38
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Sam Parr"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 24,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-sam-name"
+                  }
+                }
+              },
+              {
+                "id": "footer-rule",
+                "frame": {
+                  "x": 24,
+                  "y": 671,
+                  "width": 1232,
+                  "height": 1
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#4A473F",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "follow-label",
+                "frame": {
+                  "x": 24,
+                  "y": 684,
+                  "width": 260,
+                  "height": 32
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Follow the show"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 18,
+                    "weight": 630,
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-follow-label"
+                  }
+                }
+              },
+              {
+                "id": "follow-destination",
+                "frame": {
+                  "x": 926,
+                  "y": 684,
+                  "width": 330,
+                  "height": 32
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "mfmpod.com"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 18,
+                    "weight": 720,
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    },
+                    "align": "right",
+                    "field": "mfm-follow-destination"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "screen-share-vertical": {
+          "orientation": "vertical",
+          "width": 720,
+          "height": 1280,
+          "root": {
+            "id": "stage",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "width": 720,
+              "height": 1280
+            },
+            "content": {
+              "kind": "group"
+            },
+            "style": {
+              "fill": {
+                "kind": "solid",
+                "ink": {
+                  "color": "#171716",
+                  "opacity": 1
+                }
+              }
+            },
+            "children": [
+              {
+                "id": "masthead",
+                "frame": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 720,
+                  "height": 184
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "logo",
+                "frame": {
+                  "x": 28,
+                  "y": 20,
+                  "width": 222,
+                  "height": 60
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-logo",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "masthead-rule",
+                "frame": {
+                  "x": 28,
+                  "y": 94,
+                  "width": 664,
+                  "height": 2
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#DCD4BD",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "episode-topic",
+                "frame": {
+                  "x": 28,
+                  "y": 112,
+                  "width": 664,
+                  "height": 60
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "What would you build with $1,000?"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 35,
+                    "weight": 790,
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-episode-topic"
+                  }
+                }
+              },
+              {
+                "id": "screen-mat",
+                "frame": {
+                  "x": 22,
+                  "y": 213,
+                  "width": 676,
+                  "height": 381
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#25251F",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "screen-share",
+                "frame": {
+                  "x": 22,
+                  "y": 213,
+                  "width": 676,
+                  "height": 381
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "screen",
+                  "fit": "contain"
+                }
+              },
+              {
+                "id": "screen-caption",
+                "frame": {
+                  "x": 28,
+                  "y": 621,
+                  "width": 664,
+                  "height": 52
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "On screen"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 34,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-screen-caption"
+                  }
+                }
+              },
+              {
+                "id": "shaan-backdrop",
+                "frame": {
+                  "x": 22,
+                  "y": 706,
+                  "width": 331,
+                  "height": 428
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-portrait",
+                "frame": {
+                  "x": 22,
+                  "y": 706,
+                  "width": 331,
+                  "height": 428
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-shaan",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "shaan",
+                "frame": {
+                  "x": 22,
+                  "y": 706,
+                  "width": 331,
+                  "height": 428
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "shaan-nameplate",
+                "frame": {
+                  "x": 22,
+                  "y": 1134,
+                  "width": 331,
+                  "height": 46
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-accent",
+                "frame": {
+                  "x": 36,
+                  "y": 1145,
+                  "width": 4,
+                  "height": 23
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-name",
+                "frame": {
+                  "x": 51,
+                  "y": 1140,
+                  "width": 292,
+                  "height": 38
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Shaan Puri"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 24,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-shaan-name"
+                  }
+                }
+              },
+              {
+                "id": "sam-backdrop",
+                "frame": {
+                  "x": 367,
+                  "y": 706,
+                  "width": 331,
+                  "height": 428
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-portrait",
+                "frame": {
+                  "x": 367,
+                  "y": 706,
+                  "width": 331,
+                  "height": 428
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-sam",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "sam",
+                "frame": {
+                  "x": 367,
+                  "y": 706,
+                  "width": 331,
+                  "height": 428
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera-2",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "sam-nameplate",
+                "frame": {
+                  "x": 367,
+                  "y": 1134,
+                  "width": 331,
+                  "height": 46
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-accent",
+                "frame": {
+                  "x": 381,
+                  "y": 1145,
+                  "width": 4,
+                  "height": 23
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-name",
+                "frame": {
+                  "x": 396,
+                  "y": 1140,
+                  "width": 292,
+                  "height": 38
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Sam Parr"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 24,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-sam-name"
+                  }
+                }
+              },
+              {
+                "id": "footer-rule",
+                "frame": {
+                  "x": 28,
+                  "y": 1204,
+                  "width": 664,
+                  "height": 1
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#4A473F",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "follow-label",
+                "frame": {
+                  "x": 28,
+                  "y": 1217,
+                  "width": 260,
+                  "height": 40
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Follow the show"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 25,
+                    "weight": 630,
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-follow-label"
+                  }
+                }
+              },
+              {
+                "id": "follow-destination",
+                "frame": {
+                  "x": 362,
+                  "y": 1217,
+                  "width": 330,
+                  "height": 40
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "mfmpod.com"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 25,
+                    "weight": 720,
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    },
+                    "align": "right",
+                    "field": "mfm-follow-destination"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "follow-landscape": {
+          "orientation": "landscape",
+          "width": 1280,
+          "height": 720,
+          "root": {
+            "id": "stage",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "width": 1280,
+              "height": 720
+            },
+            "content": {
+              "kind": "group"
+            },
+            "style": {
+              "fill": {
+                "kind": "solid",
+                "ink": {
+                  "color": "#171716",
+                  "opacity": 1
+                }
+              }
+            },
+            "children": [
+              {
+                "id": "closing-background",
+                "frame": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1280,
+                  "height": 720
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "logo-plaque",
+                "frame": {
+                  "x": 32,
+                  "y": 30,
+                  "width": 292,
+                  "height": 90
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "logo",
+                "frame": {
+                  "x": 52,
+                  "y": 41,
+                  "width": 251,
+                  "height": 67
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-logo",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "takeaway-label",
+                "frame": {
+                  "x": 35,
+                  "y": 177,
+                  "width": 580,
+                  "height": 36
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "THE TAKEAWAY"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 20,
+                    "weight": 800,
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-takeaway-label"
+                  }
+                }
+              },
+              {
+                "id": "takeaway",
+                "frame": {
+                  "x": 32,
+                  "y": 229,
+                  "width": 692,
+                  "height": 205
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Big ideas start small."
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 78,
+                    "weight": 890,
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    },
+                    "align": "left"
+                  }
+                }
+              },
+              {
+                "id": "closing-rule",
+                "frame": {
+                  "x": 35,
+                  "y": 476,
+                  "width": 625,
+                  "height": 2
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "follow-label",
+                "frame": {
+                  "x": 35,
+                  "y": 507,
+                  "width": 625,
+                  "height": 69
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Follow the show"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 46,
+                    "weight": 830,
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-follow-label"
+                  }
+                }
+              },
+              {
+                "id": "follow-destination",
+                "frame": {
+                  "x": 36,
+                  "y": 578,
+                  "width": 605,
+                  "height": 49
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "mfmpod.com"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 32,
+                    "weight": 720,
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-follow-destination"
+                  }
+                }
+              },
+              {
+                "id": "shaan-backdrop",
+                "frame": {
+                  "x": 740,
+                  "y": 30,
+                  "width": 508,
+                  "height": 277
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-portrait",
+                "frame": {
+                  "x": 740,
+                  "y": 30,
+                  "width": 508,
+                  "height": 277
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-shaan",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "shaan",
+                "frame": {
+                  "x": 740,
+                  "y": 30,
+                  "width": 508,
+                  "height": 277
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "shaan-nameplate",
+                "frame": {
+                  "x": 740,
+                  "y": 307,
+                  "width": 508,
+                  "height": 46
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-accent",
+                "frame": {
+                  "x": 754,
+                  "y": 318,
+                  "width": 4,
+                  "height": 23
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-name",
+                "frame": {
+                  "x": 769,
+                  "y": 313,
+                  "width": 469,
+                  "height": 38
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Shaan Puri"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 24,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-shaan-name"
+                  }
+                }
+              },
+              {
+                "id": "sam-backdrop",
+                "frame": {
+                  "x": 740,
+                  "y": 366,
+                  "width": 508,
+                  "height": 277
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-portrait",
+                "frame": {
+                  "x": 740,
+                  "y": 366,
+                  "width": 508,
+                  "height": 277
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-sam",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "sam",
+                "frame": {
+                  "x": 740,
+                  "y": 366,
+                  "width": 508,
+                  "height": 277
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera-2",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "sam-nameplate",
+                "frame": {
+                  "x": 740,
+                  "y": 643,
+                  "width": 508,
+                  "height": 46
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-accent",
+                "frame": {
+                  "x": 754,
+                  "y": 654,
+                  "width": 4,
+                  "height": 23
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-name",
+                "frame": {
+                  "x": 769,
+                  "y": 649,
+                  "width": 469,
+                  "height": 38
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Sam Parr"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 24,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-sam-name"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "follow-vertical": {
+          "orientation": "vertical",
+          "width": 720,
+          "height": 1280,
+          "root": {
+            "id": "stage",
+            "frame": {
+              "x": 0,
+              "y": 0,
+              "width": 720,
+              "height": 1280
+            },
+            "content": {
+              "kind": "group"
+            },
+            "style": {
+              "fill": {
+                "kind": "solid",
+                "ink": {
+                  "color": "#171716",
+                  "opacity": 1
+                }
+              }
+            },
+            "children": [
+              {
+                "id": "closing-background",
+                "frame": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 720,
+                  "height": 1280
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "logo-plaque",
+                "frame": {
+                  "x": 32,
+                  "y": 38,
+                  "width": 656,
+                  "height": 141
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FAF6E9",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "logo",
+                "frame": {
+                  "x": 72,
+                  "y": 60,
+                  "width": 374,
+                  "height": 100
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-logo",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "takeaway-label",
+                "frame": {
+                  "x": 37,
+                  "y": 246,
+                  "width": 646,
+                  "height": 43
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "THE TAKEAWAY"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 25,
+                    "weight": 800,
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-takeaway-label"
+                  }
+                }
+              },
+              {
+                "id": "takeaway",
+                "frame": {
+                  "x": 32,
+                  "y": 318,
+                  "width": 656,
+                  "height": 224
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Big ideas start small."
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 68,
+                    "weight": 890,
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    },
+                    "align": "left"
+                  }
+                }
+              },
+              {
+                "id": "closing-rule",
+                "frame": {
+                  "x": 34,
+                  "y": 588,
+                  "width": 652,
+                  "height": 3
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "follow-label",
+                "frame": {
+                  "x": 36,
+                  "y": 635,
+                  "width": 648,
+                  "height": 79
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Follow the show"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 52,
+                    "weight": 830,
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-follow-label"
+                  }
+                }
+              },
+              {
+                "id": "follow-destination",
+                "frame": {
+                  "x": 36,
+                  "y": 727,
+                  "width": 648,
+                  "height": 60
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "mfmpod.com"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 40,
+                    "weight": 700,
+                    "ink": {
+                      "color": "#1C1B19",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-follow-destination"
+                  }
+                }
+              },
+              {
+                "id": "shaan-backdrop",
+                "frame": {
+                  "x": 30,
+                  "y": 852,
+                  "width": 326,
+                  "height": 292
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-portrait",
+                "frame": {
+                  "x": 30,
+                  "y": 852,
+                  "width": 326,
+                  "height": 292
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-shaan",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "shaan",
+                "frame": {
+                  "x": 30,
+                  "y": 852,
+                  "width": 326,
+                  "height": 292
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "shaan-nameplate",
+                "frame": {
+                  "x": 30,
+                  "y": 1144,
+                  "width": 326,
+                  "height": 46
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-accent",
+                "frame": {
+                  "x": 44,
+                  "y": 1155,
+                  "width": 4,
+                  "height": 23
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "shaan-name",
+                "frame": {
+                  "x": 59,
+                  "y": 1150,
+                  "width": 287,
+                  "height": 38
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Shaan Puri"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 24,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-shaan-name"
+                  }
+                }
+              },
+              {
+                "id": "sam-backdrop",
+                "frame": {
+                  "x": 364,
+                  "y": 852,
+                  "width": 326,
+                  "height": 292
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#000000",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-portrait",
+                "frame": {
+                  "x": 364,
+                  "y": 852,
+                  "width": 326,
+                  "height": 292
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "image",
+                    "asset": "my-first-million-sam",
+                    "fit": "contain"
+                  }
+                }
+              },
+              {
+                "id": "sam",
+                "frame": {
+                  "x": 364,
+                  "y": 852,
+                  "width": 326,
+                  "height": 292
+                },
+                "content": {
+                  "kind": "source",
+                  "source": "camera-2",
+                  "fit": "cover"
+                }
+              },
+              {
+                "id": "sam-nameplate",
+                "frame": {
+                  "x": 364,
+                  "y": 1144,
+                  "width": 326,
+                  "height": 46
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#262522",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-accent",
+                "frame": {
+                  "x": 378,
+                  "y": 1155,
+                  "width": 4,
+                  "height": 23
+                },
+                "content": {
+                  "kind": "group"
+                },
+                "style": {
+                  "fill": {
+                    "kind": "solid",
+                    "ink": {
+                      "color": "#FFCE76",
+                      "opacity": 1
+                    }
+                  }
+                }
+              },
+              {
+                "id": "sam-name",
+                "frame": {
+                  "x": 393,
+                  "y": 1150,
+                  "width": 287,
+                  "height": 38
+                },
+                "content": {
+                  "kind": "text",
+                  "font": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+                  "value": "Sam Parr"
+                },
+                "style": {
+                  "text": {
+                    "fontSize": 24,
+                    "weight": 760,
+                    "ink": {
+                      "color": "#FFFFFF",
+                      "opacity": 1
+                    },
+                    "align": "left",
+                    "field": "mfm-sam-name"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "graphs": {
+        "stage": {
+          "profile": "producer.render/1",
+          "clock": "timeline",
+          "passes": [
+            {
+              "kind": "composite",
+              "id": "out"
+            }
+          ]
+        }
+      },
+      "outputGraphs": {
+        "landscape": "stage",
+        "vertical": "stage",
+        "focus-shaan-landscape": "stage",
+        "focus-shaan-vertical": "stage",
+        "focus-sam-landscape": "stage",
+        "focus-sam-vertical": "stage",
+        "interview-landscape": "stage",
+        "interview-vertical": "stage",
+        "screen-share-landscape": "stage",
+        "screen-share-vertical": "stage",
+        "follow-landscape": "stage",
+        "follow-vertical": "stage"
+      }
+    }
+  },
+  "sequences": {
+    "mfm-opening": {
+      "duration": {
+        "ticks": "12",
+        "rate": 1
+      },
+      "placements": [
+        {
+          "id": "camera",
+          "source": "camera",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "12",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          }
+        },
+        {
+          "id": "camera-2",
+          "source": "camera-2",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "12",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          }
+        },
+        {
+          "id": "microphone",
+          "source": "microphone",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "12",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          }
+        }
+      ],
+      "cues": [
+        {
+          "id": "opening-in",
+          "at": {
+            "ticks": "0",
+            "rate": 1
+          },
+          "atStart": true
+        },
+        {
+          "id": "focus-shaan",
+          "at": {
+            "ticks": "4",
+            "rate": 1
+          }
+        },
+        {
+          "id": "focus-sam",
+          "at": {
+            "ticks": "8",
+            "rate": 1
+          }
+        }
+      ],
+      "audioRoutes": [
+        {
+          "id": "hosts",
+          "bus": "program",
+          "source": "microphone"
+        }
+      ]
+    },
+    "mfm-conversation": {
+      "duration": {
+        "ticks": "1200",
+        "rate": 1
+      },
+      "placements": [
+        {
+          "id": "camera",
+          "source": "camera",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "1200",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          }
+        },
+        {
+          "id": "camera-2",
+          "source": "camera-2",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "1200",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          }
+        },
+        {
+          "id": "microphone",
+          "source": "microphone",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "1200",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          }
+        }
+      ],
+      "cues": [
+        {
+          "id": "conversation-in",
+          "at": {
+            "ticks": "0",
+            "rate": 1
+          },
+          "atStart": true
+        }
+      ],
+      "audioRoutes": [
+        {
+          "id": "hosts",
+          "bus": "program",
+          "source": "microphone"
+        }
+      ]
+    },
+    "mfm-guest-interview": {
+      "duration": {
+        "ticks": "900",
+        "rate": 1
+      },
+      "placements": [
+        {
+          "id": "camera",
+          "source": "camera",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "900",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          }
+        },
+        {
+          "id": "camera-2",
+          "source": "camera-2",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "900",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          }
+        },
+        {
+          "id": "rtc-guest",
+          "source": "rtc-guest",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "900",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          }
+        },
+        {
+          "id": "microphone",
+          "source": "microphone",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "900",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          }
+        }
+      ],
+      "cues": [
+        {
+          "id": "guest-interview-in",
+          "at": {
+            "ticks": "0",
+            "rate": 1
+          },
+          "atStart": true
+        }
+      ],
+      "audioRoutes": [
+        {
+          "id": "hosts",
+          "bus": "program",
+          "source": "microphone"
+        },
+        {
+          "id": "guest",
+          "bus": "program",
+          "source": "rtc-guest"
+        }
+      ]
+    },
+    "mfm-breakdown": {
+      "duration": {
+        "ticks": "300",
+        "rate": 1
+      },
+      "placements": [
+        {
+          "id": "camera",
+          "source": "camera",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "300",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          }
+        },
+        {
+          "id": "camera-2",
+          "source": "camera-2",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "300",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          }
+        },
+        {
+          "id": "screen",
+          "source": "screen",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "300",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          }
+        },
+        {
+          "id": "microphone",
+          "source": "microphone",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "300",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          }
+        }
+      ],
+      "cues": [
+        {
+          "id": "breakdown-in",
+          "at": {
+            "ticks": "0",
+            "rate": 1
+          },
+          "atStart": true
+        }
+      ],
+      "audioRoutes": [
+        {
+          "id": "hosts",
+          "bus": "program",
+          "source": "microphone"
+        }
+      ]
+    },
+    "mfm-takeaway": {
+      "duration": {
+        "ticks": "60",
+        "rate": 1
+      },
+      "placements": [
+        {
+          "id": "camera",
+          "source": "camera",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "60",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          }
+        },
+        {
+          "id": "camera-2",
+          "source": "camera-2",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "60",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          }
+        },
+        {
+          "id": "microphone",
+          "source": "microphone",
+          "range": {
+            "start": {
+              "ticks": "0",
+              "rate": 1
+            },
+            "duration": {
+              "ticks": "60",
+              "rate": 1
+            }
+          },
+          "sourceIn": {
+            "ticks": "0",
+            "rate": 1
+          }
+        }
+      ],
+      "cues": [
+        {
+          "id": "takeaway-in",
+          "at": {
+            "ticks": "0",
+            "rate": 1
+          },
+          "atStart": true
+        }
+      ],
+      "audioRoutes": [
+        {
+          "id": "hosts",
+          "bus": "program",
+          "source": "microphone"
+        }
+      ]
+    }
+  },
+  "shows": {
+    "my-first-million": {
+      "set": "my-first-million",
+      "authority": "local",
+      "segments": [
+        {
+          "id": "opening",
+          "title": "Cold open",
+          "sequence": "mfm-opening",
+          "landscape": "landscape",
+          "vertical": "vertical",
+          "layoutChanges": [
+            {
+              "at": {
+                "ticks": "4",
+                "rate": 1
+              },
+              "landscape": "focus-shaan-landscape",
+              "vertical": "focus-shaan-vertical"
+            },
+            {
+              "at": {
+                "ticks": "8",
+                "rate": 1
+              },
+              "landscape": "focus-sam-landscape",
+              "vertical": "focus-sam-vertical"
+            }
+          ]
+        },
+        {
+          "id": "conversation",
+          "title": "Host conversation",
+          "sequence": "mfm-conversation",
+          "landscape": "landscape",
+          "vertical": "vertical",
+          "layoutChanges": []
+        },
+        {
+          "id": "guest-interview",
+          "title": "Guest interview",
+          "sequence": "mfm-guest-interview",
+          "landscape": "interview-landscape",
+          "vertical": "interview-vertical",
+          "layoutChanges": []
+        },
+        {
+          "id": "breakdown",
+          "title": "On-screen breakdown",
+          "sequence": "mfm-breakdown",
+          "landscape": "screen-share-landscape",
+          "vertical": "screen-share-vertical",
+          "layoutChanges": []
+        },
+        {
+          "id": "takeaway",
+          "title": "Takeaway & follow",
+          "sequence": "mfm-takeaway",
+          "landscape": "follow-landscape",
+          "vertical": "follow-vertical",
+          "layoutChanges": []
+        }
+      ]
+    }
+  }
+}

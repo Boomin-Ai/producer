@@ -1,0 +1,63 @@
+{
+  "protocol": "producer.bundle/1",
+  "production": "urn:uuid:2a85a049-4d2c-409a-95bf-8e6204664be6",
+  "parent": null,
+  "authoredAt": 1795651200,
+  "documentSha256": "3462e4df6b5d2ddaa6d93572bddcd5cd1597e31e0d5f41098f2a0fe049d6883d",
+  "author": "producer-editor",
+  "entry": {
+    "show": "my-first-million",
+    "segment": "opening"
+  },
+  "assets": {
+    "my-first-million-logo": {
+      "original": {
+        "sha256": "af872ad05a446f6d8661648ad6002e97e7771889bf7538b93af881645cdc55a4",
+        "format": "png"
+      },
+      "proxies": []
+    },
+    "my-first-million-sam": {
+      "original": {
+        "sha256": "fc460ea4ea73815d72fce4e5c2c3215e7827378cc4d768fbbdf3f6400f696b29",
+        "format": "png"
+      },
+      "proxies": []
+    },
+    "my-first-million-shaan": {
+      "original": {
+        "sha256": "9c815096c2fd896c5a591593ca70aa5226229171e816bf7a6b73f44622d5c9b5",
+        "format": "png"
+      },
+      "proxies": []
+    },
+    "system-ui": {
+      "original": {
+        "sha256": "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530",
+        "format": "system-ui"
+      },
+      "proxies": []
+    }
+  },
+  "actors": {
+    "producer-editor": {
+      "name": "Producer Native Dev",
+      "kind": "person",
+      "identity": "shows@producer.example"
+    },
+    "sam": {
+      "name": "Sam Parr",
+      "kind": "person"
+    },
+    "shaan": {
+      "name": "Shaan Puri",
+      "kind": "person"
+    }
+  },
+  "workflow": {
+    "state": "active",
+    "phase": "production",
+    "startedAt": 1795651200,
+    "tasks": {}
+  }
+}
