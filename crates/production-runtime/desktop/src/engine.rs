@@ -665,6 +665,7 @@ struct VideoDiagnostics {
 }
 #[derive(Clone, Default)]
 struct RenderStats {
+    clock_revision: u64,
     finished_show_revision: Option<u64>,
     set_motion_playing: bool,
     set_motion_position: f64,
@@ -691,10 +692,14 @@ struct RenderStats {
 impl RenderStats {
     fn merge(&self, s: &mut Snapshot) {
         s.input_status = self.input_status.clone();
-        s.program_position = self.position;
+        // The control lane can acknowledge a cut before the next telemetry
+        // sample. A timestamp from the outgoing segment cannot describe the new one.
+        if s.program_kind != "show" || self.clock_revision == s.program_revision {
+            s.program_position = self.position;
+            s.program_playing = self.playing;
+        }
         s.program_segment = s.project.playing_segment.clone().filter(|_| s.program_kind == "show");
-        s.program_layout = s.program_segment.as_ref().and_then(|_| s.project.show_layout_at(self.position));
-        s.program_playing = self.playing;
+        s.program_layout = s.program_segment.as_ref().and_then(|_| s.project.show_layout_at(s.program_position));
         s.set_motion_playing = self.set_motion_playing;
         s.set_motion_position = self.set_motion_position;
         s.render_frames = self.render_frames;
@@ -2167,6 +2172,8 @@ fn control(
                             state.project = next;
                             state.program_kind = if state.project.playing_segment.is_some() { "show" } else if has_set { "set" } else { "room" }.into();
                             state.program_revision += 1;
+                            state.program_segment = state.project.playing_segment.clone();
+                            state.program_layout = state.program_segment.as_ref().and_then(|_| state.project.show_layout_at(state.program_position));
                             state.previewing = false;
                             if let Some(p) = &preview {
                                 p.render.request(RenderOp::Monitor(false))?;
@@ -2841,10 +2848,19 @@ fn render_loop(
                         transport.resume("operator", now(origin))?;
                         transport.play(now(origin))?;
                         state.playing = true;
+                        if let Ok(mut observed) = stats.try_lock() {
+                            observed.playing = true;
+                            observed.finished_show_revision = None;
+                        }
                     }
                     RenderOp::Pause => {
                         transport.pause("operator", now(origin))?;
                         state.playing = false;
+                        if let Ok(mut observed) = stats.try_lock() {
+                            observed.playing = false;
+                            observed.position = transport.position(now(origin))?.as_f64();
+                            observed.finished_show_revision = None;
+                        }
                     }
                     RenderOp::Seek(t) => {
                         transport.seek(t, now(origin))?;
@@ -2945,6 +2961,7 @@ fn render_loop(
         let host = platform::host_time();
         let position = transport.position(now(origin))?;
         state.position = position.as_f64();
+        state.clock_revision = revision;
         state.finished_show_revision = (!preview && project.rendering_show && state.playing
             && position == transport.duration).then_some(revision);
         let seq = &plan.sequences["main"];
