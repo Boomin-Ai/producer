@@ -1,0 +1,32 @@
+name: Native Dev Apple Silicon preview
+on:
+  push:
+    branches: [dev/protocol-050]
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: macos-15-intel
+    timeout-minutes: 65
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '13.0'
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.100.0'
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/production-runtime/desktop
+      - name: Compile arm64 development studio
+        run: |
+          cargo build --locked --target aarch64-apple-darwin --manifest-path crates/production-runtime/desktop/Cargo.toml
+          file crates/production-runtime/desktop/target/aarch64-apple-darwin/debug/producer-native-room
+      - uses: actions/upload-artifact@v4
+        with:
+          name: producer-native-dev-arm64
+          path: crates/production-runtime/desktop/target/aarch64-apple-darwin/debug/producer-native-room
+          if-no-files-found: error
+
