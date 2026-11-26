@@ -1,6 +1,6 @@
 [package]
 name = "producer-native-room"
-version = "0.4.96"
+version = "0.4.97"
 edition = "2021"
 license = "AGPL-3.0-only"
 publish = false
@@ -10,7 +10,7 @@ build = "build.rs"
 [workspace]
 
 [dependencies]
-rune = { git = "https://github.com/anomalyco/rune", rev = "5d70a78dcaa141ee9e33f100caa79d86e7553754", default-features = false, features = ["metal-backend", "embedded-fonts"] }
+rune = { git = "https://github.com/anomalyco/rune", rev = "5d70a78dcaa141ee9e33f100caa79d86e7553754", default-features = false, features = ["metal-backend", "embedded-fonts", "native-file-dialog"] }
 thiserror = "2"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 uuid = { version = "1", features = ["v4","serde"] }
@@ -21,7 +21,7 @@ naga = { git = "https://github.com/gfx-rs/wgpu", rev = "cddb2f5d80dc0009b2ef6767
 producer-production-contract = { path = "../contract" }
 producer-production-core = { path = "../core" }
 producer-native-media = { path = "../media" }
-serde = { version = "=1.0.229", features = ["derive"] }
+serde = { version = "=1.0.229", features = ["derive", "rc"] }
 serde_json = "=1.0.154"
 sha2 = "=0.10.9"
 base64 = "=0.22.1"

@@ -22,6 +22,7 @@ mod studio_audio;
 mod dj_visual;
 mod broadcast;
 mod starter_sets;
+mod speaker_split;
 mod studio_presets;
 mod boomin_account;
 #[path = "../../../../src-tauri/src/boomin.rs"]

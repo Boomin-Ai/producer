@@ -522,6 +522,7 @@ pub struct Desk {
     root: PathBuf,
     bundled: Vec<Asset>,
     preferences: Mutex<Preferences>,
+    preference_writer: Mutex<()>,
     playback: Arc<Mutex<Playback>>,
     serial: AtomicU64,
     load: SyncSender<Load>,
@@ -589,6 +590,7 @@ impl Desk {
             root: root.to_owned(),
             bundled,
             preferences: Mutex::new(preferences),
+            preference_writer: Mutex::new(()),
             playback,
             serial: AtomicU64::new(1),
             load,
@@ -712,12 +714,13 @@ impl Desk {
     }
 
     fn settings(&self, change: impl FnOnce(&mut Preferences) -> Result<()>) -> Result<()> {
-        let mut settings = self.preferences.lock().unwrap();
-        let mut next = settings.clone();
+        let _writer = self.preference_writer.lock().unwrap();
+        let mut next = self.preferences.lock().unwrap().clone();
         change(&mut next)?;
         let pending = tempfile::NamedTempFile::new_in(&self.root)?;
         serde_json::to_writer(pending.as_file(), &next)?;
         pending.persist(self.root.join("studio-audio.json"))?;
+        let mut settings = self.preferences.lock().unwrap();
         let mut playback = self.playback.lock().unwrap();
         if playback.mixing && !next.mixing {
             let b = &mut playback.decks[DeckId::B.index()];

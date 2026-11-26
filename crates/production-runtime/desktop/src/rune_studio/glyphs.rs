@@ -6,6 +6,47 @@ pub fn glyph(name: &str) -> &'static rune::Icon {
             view: 24.,
             body: r#"<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"><path d="M20 12H4l7-7m-7 7 7 7"/></g>"#,
         },
+        "more" => &rune::Icon {
+            name: "more", view: 24.,
+            body: r#"<g fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></g>"#,
+        },
+        "folder" => &rune::Icon {
+            name: "folder", view: 24.,
+            body: r#"<path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>"#,
+        },
+        "clip-landscape" => &rune::Icon {
+            name: "clip-landscape", view: 24.,
+            body: r#"<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="m10 9 5 3-5 3z"/></g>"#,
+        },
+        "clip-portrait" => &rune::Icon {
+            name: "clip-portrait", view: 24.,
+            body: r#"<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2"/><path d="m10 9 5 3-5 3z"/></g>"#,
+        },
+        "send" => &rune::Icon {
+            name: "send",
+            view: 24.,
+            body: r#"<path d="m3 10 18-7-7 18-3-8-8-3Zm8 3L21 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>"#,
+        },
+        "image" => &rune::Icon {
+            name: "image",
+            view: 24.,
+            body: r#"<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="9" r="1.3"/><path d="m4 17 5-4 3 2 4-5 5 6"/></g>"#,
+        },
+        "clip" => &rune::Icon {
+            name: "clip",
+            view: 24.,
+            body: r#"<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="5" width="18" height="15" rx="3"/><path d="M3 11h18M7 5l4 6m2-6 4 6"/></g>"#,
+        },
+        "chevron-up" => &rune::Icon {
+            name: "chevron-up",
+            view: 24.,
+            body: r#"<path d="m5 15 7-7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>"#,
+        },
+        "chevron-down" => &rune::Icon {
+            name: "chevron-down",
+            view: 24.,
+            body: r#"<path d="m5 9 7 7 7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>"#,
+        },
         "profile" => &rune::Icon {
             name: "profile",
             view: 24.,

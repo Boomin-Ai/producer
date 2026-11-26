@@ -104,9 +104,22 @@ pub struct Component {
     pub props: BTreeMap<Id, Value>,
     pub root: Node,
 }
+/// How a room maps its authored sets to an output with different dimensions.
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum CanvasFit {
+    #[default]
+    Reflow,
+    Contain,
+}
+impl CanvasFit {
+    fn is_reflow(&self) -> bool { *self == Self::Reflow }
+}
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Set {
+    #[serde(default, skip_serializing_if = "CanvasFit::is_reflow")]
+    pub canvas_fit: CanvasFit,
     /// Named, versioned GPU graphs shared by the layouts in this set.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub graphs: BTreeMap<Id, RenderGraph>,

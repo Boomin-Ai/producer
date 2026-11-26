@@ -1,0 +1,64 @@
+{
+  "layouts": {
+    "landscape": {
+      "orientation": "landscape",
+      "width": 1920,
+      "height": 1080,
+      "root": {
+        "id": "speaker-split",
+        "frame": {"x": 0, "y": 0, "width": 1920, "height": 1080},
+        "content": {"kind": "group"},
+        "children": [
+          {
+            "id": "host-camera",
+            "frame": {"x": 0, "y": 0, "width": 959, "height": 1080},
+            "style": {"fill": {"kind": "solid", "ink": {"color": "#111B26", "opacity": 1}}},
+            "content": {"kind": "source", "source": "camera", "fit": "cover"}
+          },
+          {
+            "id": "guest-camera",
+            "frame": {"x": 961, "y": 0, "width": 959, "height": 1080},
+            "style": {"fill": {"kind": "solid", "ink": {"color": "#19232F", "opacity": 1}}},
+            "content": {"kind": "source", "source": "rtc-guest", "fit": "cover"}
+          },
+          {
+            "id": "divider",
+            "frame": {"x": 959, "y": 0, "width": 2, "height": 1080},
+            "style": {"fill": {"kind": "solid", "ink": {"color": "#344453", "opacity": 1}}},
+            "content": {"kind": "group"}
+          }
+        ]
+      }
+    },
+    "vertical": {
+      "orientation": "vertical",
+      "width": 1080,
+      "height": 1920,
+      "root": {
+        "id": "speaker-split",
+        "frame": {"x": 0, "y": 0, "width": 1080, "height": 1920},
+        "content": {"kind": "group"},
+        "children": [
+          {
+            "id": "host-camera",
+            "frame": {"x": 0, "y": 0, "width": 1080, "height": 959},
+            "style": {"fill": {"kind": "solid", "ink": {"color": "#111B26", "opacity": 1}}},
+            "content": {"kind": "source", "source": "camera", "fit": "cover"}
+          },
+          {
+            "id": "guest-camera",
+            "frame": {"x": 0, "y": 961, "width": 1080, "height": 959},
+            "style": {"fill": {"kind": "solid", "ink": {"color": "#19232F", "opacity": 1}}},
+            "content": {"kind": "source", "source": "rtc-guest", "fit": "cover"}
+          },
+          {
+            "id": "divider",
+            "frame": {"x": 0, "y": 959, "width": 1080, "height": 2},
+            "style": {"fill": {"kind": "solid", "ink": {"color": "#344453", "opacity": 1}}},
+            "content": {"kind": "group"}
+          }
+        ]
+      }
+    }
+  }
+}

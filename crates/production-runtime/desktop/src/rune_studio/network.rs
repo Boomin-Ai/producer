@@ -488,7 +488,7 @@ fn connection_row(n: &Network, brand: &Value) -> El {
     let name = brand["name"].as_str().unwrap_or("Connected workspace");
     let initials: String = name.split_whitespace().take(2)
         .filter_map(|word| word.chars().next()).flat_map(char::to_uppercase).collect();
-    let logo = el().size(32., 32.).radius(7.).clip_rounded(7.).fill(color(0x152635)).center();
+    let logo = el().size(32., 32.).radius(7.).clip_rounded(7.).fill(color(theme::AVATAR)).center();
     let logo = if let Some(image) = avatar_url(brand).and_then(|url| n.logos.get(url)).and_then(Option::as_ref) {
         logo.pixels_fit(image, SurfaceFit::Fill)
     } else {
@@ -513,7 +513,7 @@ fn connection_row(n: &Network, brand: &Value) -> El {
     };
     let mut row = row().key(format!("connection-{}", brand["id"].as_str().unwrap_or(name)))
         .w_full().min_w(0.).items_center().gap(8.).padding(7.)
-        .radius(7.).fill(color(0x111b25))
+        .radius(7.).fill(color(theme::ROW))
         .child(logo)
         .child(col().min_w(0.).grow(1.).gap(2.)
             .child(title(name, 12., 550., TEXT))
@@ -567,7 +567,7 @@ fn studio_requests(n: &Network, mut body: El) -> El {
             };
             let name = request["counterparty"]["name"].as_str().unwrap_or("Workspace");
             let mut card = col().w_full().min_w(0.).gap(5.).padding(8.)
-                .fill(color(0x111b25)).radius(7.)
+                .fill(color(theme::ROW)).radius(7.)
                 .child(title(request["title"].as_str().unwrap_or("Studio"), 12., 600., TEXT))
                 .child(caption(&format!("{name} · {status}")));
             let mut actions = row().gap(4.).flex_wrap();
@@ -616,7 +616,7 @@ pub(super) fn switcher(s: &Studio) -> Option<El> {
         .gap(2.)
         .radius(8.)
         .fill(color(BG))
-        .border(1., color(0x20303d));
+        .border(1., color(theme::TAB_BORDER));
 
     for (index, (name, glyph)) in SECTIONS.into_iter().enumerate() {
         let active = n.tab == index;
@@ -661,7 +661,7 @@ pub(super) fn switcher(s: &Studio) -> Option<El> {
                 .center()
                 .radius(5.)
                 .fill(color(if active { 0x193a32 } else { BG }))
-                .hover_fill(color(if active { 0x224c40 } else { SURFACE }))
+                .hover_fill(color(if active { theme::SELECTED_HOVER } else { SURFACE }))
                 .child(icon)
                 .on_press(move |s: &mut Studio| s.network.tab = index),
         );

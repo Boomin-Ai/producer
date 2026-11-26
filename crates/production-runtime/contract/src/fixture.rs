@@ -121,6 +121,7 @@ pub fn responsive_layout() -> Document {
     d.sets.insert(
         "teaching".into(),
         Set {
+            canvas_fit: Default::default(),
             graphs: Default::default(),
             output_graphs: Default::default(),
             layout_transition_ms: None,
@@ -289,6 +290,7 @@ pub fn classic_like() -> Document {
         property: Property::Opacity,
     };
     let mut set = Set {
+        canvas_fit: Default::default(),
         graphs: Default::default(),
             output_graphs: Default::default(),
             layout_transition_ms: None,

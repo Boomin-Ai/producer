@@ -92,8 +92,9 @@ def check(binary, root):
         assert "import-track" in mixed
     for width in (620, 1300):
         cards = render(binary, root / f"picker-{width}", f"{width}x820", ["new"], False)
-        assert {"clips", "podcast", "pilot", "game-show"} <= cards.keys()
-        assert (cards["clips"]["rect"][1] == cards["podcast"]["rect"][1]) == (width >= 696)
+        assert {"classic", "atmosphere-aerie", "clips", "pilot", "game-show"} <= cards.keys()
+        assert "podcast" not in cards
+        assert (cards["classic"]["rect"][1] == cards["atmosphere-aerie"]["rect"][1]) == (width >= 696)
     for width in (680, 1200):
         shell = root / f"shell-{width}"
         size = f"{width}x820"
@@ -139,6 +140,19 @@ def check(binary, root):
             nodes = render(binary, dock, "1150x720", frames=30)
             x, y, w, h = nodes[f"dock-{edge}-{panel}"]["rect"]
             assert w >= 100 and h >= 100 and x >= 0 and y >= 0, (panel, edge)
+            if panel == "guests" and edge == "right":
+                assert "guest-link" in nodes and "guest-output-settings" not in nodes
+                assert "people-guest-status" not in nodes
+                settings = render(binary, dock, "1150x720", ["people-session"])
+                assert settings["people-connections-popout"]["label"] == "People settings"
+                choices = {"guest-output-Landscape", "guest-output-Portrait"}
+                assert choices <= settings.keys()
+                path = dock / "room.json"
+                single_output = json.loads(path.read_text())
+                single_output["canvas"]["view"] = "vertical"
+                path.write_text(json.dumps(single_output))
+                settings = render(binary, dock, "1150x720", ["people-session"])
+                assert "guest-output-settings" in settings and choices.isdisjoint(settings)
             if panel == "sources":
                 opened = render(binary, dock, "1150x720", ["device-camera"])
                 assert opened["source-popout"]["label"] == "Camera settings"
@@ -151,6 +165,26 @@ def check(binary, root):
                     assert "source-popout" not in closed
     channels = render(binary, profile, "1150x720", ["channels", "add-channel"])
     assert {"destination-server", "destination-key", "save-channel"} <= channels.keys()
+    for edge in ("top", "bottom"):
+        profile = root / f"assistant-{edge}"
+        panel_fixture(profile, project, "assistant", edge)
+        expanded = render(binary, profile, "1150x720", frames=30)
+        assert {"assistant-transcript", "assistant-logs", "assistant-input"} <= expanded.keys()
+        assert "assistant-quick" not in expanded
+        path = profile / "room.json"
+        doc = json.loads(path.read_text())
+        doc["workspace"]["docks"][edge]["collapsed"] = True
+        path.write_text(json.dumps(doc))
+        compact = render(binary, profile, "1150x720", frames=30)
+        assert "assistant-quick" in compact and "assistant-input" not in compact
+        opened = render(binary, profile, "1150x720", ["assistant-open"])
+        assert {"assistant-popout", "assistant-transcript", "assistant-logs", "assistant-input"} <= opened.keys()
+        assert "assistant-quick" not in opened
+        assert opened["monitor-0"]["rect"] == compact["monitor-0"]["rect"]
+        x, y, w, h = opened["assistant-popout"]["rect"]
+        assert 0 <= x <= 1150 - w and 0 <= y <= 720 - h and 0 < w < 500
+        closed = render(binary, profile, "1150x720", ["assistant-open", {"type": "key", "name": "Escape"}])
+        assert "assistant-popout" not in closed and "assistant-quick" in closed
 
 
 if __name__ == "__main__":

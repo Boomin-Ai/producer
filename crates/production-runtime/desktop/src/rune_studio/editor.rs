@@ -12,6 +12,7 @@ fn node_at_mut<'a>(set: &'a mut Set, layout: &str, path: &[usize]) -> Option<&'a
 fn control_label(id: &str) -> String {
     match id {
         "mov" => "Media".into(),
+        "classic-title" => "On-screen title".into(),
         "host-camera" => "Host".into(),
         "guest-camera" | "stage-guest" => "Guest".into(),
         _ => id
@@ -109,8 +110,40 @@ pub(super) struct Editor {
     saving: bool,
     ready: bool,
     error: String,
+    assistant_draft: bool,
+    assistant_saved: bool,
 }
 impl Editor {
+    fn new(id: String, saved: Set, draft: Set, pair: SetLayoutPair) -> Self {
+        let mut editor = Self {
+            id, saved, draft, pair,
+            opened: Instant::now(),
+            picker: false,
+            inspect_sources: false,
+            output: 0,
+            fields: vec![],
+            source_picker: None,
+            due: Some(Instant::now()),
+            bounds: Default::default(),
+            inflight: None,
+            saving: false,
+            ready: false,
+            error: String::new(),
+            assistant_draft: false,
+            assistant_saved: false,
+        };
+        editor.fields();
+        editor
+    }
+    pub(super) fn assistant_review_state(&self) -> Option<serde_json::Value> {
+        self.assistant_draft.then(|| json!({
+            "set":self.id,"layout":self.pair,"displayed":self.ready.then_some(&self.pair),
+            "ready":self.ready,"error":(!self.error.is_empty()).then_some(&self.error)
+        }))
+    }
+    pub(super) fn take_assistant_save(&mut self) -> bool {
+        std::mem::take(&mut self.assistant_saved)
+    }
     fn fields(&mut self) {
         self.fields.clear();
         self.source_picker = None;
@@ -138,8 +171,10 @@ impl Editor {
     fn text_changes(&mut self) {
         let layout = self.pair.ids()[self.output];
         let mut changed = false;
+        let mut classic_title = None;
         for f in &self.fields {
             if let Some(Node {
+                id,
                 content: Content::Text { value, .. },
                 ..
             }) = node_at_mut(&mut self.draft, layout, &f.path)
@@ -147,6 +182,20 @@ impl Editor {
                 if value != &f.input.text {
                     value.clone_from(&f.input.text);
                     changed = true;
+                    if id == "classic-title" {
+                        classic_title = Some(value.clone());
+                    }
+                }
+            }
+        }
+        if let Some(title) = classic_title {
+            for layout in self.draft.layouts.values_mut() {
+                for node in &mut layout.root.children {
+                    if node.id == "classic-title" {
+                        if let Content::Text { value, .. } = &mut node.content {
+                            value.clone_from(&title);
+                        }
+                    }
                 }
             }
         }
@@ -208,6 +257,7 @@ impl Editor {
                             self.saved = self.draft.clone();
                             self.error.clear();
                             self.ready = true;
+                            self.assistant_saved = self.assistant_draft;
                         }
                         Ok(reply) => {
                             self.bounds =
@@ -269,27 +319,15 @@ pub(super) fn open_selection(s: &mut Studio, id: String, pair: SetLayoutPair) {
         s.error = "The assistant is preparing a draft.".into();
         return;
     }
-    s.chat.close_review(l);
-    let mut e = Editor {
-        id,
-        saved: set.clone(),
-        draft: set.clone(),
-        pair,
-        opened: Instant::now(),
-        picker: false,
-        inspect_sources: false,
-        output: 0,
-        fields: vec![],
-        source_picker: None,
-        due: Some(Instant::now()),
-        bounds: Default::default(),
-        inflight: None,
-        saving: false,
-        ready: false,
-        error: String::new(),
-    };
-    e.fields();
-    s.editor = Some(e);
+    s.editor = Some(Editor::new(id, set.clone(), set.clone(), pair));
+}
+
+pub(super) fn assistant_draft(live: &Live, id: String, old: Set, draft: Set, pair: SetLayoutPair) -> anyhow::Result<Editor> {
+    anyhow::ensure!(live.handle.snapshot().project.production.sets.get(&id) == Some(&old),
+        "This set changed. Ask for a fresh draft.");
+    let mut editor = Editor::new(id, old, draft, pair);
+    editor.assistant_draft = true;
+    Ok(editor)
 }
 pub(super) fn close(s: &mut Studio) {
     if let Some(e) = s.editor.as_mut() {
@@ -753,6 +791,25 @@ pub(super) fn layout_slots(p: &crate::model::RoomProject, set: &Set, pair: &SetL
     slots
 }
 
+/// A template can identify a camera with an editable nameplate: a slot named
+/// "host" pairs with the text field on the "host-name" node in the same layout.
+pub(super) fn camera_nameplate<'a>(set: &'a Set, pair: &SetLayoutPair, source: &str) -> Option<&'a str> {
+    fn find<'a>(node: &'a Node, test: &impl Fn(&Node) -> bool) -> Option<&'a Node> {
+        if test(node) { return Some(node); }
+        node.children.iter().find_map(|child| find(child, test))
+    }
+    pair.ids().into_iter().find_map(|layout| {
+        let root = &set.layouts.get(layout)?.root;
+        let slot = find(root, &|node| matches!(&node.content, Content::Source { source: id, .. } if id == source))?;
+        let nameplate = format!("{}-name", slot.id);
+        let node = find(root, &|node| node.id == nameplate && node.style.as_ref()
+            .and_then(|style| style.text.as_ref()).is_some_and(|text| text.field.is_some()))?;
+        let Content::Text { value, .. } = &node.content else { return None };
+        let name = value.trim();
+        (!name.is_empty()).then_some(name)
+    })
+}
+
 pub(super) fn source_name(p: &crate::model::RoomProject, id: &str) -> String {
     if id == "rtc-guest" {
         return "Stage guest".into();
@@ -760,7 +817,13 @@ pub(super) fn source_name(p: &crate::model::RoomProject, id: &str) -> String {
     p.lanes
         .iter()
         .find(|l| l.source == id)
-        .map_or_else(|| id.into(), |l| l.label.clone())
+        .map_or_else(|| {
+            if let Some(number) = id.strip_prefix("camera-") {
+                format!("Camera {number}")
+            } else {
+                id.into()
+            }
+        }, |l| l.label.clone())
 }
 
 pub(super) fn escape(s: &mut Studio) {

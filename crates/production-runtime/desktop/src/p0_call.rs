@@ -87,17 +87,26 @@ impl Guest {
             }
         }
     }
-    pub fn mix(&self, stereo: &mut [f32]) {
-        let Ok(mut media) = self.0.try_lock() else { return };
+    pub fn mix(&self, stereo: &mut [f32], measure: bool) -> f32 {
+        let Ok(mut media) = self.0.try_lock() else { return 0. };
         while let Some((at, block)) = media.audio.pop_front() {
             if at.elapsed() > Duration::from_millis(120) { media.expired_blocks+=1; continue; }
             for (out, sample) in stereo.chunks_exact_mut(2).zip(block) {
                 for channel in out { *channel = (*channel + sample as f32 / 32768.).clamp(-1.,1.); }
             }
             media.mixed_blocks+=1;
-            return;
+            return if measure {
+                let energy = block.iter().map(|sample| {
+                    let sample = f32::from(*sample) / 32768.;
+                    sample * sample
+                }).sum::<f32>();
+                (energy / block.len() as f32).sqrt()
+            } else {
+                0.
+            };
         }
         media.empty_reads+=1;
+        0.
     }
     // Select the captured 10 ms block nearest the current program slot.
     // Replace the primary microphone contribution before its mute/gain stage.

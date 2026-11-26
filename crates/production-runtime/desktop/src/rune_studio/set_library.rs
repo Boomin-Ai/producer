@@ -55,10 +55,9 @@ const POSTERS: &[(&str, &[u8])] = &[
     poster!("atmosphere-aerie"),
     poster!("meridian-avenue"),
     poster!("orbital-desk"),
-    poster!("podcast"),
-    poster!("studio"),
+    poster!("classic"),
+    poster!("my-first-million"),
     poster!("the-producer"),
-    poster!("waves"),
 ];
 
 impl Library {

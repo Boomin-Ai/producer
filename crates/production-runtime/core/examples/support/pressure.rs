@@ -104,6 +104,7 @@ pub fn document(id: &str, nested: bool) -> Document {
     d.sets.insert(
         "pressure".into(),
         Set {
+            canvas_fit: Default::default(),
             graphs: Default::default(),
             output_graphs: Default::default(),
             layout_transition_ms: None,

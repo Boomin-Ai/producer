@@ -18,9 +18,10 @@ pub enum PanelId {
     Dj,
     Sound,
     Network,
+    Publish,
 }
 impl PanelId {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Sources,
         Self::Scenes,
         Self::Mixer,
@@ -32,6 +33,7 @@ impl PanelId {
         Self::Dj,
         Self::Sound,
         Self::Network,
+        Self::Publish,
     ];
     pub fn launch_panels() -> impl Iterator<Item = Self> {
         let boomin = crate::boomin_account::STUDIO_PANELS;
@@ -52,6 +54,7 @@ impl PanelId {
             Self::Dj => "DJ",
             Self::Sound => "Sound",
             Self::Network => "Network",
+            Self::Publish => "Publish",
         }
     }
     pub fn key(self) -> &'static str {
@@ -67,6 +70,7 @@ impl PanelId {
             Self::Dj => "dj",
             Self::Sound => "sound",
             Self::Network => "network",
+            Self::Publish => "publish",
         }
     }
     pub fn parse(s: &str) -> Result<Self> {
@@ -101,9 +105,24 @@ impl Edge {
         matches!(self, Self::Left | Self::Right)
     }
 }
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum HeaderMode {
+    #[default]
+    Standard,
+    Compact,
+    Hidden,
+}
+impl HeaderMode {
+    pub const ALL: [Self; 3] = [Self::Standard, Self::Compact, Self::Hidden];
+    fn is_default(&self) -> bool { *self == Self::Standard }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Panel {
+    #[serde(default, skip_serializing_if = "HeaderMode::is_default")]
+    pub header: HeaderMode,
     pub edge: Edge,
     pub visible: bool,
     #[serde(default = "default_panel_weight")]
@@ -121,9 +140,18 @@ pub struct Dock {
     pub hidden: bool,
     pub active: Option<PanelId>,
 }
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DeskTheme {
+    #[default]
+    Classic,
+    OrbitalGreen,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Workspace {
+    pub theme: DeskTheme,
     pub panels: BTreeMap<PanelId, Panel>,
     pub docks: BTreeMap<Edge, Dock>,
     pub order: Vec<PanelId>,
@@ -136,6 +164,8 @@ impl<'de> Deserialize<'de> for Workspace {
         #[derive(Deserialize)]
         #[serde(deny_unknown_fields, rename_all = "camelCase")]
         struct Wire {
+            #[serde(default)]
+            theme: DeskTheme,
             panels: Option<BTreeMap<PanelId, Panel>>,
             docks: Option<BTreeMap<Edge, Dock>>,
             order: Option<Vec<PanelId>>,
@@ -147,6 +177,7 @@ impl<'de> Deserialize<'de> for Workspace {
         }
         let w = Wire::deserialize(d)?;
         let mut out = Self::default();
+        out.theme = w.theme;
         match (w.panels, w.docks, w.order) {
             (Some(p), Some(d), Some(o))
                 if [w.sources, w.controls, w.timeline, w.timeline_top]
@@ -155,7 +186,7 @@ impl<'de> Deserialize<'de> for Workspace {
             {
                 let mut panels = p;
                 let mut order = o;
-                for id in [PanelId::Clips, PanelId::People, PanelId::Assistant, PanelId::Dj, PanelId::Sound, PanelId::Network] {
+                for id in [PanelId::Clips, PanelId::People, PanelId::Assistant, PanelId::Dj, PanelId::Sound, PanelId::Network, PanelId::Publish] {
                     if !panels.contains_key(&id) && !order.contains(&id) {
                         panels.insert(id, out.panels[&id].clone());
                         order.push(id);
@@ -164,6 +195,8 @@ impl<'de> Deserialize<'de> for Workspace {
                 out.panels = panels;
                 out.docks = d;
                 out.order = order;
+                out.validate_registry().map_err(serde::de::Error::custom)?;
+                out.reconcile();
             }
             (None, None, None) => {
                 for (p, v) in [
@@ -194,6 +227,7 @@ impl<'de> Deserialize<'de> for Workspace {
 impl Default for Workspace {
     fn default() -> Self {
         Self {
+            theme: DeskTheme::Classic,
             panels: [
                 (PanelId::Sources, Edge::Left, true),
                 (PanelId::Scenes, Edge::Left, false),
@@ -204,6 +238,7 @@ impl Default for Workspace {
                 (PanelId::Dj, Edge::Bottom, false),
                 (PanelId::Sound, Edge::Left, false),
                 (PanelId::Network, Edge::Right, false),
+                (PanelId::Publish, Edge::Right, false),
                 (PanelId::Controls, Edge::Right, true),
                 (PanelId::Timeline, Edge::Bottom, true),
             ]
@@ -212,6 +247,7 @@ impl Default for Workspace {
                 (
                     p,
                     Panel {
+                        header: HeaderMode::default(),
                         edge,
                         visible,
                         weight: 1.,
@@ -246,6 +282,8 @@ impl Default for Workspace {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "camelCase", deny_unknown_fields)]
 pub enum WorkspaceCommand {
+    SetTheme { theme: DeskTheme },
+    SetHeader { panel: PanelId, mode: HeaderMode },
     Place {
         panel: PanelId,
         edge: Edge,
@@ -330,7 +368,20 @@ impl Workspace {
             }
         }
     }
-    pub fn validate(&self) -> Result<()> {
+    pub fn descriptors(&self) -> BTreeMap<&'static str, serde_json::Value> {
+        PanelId::ALL.into_iter().map(|id| {
+            let panel = &self.panels[&id];
+            let edges: Vec<_> = Edge::ALL.into_iter().filter(|edge| id.accepts(*edge)).collect();
+            (id.key(), serde_json::json!({
+                "id": id.key(), "label": id.label(), "allowedEdges": edges,
+                "headerMode": panel.header, "headerModes": HeaderMode::ALL,
+                "placement": panel, "dockCollapsed": self.docks[&panel.edge].collapsed,
+                "dockHidden": self.docks[&panel.edge].hidden, "scope": "workspace"
+            }))
+        }).collect()
+    }
+
+    fn validate_registry(&self) -> Result<()> {
         if self.panels.len() != PanelId::ALL.len()
             || self.docks.len() != 4
             || self.order.len() != PanelId::ALL.len()
@@ -340,6 +391,10 @@ impl Workspace {
         {
             bail!("Invalid workspace registry");
         }
+        Ok(())
+    }
+    pub fn validate(&self) -> Result<()> {
+        self.validate_registry()?;
         for (p, s) in &self.panels {
             if !s.weight.is_finite() || !(0.0001..=16.).contains(&s.weight) {
                 bail!("Invalid panel size weight");
@@ -495,6 +550,10 @@ impl Workspace {
     pub fn apply(&mut self, c: WorkspaceCommand) -> Result<()> {
         let mut next = self.clone();
         match c {
+            WorkspaceCommand::SetTheme { theme } => next.theme = theme,
+            WorkspaceCommand::SetHeader { panel, mode } => {
+                next.panels.get_mut(&panel).unwrap().header = mode;
+            }
             WorkspaceCommand::Place {
                 panel,
                 edge,
@@ -599,7 +658,9 @@ impl Workspace {
             }
             WorkspaceCommand::Reset => {
                 let selected = next.selected.clone();
+                let theme = next.theme;
                 next = Self::default();
+                next.theme = theme;
                 next.selected = selected;
             }
         }
@@ -724,6 +785,25 @@ mod tests {
         assert!(!PanelId::launch_panels().any(|panel| panel == PanelId::Timeline));
         assert_eq!(layout.extents(1440., 900.)[3], 0.);
         layout.validate().unwrap();
+    }
+
+    #[test]
+    fn header_mode_survives_moves_and_round_trips() {
+        let mut ws = Workspace::default();
+        let legacy = serde_json::to_value(&ws).unwrap();
+        assert!(legacy["panels"]["guests"].get("header").is_none());
+        for mode in HeaderMode::ALL {
+            ws.apply(WorkspaceCommand::SetHeader { panel: PanelId::People, mode }).unwrap();
+            ws.apply(WorkspaceCommand::Move { panel: PanelId::People, edge: Edge::Right }).unwrap();
+            ws = serde_json::from_value(serde_json::to_value(&ws).unwrap()).unwrap();
+            assert_eq!(ws.panels[&PanelId::People].header, mode);
+        }
+        for panel in PanelId::ALL {
+            ws.apply(WorkspaceCommand::SetHeader { panel, mode: HeaderMode::Hidden }).unwrap();
+        }
+        ws.apply(WorkspaceCommand::SetTheme { theme: DeskTheme::OrbitalGreen }).unwrap();
+        let restored: Workspace = serde_json::from_value(serde_json::to_value(&ws).unwrap()).unwrap();
+        assert_eq!(restored, ws);
     }
 
     #[test]
@@ -1029,6 +1109,15 @@ mod tests {
             [84., 84., 56., 56.]
         );
         assert_eq!(empty.extents(1440., 900.), [0.; 4]);
+    }
+    #[test]
+    fn loading_repairs_stale_dock_selection() {
+        let mut saved = Workspace::default();
+        saved.docks.get_mut(&Edge::Left).unwrap().active = Some(PanelId::Mixer);
+        saved.docks.get_mut(&Edge::Top).unwrap().active = Some(PanelId::Timeline);
+        saved.docks.get_mut(&Edge::Right).unwrap().active = None;
+        let restored: Workspace = serde_json::from_value(serde_json::to_value(saved).unwrap()).unwrap();
+        assert_eq!(restored, Workspace::default());
     }
     #[test]
     fn horizontal_drag_snaps_and_expands_symmetrically() {

@@ -8,7 +8,12 @@ mod mixer;
 mod monitor;
 mod network;
 mod panels;
+mod panel_frame;
+mod theme;
 mod people;
+mod publish;
+mod publish_options;
+mod publish_history;
 mod settings;
 mod set_library;
 mod timeline;
@@ -40,7 +45,7 @@ const TEXT: u32 = 0xe4edf3;
 const MUTED: u32 = 0x8ca2af;
 const MINT: u32 = 0x78ddba;
 fn color(c: u32) -> Color {
-    rune::color::hex(&format!("#{c:06x}")).unwrap()
+    theme::color(c)
 }
 fn title(s: impl Into<String>, size: f32, weight: f32, c: u32) -> El {
     text(s.into())
@@ -112,6 +117,8 @@ enum Page {
 struct Live {
     handle: Arc<Handle>,
     snapshot: Snapshot,
+    broadcast_view: (crate::broadcast::Status, bool),
+    clip_view: Option<(crate::clips::Status, Arc<Vec<crate::clips::Saved>>)>,
     surfaces: [NativeSurface; 2],
     guest_thumbnail: NativeSurface,
     worker: Option<std::thread::JoinHandle<()>>,
@@ -161,6 +168,8 @@ impl Live {
         Ok(Self {
             handle,
             snapshot: snap,
+            clip_view: None,
+            broadcast_view: Default::default(),
             surfaces,
             guest_thumbnail,
             worker: Some(worker),
@@ -174,7 +183,15 @@ impl Live {
         if self.updated.elapsed() < Duration::from_millis(150) {
             return Ok(false);
         }
-        self.snapshot = self.handle.snapshot();
+        if let Ok(media) = self.handle.media.try_lock() {
+            if let Some(media) = media.as_ref() {
+                if let Some(view) = media.clips.try_view() { self.clip_view = Some(view); }
+                if let Some(view) = media.broadcast.try_view() { self.broadcast_view = view; }
+            }
+        }
+        if let Some(snapshot) = self.handle.try_snapshot() {
+            self.snapshot = snapshot;
+        }
         self.previewing
             .store(self.snapshot.previewing, Ordering::Release);
         self.guest_view.store(
@@ -238,15 +255,16 @@ struct Studio {
     pending_trim: Option<RoomCommand>,
     channels: channels::Channels,
     naming: bool,
-    starter_images: Option<[rune::Image; 4]>,
+    starter_images: Option<[rune::Image; Starter::ALL.len()]>,
     pending_link: Option<crate::room_share::LinkKind>,
     activity: bool,
     switch_notice: Option<&'static str>,
     show_chat: bool,
     settings: settings::Settings,
-    studio_settings: bool,
+    studio_settings: Option<settings::StudioSheet>,
     mixer_scrub: Option<(f32, Instant)>,
     network: network::Network,
+    publish: publish::Publish,
     dj_deck: usize,
     sound_library: bool,
     sound_query: TextEdit,
@@ -320,6 +338,7 @@ impl Studio {
             show_chat: false,
             settings: Default::default(),
             network: Default::default(),
+            publish: Default::default(),
             dj_deck: 0,
             sound_library: false,
             sound_query: TextEdit::new(""),
@@ -334,7 +353,7 @@ impl Studio {
             marquee_cue: None,
             city_slot: None,
             city_query: TextEdit::new(""),
-            studio_settings: false,
+            studio_settings: None,
             mixer_scrub: None,
             city_searched: String::new(),
             city_results: vec![],
@@ -376,7 +395,7 @@ impl Studio {
                 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
                 self.camera.stop();
                 self.editor = None;
-                self.studio_settings = false;
+                self.studio_settings = None;
                 self.mixer_scrub = None;
                 self.set_selection = None;
                 self.pending_link = None;
@@ -437,7 +456,7 @@ impl Studio {
     fn tick(&mut self, _: f64, _: &mut Tx) -> bool {
         let mut accounts =
             self.settings.poll(&mut self.error) | self.channels.poll(&mut self.error) | self.people.poll();
-        accounts |= network::poll(self) | self.set_library.poll();
+        accounts |= publish::poll(self) | network::poll(self) | self.set_library.poll();
         accounts |= people::poll_direct_invitation(self);
         if self.settings.account.is_some() {
             if let Some(kind) = self.pending_link.take() {
@@ -465,6 +484,9 @@ impl Studio {
                 accounts = true;
             }
         }
+        let assistant_target = self.live.as_ref()
+            .filter(|live| !live.handle.assistant_requests.lock().unwrap().is_empty())
+            .and_then(|live| chat::target(self, &live.snapshot.project));
         if let Some(l) = &mut self.live {
             if self.editor.as_mut().is_some_and(|e| e.tick(l)) {
                 self.editor = None;
@@ -476,7 +498,25 @@ impl Studio {
                 });
                 accounts = true;
             }
-            let changed_chat = self.chat.tick(l, self.editor.is_some());
+            let assistant = &l.snapshot.project.workspace.panels[&PanelId::Assistant];
+            let dock = &l.snapshot.project.workspace.docks[&assistant.edge];
+            let mut changed_chat = false;
+            if self.show_chat && (!assistant.visible || assistant.edge.side() || dock.hidden || !dock.collapsed || self.editor.is_some() || self.editing_docks) {
+                self.show_chat = false;
+                changed_chat = true;
+            }
+            if self.editor.as_mut().is_some_and(editor::Editor::take_assistant_save) {
+                self.chat.saved_set();
+                changed_chat = true;
+            }
+            changed_chat |= self.chat.tick(l, self.editor.as_ref(), assistant.visible && !dock.hidden, assistant_target);
+            if self.editor.is_none() {
+                if let Some(editor) = self.chat.take_review(l) {
+                    self.editor = Some(editor);
+                    self.show_chat = false;
+                    changed_chat = true;
+                }
+            }
             match l.refresh() {
                 Ok(changed) => accounts || changed || changed_chat,
                 Err(e) => {
@@ -585,6 +625,10 @@ pub(super) fn run() {
     .run()
 }
 fn view(s: &Studio, cx: &mut Cx<Studio>) -> El {
+    let palette = s.live.as_ref().filter(|_| s.page == Page::Studio).map(|l| l.snapshot.project.workspace.theme).unwrap_or_default();
+    theme::with(palette, || desk_view(s, cx))
+}
+fn desk_view(s: &Studio, cx: &mut Cx<Studio>) -> El {
     cx.help_look(rune::HelpLook::system(true)
         .fill(color(0x16232e))
         .ink(color(TEXT))
@@ -603,10 +647,10 @@ fn view(s: &Studio, cx: &mut Cx<Studio>) -> El {
                 .child(panels::workspace(s, width, height).disabled(true))
                 .child(editor::view(s, width, height));
         }
-        if s.studio_settings {
+        if let Some(sheet) = s.studio_settings {
             return root
                 .child(panels::workspace(s, width, height).disabled(true))
-                .child(settings::studio_overlay(s, width, height));
+                .child(settings::studio_overlay(s, width, height, sheet));
         }
         return root.child(panels::workspace(s, width, height));
     }

@@ -13,13 +13,26 @@ pub(super) struct People {
     route: Route,
     hosting: Option<(String, bool)>,
     checking: Option<mpsc::Receiver<(String, bool)>>,
-    invitation_copy: Option<mpsc::Receiver<anyhow::Result<String>>>,
+    task: Option<GuestTask>,
     invitation_result: Option<Result<String, String>>,
+    session_error: Option<String>,
     waiting_for_link: Option<Instant>,
     portrait: bool,
     details: bool,
     remove: bool,
 }
+
+#[derive(Clone, Copy, PartialEq)]
+enum GuestTaskKind {
+    Invitation,
+    Session,
+}
+
+struct GuestTask {
+    kind: GuestTaskKind,
+    result: mpsc::Receiver<anyhow::Result<Option<String>>>,
+}
+
 impl People {
     pub fn refresh(s: &mut Studio) {
         if s.people.checking.is_some() {
@@ -51,17 +64,27 @@ impl People {
     }
     pub fn poll(&mut self) -> bool {
         let mut changed = false;
-        if let Some(receiver) = &self.invitation_copy {
-            let result = match receiver.try_recv() {
+        if let Some(task) = &self.task {
+            let result = match task.result.try_recv() {
                 Ok(result) => Some(result.map_err(|error| error.to_string())),
                 Err(mpsc::TryRecvError::Disconnected) => {
-                    Some(Err("Couldn’t copy the invitation. Try again.".into()))
+                    Some(Err("The guest action could not finish. Try again.".into()))
                 }
                 Err(mpsc::TryRecvError::Empty) => None,
             };
             if let Some(result) = result {
-                self.invitation_copy = None;
-                self.invitation_result = Some(result);
+                match task.kind {
+                    GuestTaskKind::Invitation => match result {
+                        Ok(Some(message)) => self.invitation_result = Some(Ok(message)),
+                        Err(error) => {
+                            self.waiting_for_link = None;
+                            self.invitation_result = Some(Err(error));
+                        }
+                        Ok(None) => {}
+                    },
+                    GuestTaskKind::Session => self.session_error = result.err(),
+                }
+                self.task = None;
                 changed = true;
             }
         }
@@ -73,30 +96,132 @@ impl People {
         changed
     }
     pub fn copying_invitation(&self) -> bool {
-        self.invitation_copy.is_some() || self.waiting_for_link.is_some()
+        self.waiting_for_link.is_some()
+            || self
+                .task
+                .as_ref()
+                .is_some_and(|task| task.kind == GuestTaskKind::Invitation)
     }
-    pub fn copy_invitation(&mut self, copy: impl FnOnce() -> anyhow::Result<String> + Send + 'static) {
+
+    pub fn busy(&self) -> bool {
+        self.waiting_for_link.is_some() || self.task.is_some()
+    }
+
+    pub fn copy_invitation(
+        &mut self,
+        copy: impl FnOnce() -> anyhow::Result<String> + Send + 'static,
+    ) {
+        self.run(GuestTaskKind::Invitation, move || copy().map(Some));
+    }
+
+    fn run(
+        &mut self,
+        kind: GuestTaskKind,
+        task: impl FnOnce() -> anyhow::Result<Option<String>> + Send + 'static,
+    ) {
         self.invitation_result = None;
+        self.session_error = None;
         let (tx, rx) = mpsc::channel();
-        self.invitation_copy = Some(rx);
+        self.task = Some(GuestTask { kind, result: rx });
         std::thread::spawn(move || {
-            let _ = tx.send(copy());
+            let _ = tx.send(task());
         });
     }
-    pub fn invitation_feedback(&self) -> Option<El> {
+
+    fn request(&mut self, kind: GuestTaskKind, handle: Arc<Handle>, command: RoomCommand) {
+        self.run(kind, move || {
+            let reply = handle.request(command)?;
+            anyhow::ensure!(
+                reply["ok"] == true,
+                "{}",
+                reply["error"]
+                    .as_str()
+                    .unwrap_or("The guest action could not finish. Try again.")
+            );
+            Ok(None)
+        });
+    }
+
+    pub fn invitation_feedback(&self, rtc: &serde_json::Value) -> Option<El> {
+        if matches!(phase(rtc), "connected" | "failed" | "ended") || rtc["admitReady"] == true {
+            return None;
+        }
         let (message, tint) = match self.invitation_result.as_ref()? {
             Ok(message) => (message, MINT),
             Err(message) => (message, 0xe9b666),
         };
-        Some(text(message.clone()).key("guest-invitation-feedback")
-            .font(TextStyle::new(11., 500.)).color(color(tint)).wrap())
+        Some(
+            text(message.clone())
+                .key("guest-invitation-feedback")
+                .font(TextStyle::new(11., 500.))
+                .color(color(tint))
+                .wrap(),
+        )
     }
 }
+
+fn phase(rtc: &serde_json::Value) -> &str {
+    rtc["phase"].as_str().unwrap_or("idle")
+}
+
+fn guest_status<'a>(people: &'a People, rtc: &'a serde_json::Value) -> Option<(&'a str, u32)> {
+    let phase = phase(rtc);
+    let terminal_message = match phase {
+        "failed" => Some(
+            rtc["reason"]
+                .as_str()
+                .unwrap_or("Guest connection failed. End the session to try again."),
+        ),
+        "ended" => Some(rtc["reason"].as_str().unwrap_or("Guest session ended.")),
+        _ => None,
+    };
+    if let Some(error) = terminal_message.or(people.session_error.as_deref()) {
+        return Some((error, 0xe9b666));
+    }
+    if phase == "connected" {
+        return None;
+    }
+    if matches!(phase, "gathering" | "waiting") && rtc["admitReady"] == true {
+        return Some(("Guest ready to join", MINT));
+    }
+    if let Some(Err(error)) = &people.invitation_result {
+        return Some((error, 0xe9b666));
+    }
+    let copied = people
+        .invitation_result
+        .as_ref()
+        .and_then(|result| result.as_ref().ok());
+    match phase {
+        "idle" if people.copying_invitation() => Some(("Preparing invitation…", MUTED)),
+        "idle" => copied.map(|message| (message.as_str(), MINT)),
+        "gathering" => Some(("Preparing invitation…", MUTED)),
+        "waiting" if copied.is_some() => Some(("Invitation copied. Waiting for your guest.", MINT)),
+        "waiting" => Some(("Waiting for your guest", MUTED)),
+        _ => Some(("Connecting guest…", MUTED)),
+    }
+}
+
+fn send_guest_command(s: &mut Studio, command: RoomCommand) {
+    if let Some(live) = &s.live {
+        if !s.people.busy() {
+            s.people
+                .request(GuestTaskKind::Session, live.handle.clone(), command);
+        }
+    }
+}
+
+fn guest_command(s: &Studio, key: &str, label: &str, selected: bool, command: RoomCommand) -> El {
+    button(key, label, selected, move |s| {
+        send_guest_command(s, command.clone())
+    })
+    .disabled(s.people.busy())
+}
+
 pub(super) fn trigger(s: &Studio) -> El {
     panels::tool(
         "people-session",
         "settings",
-        "Guest connection",
+        "People settings",
         s.people_settings,
         |s| {
             s.people_settings = !s.people_settings;
@@ -112,67 +237,184 @@ pub(super) fn guest_link(s: &mut Studio) {
 }
 
 pub(super) fn audience_live(s: &Studio) -> bool {
-    s.live.as_ref().is_some_and(|live| live.handle.media.lock().unwrap()
-        .as_ref().is_some_and(|media| media.broadcast.sending_to_studio_site()))
+    s.live.as_ref().is_some_and(|live| live.broadcast_view.1)
 }
 
-pub(super) fn panel_header(s: &Studio, waiting: usize) -> El {
-    let mut header = row().items_center().gap(5.)
-        .child(title("People", 15., 650., TEXT));
-    if waiting > 0 {
-        header = header.child(title(format!("{waiting} waiting"), 10., 550., MINT));
-    }
-    header = header.child(el().grow(1.)).child(trigger(s));
-    let mut controls = col().gap(5.).child(header);
-    if audience_live(s) || s.live.as_ref().is_some_and(|live| live.handle.root.join("boomin/audience-open").is_file()) {
-        controls = controls.child(button("audience-link", "Copy audience link", false, |s| {
-            panels::copy_link(s, crate::room_share::LinkKind::Audience);
-        }).disabled(!audience_live(s)));
+fn audience_controls(s: &Studio, mut controls: El) -> El {
+    if audience_live(s)
+        || s.live
+            .as_ref()
+            .is_some_and(|live| live.handle.root.join("boomin/audience-open").is_file())
+    {
+        controls = controls.child(
+            button("audience-link", "Copy audience link", false, |s| {
+                panels::copy_link(s, crate::room_share::LinkKind::Audience);
+            })
+            .disabled(!audience_live(s)),
+        );
     }
     controls
 }
 
-pub(super) fn empty_guest(s: &Studio) -> El {
+fn empty_guest(s: &Studio) -> El {
     let busy = s.people.copying_invitation();
-    col().key("people-empty-guest").padding(10.).gap(7.)
-        .radius(8.).fill(color(0x111d28)).border(1., color(0x273745))
-        .child(row().gap(8.).items_center()
-            .child(el().size(30., 30.).radius(7.).fill(color(0x1b2d39)).center()
-                .child(rune::icon(glyphs::glyph("profile"), 17.).color(color(MUTED))))
-            .child(col().min_w(0.).gap(2.)
-                .child(title("Guest slot", 12., 650., TEXT))
-                .child(title("Invite someone into your studio", 10., 450., MUTED))))
-        .child(button("guest-link", if busy { "Preparing link…" } else { "Invite a guest…" }, false, guest_link)
-            .disabled(busy))
+    col().key("people-empty-guest").min_w(0.).padding(9.).gap(8.)
+        .radius(8.).fill(color(SURFACE))
+        .child(row().gap(7.).items_center()
+            .child(rune::icon(glyphs::glyph("profile"), 17.).color(color(MUTED)))
+            .child(text("No guests yet").font(TextStyle::new(12., 600.)).color(color(TEXT)).wrap().min_w(0.).grow(1.)))
+        .child(button("guest-link", if busy { "Preparing link…" } else { "Invite a guest" },
+            true, guest_link).disabled(s.people.busy()).w_full())
+}
+
+pub(super) fn panel(s: &Studio, mut body: El) -> El {
+    let live = s.live.as_ref().unwrap();
+    let rtc = &live.snapshot.producer_rtc;
+    let phase = phase(rtc);
+    let awaiting = live.handle.waiting_guests.lock().unwrap().clone();
+    body = audience_controls(s, body.gap(8.));
+    if !awaiting.is_empty() {
+        body = body.child(title(format!("{} waiting", awaiting.len()), 10., 550., MINT));
+    }
+
+    if let Some((message, tint)) = guest_status(&s.people, rtc) {
+        body = body.child(
+            col()
+                .key("people-guest-status")
+                .role(if tint == 0xe9b666 { "alert" } else { "status" })
+                .label(message)
+                .padding(8.)
+                .radius(6.)
+                .fill(color(SURFACE))
+                .child(
+                    text(message)
+                        .font(TextStyle::new(11., 500.))
+                        .color(color(tint))
+                        .wrap(),
+                ),
+        );
+    }
+    if phase == "idle" && awaiting.is_empty() {
+        body = body.child(empty_guest(s));
+    } else if matches!(phase, "gathering" | "waiting")
+        && rtc["admitReady"] != true
+        && rtc["linkReady"] == true
+    {
+        body = body.child(
+            button("guest-link", "Copy guest link", false, guest_link).disabled(s.people.busy()),
+        );
+    }
+
+    if matches!(phase, "gathering" | "waiting") && rtc["admitReady"] == true {
+        if let Some(name) = rtc["displayName"].as_str() {
+            body = body.child(title(name, 12., 600., TEXT));
+        }
+        body = body.child(guest_command(
+            s,
+            "rtc-admit",
+            "Admit guest",
+            true,
+            RoomCommand::RtcAdmit,
+        ));
+    }
+    if phase == "connected" && rtc["role"] == "host" {
+        body = guest_card(s, body);
+    } else if phase != "idle" {
+        body = body.child(guest_command(
+            s,
+            "rtc-end",
+            "End session",
+            false,
+            RoomCommand::RtcEnd,
+        ));
+    }
+
+    if live.handle.pending_rtc_link.lock().unwrap().is_some() {
+        body = body.child(
+            button("accept-invitation", "Accept guest invitation", false, |s| {
+                if let Some(live) = &s.live {
+                    let link = live.handle.pending_rtc_link.lock().unwrap().take();
+                    if link.is_some() {
+                        send_guest_command(
+                            s,
+                            RoomCommand::RtcStart {
+                                display_name: None,
+                                link,
+                                lan: false,
+                                rehearsal: false,
+                                output: None,
+                            },
+                        );
+                    }
+                }
+            })
+            .disabled(phase != "idle" || s.people.busy()),
+        );
+    }
+    for guest in awaiting {
+        let id = guest.id;
+        body = body.child(
+            col()
+                .padding(8.)
+                .gap(4.)
+                .radius(6.)
+                .fill(color(SURFACE))
+                .child(title(guest.name, 12., 600., TEXT))
+                .child(title("Waiting to join", 10., 500., MUTED))
+                .child(
+                    button(format!("admit-{id}"), "Admit guest", false, move |s| {
+                        if let Some(live) = &s.live {
+                            let root = live.handle.root.clone();
+                            s.people.run(GuestTaskKind::Session, move || {
+                                crate::room_share::admit(&root, id)?;
+                                Ok(None)
+                            });
+                        }
+                    })
+                    .disabled(s.people.busy()),
+                ),
+        );
+    }
+    body
 }
 
 pub(super) fn start_direct_invitation(s: &mut Studio) -> bool {
     let Some(live) = &s.live else { return false };
-    if s.people.route == Route::Hosted || !crate::producer_rtc::Peer::can_host_direct(&live.handle.root) {
+    if s.people.route == Route::Hosted
+        || !crate::producer_rtc::Peer::can_host_direct(&live.handle.root)
+    {
         return false;
     }
-    let rtc = &live.snapshot.producer_rtc;
-    if rtc["phase"] != "idle" {
-        s.people.invitation_result = Some(Err("End the current guest session before inviting someone else.".into()));
+    if phase(&live.snapshot.producer_rtc) != "idle" {
+        s.people.invitation_result = Some(Err(
+            "End the current guest session before inviting someone else.".into(),
+        ));
         return true;
     }
-    s.people.invitation_result = None;
     s.people.waiting_for_link = Some(Instant::now() + Duration::from_secs(20));
-    if let Err(error) = live.handle.send(RoomCommand::RtcStart {
+    let command = RoomCommand::RtcStart {
         display_name: None,
         link: None,
         lan: s.people.route == Route::Lan,
         rehearsal: false,
-        output: Some(if s.people.portrait { CanvasView::Vertical } else { CanvasView::Landscape }),
-    }) {
-        s.people.waiting_for_link = None;
-        s.people.invitation_result = Some(Err(error.to_string()));
-    }
+        output: Some(if s.people.portrait {
+            CanvasView::Vertical
+        } else {
+            CanvasView::Landscape
+        }),
+    };
+    s.people
+        .request(GuestTaskKind::Invitation, live.handle.clone(), command);
     true
 }
 
 pub(super) fn poll_direct_invitation(s: &mut Studio) -> bool {
-    let Some(deadline) = s.people.waiting_for_link else { return false };
+    let Some(deadline) = s.people.waiting_for_link else {
+        return false;
+    };
+    if s.people.task.is_some() {
+        return false;
+    }
     let Some(live) = &s.live else { return false };
     let rtc = &live.snapshot.producer_rtc;
     if rtc["linkReady"] == true {
@@ -181,9 +423,14 @@ pub(super) fn poll_direct_invitation(s: &mut Studio) -> bool {
         return true;
     }
     let error = if matches!(rtc["phase"].as_str(), Some("failed" | "ended")) {
-        Some(rtc["reason"].as_str().unwrap_or("Guest session ended before the invitation was ready.").to_owned())
+        Some(
+            rtc["reason"]
+                .as_str()
+                .unwrap_or("Guest session ended before the invitation was ready.")
+                .to_owned(),
+        )
     } else if Instant::now() >= deadline {
-        Some("Guest link took too long. End the session and try again.".into())
+        Some("The guest link took too long. Try inviting again.".into())
     } else {
         None
     };
@@ -197,28 +444,72 @@ pub(super) fn poll_direct_invitation(s: &mut Studio) -> bool {
     }
     false
 }
-pub(super) fn guest_output(s: &Studio) -> El {
-    let live = s.live.as_ref().unwrap();
-    let rtc = &live.snapshot.producer_rtc;
-    let locked = rtc["role"] == "host" && matches!(rtc["phase"].as_str(), Some("gathering" | "waiting" | "connected"));
-    let view = live.snapshot.project.canvas.view;
+fn guest_orientation(
+    view: CanvasView,
+    prefers_portrait: bool,
+    rtc: &serde_json::Value,
+) -> (bool, bool) {
+    let locked = rtc["role"] == "host" && !matches!(phase(rtc), "idle" | "ended" | "failed");
     let portrait = if locked {
         rtc["outputOrientation"] == "portrait"
     } else {
-        view == CanvasView::Vertical || (view == CanvasView::Both && s.people.portrait)
+        view == CanvasView::Vertical || (view == CanvasView::Both && prefers_portrait)
     };
-    let mut group = row().gap(5.).flex_wrap().items_center()
+    (portrait, locked)
+}
+
+fn guest_output(s: &Studio) -> El {
+    let live = s.live.as_ref().unwrap();
+    let view = live.snapshot.project.canvas.view;
+    let (portrait, locked) =
+        guest_orientation(view, s.people.portrait, &live.snapshot.producer_rtc);
+    let group = col()
+        .key("guest-output-settings")
+        .role("group")
+        .label("Guest output")
+        .gap(5.)
+        .padding(7.)
+        .radius(5.)
+        .fill(color(0x101a24))
         .child(title("Guest output", 11., 550., MUTED));
     if locked || view != CanvasView::Both {
-        return group.child(title(
-            if portrait { "Portrait" } else { "Landscape" }, 11., 600., TEXT
-        )).child(title(if locked { "Locked for this session" } else { "Follows Studio" }, 10., 450., MUTED));
+        return group.child(
+            row()
+                .gap(5.)
+                .flex_wrap()
+                .items_center()
+                .child(title(
+                    if portrait { "Portrait" } else { "Landscape" },
+                    11.,
+                    600.,
+                    TEXT,
+                ))
+                .child(title(
+                    if locked {
+                        "Locked for this session"
+                    } else {
+                        "Follows studio output"
+                    },
+                    10.,
+                    450.,
+                    MUTED,
+                )),
+        );
     }
+    let mut choices = row().gap(5.).flex_wrap();
     for (label, vertical) in [("Landscape", false), ("Portrait", true)] {
-        group = group.child(button(format!("guest-output-{label}"), label, portrait==vertical,
-            move |s| s.people.portrait=vertical));
+        choices = choices.child(
+            button(
+                format!("guest-output-{label}"),
+                label,
+                portrait == vertical,
+                move |s| s.people.portrait = vertical,
+            )
+            .checked(portrait == vertical)
+            .disabled(s.people.copying_invitation()),
+        );
     }
-    group
+    group.child(choices)
 }
 
 pub(super) fn popover(s: &Studio, height: f32) -> El {
@@ -229,7 +520,7 @@ pub(super) fn popover(s: &Studio, height: f32) -> El {
     let mut menu = col()
         .key("people-connections-popout")
         .role("dialog")
-        .label("Guest connection")
+        .label("People settings")
         .anchored_fit("people-session", rune::Side::Bottom, rune::Align::End, 5.)
         .w(260.)
         .max_h((height - 54.).max(1.))
@@ -239,7 +530,9 @@ pub(super) fn popover(s: &Studio, height: f32) -> El {
         .fill(color(0x15202b))
         .border(1., color(0x344755))
         .modal(true, |s: &mut Studio| s.people_settings = false)
-        .child(title("Guest connection", 13., 600., TEXT));
+        .child(title("People settings", 13., 600., TEXT))
+        .child(guest_output(s))
+        .child(title("Guest connection", 11., 550., MUTED));
     for (route, key, name, hint, enabled) in [
         (
             Route::Invitation,
@@ -337,7 +630,7 @@ pub(super) fn popover(s: &Studio, height: f32) -> El {
     menu.scroll(Default::default())
 }
 
-pub(super) fn guest_card(s: &Studio, mut b: El) -> El {
+fn guest_card(s: &Studio, mut b: El) -> El {
     let live = s.live.as_ref().unwrap();
     let rtc = &live.snapshot.producer_rtc;
     let staged = rtc["onStage"] == true;
@@ -369,7 +662,8 @@ pub(super) fn guest_card(s: &Studio, mut b: El) -> El {
         row()
             .flex_wrap()
             .gap(4.)
-            .child(command(
+            .child(guest_command(
+                s,
                 "card-mute",
                 if muted { "Unmute" } else { "Mute" },
                 muted,
@@ -378,7 +672,8 @@ pub(super) fn guest_card(s: &Studio, mut b: El) -> El {
                     muted: !muted,
                 },
             ))
-            .child(command(
+            .child(guest_command(
+                s,
                 "rtc-stage",
                 if staged {
                     "Take off stage"
@@ -436,7 +731,8 @@ pub(super) fn guest_card(s: &Studio, mut b: El) -> El {
         ));
     }
     if s.people.remove {
-        b = b.child(command(
+        b = b.child(guest_command(
+            s,
             "confirm-remove-guest",
             "Remove from studio",
             false,
@@ -444,4 +740,69 @@ pub(super) fn guest_card(s: &Studio, mut b: El) -> El {
         ));
     }
     b
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn expired_guest_link_replaces_old_clipboard_confirmation() {
+        let people = People {
+            invitation_result: Some(Ok("Guest invitation copied".into())),
+            ..People::default()
+        };
+        assert_eq!(
+            guest_status(&people, &json!({"phase":"waiting"})),
+            Some(("Invitation copied. Waiting for your guest.", MINT))
+        );
+        assert_eq!(
+            guest_status(&people, &json!({"phase":"waiting", "admitReady":true})),
+            Some(("Guest ready to join", MINT))
+        );
+        assert_eq!(
+            guest_status(
+                &people,
+                &json!({"phase":"failed", "reason":"Studio link expired"})
+            ),
+            Some(("Studio link expired", 0xe9b666))
+        );
+    }
+
+    #[test]
+    fn guest_orientation_follows_single_output_and_preserves_an_active_session() {
+        let idle = json!({"phase":"idle"});
+        assert_eq!(
+            guest_orientation(CanvasView::Landscape, true, &idle),
+            (false, false)
+        );
+        assert_eq!(
+            guest_orientation(CanvasView::Vertical, false, &idle),
+            (true, false)
+        );
+        assert_eq!(
+            guest_orientation(CanvasView::Both, true, &idle),
+            (true, false)
+        );
+
+        let connected = json!({"phase":"connected", "role":"host", "outputOrientation":"portrait"});
+        assert_eq!(
+            guest_orientation(CanvasView::Landscape, false, &connected),
+            (true, true)
+        );
+    }
+
+    #[test]
+    fn an_arriving_guest_supersedes_a_racing_copy_failure() {
+        let people = People {
+            invitation_result: Some(Err("Guest link expired".into())),
+            ..People::default()
+        };
+        assert_eq!(
+            guest_status(&people, &json!({"phase":"waiting", "admitReady":true})),
+            Some(("Guest ready to join", MINT))
+        );
+        assert_eq!(guest_status(&people, &json!({"phase":"connected"})), None);
+    }
 }

@@ -42,6 +42,7 @@ pub struct Settings {
     pub memory_mb: u32,
     pub output: Output,
     pub folder: Option<PathBuf>,
+    pub queue_for_publish: bool,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -50,6 +51,7 @@ impl Default for Settings {
             memory_mb: 128,
             output: Output::default(),
             folder: None,
+            queue_for_publish: false,
         }
     }
 }
@@ -107,6 +109,8 @@ pub struct Status {
 struct State {
     root: PathBuf,
     status: Status,
+    local_queue: Arc<Vec<Saved>>,
+    queue_load_error: Option<String>,
     session: u64,
     started: Option<Instant>,
     tracks: Vec<Track>,
@@ -114,6 +118,36 @@ struct State {
     evicted_save_bytes: usize,
 }
 impl State {
+    fn write_local_queue(&mut self, queue: Vec<Saved>) -> Result<()> {
+        if let Some(error) = &self.queue_load_error {
+            anyhow::bail!("{error}");
+        }
+        store(&self.root, "local-publish-queue.json", &queue)
+            .context("Could not save the local Publish queue")?;
+        self.local_queue = Arc::new(queue);
+        Ok(())
+    }
+
+    fn finish_save(&mut self, item: Saved, queue_for_publish: bool) {
+        self.status.error = item.error.clone();
+        if queue_for_publish && item.error.is_none() && !item.files.is_empty() {
+            let mut queue = self.local_queue.as_ref().clone();
+            queue.insert(0, item.clone());
+            if let Err(error) = self.write_local_queue(queue) {
+                self.status.error = Some(format!(
+                    "Clip saved, but could not add it to the local queue: {error:#}"
+                ));
+            }
+        }
+        self.status.recent.insert(0, item);
+        self.status.recent.truncate(100);
+        if let Err(error) = store(&self.root, "clip-library.json", &self.status.recent) {
+            self.status.error = Some(error.to_string());
+        }
+        self.evicted_save_bytes = 0;
+        self.status.saving = false;
+    }
+
     fn evict(&mut self, track: usize) {
         let old = self.tracks[track].fragments.pop_front().unwrap();
         self.bytes -= old.bytes.len();
@@ -128,6 +162,23 @@ impl Clips {
     pub fn load(&self, root: &Path) {
         let mut state = self.0.lock().unwrap();
         state.root = root.to_path_buf();
+        let queue = match fs::File::open(root.join("local-publish-queue.json")) {
+            Ok(file) => serde_json::from_reader(file).map_err(anyhow::Error::from),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+            Err(error) => Err(error.into()),
+        };
+        match queue {
+            Ok(items) => {
+                state.local_queue = Arc::new(items);
+                state.queue_load_error = None;
+            }
+            Err(error) => {
+                let message = format!("Could not read the local Publish queue: {error}");
+                state.local_queue = Arc::default();
+                state.queue_load_error = Some(message.clone());
+                state.status.error = Some(message);
+            }
+        }
         if let Ok(bytes) = fs::read(root.join("clip-settings.json")) {
             if let Ok(s) = serde_json::from_slice::<Settings>(&bytes) {
                 if s.validate().is_ok() {
@@ -142,12 +193,31 @@ impl Clips {
             }
         }
     }
+    pub fn local_queue(&self) -> Arc<Vec<Saved>> {
+        Arc::clone(&self.0.lock().unwrap().local_queue)
+    }
+
+    pub fn remove_from_local_queue(&self, id: u128) -> Result<()> {
+        let mut state = self.0.lock().unwrap();
+        if let Some(index) = state.local_queue.iter().position(|clip| clip.id == id) {
+            let mut queue = state.local_queue.as_ref().clone();
+            queue.remove(index);
+            state.write_local_queue(queue)?;
+        }
+        Ok(())
+    }
+
     pub fn configure(&self, settings: Settings) -> Result<()> {
         settings.validate()?;
         let mut s = self.0.lock().unwrap();
+        let previous = &s.status.settings;
+        let same_capture = previous.seconds == settings.seconds
+            && previous.memory_mb == settings.memory_mb
+            && previous.output == settings.output
+            && previous.folder == settings.folder;
         ensure!(
-            !s.status.enabled && !s.status.saving,
-            "Stop rolling capture before changing clip settings"
+            same_capture || (!s.status.enabled && !s.status.saving),
+            "Stop rolling capture before changing capture settings"
         );
         store(&s.root, "clip-settings.json", &settings)?;
         s.status.settings = settings;
@@ -169,6 +239,11 @@ impl Clips {
             .name = name.into();
         store(&s.root, "clip-library.json", &recent)?;
         s.status.recent = recent;
+        if let Some(index) = s.local_queue.iter().position(|clip| clip.id == id) {
+            let mut queue = s.local_queue.as_ref().clone();
+            queue[index].name = name.into();
+            s.write_local_queue(queue)?;
+        }
         Ok(())
     }
     pub fn begin(&self) -> Result<(u64, Settings)> {
@@ -214,6 +289,13 @@ impl Clips {
     }
     pub fn status(&self) -> Status {
         let s = self.0.lock().unwrap();
+        Self::status_from(&s)
+    }
+    pub fn try_view(&self) -> Option<(Status, Arc<Vec<Saved>>)> {
+        let s = self.0.try_lock().ok()?;
+        Some((Self::status_from(&s), s.local_queue.clone()))
+    }
+    fn status_from(s: &State) -> Status {
         let mut status = s.status.clone();
         status.elapsed = s.started.map(|v| v.elapsed().as_secs()).unwrap_or_default();
         if status.enabled && status.elapsed >= 10 && !status.ready && status.error.is_none() {
@@ -298,7 +380,7 @@ impl Clips {
         true
     }
     pub fn save(&self) -> Result<()> {
-        let (folder, output, tracks, seconds) = {
+        let (folder, output, tracks, seconds, queue_for_publish) = {
             let mut s = self.0.lock().unwrap();
             ensure!(
                 s.status.enabled && s.status.ready && !s.status.saving,
@@ -349,6 +431,7 @@ impl Clips {
                 s.status.settings.output,
                 tracks,
                 s.status.settings.seconds,
+                s.status.settings.queue_for_publish,
             )
         };
         let clips = self.clone();
@@ -369,15 +452,7 @@ impl Clips {
                     Ok(files) => item.files = files,
                     Err(e) => item.error = Some(e.to_string()),
                 }
-                let mut state = clips.0.lock().unwrap();
-                state.status.error = item.error.clone();
-                state.status.recent.insert(0, item);
-                state.status.recent.truncate(100);
-                if let Err(e) = store(&state.root, "clip-library.json", &state.status.recent) {
-                    state.status.error = Some(e.to_string());
-                }
-                state.evicted_save_bytes = 0;
-                state.status.saving = false;
+                clips.0.lock().unwrap().finish_save(item, queue_for_publish);
             })
         {
             self.0.lock().unwrap().status.saving = false;
@@ -518,6 +593,69 @@ mod tests {
     use super::*;
     use crate::recording::NativeSpan;
     #[test]
+    fn local_publish_queue_keeps_only_opted_in_successful_exports_across_restarts() {
+        let studio = tempfile::tempdir().unwrap();
+        fs::write(
+            studio.path().join("clip-settings.json"),
+            r#"{"seconds":15}"#,
+        )
+        .unwrap();
+        let clips = Clips::default();
+        clips.load(studio.path());
+        assert!(!clips.status().settings.queue_for_publish);
+        let mut clip = Saved {
+            id: 1,
+            name: "Saved clip".into(),
+            files: [Output::Landscape, Output::Vertical]
+                .into_iter()
+                .map(|output| File {
+                    path: studio.path().join(format!("{}.mp4", output.label())),
+                    output,
+                    duration_ms: 15000,
+                })
+                .collect(),
+            error: None,
+        };
+        for file in &clip.files {
+            fs::write(&file.path, b"saved media").unwrap();
+        }
+        clips.0.lock().unwrap().finish_save(clip.clone(), false);
+        assert!(clips.local_queue().is_empty());
+        assert!(!studio.path().join("local-publish-queue.json").exists());
+
+        clips.begin().unwrap();
+        let mut settings = clips.status().settings;
+        settings.queue_for_publish = true;
+        clips.configure(settings).unwrap();
+        assert!(clips.enabled());
+        clip.id = 2;
+        clips.0.lock().unwrap().finish_save(clip.clone(), true);
+        clips.rename(2, "Final cut".into()).unwrap();
+        clip.id = 3;
+        clip.error = Some("Could not export".into());
+        clips.0.lock().unwrap().finish_save(clip, true);
+        clips.end(None);
+        let reopened = Clips::default();
+        reopened.load(studio.path());
+        assert!(reopened.status().settings.queue_for_publish);
+        let queued = reopened.local_queue();
+        assert_eq!(queued.len(), 1);
+        assert_eq!(queued[0].name, "Final cut");
+        assert_eq!(queued[0].files.len(), 2);
+        let other_studio = tempfile::tempdir().unwrap();
+        let other = Clips::default();
+        other.load(other_studio.path());
+        assert!(other.local_queue().is_empty());
+        assert!(!other.status().settings.queue_for_publish);
+        reopened.remove_from_local_queue(2).unwrap();
+        reopened.remove_from_local_queue(2).unwrap();
+        let reopened = Clips::default();
+        reopened.load(studio.path());
+        assert!(reopened.local_queue().is_empty());
+        assert!(queued[0].files.iter().all(|file| file.path.exists()));
+    }
+
+    #[test]
     #[ignore = "uses the Native Dev encoded A/V fixture and bundled muxer"]
     fn rolling_capture_exports_both_and_reopens_library() {
         let fixture = PathBuf::from(std::env::var_os("CLIP_TAKE_FIXTURE").unwrap());
@@ -529,6 +667,7 @@ mod tests {
             .configure(Settings {
                 seconds: 3,
                 output: Output::Both,
+                queue_for_publish: true,
                 ..Default::default()
             })
             .unwrap();
@@ -573,6 +712,9 @@ mod tests {
         assert!(clips.status().ready);
         clips.save().unwrap();
         assert!(clips.save().is_err());
+        let mut during_export = clips.status().settings;
+        during_export.queue_for_publish = false;
+        clips.configure(during_export).unwrap();
         for _ in 0..160 {
             if !clips.status().saving {
                 break;
@@ -598,10 +740,26 @@ mod tests {
                 .success());
         }
         clips.rename(clip.id, "Saved segment".into()).unwrap();
+        clips.save().unwrap();
+        for _ in 0..160 {
+            if !clips.status().saving {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert_eq!(clips.status().recent.len(), 2);
+        assert!(clips
+            .status()
+            .recent
+            .iter()
+            .all(|entry| entry.error.is_none()));
         clips.end(None);
         let restarted = Clips::default();
         restarted.load(dir.path());
         assert!(!restarted.enabled());
-        assert_eq!(restarted.status().recent[0].name, "Saved segment");
+        assert_eq!(restarted.status().recent[1].name, "Saved segment");
+        assert!(!restarted.status().settings.queue_for_publish);
+        assert_eq!(restarted.local_queue().len(), 1);
+        assert_eq!(restarted.local_queue()[0].id, clip.id);
     }
 }

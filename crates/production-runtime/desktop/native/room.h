@@ -17,7 +17,7 @@ typedef struct { const char *geometry,*source,*entry; uint32_t width,height; int
 void *nr_text_cache(const NRText*,size_t,const NRGraphSpec*,size_t,char*,size_t);
 void nr_text_cache_release(void*);
 void nr_stop(void*);
-int nr_render(void*, uint32_t, uint32_t, uint32_t, const NRDraw*, size_t, void**, void*, void*, double, uint64_t);
+int nr_render(void*, uint32_t, uint32_t, uint32_t, const NRDraw*, size_t, void**, const float (*)[4], void*, void*, double, uint64_t);
 int nr_record_start(void*, uint64_t, double, const NRRecordTrack*, size_t, NRSegmentCallback);
 void nr_record_stop(void*);
 void nr_record_audio(void*, const float*, const float*, uint32_t, double);

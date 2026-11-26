@@ -157,6 +157,7 @@ unsafe extern "C" {
         draws: *const Draw,
         count: usize,
         sources: *mut *mut c_void,
+        grades: *const [f32; 4],
         text: *mut c_void,
         dj_title: *mut c_void,
         pts: f64,
@@ -811,9 +812,11 @@ extern "C" fn status_callback(ctx: *mut c_void, index: u32, text: *const c_char)
 struct RenderHandle(NonNull<c_void>);
 unsafe impl Send for RenderHandle {}
 unsafe impl Sync for RenderHandle {}
+pub type GradeSlots = Arc<std::sync::RwLock<[[f32; 4]; 8]>>;
 #[derive(Clone)]
-pub struct RenderTarget(Arc<std::sync::RwLock<Option<RenderHandle>>>);
+pub struct RenderTarget(Arc<std::sync::RwLock<Option<RenderHandle>>>, GradeSlots);
 impl RenderTarget {
+    pub fn set_grades(&mut self, grades: GradeSlots) { self.1 = grades; }
     pub fn render(
         &self,
         output: usize,
@@ -844,6 +847,7 @@ impl RenderTarget {
         let mut ptrs = frames
             .each_ref()
             .map(|f| f.as_ref().map_or(std::ptr::null_mut(), |f| f.ptr.as_ptr()));
+        let grades = *self.1.read().unwrap();
         unsafe {
             nr_render(
                 handle.0.as_ptr(),
@@ -853,6 +857,7 @@ impl RenderTarget {
                 draws.as_ptr(),
                 draws.len(),
                 ptrs.as_mut_ptr(),
+                grades.as_ptr(),
                 text.0.as_ptr(),
                 dj_title.map_or(std::ptr::null_mut(),|t|t.0.as_ptr()),
                 at,
@@ -890,7 +895,7 @@ impl NativeRoom {
             bail!("Native Metal renderer could not start");
         };
         Ok(Self {
-            target: RenderTarget(Arc::new(std::sync::RwLock::new(Some(RenderHandle(ptr))))),
+            target: RenderTarget(Arc::new(std::sync::RwLock::new(Some(RenderHandle(ptr)))), Default::default()),
             ptr,
             context,
             shared,
@@ -1113,6 +1118,53 @@ impl Drop for MovieAudio {
 mod tests {
     use super::{align_audio_start, trim_capture_overlap, Frame, Shared};
     use std::{sync::{mpsc, Arc}, thread, time::Duration};
+
+    #[test]
+    fn camera_grade_changes_only_the_selected_source_pixels() {
+        use super::{Draw, NativeRoom, OutputSize, TextCache};
+        use std::{ffi::c_void, time::Instant};
+        unsafe extern "C" {
+            fn CVPixelBufferLockBaseAddress(buffer: *mut c_void, flags: usize) -> i32;
+            fn CVPixelBufferUnlockBaseAddress(buffer: *mut c_void, flags: usize) -> i32;
+            fn CVPixelBufferGetBaseAddressOfPlane(buffer: *mut c_void, plane: usize) -> *const u8;
+        }
+        let mut native = NativeRoom::new().unwrap();
+        let size = OutputSize { width: 128, height: 64 };
+        native.prepare([size, size]).unwrap();
+        let grades = super::GradeSlots::default();
+        native.target.set_grades(grades.clone());
+        let cache = TextCache::with_graphs(&[], &[]).unwrap();
+        let source = Arc::new(Frame::guest(&[40, 64, 128, 255].repeat(64), 8, 8).unwrap());
+        let mut frames = std::array::from_fn(|_| None);
+        frames[0] = Some(source.clone());
+        frames[4] = Some(source);
+        let mut draws = [Draw::solid([0.,0.,0.5,1.], [1.;4]); 2];
+        for (i, draw) in draws.iter_mut().enumerate() {
+            draw.kind = 1;
+            draw.source = (i * 4) as u32;
+            draw.rect[0] = i as f32 * 0.5;
+            draw.metrics = [0.,64.,64.,0.];
+        }
+        for (generation, ev) in [(1, 0.), (2, 1.), (3, 0.)] {
+            grades.write().unwrap()[4][0] = ev;
+            assert!(native.target.render(0,128,64,&draws,&frames,&cache,super::host_time(),generation));
+            let start = Instant::now();
+            let frame = loop {
+                if let Some(frame) = native.shared.frame(3).filter(|f| f.generation == generation) { break frame; }
+                assert!(start.elapsed() < Duration::from_secs(5));
+                thread::sleep(Duration::from_millis(5));
+            };
+            unsafe {
+                let pixel = frame.ptr.as_ptr();
+                assert_eq!(CVPixelBufferLockBaseAddress(pixel, 1), 0);
+                let y = CVPixelBufferGetBaseAddressOfPlane(pixel, 0);
+                let (left, right) = (*y.add(32), *y.add(96));
+                CVPixelBufferUnlockBaseAddress(pixel, 1);
+                assert!(left > 40, "Source missing");
+                if ev == 0. { assert_eq!(left, right); } else { assert!(right > left + 12); }
+            }
+        }
+    }
 
     #[test]
     fn camera_read_keeps_a_picture_while_capture_publishes() {

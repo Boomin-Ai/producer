@@ -20,6 +20,38 @@ pub enum CanvasView {
     Vertical,
     Both,
 }
+/// Affine mapping from compiled layout pixels to the native output. Shared by
+/// the compositor and the set editor's source hit regions.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct CanvasTransform {
+    pub scale: f64,
+    x: f64,
+    y: f64,
+}
+impl CanvasTransform {
+    pub const IDENTITY: Self = Self { scale: 1., x: 0., y: 0. };
+
+    pub fn rect(self, r: Rect) -> Rect {
+        Rect { x: self.x + r.x * self.scale, y: self.y + r.y * self.scale,
+            width: r.width * self.scale, height: r.height * self.scale }
+    }
+}
+
+impl CanvasSettings {
+    pub fn transform(&self, set: &Set, layout: &Layout) -> CanvasTransform {
+        if set.canvas_fit == CanvasFit::Reflow {
+            return CanvasTransform::IDENTITY;
+        }
+        let output = match layout.orientation {
+            Orientation::Landscape => self.landscape,
+            Orientation::Vertical => self.vertical,
+        };
+        let (w, h) = (f64::from(output.width), f64::from(output.height));
+        let (lw, lh) = (f64::from(layout.width), f64::from(layout.height));
+        let scale = (w / lw).min(h / lh);
+        CanvasTransform { scale, x: (w - lw * scale) * 0.5, y: (h - lh * scale) * 0.5 }
+    }
+}
 impl Default for CanvasSettings {
     fn default() -> Self {
         Self {
@@ -111,6 +143,20 @@ pub struct RoomScene {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mounted_layout: Option<SetLayoutPair>,
 }
+/// Meter and transport snapshots share the set library until a project edit needs its own copy.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ProductionDocument(Arc<Document>);
+
+impl std::ops::Deref for ProductionDocument {
+    type Target = Document;
+    fn deref(&self) -> &Document { &self.0 }
+}
+
+impl std::ops::DerefMut for ProductionDocument {
+    fn deref_mut(&mut self) -> &mut Document { Arc::make_mut(&mut self.0) }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct RoomProject {
@@ -126,11 +172,50 @@ pub struct RoomProject {
     pub room: String,
     pub canvas: CanvasSettings,
     pub workspace: Workspace,
-    pub production: Document,
+    pub production: ProductionDocument,
     pub lanes: Vec<Lane>,
     pub scene: String,
     #[serde(default)]
     pub inputs: BTreeMap<String, InputBinding>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub camera_grades: BTreeMap<String, CameraGrade>,
+}
+/// Source-local software grade. Integer controls keep wire values and reset exact.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct CameraGrade {
+    pub exposure: i16, // hundredths of a stop
+    pub contrast: i16, // percentage points relative to neutral
+    pub saturation: i16,
+    pub warmth: i16,
+}
+impl CameraGrade {
+    pub fn valid(self) -> bool {
+        (-200..=200).contains(&self.exposure) && [self.contrast, self.saturation, self.warmth]
+            .iter().all(|v| (-100..=100).contains(v))
+    }
+    fn uniform(self) -> [f32; 4] {
+        [self.exposure, self.contrast, self.saturation, self.warmth].map(|v| f32::from(v) / 100.)
+    }
+}
+impl RoomProject {
+    pub fn validate_grade(&self, source: &str, grade: CameraGrade) -> Result<()> {
+        anyhow::ensure!(matches!(self.production.sources.get(source), Some(Source::Live { role: Role::HostCamera })), "Select a camera source");
+        anyhow::ensure!(grade.valid(), "Camera grade outside its allowed range");
+        Ok(())
+    }
+    pub fn grade_slots(&self) -> [[f32; 4]; 8] {
+        let mut values = [[0.; 4]; 8];
+        for (source, grade) in self.camera_grades.iter().filter(|(_, g)| g.valid()) {
+            let slot = if source == "camera" { Some(0) } else {
+                self.inputs.get(source).filter(|b| b.kind == "camera").map(|b| b.slot as usize)
+            };
+            if let Some(target) = slot.and_then(|slot| values.get_mut(slot)) {
+                *target = grade.uniform();
+            }
+        }
+        values
+    }
 }
 fn default_active_scene() -> String {
     "studio".into()
@@ -261,6 +346,7 @@ impl RoomProject {
             },
         );
         let set = Set {
+            canvas_fit: Default::default(),
             graphs: Default::default(),
             output_graphs: Default::default(),
             layout_transition_ms: None,
@@ -390,7 +476,7 @@ impl RoomProject {
             room: "native-room-lab".into(),
             canvas: CanvasSettings::default(),
             workspace: Workspace::default(),
-            production: d,
+            production: ProductionDocument(Arc::new(d)),
             lanes: vec![
                 Lane {
                     id: "v1".into(),
@@ -437,6 +523,7 @@ impl RoomProject {
             active_scene: default_active_scene(),
             scene: "studio".into(),
             inputs: BTreeMap::new(),
+            camera_grades: BTreeMap::new(),
         }
     }
     /// Capture identity is separate from source type. Each endpoint receives its
@@ -473,18 +560,6 @@ impl RoomProject {
             })
             .ok_or_else(|| anyhow!("Up to five inputs of each type are supported"))?;
         let source = format!("{kind}-{n}");
-        let slot = if kind == "camera" {
-            (4..8)
-                .find(|slot| {
-                    !self
-                        .inputs
-                        .values()
-                        .any(|b| b.kind == "camera" && b.slot == *slot)
-                })
-                .ok_or_else(|| anyhow!("Camera capture budget reached"))?
-        } else {
-            0
-        };
         self.production.sources.insert(
             source.clone(),
             Source::Live {
@@ -495,10 +570,15 @@ impl RoomProject {
                 },
             },
         );
-        let seq = self.production.sequences.get_mut("main").unwrap();
+        self.configure_input_inner(&source, kind, device, label)?;
+        Ok(source)
+    }
+
+    fn add_input_lane(&mut self, source: &str, kind: &str, label: &str) -> Result<()> {
+        let seq = self.production.sequences.get_mut("main").context("Missing timeline")?;
         seq.placements.push(Placement {
             id: format!("{source}-clip"),
-            source: source.clone(),
+            source: source.into(),
             range: Range {
                 start: Time::ZERO,
                 duration: seq.duration,
@@ -510,27 +590,19 @@ impl RoomProject {
         if kind == "microphone" {
             seq.audio_routes.push(AudioRoute {
                 id: format!("{source}-program"),
-                source: source.clone(),
+                source: source.into(),
                 bus: Bus::Program,
             });
         }
         self.lanes.push(Lane {
             id: format!("lane-{source}"),
-            source: source.clone(),
+            source: source.into(),
             label: label.into(),
             kind: if kind == "camera" { "video" } else { "audio" }.into(),
             gain: 1.,
             muted: kind == "microphone",
         });
-        self.inputs.insert(
-            source.clone(),
-            InputBinding {
-                kind: kind.into(),
-                device: device.into(),
-                slot,
-            },
-        );
-        Ok(source)
+        Ok(())
     }
     pub fn configure_input(
         &mut self,
@@ -588,6 +660,13 @@ impl RoomProject {
         } else {
             0
         };
+        if !self.lanes.iter().any(|lane| lane.source == source) {
+            if source == kind {
+                self.restore_source_lane(source)?;
+            } else {
+                self.add_input_lane(source, kind, label)?;
+            }
+        }
         self.inputs.insert(
             source.into(),
             InputBinding {
@@ -652,7 +731,7 @@ impl RoomProject {
     pub fn compile(&self) -> Result<Arc<compile::Plan>> {
         self.validate_room()?;
         let set = &self.production.sets[&self.scene];
-        if set.layouts.values().all(|layout| {
+        if set.canvas_fit == CanvasFit::Contain || set.layouts.values().all(|layout| {
             let size = match layout.orientation {
                 Orientation::Landscape => self.canvas.landscape,
                 Orientation::Vertical => self.canvas.vertical,
@@ -683,7 +762,7 @@ impl RoomProject {
     }
     pub fn command(&mut self, c: commands::Command) -> Result<()> {
         let next = commands::apply(&self.production, &c)?;
-        let old = std::mem::replace(&mut self.production, next);
+        let old = std::mem::replace(&mut self.production, ProductionDocument(Arc::new(next)));
         if let Err(e) = self.compile() {
             self.production = old;
             return Err(e);
@@ -1013,6 +1092,7 @@ impl RoomProject {
         }
         self.lanes.retain(|l| l.source != source);
         self.inputs.remove(source);
+        self.camera_grades.remove(source);
         for seq in self.production.sequences.values_mut() {
             seq.placements.retain(|p| p.source != source);
             seq.audio_routes.retain(|r| r.source != source);
@@ -1178,16 +1258,15 @@ impl RoomProject {
             next.production.sets.insert("room-scene".into(), set);
             next.scene = "room-scene".into();
         }
-        let seq = next
-            .production
-            .sequences
+        let document = &mut *next.production;
+        let seq = document.sequences
             .get_mut("main")
             .context("Missing timeline")?;
         let prefix = format!("sets/{}/", next.scene);
         seq.tracks.retain(|t| t.target.path.starts_with(&prefix));
         seq.cues.clear();
         seq.placements.clear();
-        for (id, source) in &next.production.sources {
+        for (id, source) in &document.sources {
             if !next.lanes.iter().any(|lane| lane.source == *id) {
                 continue;
             }
@@ -1206,7 +1285,7 @@ impl RoomProject {
         Ok(next)
     }
     pub fn assistant_context(&self) -> serde_json::Value {
-        serde_json::json!({"renderGraph":{"profile":"producer.render/1","paint":"graph","pass":"fragment","language":"WGSL function body","inputs":["pass","source","image","layers"],"outputGraphs":"maps each layout ID to its terminal graph; layers are premultiplied RGBA","uniforms":["frame.info.xy = target pixels","frame.info.z = seconds","frame.info.w = layout progress","frame.params = four constants or numeric room fields"],"maxPasses":8,"commands":["setEditPreview","setEditSave"]},"room":self.room,"scenes":{"active":self.active_scene,"items":self.room_scenes.keys().collect::<Vec<_>>(),"commands":["sceneAdd","sceneSelect"],"addCopiesCurrentScene":true,"maximum":32},"activeView":self.canvas.view,"renderTargets":{"landscape":self.canvas.landscape,"vertical":self.canvas.vertical},"set":self.scene,"show":"native-show","authorAtRoomDimensions":true,"showLayoutsUseRoomDimensions":true,"responsiveLayout":true,"capabilities":["document.transaction","timeline.trim","canvas.size","panel.visibility","timeline.dock","workspace.move","workspace.place","source.addInput","source.configureInput","workspace.resize","workspace.collapse","workspace.activate","transport.seek","take.place","take.refresh","take.inspect","surface.style"],"workspace":{"layout":self.workspace,"panels":crate::workspace::PanelId::ALL,"edges":crate::workspace::Edge::ALL,"operation":"workspace","actions":["move","place","activate","visibility","collapse","hideDock","resize","resizeSplit","reset"],"timelineEdges":["top","bottom"],"changesAffectOutput":false},"inputs":{"bindings":self.inputs,"commands":["addInput","configureInput"],"types":["camera","microphone"],"independentGainAndMute":true,"newMicrophonesMuted":true,"changesRequireIdleRecording":true},"visualRendering":{"surfaceStyle":["solid","linearGradient","veil","alpha","pixelRadius","innerBorder","grain","text"],"textFonts":["system-font"],"nativeTextTextureBudgetBytes":33554432,"maxTextElements":128,"writeOperation":"document.transaction.setSurface","resourcesPreparedOffRenderAudioLane":true}})
+        serde_json::json!({"renderGraph":{"profile":"producer.render/1","paint":"graph","pass":"fragment","language":"WGSL function body","inputs":["pass","source","image","layers"],"outputGraphs":"maps each layout ID to its terminal graph; layers are premultiplied RGBA","uniforms":["frame.info.xy = target pixels","frame.info.z = seconds","frame.info.w = layout progress","frame.params = four constants or numeric room fields"],"maxPasses":8,"commands":["setEditPreview","setEditSave"]},"room":self.room,"scenes":{"active":self.active_scene,"items":self.room_scenes.keys().collect::<Vec<_>>(),"commands":["sceneAdd","sceneSelect"],"addCopiesCurrentScene":true,"maximum":32},"activeView":self.canvas.view,"renderTargets":{"landscape":self.canvas.landscape,"vertical":self.canvas.vertical},"set":self.scene,"show":"native-show","authorAtRoomDimensions":true,"showLayoutsUseRoomDimensions":true,"responsiveLayout":true,"capabilities":["document.transaction","timeline.trim","canvas.size","panel.visibility","timeline.dock","workspace.move","workspace.place","source.addInput","source.configureInput","workspace.resize","workspace.collapse","workspace.activate","transport.seek","take.place","take.refresh","take.inspect","surface.style"],"workspace":{"layout":self.workspace,"panels":crate::workspace::PanelId::ALL,"edges":crate::workspace::Edge::ALL,"operation":"workspace","themes":["classic","orbitalGreen"],"actions":["setTheme","setHeader","move","place","activate","visibility","collapse","hideDock","resize","resizeSplit","reset"],"timelineEdges":["top","bottom"],"changesAffectOutput":false},"inputs":{"bindings":self.inputs,"commands":["addInput","configureInput"],"types":["camera","microphone"],"independentGainAndMute":true,"newMicrophonesMuted":true,"changesRequireIdleRecording":true},"visualRendering":{"surfaceStyle":["solid","linearGradient","veil","alpha","pixelRadius","innerBorder","grain","text"],"textFonts":["system-font"],"nativeTextTextureBudgetBytes":33554432,"maxTextElements":128,"writeOperation":"document.transaction.setSurface","resourcesPreparedOffRenderAudioLane":true}})
     }
 }
 pub fn time(seconds: f64) -> Result<Time> {
@@ -1218,6 +1297,41 @@ pub fn time(seconds: f64) -> Result<Time> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn contain_fits_the_authored_stage_to_hd_and_square_outputs() {
+        let mut room = RoomProject::demo();
+        let set = room.production.sets.get_mut("studio").unwrap();
+        assert!(serde_json::to_value(&set).unwrap().get("canvasFit").is_none());
+        set.canvas_fit = CanvasFit::Contain;
+        let authored = set.layouts["landscape"].clone();
+        let authored_rect = authored.root.frame.unwrap();
+        let pair = [
+            (OutputSize { width: 1280, height: 720 }, 0., 1280., 720.),
+            (OutputSize::LANDSCAPE, 0., 1920., 1080.),
+            (OutputSize::SQUARE, 236.25, 1080., 607.5),
+        ];
+        for (output, top, width, height) in pair {
+            room.canvas.landscape = output;
+            let plan = room.compile().unwrap();
+            let root = plan.nodes.iter().find(|n| n.path ==
+                format!("sets/studio/layouts/landscape/{}", authored.root.id)).unwrap();
+            assert_eq!(root.frame, authored_rect);
+            let fit = room.canvas.transform(&room.production.sets["studio"], &authored);
+            assert_eq!(fit.rect(root.frame), Rect { x: 0., y: top, width, height });
+        }
+        assert_eq!(room.production.sets["studio"].layouts["landscape"], authored);
+    }
+
+    #[test]
+    fn studio_snapshots_share_the_library_until_it_is_edited() {
+        let room = RoomProject::demo();
+        let mut copy = room.clone();
+        assert!(Arc::ptr_eq(&room.production.0, &copy.production.0));
+        copy.production.title = "Updated".into();
+        assert_ne!(room.production.title, copy.production.title);
+        assert!(!Arc::ptr_eq(&room.production.0, &copy.production.0));
+    }
 
     #[test]
     fn capture_rejections_leave_the_document_unchanged() {

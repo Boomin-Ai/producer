@@ -10,7 +10,7 @@ pub(super) fn tool(id: &str, g: &str, label: &str, on: bool, act: impl Fn(&mut S
     } else if on {
         MINT
     } else {
-        0xaab4c2
+        theme::TOOL_ICON
     };
     el().key(id.to_string())
         .role("button")
@@ -20,8 +20,8 @@ pub(super) fn tool(id: &str, g: &str, label: &str, on: bool, act: impl Fn(&mut S
         .size(33., 32.)
         .radius(8.)
         .center()
-        .fill(color(if on { 0x16352e } else { 0x0d151f }))
-        .hover_fill(color(if on { 0x224c40 } else { 0x21303c }))
+        .fill(color(if on { theme::TOOL_SELECTED } else { theme::TOOL }))
+        .hover_fill(color(if on { theme::SELECTED_HOVER } else { 0x21303c }))
         .child(glyph(g, 17., tint))
         .on_press(act)
 }
@@ -34,14 +34,16 @@ pub(super) fn copy_link(s: &mut Studio, kind: crate::room_share::LinkKind) {
         return;
     }
     let guest = matches!(kind, crate::room_share::LinkKind::Guest);
-    if guest && s.people.copying_invitation() {
+    if guest && s.people.busy() {
         return;
     }
     if guest && live.snapshot.producer_rtc["linkReady"] == true {
         let handle = live.handle.clone();
         s.people.copy_invitation(move || {
             let reply = handle.request(RoomCommand::RtcLink)?;
-            let link = reply["link"].as_str().ok_or_else(|| anyhow::anyhow!("Guest link expired"))?;
+            let link = reply["link"].as_str().ok_or_else(|| {
+                anyhow::anyhow!("{}", reply["error"].as_str().unwrap_or("Guest link expired"))
+            })?;
             crate::room_share::copy_url(&crate::rtc_signaling::browser_invitation(link)?)?;
             Ok("Guest invitation copied".into())
         });
@@ -97,13 +99,7 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
         }
     }
     let [left, right, top, bottom] = ws.layout_extents(w, h - 79., s.editing_docks);
-    let streaming = l
-        .handle
-        .media
-        .lock()
-        .unwrap()
-        .as_ref()
-        .is_some_and(|m| m.broadcast.active());
+    let streaming = l.broadcast_view.0.active;
     let bar_fill = if cfg!(target_os = "macos") { color(BG).alpha(0.93) } else { color(BG) };
     let notice = if !s.error.is_empty() { Some(s.error.as_str()) } else { snap.error.as_deref() };
     let chrome = row()
@@ -134,9 +130,12 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
                 s.moving_panel = None;
             })
         } else { el().size(0., 0.) })
+        .child(if s.editing_docks {
+            button("layout-theme", "Desk theme", false, super::settings::open_theme)
+        } else { el().size(0., 0.) })
         .child(row().key("activity-trigger").focusable(true)
             .items_center().gap(6.).px(6.).h(28.).min_w(0.)
-            .max_w((w - if s.editing_docks { 515. } else { 470. }).clamp(64., 360.))
+            .max_w((w - if s.editing_docks { 600. } else { 470. }).clamp(64., 360.))
             .role("button").label("Activity")
             .help(if s.activity { "Hide studio activity" } else { "Show studio activity" })
             .radius(5.).hover_fill(color(0x21303c))
@@ -154,24 +153,6 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
         .child(tool("channels", "channels", "Open channels", false, |s| {
             super::channels::Channels::open(s, true)
         }))
-        .child(tool(
-            "canvas-mode",
-            "panels",
-            match p.canvas.view {
-                CanvasView::Both => "Show landscape monitor",
-                CanvasView::Landscape => "Show portrait monitor",
-                CanvasView::Vertical => "Show both monitors",
-            },
-            false,
-            |s| {
-                let next = match s.live.as_ref().unwrap().snapshot.project.canvas.view {
-                    CanvasView::Both => CanvasView::Landscape,
-                    CanvasView::Landscape => CanvasView::Vertical,
-                    CanvasView::Vertical => CanvasView::Both,
-                };
-                s.send(RoomCommand::CanvasView { view: next });
-            },
-        ))
         .child(tool(
             "virtual-camera",
             "camera",
@@ -375,16 +356,7 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
         .padding(4.)
         .child(views)
         .child(el().grow(1.));
-    if s.chat.reviewing {
-        center = center.child(
-            button("end-review", "Exit draft preview", true, |s| {
-                if let Some(l) = &s.live {
-                    s.chat.close_review(l);
-                }
-            })
-            .self_center(),
-        );
-    } else if snap.previewing {
+    if snap.previewing {
         center = center.child(
             command(
                 "take",
@@ -393,22 +365,6 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
                 super::timeline::send_to_output(),
             )
             .self_center(),
-        );
-    }
-    if s.show_chat {
-        center = center.child(
-            super::chat::panel(
-                s,
-                col()
-                    .key("chat-dialog")
-                    .padding(12.)
-                    .gap(4.)
-                    .fill(color(PANEL)),
-            )
-            .child(button("close-chat", "Close", false, |s| {
-                s.show_chat = false
-            }))
-            .scroll(Default::default()),
         );
     }
     middle = middle.child(center.child(bar));
@@ -446,7 +402,7 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
     } else {
         "PRODUCER"
     };
-    let seam = |y| el().absolute(0., y).w_full().h(1.).fill(color(0x202b35));
+    let seam = |y| el().absolute(0., y).w_full().h(1.).fill(color(theme::SEAM));
     let completed = shell.child(body).child(chrome.absolute(0., 0.))
         .child(seam(44.)).child(seam((h - 25.).max(0.))).child(
         row().key("studio-statusbar").absolute(0., (h - 24.).max(0.)).w_full().fill(bar_fill)
@@ -568,6 +524,8 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
     }
     if let Some(sheet) = super::channels::sheet(s, w) {
         completed.child(sheet)
+    } else if let Some(panel) = super::chat::popout(s, &ws) {
+        completed.child(panel)
     } else {
         completed
     }
@@ -576,7 +534,8 @@ fn slot_ready(snap: &crate::engine::Snapshot, id: &str) -> bool {
     use producer_production_contract::{Role, Source};
     let p = &snap.project;
     match p.production.sources.get(id) {
-        Some(Source::Live { role: Role::Guest }) => snap.producer_rtc["phase"] == "connected" && snap.guest_video_received,
+        Some(Source::Live { role: Role::Guest }) => p.rtc_video_slot().is_some()
+            && snap.producer_rtc["phase"] == "connected" && snap.guest_video_received,
         Some(Source::Graphics { .. }) => true,
         _ if !p.lanes.iter().any(|lane| lane.source == id) => false,
         Some(Source::Live { role: Role::Screen }) => snap.source_frames[1] > 0 && snap.frame_age_ms[1] >= 0.,
@@ -588,6 +547,14 @@ fn slot_ready(snap: &crate::engine::Snapshot, id: &str) -> bool {
         None => false,
     }
 }
+fn source_kind<'a>(p: &'a crate::model::RoomProject, source: &'a str) -> &'a str {
+    use producer_production_contract::{Role, Source};
+    match p.production.sources.get(source) {
+        Some(Source::Live { role: Role::HostCamera }) => "camera",
+        Some(Source::Live { role: Role::Microphone }) => "microphone",
+        _ => source,
+    }
+}
 fn open_source(s: &mut Studio, source: &str, anchor: Option<[f32; 2]>) {
     s.camera_info = Default::default();
     s.source = Some(source.into());
@@ -596,11 +563,12 @@ fn open_source(s: &mut Studio, source: &str, anchor: Option<[f32; 2]>) {
         return;
     };
     let binding = l.snapshot.project.inputs.get(source);
-    if binding.map_or(source, |b| b.kind.as_str()) == "camera" {
+    if source_kind(&l.snapshot.project, source) == "camera" {
         let current = binding
             .map(|b| b.device.as_str())
             .filter(|id| !id.is_empty())
             .or_else(|| {
+                if source != "camera" { return None; }
                 l.snapshot
                     .cameras
                     .as_array()?
@@ -616,7 +584,7 @@ fn open_source(s: &mut Studio, source: &str, anchor: Option<[f32; 2]>) {
 fn source_popout(s: &Studio, source: &str, w: f32, h: f32) -> El {
     let snap = &s.live.as_ref().unwrap().snapshot;
     let p = &snap.project;
-    let kind = p.inputs.get(source).map_or(source, |b| b.kind.as_str());
+    let kind = source_kind(p, source);
     let heading = match kind {
         "camera" => "Camera settings",
         "microphone" => "Microphone settings",
@@ -691,9 +659,10 @@ fn source_popout(s: &Studio, source: &str, w: f32, h: f32) -> El {
         } else {
             &snap.microphones
         };
+        let mut available = false;
         for d in devices.as_array().into_iter().flatten() {
             if let (Some(id), Some(name)) = (d["id"].as_str(), d["name"].as_str()) {
-                let current = p.inputs.get(source).map_or(d["default"] == true, |b| {
+                let current = p.inputs.get(source).map_or(source == kind && d["default"] == true, |b| {
                     if b.device.is_empty() {
                         d["default"] == true
                     } else {
@@ -704,9 +673,14 @@ fn source_popout(s: &Studio, source: &str, w: f32, h: f32) -> El {
                     .inputs
                     .iter()
                     .any(|(key, b)| key != source && b.kind == kind && b.device == id)
-                    || (source != kind && !p.inputs.contains_key(kind) && d["default"] == true);
+                    || (source != kind && !p.inputs.contains_key(kind) && d["default"] == true
+                        && p.lanes.iter().any(|lane| lane.source == kind));
+                available |= !used;
+                let reconnect = current && source != kind && kind == "camera" && !slot_ready(snap, source);
                 let (source, kind, id) = (source.to_string(), kind.to_owned(), id.to_owned());
-                let label = if current {
+                let label = if reconnect {
+                    "Reconnect"
+                } else if current {
                     "Current"
                 } else if used {
                     "In Sources"
@@ -730,7 +704,7 @@ fn source_popout(s: &Studio, source: &str, w: f32, h: f32) -> El {
                         .child(title(label, 10., 500., if current { MINT } else { MUTED }))
                         .disabled(used)
                         .on_press(move |s: &mut Studio| {
-                            if !current {
+                            if !current || reconnect {
                                 s.send(RoomCommand::ConfigureInput {
                                     source: source.clone(),
                                     kind: kind.clone(),
@@ -741,6 +715,9 @@ fn source_popout(s: &Studio, source: &str, w: f32, h: f32) -> El {
                         }),
                 );
             }
+        }
+        if !available && kind == "camera" && source != kind {
+            pick = pick.child(title("Connect another camera to use this input.", 11., 500., MUTED));
         }
     } else if kind == "screen" {
         for (label, target) in [
@@ -838,6 +815,35 @@ fn source_popout(s: &Studio, source: &str, w: f32, h: f32) -> El {
                 pick = pick.child(line);
             }
         }
+        let grade = p.camera_grades.get(source).copied().unwrap_or_default();
+        pick = pick.child(title("Lighting & color", 13., 650., TEXT));
+        for (field, label, value, step, limit) in [
+            ("exposure", "Exposure", grade.exposure, 25_i16, 200_i16),
+            ("contrast", "Contrast", grade.contrast, 10, 100),
+            ("saturation", "Saturation", grade.saturation, 10, 100),
+            ("warmth", "Warmth", grade.warmth, 10, 100),
+        ] {
+            let display = if field == "exposure" { format!("{:+.2} EV", f32::from(value)/100.) } else { format!("{value:+}%") };
+            let mut line = row().gap(4.).items_center().child(title(label, 12., 500., TEXT))
+                .child(el().grow(1.)).child(title(display, 11., 500., MUTED));
+            for (sign, suffix, delta) in [("−","down",-step), ("+","up",step)] {
+                let mut next = grade;
+                let new_value = (value + delta).clamp(-limit, limit);
+                match field {
+                    "exposure" => next.exposure = new_value,
+                    "contrast" => next.contrast = new_value,
+                    "saturation" => next.saturation = new_value,
+                    _ => next.warmth = new_value,
+                }
+                line = line.child(command(format!("grade-{field}-{suffix}"), sign, false,
+                    RoomCommand::CameraGrade { source: source.into(), grade: next })
+                    .label(format!("{label} {suffix}")).disabled(new_value == value));
+            }
+            pick = pick.child(line);
+        }
+        pick = pick.child(command("reset-camera-grade","Reset lighting & color",false,
+            RoomCommand::CameraGrade { source: source.into(), grade: Default::default() })
+            .disabled(grade == Default::default()));
         if let Some(msg) = info["error"].as_str() {
             pick = pick.child(title(msg, 11., 500., 0xff9b93));
         }
@@ -848,7 +854,7 @@ fn source_popout(s: &Studio, source: &str, w: f32, h: f32) -> El {
             |_| crate::platform::camera_effects(),
         ));
     }
-    if kind != "add" {
+    if p.lanes.iter().any(|lane| lane.source == source) {
         let source = source.to_owned();
         pick = pick.child(
             button("remove-source", "Remove source", false, move |s| {
@@ -918,11 +924,35 @@ fn studio_list(snap: &Snapshot, id: PanelId, compact: bool) -> El {
                     item = item.child(title("On", 10., 600., MINT));
                 }
             }
-            list = list.child(item.on_press(move |s: &mut Studio| {
-                s.send(RoomCommand::SceneSelect {
-                    id: selected.clone(),
-                })
-            }));
+            let select = item.on_press(move |s: &mut Studio| {
+                s.send(RoomCommand::SceneSelect { id: selected.clone() });
+            });
+            let mut scene_row = row().items_center().gap(3.).min_w(0.)
+                .child(if compact { select } else { select.w(0.).grow(1.) });
+            if p.room_scenes.len() > 1 {
+                let id = key.clone();
+                let label = format!("Options for {}", scene.name);
+                let delete = format!("Delete {}", scene.name);
+                let anchor = format!("scene-options-{key}");
+                let menu_anchor = anchor.clone();
+                scene_row = scene_row.child(
+                    tool(&anchor, "more", &label, false, |_| {}).size(23., 24.)
+                        .on_press_tx(move |_: &mut Studio, tx| {
+                            let id = id.clone();
+                            tx.popup_menu(
+                                rune::PopupMenu::new().item(rune::PopupItem::new("delete", &delete)),
+                                menu_anchor.clone(),
+                                move |s: &mut Studio, pick, _| {
+                                    if pick == Some("delete") {
+                                        s.send(RoomCommand::SceneRemove { id });
+                                    }
+                                },
+                            );
+                        }).disabled(active && (snap.recording || snap.take.busy())),
+                );
+            }
+            list = list.child(scene_row);
+
         }
     } else {
         let seq = p.production.sequences.get("main");
@@ -1001,7 +1031,18 @@ fn studio_list(snap: &Snapshot, id: PanelId, compact: bool) -> El {
             );
         }
     }
-    let add = if id == PanelId::Scenes {
+    if compact {
+        row()
+            .w_full()
+            .min_w(0.)
+            .items_center()
+            .gap(4.)
+            .child(list.min_w(0.).grow(1.).scroll_x())
+            .child(list_add(id))
+    } else { list }
+}
+pub(super) fn list_add(id: PanelId) -> El {
+    (if id == PanelId::Scenes {
         send_tool(
             "add-scene",
             "plus",
@@ -1014,28 +1055,7 @@ fn studio_list(snap: &Snapshot, id: PanelId, compact: bool) -> El {
             open_source(s, "add", None)
         })
     }
-    .size(24., 24.);
-    if compact {
-        row()
-            .w_full()
-            .min_w(0.)
-            .items_center()
-            .gap(4.)
-            .child(list.min_w(0.).grow(1.).scroll_x())
-            .child(add)
-    } else {
-        col()
-            .gap(4.)
-            .child(
-                row()
-                    .h(26.)
-                    .items_center()
-                    .child(title(id.label(), 12., 600., TEXT))
-                    .child(el().grow(1.))
-                    .child(add),
-            )
-            .child(list)
-    }
+    ).size(24., 24.)
 }
 fn strip(s: &Studio, id: PanelId, edge: Edge) -> El {
     let l = s.live.as_ref().unwrap();
@@ -1068,38 +1088,9 @@ fn strip(s: &Studio, id: PanelId, edge: Edge) -> El {
                     .on_press(super::editor::open),
             );
         }
-        PanelId::Assistant => {
-            return r
-                .child(button("assistant-open", "Assistant", s.show_chat, |s| {
-                    s.show_chat = !s.show_chat
-                }))
-                .child(
-                    field("assistant-quick", &s.chat.input, |s| &mut s.chat.input)
-                        .on_submit(|s: &mut Studio, _| {
-                            s.show_chat = true;
-                            if let Some(l) = &s.live {
-                                s.chat.start(l);
-                            }
-                        })
-                        .grow(1.)
-                        .w(0.),
-                )
-                .child(tool(
-                    "assistant-send",
-                    "stage-in",
-                    "Send message",
-                    false,
-                    |s| {
-                        s.show_chat = true;
-                        if let Some(l) = &s.live {
-                            s.chat.start(l);
-                        }
-                    },
-                ))
-        }
+        PanelId::Assistant => return super::chat::compact(s),
         PanelId::Clips => {
-            if let Some(m) = l.handle.media.lock().unwrap().as_ref() {
-                let st = m.clips.status();
+            if let Some((st, _)) = &l.clip_view {
                 let name = format!("Save last {}s", st.settings.seconds);
                 if st.ready {
                     r = r.child(command("save-clip", name, false, RoomCommand::ClipsSave));
@@ -1155,6 +1146,7 @@ fn strip(s: &Studio, id: PanelId, edge: Edge) -> El {
                 ));
             }
         }
+        PanelId::Publish => return r.child(button("publish-new","New post",false,move |s| { s.send(RoomCommand::Workspace { command: WorkspaceCommand::Collapse { edge, collapsed:false } }); super::publish::new_post(s); }).disabled(s.publish.scope.is_none())),
         PanelId::Dj => return dj_strip(s, r),
         _ => {
             r = r.child(command(
@@ -1205,73 +1197,80 @@ fn dock(
                 (before + span).max(1.),
             ));
         }
-        let mut panel = col()
-            .key(format!("dock-{}-{}", edge.key(), id.key()))
-            .min_h(0.)
-            .min_w(0.)
-            .grow(ws.panels[&id].weight)
-            .clip_rounded(5.)
-            .radius(5.)
-            .padding(6.)
-            .gap(3.)
-            .fill(color(PANEL));
-        panel = if edge.side() {
-            panel.h(0.)
-        } else {
-            panel.w(0.)
-        };
+        let frame = &ws.panels[&id];
+        let mut panel = super::panel_frame::surface(id, frame);
+        let split_publish = !edge.side() && span >= 480.;
+        let composing = id == PanelId::Publish && s.publish.composing;
+        if !ws.docks[&edge].collapsed && !composing {
+            if let Some(header) = super::panel_frame::header(s, id, frame.header, split_publish) { panel = panel.child(header); }
+        }
         if ws.docks[&edge].collapsed {
             panel = panel.child(strip(s, id, edge));
+        } else if composing {
+            panel = panel.child(super::publish::inline_composer(s, split_publish));
+        } else if id == PanelId::Publish && split_publish {
+            panel = panel.child(super::publish::panel(s, col().gap(5.), true, frame.header == crate::workspace::HeaderMode::Hidden));
+        } else if id == PanelId::Assistant {
+            panel = panel.padding(0.).gap(0.).child(super::chat::panel(s, false));
         } else {
             if id == PanelId::Network {
-                panel = panel.child(
-                    row()
-                        .items_center()
-                        .h(26.)
-                        .child(title("Network", 16., 650., TEXT)),
-                );
                 if let Some(switcher) = super::network::switcher(s) {
                     panel = panel.child(switcher);
                 }
-            } else if matches!(
-                id,
-                PanelId::Mixer | PanelId::Sound | PanelId::Timeline | PanelId::Assistant
-            ) {
-                let (name, detail) = match id {
-                    PanelId::Mixer => ("Audio mixer", "48 kHz"),
-                    PanelId::Assistant => ("Studio Assistant", ""),
-                    PanelId::Sound => ("Sound", if s.sound_library { "Add sounds" } else { "" }),
-                    _ => ("Timeline", ""),
-                };
-                panel = panel.child(
-                    row()
-                        .items_center()
-                        .h(26.)
-                        .child(title(name, 12., 600., TEXT))
-                        .child(el().grow(1.))
-                        .child(if id == PanelId::Timeline {
-                            button("close-timeline", "×", false, |s| {
-                                s.send(RoomCommand::Workspace {
-                                    command: WorkspaceCommand::Visibility {
-                                        panel: PanelId::Timeline,
-                                        visible: false,
-                                    },
-                                });
-                            }).label("Close Timeline").help("Close Timeline").size(24., 24.).padding(0.)
-                        } else {
-                            title(detail, 11., 500., MUTED)
-                        }),
-                );
             }
-            panel = panel.child(
-                col().key(format!("panel-scroll-{}", id.key())).h(0.).grow(1.).min_h(0.).w_full()
-                    .child(panel_body(s, id, edge, if edge.side() { width } else { span }))
-                    .scroll(Default::default()),
-            );
+            panel = panel.child(super::panel_frame::scroll_body(id,
+                panel_body(s, id, edge, if edge.side() { width } else { span })));
         }
         list = list.child(panel);
     }
     list.min_h(0.).min_w(0.)
+}
+fn clip_file_tool(id: &str, icon: &str, label: &str, path: PathBuf, reveal: bool) -> El {
+    tool(id, icon, label, false, move |s| {
+        let path = path.clone();
+        s.room_task(move |_| {
+            let mut command = std::process::Command::new("/usr/bin/open");
+            if reveal { command.arg("-R"); }
+            anyhow::ensure!(command.arg(path).status()?.success(), "Could not open saved clip");
+            Ok(String::new())
+        });
+    }).size(26., 26.)
+}
+
+pub(super) fn clip_actions(s: &Studio) -> Option<El> {
+    let (state, _) = s.live.as_ref()?.clip_view.as_ref()?;
+                let hint = if state.saving {
+                    "Saving…".into()
+                } else if state.enabled && state.ready {
+                    format!("Rolling · {}:{:02}", state.elapsed / 60, state.elapsed % 60)
+                } else if state.enabled {
+                    "Buffering…".into()
+                } else {
+                    "Off".into()
+                };
+                Some(row()
+                        .items_center()
+                        .gap(4.)
+                        .child(title(hint, 11., 500., MUTED))
+                        .child(command(
+                            "clips-enable",
+                            if state.enabled { "On" } else { "Off" },
+                            state.enabled,
+                            RoomCommand::ClipsEnable {
+                                enabled: !state.enabled,
+                            },
+                        ))
+                        .child(
+                            tool(
+                                "clip-settings",
+                                "settings",
+                                "Clips settings",
+                                s.clip_settings,
+                                |s| s.clip_settings = !s.clip_settings,
+                            )
+                            .size(26., 26.),
+                        ),
+                )
 }
 fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
     let l = s.live.as_ref().unwrap();
@@ -1403,19 +1402,29 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                     let action = match p.production.sources.get(&id) {
                         Some(Source::Live { role: Role::Screen }) => command(repair_key, "Share a screen…", false,
                             RoomCommand::ScreenCapture { target: ScreenCaptureTarget::Any }),
+                        Some(Source::Live { role: Role::Guest }) if p.rtc_video_slot().is_none() =>
+                            title("Remove an extra camera in Sources to make space for guest video.", 11., 500., MUTED),
                         Some(Source::Live { role: Role::Guest }) => {
                             let copying = s.people.copying_invitation();
                             let mut invitation = col().gap(4.).child(button(
                                 repair_key, if copying { "Copying invitation…" } else { "Invite a guest…" }, false,
                                 |s| copy_link(s, crate::room_share::LinkKind::Guest))
-                                .disabled(copying));
-                            if let Some(feedback) = s.people.invitation_feedback() {
+                                .disabled(s.people.busy()));
+                            if let Some(feedback) = s.people.invitation_feedback(&snap.producer_rtc) {
                                 invitation = invitation.child(feedback);
                             }
                             invitation
                         }
                         Some(Source::Live { role: Role::HostCamera | Role::Microphone }) => {
-                            let label = format!("Connect {}", super::editor::source_name(p, &id));
+                            let nameplate = if source_kind(p, &id) == "camera" {
+                                super::editor::camera_nameplate(set, &pair, &id)
+                            } else {
+                                None
+                            };
+                            let label = nameplate.map_or_else(
+                                || format!("Connect {}", super::editor::source_name(p, &id)),
+                                |name| format!("Connect {name}’s camera"),
+                            );
                             if id == "camera" || id == "microphone" {
                                 command(repair_key, label, false, RoomCommand::Capture {
                                     camera: id == "camera", mic: id == "microphone", screen: false,
@@ -1465,7 +1474,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                         .border(1., color(0x344758));
                     for n in 1..4 {
                         let pos = n as f32 * size / 4.;
-                        let grid = if n == 2 { 0x47616d } else { 0x23333e };
+                        let grid = if n == 2 { theme::GRIP } else { 0x23333e };
                         pad = pad
                             .child(el().absolute(pos, 0.).size(1., size).fill(color(grid)))
                             .child(el().absolute(0., pos).size(size, 1.).fill(color(grid)));
@@ -1800,7 +1809,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                     }
                 }
             } else {
-                b = b.child(title("Set Controls", 14., 600., TEXT)).child(title(
+                b = b.child(title(
                     "No Sets in this studio",
                     12.,
                     500.,
@@ -1810,43 +1819,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
             b
         }
         PanelId::Clips => {
-            if let Some(m) = l.handle.media.lock().unwrap().as_ref() {
-                let state = m.clips.status();
-                let hint = if state.saving {
-                    "Saving…".into()
-                } else if state.enabled && state.ready {
-                    format!("Rolling · {}:{:02}", state.elapsed / 60, state.elapsed % 60)
-                } else if state.enabled {
-                    "Buffering…".into()
-                } else {
-                    "Off".into()
-                };
-                b = b.child(
-                    row()
-                        .items_center()
-                        .gap(4.)
-                        .child(title("Clips", 12., 600., TEXT))
-                        .child(el().grow(1.))
-                        .child(title(hint, 11., 500., MUTED))
-                        .child(command(
-                            "clips-enable",
-                            if state.enabled { "On" } else { "Off" },
-                            state.enabled,
-                            RoomCommand::ClipsEnable {
-                                enabled: !state.enabled,
-                            },
-                        ))
-                        .child(
-                            tool(
-                                "clip-settings",
-                                "settings",
-                                "Clips settings",
-                                s.clip_settings,
-                                |s| s.clip_settings = !s.clip_settings,
-                            )
-                            .size(26., 26.),
-                        ),
-                );
+            if let Some((state, _)) = &l.clip_view {
                 b = b.child(
                     command(
                         "clips-save",
@@ -1858,6 +1831,18 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 );
                 if s.clip_settings {
                     let cfg = &state.settings;
+                    let mut next = cfg.clone();
+                    next.queue_for_publish = !cfg.queue_for_publish;
+                    b = b.child(command(
+                        "clips-local-queue",
+                        if cfg.queue_for_publish {
+                            "Add saved clips to local queue · On"
+                        } else {
+                            "Add saved clips to local queue · Off"
+                        },
+                        cfg.queue_for_publish,
+                        RoomCommand::ClipsConfigure { settings: next },
+                    ));
                     let mut lengths = row().gap(3.).flex_wrap();
                     for n in [15, 30, 60, 120] {
                         let mut next = cfg.clone();
@@ -1916,134 +1901,43 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                         ),
                     );
                 }
-                if let Some(err) = state.error {
+                if let Some(err) = &state.error {
                     b = b.child(title(err, 11., 500., 0xffadb3));
                 }
-                for clip in state.recent {
-                    b = b.child(title(&clip.name, 12., 550., TEXT));
-                    let mut files = row().gap(3.).flex_wrap();
-                    for f in clip.files {
-                        for reveal in [false, true] {
-                            let path = f.path.clone();
-                            let label = if reveal {
-                                "Show in Finder".into()
-                            } else {
-                                format!("Play {}", f.output.label())
-                            };
-                            files = files.child(button(
-                                format!("clip-{}-{}-{reveal}", clip.id, f.output.label()),
-                                label,
-                                false,
-                                move |s| {
-                                    let path = path.clone();
-                                    s.room_task(move |_| {
-                                        let mut cmd = std::process::Command::new("/usr/bin/open");
-                                        if reveal {
-                                            cmd.arg("-R");
-                                        }
-                                        anyhow::ensure!(
-                                            cmd.arg(path).status()?.success(),
-                                            "Could not open saved clip"
-                                        );
-                                        Ok(String::new())
-                                    });
-                                },
-                            ));
-                        }
+                for clip in &state.recent {
+                    let mut files = row().gap(4.).items_center();
+                    for file in &clip.files {
+                        let icon = match file.output {
+                            crate::clips::Output::Landscape => "clip-landscape",
+                            crate::clips::Output::Vertical => "clip-portrait",
+                            crate::clips::Output::Both => "play",
+                        };
+                        let label = format!("Play {}", file.output.label());
+                        files = files.child(clip_file_tool(
+                            &format!("clip-{}-{}-false", clip.id, file.output.label()),
+                            icon, &label, file.path.clone(), false,
+                        ));
                     }
-                    b = b.child(files);
+                    if let Some(file) = clip.files.first() {
+                        files = files.child(clip_file_tool(
+                            &format!("clip-{}-{}-true", clip.id, file.output.label()),
+                            "folder", "Show in Finder", file.path.clone(), true,
+                        ));
+                    }
+                    b = b.child(row().w_full().min_w(0.).items_center().gap(6.).padding(5.).radius(6.)
+                        .border(1., color(theme::TRANSPORT_BORDER)).fill(color(SURFACE))
+                        .child(title(&clip.name, 11., 550., TEXT).grow(1.).min_w(0.))
+                        .child(files));
                 }
             }
             b
         }
         PanelId::Timeline => super::timeline::panel(s, width),
         PanelId::Network => super::network::panel(s, b),
+        PanelId::Publish => super::publish::panel(s, b, false, p.workspace.panels[&id].header == crate::workspace::HeaderMode::Hidden),
         PanelId::Dj | PanelId::Sound => audio(s, id, b, edge, width),
-        PanelId::People => {
-            let rtc = &snap.producer_rtc;
-            let phase = rtc["phase"].as_str().unwrap_or("idle");
-            let awaiting = l.handle.waiting_guests.lock().unwrap().clone();
-            b = b.gap(8.).child(super::people::panel_header(s, awaiting.len()));
-            if matches!(phase, "idle" | "ended" | "failed") && awaiting.is_empty() {
-                b = b.child(super::people::empty_guest(s));
-            } else if matches!(phase, "gathering" | "waiting") && rtc["admitReady"] != true {
-                b = b.child(button("guest-link", "Copy guest link", false, super::people::guest_link)
-                    .disabled(rtc["linkReady"] != true));
-            }
-            b = b.child(super::people::guest_output(s));
-            if let Some(feedback) = s.people.invitation_feedback() {
-                b = b.child(feedback.key("people-invitation-feedback"));
-            }
-            if phase != "idle" {
-                let status = match phase {
-                    "gathering" => "Preparing invitation",
-                    "waiting" if rtc["admitReady"] == true => "Guest ready to join",
-                    "waiting" => "Waiting for your guest",
-                    "connected" => "Guest connected",
-                    "failed" => "Guest connection failed",
-                    "ended" => "Guest session ended",
-                    _ => "Connecting guest",
-                };
-                b = b.child(title(status, 12., 500., MUTED));
-                if rtc["admitReady"] == true {
-                    if let Some(name) = rtc["displayName"].as_str() {
-                        b = b.child(title(name, 12., 600., TEXT));
-                    }
-                    b = b.child(command(
-                        "rtc-admit",
-                        "Admit guest",
-                        true,
-                        RoomCommand::RtcAdmit,
-                    ));
-                }
-                if phase == "connected" && rtc["role"] == "host" {
-                    b = super::people::guest_card(s,b);
-                } else {
-                    b = b.child(command("rtc-end","End session",false,RoomCommand::RtcEnd));
-                }
-                if let Some(reason) = rtc["reason"].as_str() { b = b.child(title(reason,11.,500.,MUTED)); }
-            }
-            if l.handle.pending_rtc_link.lock().unwrap().is_some() {
-                b = b.child(button(
-                    "accept-invitation",
-                    "Accept guest invitation",
-                    false,
-                    |s| {
-                        if let Some(l) = &s.live {
-                            let link = l.handle.pending_rtc_link.lock().unwrap().take();
-                            if link.is_some() {
-                                s.send(RoomCommand::RtcStart {
-                                    display_name: None,
-                                    link,
-                                    lan: false,
-                                    rehearsal: false,
-                                    output: None,
-                                });
-                            }
-                        }
-                    },
-                ));
-            }
-            for guest in awaiting {
-                let id = guest.id;
-                b = b.child(col().padding(8.).gap(4.).radius(6.).fill(color(SURFACE))
-                    .child(title(guest.name, 12., 600., TEXT))
-                    .child(title("Waiting to join", 10., 500., MUTED))
-                    .child(button(
-                    format!("admit-{id}"),
-                    "Admit guest",
-                    false,
-                    move |s| {
-                        s.room_task(move |root| {
-                            crate::room_share::admit(root, id)?;
-                            Ok(String::new())
-                        })
-                    },
-                )));
-            }
-            b
-        }
-        PanelId::Assistant => super::chat::panel(s, b),
+        PanelId::People => super::people::panel(s, b),
+        PanelId::Assistant => b,
     }
 }
 fn audio(s: &Studio, panel: PanelId, mut b: El, edge: Edge, width: f32) -> El {
@@ -2157,8 +2051,8 @@ fn audio(s: &Studio, panel: PanelId, mut b: El, edge: Edge, width: f32) -> El {
             .px(3.)
             .gap(4.)
             .radius(6.)
-            .border(1., color(0x213343))
-            .fill(color(0x14212d))
+            .border(1., color(theme::TRANSPORT_BORDER))
+            .fill(color(theme::TRANSPORT))
             .child(audio_tool(
                 &format!("play-{i}"),
                 if d.playing { "pause" } else { "play" },
@@ -2220,7 +2114,7 @@ fn audio(s: &Studio, panel: PanelId, mut b: El, edge: Edge, width: f32) -> El {
                 .gap(3.)
                 .h(29.)
                 .radius(5.)
-                .fill(color(0x14212d))
+                .fill(color(theme::TRANSPORT))
                 .child(cmd(
                     "mix".into(),
                     "Mix".into(),
@@ -2303,7 +2197,7 @@ fn audio(s: &Studio, panel: PanelId, mut b: El, edge: Edge, width: f32) -> El {
                 .items_center()
                 .px(6.)
                 .radius(3.)
-                .fill(color(if selected { 0x18342e } else { 0x121f29 }))
+                .fill(color(if selected { theme::TRACK_SELECTED } else { theme::TRACK }))
                 .child(title(item.name, 11., 500., TEXT))
                 .on_press(move |s: &mut Studio| {
                     s.send(RoomCommand::StudioAudio {
@@ -2391,7 +2285,7 @@ fn compact_slider(key: &str, label: &str, value: f32, set: impl Fn(&mut Studio, 
     let accessible = set.clone();
     el().key(key.to_owned()).w_full().h(13.).center().padding(1.)
         .role("slider").label(label.to_owned()).range_value(value.into(), 0., 1.).range_step(0.02)
-        .child(row().w_full().h(4.).radius(2.).clip_rounded(2.).fill(color(0x2a3d4c))
+        .child(row().w_full().h(4.).radius(2.).clip_rounded(2.).fill(color(theme::SLIDER_RAIL_COMPACT))
             .child(el().h_full().w_frac(value).fill(color(MINT))))
         .on_drag(move |s: &mut Studio, d, _| {
             if !d.cancelled() && d.w > 0. {
@@ -2422,9 +2316,9 @@ fn slider(label: &str, value: f32, set: impl Fn(&mut Studio, f32) + 'static) -> 
                 .items_center()
                 .w_full()
                 .h(2.)
-                .fill(color(0x354857))
-                .child(el().w_frac(frac).h(2.).fill(color(0x99b6c2)))
-                .child(el().size(6., 6.).radius(3.).fill(color(0x99b6c2))),
+                .fill(color(theme::SLIDER_RAIL))
+                .child(el().w_frac(frac).h(2.).fill(color(theme::SLIDER_VALUE)))
+                .child(el().size(6., 6.).radius(3.).fill(color(theme::SLIDER_VALUE))),
         )
         .on_drag(move |s: &mut Studio, d, _| {
             if !d.cancelled() && d.w > 0. {
@@ -2475,8 +2369,8 @@ fn split_handle(edge: Edge, first: PanelId, second: PanelId, ratio: f32, span: f
         .center()
         .hit()
         .cursor(cursor)
-        .hover_fill(color(0x293b47))
-        .child(mark.radius(1.).fill(color(0x47616d)))
+        .hover_fill(color(theme::GRIP_HOVER))
+        .child(mark.radius(1.).fill(color(theme::GRIP)))
         .on_drag(move |s: &mut Studio, d, _| {
             if d.cancelled() {
                 s.resize = None;
@@ -2516,8 +2410,8 @@ fn grip(edge: Edge, size: f32, collapsed: bool) -> El {
         .label(format!("Resize {} dock", edge.key()))
         .center().hit()
         .cursor(if side { rune::Cursor::ResizeEw } else { rune::Cursor::ResizeNs })
-        .hover_fill(color(0x293b47))
-        .child(line.radius(1.).fill(color(0x47616d)))
+        .hover_fill(color(theme::GRIP_HOVER))
+        .child(line.radius(1.).fill(color(theme::GRIP)))
         .on_drag(move |s: &mut Studio, d, _| {
             if matches!(d.phase, rune::Phase::Down) {
                 d.data = size;
@@ -2862,11 +2756,12 @@ fn dock_picker(
                 Edge::Top => (offset + span - 176., 76.),
                 Edge::Bottom => (offset + span - 176., h - 50. - extents[3] + 28.),
             };
+            let height = 320_f32.min((h - 80.).max(80.));
             r = [
                 x.clamp(6., (w - 182.).max(6.)),
-                y.clamp(48., (h - 204.).max(48.)),
+                y.clamp(48., (h - height - 24.).max(48.)),
                 176.,
-                180.,
+                height,
             ];
         }
     }
@@ -2884,7 +2779,7 @@ fn dock_picker(
         .items_center()
         .child(title(
             if s.moving_panel.is_some() {
-                "Move panel"
+                "Panel settings"
             } else {
                 "Add panel"
             },
@@ -2899,6 +2794,16 @@ fn dock_picker(
     }));
     pane = pane.child(head);
     if let Some(id) = s.moving_panel {
+        {
+            pane = pane.child(title("Header", 11., 550., MUTED));
+            use crate::workspace::HeaderMode;
+            for (mode, name) in [(HeaderMode::Standard,"Standard"),(HeaderMode::Compact,"Compact"),(HeaderMode::Hidden,"Hidden")] {
+                pane = pane.child(command(format!("panel-header-{}", name.to_lowercase()), name,
+                    ws.panels[&id].header == mode,
+                    RoomCommand::Workspace { command: WorkspaceCommand::SetHeader { panel:id, mode } }));
+            }
+            pane = pane.child(title("Move to", 11., 550., MUTED));
+        }
         for target in Edge::ALL {
             if target != edge && id.accepts(target) {
                 pane = pane.child(button(
@@ -2949,9 +2854,9 @@ fn dock_picker(
 }
 
 pub(super) fn layout_key(s: &mut Studio, event: &rune::KeyEvent, _: &mut rune::Tx) -> bool {
-    if s.studio_settings {
+    if s.studio_settings.is_some() {
         if matches!(event.key, rune::Key::Escape) {
-            s.studio_settings = false;
+            s.studio_settings = None;
             return true;
         }
         return false;
@@ -2962,6 +2867,10 @@ pub(super) fn layout_key(s: &mut Studio, event: &rune::KeyEvent, _: &mut rune::T
     }
     if s.source.is_some() && matches!(event.key, rune::Key::Escape) {
         s.source = None;
+        return true;
+    }
+    if s.show_chat && matches!(event.key, rune::Key::Escape) {
+        super::chat::close_popout(s);
         return true;
     }
     if s.editor.is_some() {

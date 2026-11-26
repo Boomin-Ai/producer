@@ -89,6 +89,11 @@ static NSString *const shader = @
 "  return float4(d.color.rgb,d.color.a*line*(.22+.78*uv.x)); }\n"
 "fragment float4 fs(V v [[stage_in]], constant D& d [[buffer(0)]], texture2d<float> t [[texture(0)]]) { constexpr sampler s(filter::linear,address::clamp_to_edge); float2 sz=max(d.metrics.yz,float2(1)); float radius=clamp(d.metrics.x,0.,min(sz.x,sz.y)*.5); float2 q=abs((v.uv-.5)*sz)-sz*.5+radius; float sd=length(max(q,0.))+min(max(q.x,q.y),0.)-radius; if(d.material.x==2.) sd=camera_edge_distance(sd,(v.uv-.5)*sz,d.material.w); float aa=max(fwidth(sd),.7); float mask=1-smoothstep(-aa*.5,aa*.5,sd); float2 dir=float2(cos(d.surface.x),sin(d.surface.x)); float ramp=clamp(dot((v.uv-.5)*sz,dir)/max(dot(abs(dir),sz),1.)+.5,0.,1.); float4 c=mix(d.color,d.color_to,ramp); if(d.material.x==1.){float phase=d.material.w*d.material.z*.08; float field=.5+.28*sin(v.uv.x*8.+v.uv.y*5.+phase)+.16*sin(v.uv.x*17.-v.uv.y*11.-phase*.7); float blend=clamp(.5+.5*sin(v.uv.x*4.+v.uv.y*3.+field*2.),0.,1.); c=mix(d.color,d.color_to,blend); c=mix(c,d.accent,smoothstep(.15,.95,v.uv.y)*.85); float2 cell=fract(v.uv*sz/max(d.material.y,2.))-.5; float dots=1.-smoothstep(.15,.27,length(cell)); c.rgb=clamp(c.rgb+float3((dots-.22)*.13),0.,1.); c.a*=clamp(.42+field*.65,0.,1.); } if(d.material.x==3.) c=contour_ink(v.uv,d); if(d.kind==1||d.kind==3)c=t.sample(s,d.uv.xy+v.uv*d.uv.zw); if(d.kind==2)c=float4(d.color.rgb,d.color.a*t.sample(s,v.uv).a); if(d.surface.y>0.){float2 pixel=floor(v.uv*sz); float noise=fract(sin(dot(pixel,float2(12.9898,78.233)))*43758.5453)-.5; c.rgb=clamp(c.rgb+noise*d.surface.y,0.,1.);} float stroke=d.metrics.w>0.?smoothstep(-d.metrics.w-aa*.5,-d.metrics.w+aa*.5,sd)*d.border.a:0.; float alpha=stroke+c.a*(1-stroke); float3 rgb=alpha>0.?(d.border.rgb*stroke+c.rgb*c.a*(1-stroke))/alpha:float3(0);return float4(rgb,alpha*mask*d.opacity); }\n"
 // Match GPUI's full-range BT.601 surface shader. Explicit metadata follows it.
+"kernel void camera_grade(texture2d<float,access::read> src [[texture(0)]], texture2d<float,access::write> dst [[texture(1)]], constant float4& g [[buffer(0)]], uint2 p [[thread_position_in_grid]]) {\n"
+"  if(p.x>=src.get_width() || p.y>=src.get_height())return; float4 c=src.read(p);\n"
+"  float3 rgb=c.rgb*exp2(g.x/2.2)*float3(1.+.2*g.w,1.,1.-.2*g.w);\n"
+"  rgb=(rgb-.5)*(1.+g.y)+.5; float luma=dot(rgb,float3(.2126,.7152,.0722));\n"
+"  dst.write(float4(clamp(mix(float3(luma),rgb,1.+g.z),0.,1.),c.a),p); }\n"
 "kernel void to_yuv(texture2d<float,access::read> c [[texture(0)]], texture2d<float,access::write> y [[texture(1)]], texture2d<float,access::write> uv [[texture(2)]], uint2 q [[thread_position_in_grid]]) { if(q.x>=uv.get_width()||q.y>=uv.get_height())return; uint2 p=q*2; float3 a=c.read(p).rgb,b=c.read(p+uint2(1,0)).rgb,d=c.read(p+uint2(0,1)).rgb,e=c.read(p+uint2(1,1)).rgb; float3 l=float3(.299,.587,.114); y.write(float4(dot(a,l)),p); y.write(float4(dot(b,l)),p+uint2(1,0)); y.write(float4(dot(d,l)),p+uint2(0,1)); y.write(float4(dot(e,l)),p+uint2(1,1)); float3 mean=(a+b+d+e)*.25; uv.write(float4(dot(mean,float3(-.168736,-.331264,.5))+.5,dot(mean,float3(.5,-.418688,-.081312))+.5,0,1),q); }\n";
 
 @class NRRoom;
@@ -117,7 +122,8 @@ typedef enum {
     uint64_t _screenRequestGeneration;
     dispatch_queue_t _captureQueue, _screenQueue, _writerQueue;
     id<MTLDevice> _device; id<MTLCommandQueue> _gpuQueue;
-    id<MTLRenderPipelineState> _pipeline; id<MTLComputePipelineState> _convert;
+    id<MTLRenderPipelineState> _pipeline; id<MTLComputePipelineState> _convert, _cameraGrade;
+    id<MTLTexture> _graded[2][8];
     CVMetalTextureCacheRef _cache; id<MTLTexture> _white;
     BOOL _pressure; atomic_bool _pressureArmed, _pressurePinned; dispatch_queue_t _pressureLog;
     NSObject *_commitGate[2]; double _lastCommittedPTS[2];
@@ -322,7 +328,8 @@ void *nr_create(void *ctx,NRFrameCallback frame,NRAudioCallback audio,NRStatusCa
         p.colorAttachments[0].sourceAlphaBlendFactor=MTLBlendFactorOne;p.colorAttachments[0].destinationAlphaBlendFactor=MTLBlendFactorOneMinusSourceAlpha;
         r->_pipeline=[r->_device newRenderPipelineStateWithDescriptor:p error:&e];
         r->_convert=[r->_device newComputePipelineStateWithFunction:[lib newFunctionWithName:@"to_yuv"] error:&e];
-        if(!r->_pipeline||!r->_convert||CVMetalTextureCacheCreate(NULL,NULL,r->_device,NULL,&r->_cache)!=kCVReturnSuccess)return NULL;
+        r->_cameraGrade=[r->_device newComputePipelineStateWithFunction:[lib newFunctionWithName:@"camera_grade"] error:&e];
+        if(!r->_pipeline||!r->_convert||!r->_cameraGrade||CVMetalTextureCacheCreate(NULL,NULL,r->_device,NULL,&r->_cache)!=kCVReturnSuccess)return NULL;
         return (__bridge_retained void*)r;
     }
 }
@@ -831,7 +838,7 @@ int nr_prepare(void *handle,uint32_t w0,uint32_t h0,uint32_t w1,uint32_t h1) {
     if(ok)for(int i=0;i<2;i++)if(pools[i]){if(r->_pool[i])CFRelease(r->_pool[i]);r->_pool[i]=pools[i];pools[i]=NULL;r->_rgb[i]=textures[i];r->_width[i]=w[i];r->_height[i]=h[i];}
     for(int i=0;i<2;i++)if(pools[i])CFRelease(pools[i]);return ok?1:0;
 }
-int nr_render(void *handle,uint32_t output,uint32_t w,uint32_t h,const NRDraw *draws,size_t count,void **sources,void *textCache,void *djCache,double pts,uint64_t generation) {
+int nr_render(void *handle,uint32_t output,uint32_t w,uint32_t h,const NRDraw *draws,size_t count,void **sources,const float (*grades)[4],void *textCache,void *djCache,double pts,uint64_t generation) {
     NRRoom *r=(__bridge NRRoom*)handle;
     if(output>1||count>1024||w<64||h<64||w>4096||h>4096||w%2||h%2||atomic_load(&r->_closing))return 0;
     if(output==0 && atomic_load(&r->_recordEnabled))p0Stall(r,1,pts);
@@ -857,6 +864,27 @@ int nr_render(void *handle,uint32_t output,uint32_t w,uint32_t h,const NRDraw *d
         CVMetalTextureRef keep[8]={0};id<MTLTexture> textures[8]={nil};
         CVPixelBufferRef held[8]={0};
         for(int i=0;i<8;i++)if(sources[i]){held[i]=CVPixelBufferRetain((CVPixelBufferRef)sources[i]);textures[i]=cvtexture(r,held[i],MTLPixelFormatBGRA8Unorm,CVPixelBufferGetWidth(held[i]),CVPixelBufferGetHeight(held[i]),0,&keep[i]);}
+        for(int i=0;i<8;i++){
+            id<MTLTexture> src=textures[i];
+            if(!src || !(grades[i][0] || grades[i][1] || grades[i][2] || grades[i][3])) continue;
+            id<MTLTexture> dst;
+            @synchronized(r->_commitGate[output]){
+                dst=r->_graded[output][i];
+                if(!dst || dst.width!=src.width || dst.height!=src.height){
+                    MTLTextureDescriptor *desc=[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:src.width height:src.height mipmapped:NO];
+                    desc.storageMode=MTLStorageModePrivate;
+                    desc.usage=MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
+                    dst=r->_graded[output][i]=[r->_device newTextureWithDescriptor:desc];
+                }
+            }
+            if(!dst) continue;
+            id<MTLComputeCommandEncoder> pass=[command computeCommandEncoder];
+            [pass setComputePipelineState:r->_cameraGrade];
+            [pass setTexture:src atIndex:0]; [pass setTexture:dst atIndex:1];
+            [pass setBytes:grades[i] length:sizeof(grades[i]) atIndex:0];
+            [pass dispatchThreads:MTLSizeMake(src.width,src.height,1) threadsPerThreadgroup:MTLSizeMake(16,16,1)];
+            [pass endEncoding]; textures[i]=dst;
+        }
         NRVisualResources *resourcesForFrame=(__bridge NRVisualResources*)textCache;
         NRVisualResources *djResources=(__bridge NRVisualResources*)djCache;
         id<MTLTexture> graphOutputs[64]={nil};

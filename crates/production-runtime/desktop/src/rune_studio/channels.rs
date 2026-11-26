@@ -134,17 +134,7 @@ pub(super) fn sheet(s: &Studio, width: f32) -> Option<El> {
     Some(controls(s, box_, false, status))
 }
 fn status(s: &Studio) -> broadcast::Status {
-    s.live
-        .as_ref()
-        .and_then(|l| {
-            l.handle
-                .media
-                .lock()
-                .unwrap()
-                .as_ref()
-                .map(|m| m.broadcast.status())
-        })
-        .unwrap_or_default()
+    s.live.as_ref().map(|live| live.broadcast_view.0.clone()).unwrap_or_default()
 }
 pub(super) fn preferences(s: &Studio) -> El {
     controls(s, col().gap(8.), true, status(s))

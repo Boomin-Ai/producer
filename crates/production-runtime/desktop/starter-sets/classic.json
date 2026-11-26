@@ -1,0 +1,2038 @@
+{
+  "set": {
+    "layouts": {
+      "landscape": {
+        "orientation": "landscape",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "root",
+          "frame": {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 1280,
+            "height": 720
+          },
+          "flow": {
+            "kind": "overlay"
+          },
+          "content": {
+            "kind": "group"
+          },
+          "children": [
+            {
+              "id": "classic-title",
+              "frame": {
+                "x": 86,
+                "y": 36,
+                "width": 855,
+                "height": 153
+              },
+              "content": {
+                "kind": "text",
+                "value": "Classic",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "style": {
+                "text": {
+                  "field": "classic-title",
+                  "fontSize": 98,
+                  "weight": 900,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "left"
+                }
+              }
+            },
+            {
+              "id": "marquee",
+              "style": {
+                "radius": 0.0,
+                "grain": 0.0,
+                "text": {
+                  "fontSize": 16,
+                  "weight": 600,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "left"
+                }
+              },
+              "frame": {
+                "x": 0,
+                "y": 262.8,
+                "width": 1280.0,
+                "height": 26.4
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "text",
+                "value": "",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "children": [],
+              "bindings": []
+            },
+            {
+              "id": "marquee-second",
+              "style": {
+                "radius": 0.0,
+                "grain": 0.0,
+                "text": {
+                  "fontSize": 16,
+                  "weight": 600,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "left"
+                }
+              },
+              "frame": {
+                "x": 0,
+                "y": 262.8,
+                "width": 1280.0,
+                "height": 26.4
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "text",
+                "value": "",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "children": [],
+              "bindings": []
+            },
+            {
+              "id": "host",
+              "frame": {
+                "x": 0.0,
+                "y": 0.0,
+                "width": 1088.0,
+                "height": 519.84
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "source",
+                "source": "camera",
+                "fit": "cover"
+              },
+              "placement": {
+                "anchor": {
+                  "x": 0.5,
+                  "y": 0.574
+                },
+                "pivot": {
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              }
+            },
+            {
+              "id": "guest",
+              "frame": {
+                "x": 0.0,
+                "y": 0.0,
+                "width": 565.76,
+                "height": 458.64
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "source",
+                "source": "rtc-guest",
+                "fit": "cover"
+              },
+              "placement": {
+                "anchor": {
+                  "x": 0.731,
+                  "y": 0.5485
+                },
+                "pivot": {
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              }
+            },
+            {
+              "id": "host-caption",
+              "style": {
+                "radius": 0.0,
+                "grain": 0.0,
+                "text": {
+                  "fontSize": 18,
+                  "weight": 740,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1.0
+                  },
+                  "align": "left"
+                }
+              },
+              "frame": {
+                "x": 2.0,
+                "y": 2.0,
+                "width": 256.0,
+                "height": 28.8
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "text",
+                "value": "HOST",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "children": [],
+              "bindings": []
+            },
+            {
+              "id": "guest-caption",
+              "style": {
+                "radius": 0.0,
+                "grain": 0.0,
+                "text": {
+                  "fontSize": 18,
+                  "weight": 740,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1.0
+                  },
+                  "align": "left"
+                }
+              },
+              "frame": {
+                "x": 2.0,
+                "y": 34.8,
+                "width": 256.0,
+                "height": 28.8
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "text",
+                "value": "GUEST",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "children": [],
+              "bindings": []
+            }
+          ],
+          "bindings": []
+        }
+      },
+      "vertical": {
+        "orientation": "vertical",
+        "width": 720,
+        "height": 1280,
+        "root": {
+          "id": "root",
+          "frame": {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 720,
+            "height": 1280
+          },
+          "flow": {
+            "kind": "overlay"
+          },
+          "content": {
+            "kind": "group"
+          },
+          "children": [
+            {
+              "id": "classic-title",
+              "frame": {
+                "x": 60,
+                "y": 82,
+                "width": 960,
+                "height": 190
+              },
+              "content": {
+                "kind": "text",
+                "value": "Classic",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "style": {
+                "text": {
+                  "field": "classic-title",
+                  "fontSize": 108,
+                  "weight": 900,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "center"
+                }
+              }
+            },
+            {
+              "id": "marquee",
+              "style": {
+                "radius": 0.0,
+                "grain": 0.0,
+                "text": {
+                  "fontSize": 16,
+                  "weight": 600,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "left"
+                }
+              },
+              "frame": {
+                "x": 0,
+                "y": 467.2,
+                "width": 720.0,
+                "height": 26.4
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "text",
+                "value": "",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "children": [],
+              "bindings": []
+            },
+            {
+              "id": "marquee-second",
+              "style": {
+                "radius": 0.0,
+                "grain": 0.0,
+                "text": {
+                  "fontSize": 16,
+                  "weight": 600,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "left"
+                }
+              },
+              "frame": {
+                "x": 0,
+                "y": 467.2,
+                "width": 720.0,
+                "height": 26.4
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "text",
+                "value": "",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "children": [],
+              "bindings": []
+            },
+            {
+              "id": "host",
+              "frame": {
+                "x": 0.0,
+                "y": 0.0,
+                "width": 640.8,
+                "height": 953.6
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "source",
+                "source": "camera",
+                "fit": "cover"
+              },
+              "placement": {
+                "anchor": {
+                  "x": 0.5,
+                  "y": 0.5755
+                },
+                "pivot": {
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              }
+            },
+            {
+              "id": "guest",
+              "frame": {
+                "x": 0.0,
+                "y": 0.0,
+                "width": 640.8,
+                "height": 456.96
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "source",
+                "source": "rtc-guest",
+                "fit": "cover"
+              },
+              "placement": {
+                "anchor": {
+                  "x": 0.5,
+                  "y": 0.7535
+                },
+                "pivot": {
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              }
+            },
+            {
+              "id": "host-caption",
+              "style": {
+                "radius": 0.0,
+                "grain": 0.0,
+                "text": {
+                  "fontSize": 21,
+                  "weight": 740,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1.0
+                  },
+                  "align": "left"
+                }
+              },
+              "frame": {
+                "x": 2.0,
+                "y": 2.0,
+                "width": 256.0,
+                "height": 33.6
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "text",
+                "value": "HOST",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "children": [],
+              "bindings": []
+            },
+            {
+              "id": "guest-caption",
+              "style": {
+                "radius": 0.0,
+                "grain": 0.0,
+                "text": {
+                  "fontSize": 21,
+                  "weight": 740,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1.0
+                  },
+                  "align": "left"
+                }
+              },
+              "frame": {
+                "x": 2.0,
+                "y": 39.6,
+                "width": 256.0,
+                "height": 33.6
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "text",
+                "value": "GUEST",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "children": [],
+              "bindings": []
+            }
+          ],
+          "bindings": []
+        }
+      },
+      "opening-landscape": {
+        "orientation": "landscape",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "root",
+          "frame": {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 1280,
+            "height": 720
+          },
+          "flow": {
+            "kind": "overlay"
+          },
+          "content": {
+            "kind": "group"
+          },
+          "children": [
+            {
+              "id": "classic-title",
+              "frame": {
+                "x": 144,
+                "y": 385,
+                "width": 1632,
+                "height": 260
+              },
+              "content": {
+                "kind": "text",
+                "value": "Classic",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "style": {
+                "text": {
+                  "field": "classic-title",
+                  "fontSize": 185,
+                  "weight": 900,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "center"
+                }
+              }
+            },
+            {
+              "id": "marquee",
+              "style": {
+                "radius": 0.0,
+                "grain": 0.0,
+                "text": {
+                  "fontSize": 16,
+                  "weight": 600,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "left"
+                }
+              },
+              "frame": {
+                "x": 0,
+                "y": 262.8,
+                "width": 1280.0,
+                "height": 26.4
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "text",
+                "value": "",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "children": [],
+              "bindings": []
+            },
+            {
+              "id": "marquee-second",
+              "style": {
+                "radius": 0.0,
+                "grain": 0.0,
+                "text": {
+                  "fontSize": 16,
+                  "weight": 600,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "left"
+                }
+              },
+              "frame": {
+                "x": 0,
+                "y": 262.8,
+                "width": 1280.0,
+                "height": 26.4
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "text",
+                "value": "",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "children": [],
+              "bindings": []
+            }
+          ],
+          "bindings": []
+        }
+      },
+      "opening-vertical": {
+        "orientation": "vertical",
+        "width": 720,
+        "height": 1280,
+        "root": {
+          "id": "root",
+          "frame": {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 720,
+            "height": 1280
+          },
+          "flow": {
+            "kind": "overlay"
+          },
+          "content": {
+            "kind": "group"
+          },
+          "children": [
+            {
+              "id": "classic-title",
+              "frame": {
+                "x": 86,
+                "y": 650,
+                "width": 908,
+                "height": 240
+              },
+              "content": {
+                "kind": "text",
+                "value": "Classic",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "style": {
+                "text": {
+                  "field": "classic-title",
+                  "fontSize": 134,
+                  "weight": 900,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "center"
+                }
+              }
+            },
+            {
+              "id": "marquee",
+              "style": {
+                "radius": 0.0,
+                "grain": 0.0,
+                "text": {
+                  "fontSize": 16,
+                  "weight": 600,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "left"
+                }
+              },
+              "frame": {
+                "x": 0,
+                "y": 467.2,
+                "width": 720.0,
+                "height": 26.4
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "text",
+                "value": "",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "children": [],
+              "bindings": []
+            },
+            {
+              "id": "marquee-second",
+              "style": {
+                "radius": 0.0,
+                "grain": 0.0,
+                "text": {
+                  "fontSize": 16,
+                  "weight": 600,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "left"
+                }
+              },
+              "frame": {
+                "x": 0,
+                "y": 467.2,
+                "width": 720.0,
+                "height": 26.4
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "text",
+                "value": "",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "children": [],
+              "bindings": []
+            }
+          ],
+          "bindings": []
+        }
+      },
+      "host-landscape": {
+        "orientation": "landscape",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "root",
+          "frame": {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 1280,
+            "height": 720
+          },
+          "flow": {
+            "kind": "overlay"
+          },
+          "content": {
+            "kind": "group"
+          },
+          "children": [
+            {
+              "id": "classic-title",
+              "frame": {
+                "x": 86,
+                "y": 36,
+                "width": 855,
+                "height": 153
+              },
+              "content": {
+                "kind": "text",
+                "value": "Classic",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "style": {
+                "text": {
+                  "field": "classic-title",
+                  "fontSize": 98,
+                  "weight": 900,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "left"
+                }
+              }
+            },
+            {
+              "id": "marquee",
+              "style": {
+                "radius": 0.0,
+                "grain": 0.0,
+                "text": {
+                  "fontSize": 16,
+                  "weight": 600,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "left"
+                }
+              },
+              "frame": {
+                "x": 0,
+                "y": 262.8,
+                "width": 1280.0,
+                "height": 26.4
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "text",
+                "value": "",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "children": [],
+              "bindings": []
+            },
+            {
+              "id": "marquee-second",
+              "style": {
+                "radius": 0.0,
+                "grain": 0.0,
+                "text": {
+                  "fontSize": 16,
+                  "weight": 600,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "left"
+                }
+              },
+              "frame": {
+                "x": 0,
+                "y": 262.8,
+                "width": 1280.0,
+                "height": 26.4
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "text",
+                "value": "",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "children": [],
+              "bindings": []
+            },
+            {
+              "id": "host",
+              "frame": {
+                "x": 0.0,
+                "y": 0.0,
+                "width": 1088.0,
+                "height": 519.84
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "source",
+                "source": "camera",
+                "fit": "cover"
+              },
+              "placement": {
+                "anchor": {
+                  "x": 0.5,
+                  "y": 0.574
+                },
+                "pivot": {
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              }
+            }
+          ],
+          "bindings": []
+        }
+      },
+      "host-vertical": {
+        "orientation": "vertical",
+        "width": 720,
+        "height": 1280,
+        "root": {
+          "id": "root",
+          "frame": {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 720,
+            "height": 1280
+          },
+          "flow": {
+            "kind": "overlay"
+          },
+          "content": {
+            "kind": "group"
+          },
+          "children": [
+            {
+              "id": "classic-title",
+              "frame": {
+                "x": 60,
+                "y": 82,
+                "width": 960,
+                "height": 190
+              },
+              "content": {
+                "kind": "text",
+                "value": "Classic",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "style": {
+                "text": {
+                  "field": "classic-title",
+                  "fontSize": 108,
+                  "weight": 900,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "center"
+                }
+              }
+            },
+            {
+              "id": "marquee",
+              "style": {
+                "radius": 0.0,
+                "grain": 0.0,
+                "text": {
+                  "fontSize": 16,
+                  "weight": 600,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "left"
+                }
+              },
+              "frame": {
+                "x": 0,
+                "y": 467.2,
+                "width": 720.0,
+                "height": 26.4
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "text",
+                "value": "",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "children": [],
+              "bindings": []
+            },
+            {
+              "id": "marquee-second",
+              "style": {
+                "radius": 0.0,
+                "grain": 0.0,
+                "text": {
+                  "fontSize": 16,
+                  "weight": 600,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "left"
+                }
+              },
+              "frame": {
+                "x": 0,
+                "y": 467.2,
+                "width": 720.0,
+                "height": 26.4
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "text",
+                "value": "",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "children": [],
+              "bindings": []
+            },
+            {
+              "id": "host",
+              "frame": {
+                "x": 0.0,
+                "y": 0.0,
+                "width": 640.8,
+                "height": 953.6
+              },
+              "flow": {
+                "kind": "overlay"
+              },
+              "content": {
+                "kind": "source",
+                "source": "camera",
+                "fit": "cover"
+              },
+              "placement": {
+                "anchor": {
+                  "x": 0.5,
+                  "y": 0.5755
+                },
+                "pivot": {
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              }
+            }
+          ],
+          "bindings": []
+        }
+      },
+      "screen-share-landscape": {
+        "orientation": "landscape",
+        "width": 1280,
+        "height": 720,
+        "root": {
+          "id": "root",
+          "frame": {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 1280,
+            "height": 720
+          },
+          "flow": {
+            "kind": "overlay"
+          },
+          "content": {
+            "kind": "group"
+          },
+          "children": [
+            {
+              "id": "classic-title",
+              "frame": {
+                "x": 86,
+                "y": 36,
+                "width": 855,
+                "height": 153
+              },
+              "content": {
+                "kind": "text",
+                "value": "Classic",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "style": {
+                "text": {
+                  "field": "classic-title",
+                  "fontSize": 98,
+                  "weight": 900,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "left"
+                }
+              }
+            },
+            {
+              "id": "packed-layers",
+              "frame": {
+                "x": 0,
+                "y": 0,
+                "width": 1920,
+                "height": 1080
+              },
+              "flow": {
+                "kind": "column",
+                "gap": 0.0,
+                "sizes": [
+                  {
+                    "kind": "weight",
+                    "weight": 0.6231000000000001,
+                    "min": 1.0,
+                    "max": 4096.0
+                  },
+                  {
+                    "kind": "weight",
+                    "weight": 0.3069,
+                    "min": 1.0,
+                    "max": 4096.0
+                  },
+                  {
+                    "kind": "weight",
+                    "weight": 0.035,
+                    "min": 1.0,
+                    "max": 48.0
+                  },
+                  {
+                    "kind": "weight",
+                    "weight": 0.035,
+                    "min": 1.0,
+                    "max": 48.0
+                  }
+                ]
+              },
+              "content": {
+                "kind": "group"
+              },
+              "children": [
+                {
+                  "id": "media",
+                  "flow": {
+                    "kind": "overlay"
+                  },
+                  "content": {
+                    "kind": "source",
+                    "source": "screen",
+                    "fit": "contain"
+                  }
+                },
+                {
+                  "id": "host",
+                  "flow": {
+                    "kind": "overlay"
+                  },
+                  "content": {
+                    "kind": "source",
+                    "source": "camera",
+                    "fit": "contain"
+                  }
+                },
+                {
+                  "id": "marquee",
+                  "style": {
+                    "radius": 0.0,
+                    "grain": 0.0,
+                    "text": {
+                      "fontSize": 16,
+                      "weight": 600,
+                      "ink": {
+                        "color": "#FFFFFF",
+                        "opacity": 1
+                      },
+                      "align": "left"
+                    }
+                  },
+                  "frame": {
+                    "x": 0,
+                    "y": 262.8,
+                    "width": 1280.0,
+                    "height": 26.4
+                  },
+                  "flow": {
+                    "kind": "overlay"
+                  },
+                  "content": {
+                    "kind": "text",
+                    "value": "",
+                    "font": "0000000000000000000000000000000000000000000000000000000000000000"
+                  },
+                  "children": [],
+                  "bindings": []
+                },
+                {
+                  "id": "marquee-second",
+                  "style": {
+                    "radius": 0.0,
+                    "grain": 0.0,
+                    "text": {
+                      "fontSize": 16,
+                      "weight": 600,
+                      "ink": {
+                        "color": "#FFFFFF",
+                        "opacity": 1
+                      },
+                      "align": "left"
+                    }
+                  },
+                  "frame": {
+                    "x": 0,
+                    "y": 262.8,
+                    "width": 1280.0,
+                    "height": 26.4
+                  },
+                  "flow": {
+                    "kind": "overlay"
+                  },
+                  "content": {
+                    "kind": "text",
+                    "value": "",
+                    "font": "0000000000000000000000000000000000000000000000000000000000000000"
+                  },
+                  "children": [],
+                  "bindings": []
+                }
+              ]
+            }
+          ],
+          "bindings": []
+        }
+      },
+      "screen-share-vertical": {
+        "orientation": "vertical",
+        "width": 720,
+        "height": 1280,
+        "root": {
+          "id": "root",
+          "frame": {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 720,
+            "height": 1280
+          },
+          "flow": {
+            "kind": "overlay"
+          },
+          "content": {
+            "kind": "group"
+          },
+          "children": [
+            {
+              "id": "classic-title",
+              "frame": {
+                "x": 60,
+                "y": 82,
+                "width": 960,
+                "height": 190
+              },
+              "content": {
+                "kind": "text",
+                "value": "Classic",
+                "font": "0000000000000000000000000000000000000000000000000000000000000000"
+              },
+              "style": {
+                "text": {
+                  "field": "classic-title",
+                  "fontSize": 108,
+                  "weight": 900,
+                  "ink": {
+                    "color": "#FFFFFF",
+                    "opacity": 1
+                  },
+                  "align": "center"
+                }
+              }
+            },
+            {
+              "id": "packed-layers",
+              "frame": {
+                "x": 0,
+                "y": 0,
+                "width": 1080,
+                "height": 1920
+              },
+              "flow": {
+                "kind": "column",
+                "gap": 0.0,
+                "sizes": [
+                  {
+                    "kind": "weight",
+                    "weight": 0.5673,
+                    "min": 1.0,
+                    "max": 4096.0
+                  },
+                  {
+                    "kind": "weight",
+                    "weight": 0.3627,
+                    "min": 1.0,
+                    "max": 4096.0
+                  },
+                  {
+                    "kind": "weight",
+                    "weight": 0.035,
+                    "min": 1.0,
+                    "max": 48.0
+                  },
+                  {
+                    "kind": "weight",
+                    "weight": 0.035,
+                    "min": 1.0,
+                    "max": 48.0
+                  }
+                ]
+              },
+              "content": {
+                "kind": "group"
+              },
+              "children": [
+                {
+                  "id": "media",
+                  "flow": {
+                    "kind": "overlay"
+                  },
+                  "content": {
+                    "kind": "source",
+                    "source": "screen",
+                    "fit": "contain"
+                  }
+                },
+                {
+                  "id": "host",
+                  "flow": {
+                    "kind": "overlay"
+                  },
+                  "content": {
+                    "kind": "source",
+                    "source": "camera",
+                    "fit": "contain"
+                  }
+                },
+                {
+                  "id": "marquee",
+                  "style": {
+                    "radius": 0.0,
+                    "grain": 0.0,
+                    "text": {
+                      "fontSize": 16,
+                      "weight": 600,
+                      "ink": {
+                        "color": "#FFFFFF",
+                        "opacity": 1
+                      },
+                      "align": "left"
+                    }
+                  },
+                  "frame": {
+                    "x": 0,
+                    "y": 467.2,
+                    "width": 720.0,
+                    "height": 26.4
+                  },
+                  "flow": {
+                    "kind": "overlay"
+                  },
+                  "content": {
+                    "kind": "text",
+                    "value": "",
+                    "font": "0000000000000000000000000000000000000000000000000000000000000000"
+                  },
+                  "children": [],
+                  "bindings": []
+                },
+                {
+                  "id": "marquee-second",
+                  "style": {
+                    "radius": 0.0,
+                    "grain": 0.0,
+                    "text": {
+                      "fontSize": 16,
+                      "weight": 600,
+                      "ink": {
+                        "color": "#FFFFFF",
+                        "opacity": 1
+                      },
+                      "align": "left"
+                    }
+                  },
+                  "frame": {
+                    "x": 0,
+                    "y": 467.2,
+                    "width": 720.0,
+                    "height": 26.4
+                  },
+                  "flow": {
+                    "kind": "overlay"
+                  },
+                  "content": {
+                    "kind": "text",
+                    "value": "",
+                    "font": "0000000000000000000000000000000000000000000000000000000000000000"
+                  },
+                  "children": [],
+                  "bindings": []
+                }
+              ]
+            }
+          ],
+          "bindings": []
+        }
+      }
+    },
+    "graphs": {
+      "landscape": {
+        "profile": "producer.render/1",
+        "clock": "timeline",
+        "passes": [
+          {
+            "kind": "fragment",
+            "id": "city-film",
+            "inputs": [
+              {
+                "kind": "image",
+                "asset": "classic-skyline"
+              }
+            ],
+            "shader": "let xy=vec2<f32>(.5+(uv.x-.5)*min(1.,frame.info.x/frame.info.y/1.77778),uv.y);\nlet tm=frame.info.z*5.;let t=63.-abs(63.-(tm%126.));let a=floor(t);let b=min(63.,a+1.);\nlet coord=clamp(xy,vec2<f32>(.002,.003),vec2<f32>(.998,.997));\nlet A=textureSample(input0,linear_sampler,(vec2<f32>(a%8.,floor(a/8.))+coord)/8.);\nlet B=textureSample(input0,linear_sampler,(vec2<f32>(b%8.,floor(b/8.))+coord)/8.);\nlet v=mix(A.rgb,B.rgb,fract(t));let l=dot(v,vec3<f32>(.2126,.7152,.0722));\nlet rgb=mix(vec3<f32>(l*.64,l*.89,l),v,.63)*.88+vec3<f32>(.019,.039,.055);\nreturn vec4<f32>(rgb,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "conversation",
+            "inputs": [
+              {
+                "kind": "layers",
+                "nodes": [
+                  "host"
+                ]
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "guest"
+                ]
+              }
+            ],
+            "shader": "let progress=frame.info.w;let drift=vec2<f32>(.008*sin(frame.info.z*.72),.006*sin(frame.info.z*1.06));var rgb=vec3<f32>(0.);var alpha=0.;\n{\n    let motion = smoothstep(0.,.88,progress);\n    let box = mix(vec4<f32>(0.075,0.213,0.85,0.722), vec4<f32>(0.048,0.23,0.442,0.637),motion);\n    let q = (uv-drift-box.xy)/box.zw;\n    let size = box.zw*frame.info.xy;\n    let panel = vec4<f32>(0.075,0.213,0.85,0.722);\n    let extent=panel.zw*vec2<f32>(1280.0,720.0)/frame.info.xy;\n    let center=panel.xy+panel.zw*.5;\n    let start=max(center-extent*.5,vec2<f32>(0.));\n    let stop=min(center+extent*.5,vec2<f32>(1.));\n    let visible=stop-start;\n    let aspect=(box.z/box.w)/(visible.x/visible.y);\n    let sourceUV=.5+(q-.5)*min(vec2<f32>(aspect,1./aspect),vec2<f32>(1.))/max(frame.controls.x,1.);\n    let camera=textureSample(input0,linear_sampler,mix(start,stop,clamp(sourceUV,vec2<f32>(.002),vec2<f32>(.998))));\n    let accent = vec3<f32>(.68,.26,.92);\n    let corner = 14.;\n    let d = abs((q-.5)*size) - (size*.5-corner);\n    let sd = length(max(d,vec2<f32>(0.))) + min(max(d.x,d.y),0.) - corner;\n    let axis = q.x + (q.y-.5)*.32;\n    let blade = mix(-.24,1.24,smoothstep(.10,.91,progress))-axis;\n    let opening = 1.;\n    let edge = 0.;\n    let pixel = (q-.5)*size/min(size.x,size.y);\n    let distance = length(pixel);\n    let ring = 1.-smoothstep(.001,.005,abs(distance-.11));\n    let idle = vec3<f32>(.032,.036,.065) + accent*(.078*exp(-distance*5.)+.27*ring);\n    let picture = mix(idle,camera.rgb,camera.a);\n    let scrim = .30*smoothstep(.70,.99,q.y);\n    let face = mix(accent*.83,picture*(1.-scrim),1.-smoothstep(-2.4,-.8,sd));\n    let mask = opening*(1.-smoothstep(-.3,1.,sd));\n    let rail = accent*exp(-abs(sd)*.27)*.17;\n    let light = mix(accent,vec3<f32>(1.),.6)*edge;\n    rgb = mix(rgb,face+light,mask) + opening*rail;\n    alpha = max(alpha,max(mask,opening*.20*exp(-abs(sd)*.27)));\n}\n\n{\n    let motion = smoothstep(0.,.88,progress);\n    let box = mix(vec4<f32>(0.59,0.27,0.36,0.55), vec4<f32>(0.51,0.23,0.442,0.637),motion);\n    let q = (uv-drift-box.xy)/box.zw;\n    let size = box.zw*frame.info.xy;\n    let panel = vec4<f32>(0.51,0.23,0.442,0.637);\n    let extent=panel.zw*vec2<f32>(1280.0,720.0)/frame.info.xy;\n    let center=panel.xy+panel.zw*.5;\n    let start=max(center-extent*.5,vec2<f32>(0.));\n    let stop=min(center+extent*.5,vec2<f32>(1.));\n    let visible=stop-start;\n    let aspect=(box.z/box.w)/(visible.x/visible.y);\n    let sourceUV=.5+(q-.5)*min(vec2<f32>(aspect,1./aspect),vec2<f32>(1.))/1.;\n    let camera=textureSample(input1,linear_sampler,mix(start,stop,clamp(sourceUV,vec2<f32>(.002),vec2<f32>(.998))));\n    let accent = vec3<f32>(.28,.83,.81);\n    let corner = 14.;\n    let d = abs((q-.5)*size) - (size*.5-corner);\n    let sd = length(max(d,vec2<f32>(0.))) + min(max(d.x,d.y),0.) - corner;\n    let axis = q.x + (q.y-.5)*.32;\n    let blade = mix(-.24,1.24,smoothstep(.10,.91,progress))-axis;\n    let opening = smoothstep(-.004,.004,blade);\n    let edge = exp(-abs(blade)*64.)*sin(progress*3.14159);\n    let pixel = (q-.5)*size/min(size.x,size.y);\n    let distance = length(pixel);\n    let ring = 1.-smoothstep(.001,.005,abs(distance-.11));\n    let idle = vec3<f32>(.032,.036,.065) + accent*(.078*exp(-distance*5.)+.27*ring);\n    let picture = mix(idle,camera.rgb,camera.a);\n    let scrim = .30*smoothstep(.70,.99,q.y);\n    let face = mix(accent*.83,picture*(1.-scrim),1.-smoothstep(-2.4,-.8,sd));\n    let mask = opening*(1.-smoothstep(-.3,1.,sd));\n    let rail = accent*exp(-abs(sd)*.27)*.17;\n    let light = mix(accent,vec3<f32>(1.),.6)*edge;\n    rgb = mix(rgb,face+light,mask) + opening*rail;\n    alpha = max(alpha,max(mask,opening*.20*exp(-abs(sd)*.27)));\n}\nreturn vec4<f32>(rgb,alpha);"
+          },
+          {
+            "kind": "fragment",
+            "id": "hero",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "city-film"
+              },
+              {
+                "kind": "pass",
+                "id": "conversation"
+              }
+            ],
+            "shader": "let t=frame.info.z;let pix=uv*frame.info.xy;\nlet phase=dot(pix,vec2<f32>(.00085,-.00115))-t*.16;\nlet crest=.5+.5*cos(6.283185*phase);\nlet ripple=crest*crest;\nlet bend=vec2<f32>(sin(pix.y*.008-t*.9),cos(pix.x*.006+t*.8))*4.2*ripple;\nlet st=(pix+bend+t*vec2<f32>(26.,-12.))/43.;let df=abs(fract(st+.5)-.5)*43.;\nlet line=1.-smoothstep(.32,1.48,min(df.x,df.y));\nlet glow=exp(-length((uv-vec2<f32>(-.02,1.04))*vec2<f32>(3.1,3.8))*1.75);\nlet city=textureSample(input0,linear_sampler,uv).rgb;\nlet blur=(textureSample(input0,linear_sampler,uv+vec2<f32>(.006,.004)).rgb+textureSample(input0,linear_sampler,uv-vec2<f32>(.006,.004)).rgb)*.5;\nvar rgb=vec3<f32>(.010,.010,.021)+mix(city,blur,.7)*.44+vec3<f32>(.91,.22,.49)*glow+vec3<f32>(.19,.14,.67)*exp(-length((uv-vec2<f32>(.16,.94))*4.)*1.7);\nlet highlight=ripple*ripple*ripple;\nrgb+=line*(vec3<f32>(.073,.094,.19)+highlight*vec3<f32>(.24,.11,.35));\nlet feed=textureSample(input1,linear_sampler,uv);\nreturn vec4<f32>(rgb*(1.-feed.a)+feed.rgb,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "type",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "hero"
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "host-caption",
+                  "guest-caption"
+                ]
+              }
+            ],
+            "shader": "\nlet cameraUV=uv-vec2<f32>(.008*sin(frame.info.z*.72),.006*sin(frame.info.z*1.06));\nlet motion=smoothstep(0.,.88,frame.info.w);\nlet opacity=smoothstep(.65,1.,frame.info.w);\nvar color=textureSample(input0,linear_sampler,uv).rgb;\n\n{\n    let card = mix(vec4<f32>(0.075,0.213,0.85,0.722),vec4<f32>(0.048,0.23,0.442,0.637),motion);\n    let anchor = vec2<f32>(card.x,card.y+card.w)+vec2<f32>(0.02,0.064)*vec2<f32>(1.,-1.);\n    let textPixel = (cameraUV-anchor)*vec2<f32>(1280.0,720.0);\n    let textUV = (vec2<f32>(2.0,2.0)+clamp(textPixel,vec2<f32>(.5),vec2<f32>(256.0,28.8)-.5))/frame.info.xy;\n    let label = textureSample(input1,linear_sampler,textUV);\n    let inside = all(textPixel>=vec2<f32>(0.)) && all(textPixel<vec2<f32>(256.0,28.8));\n    let weight = select(0.,opacity,inside);\n    color = color*(1.-label.a*weight)+label.rgb*weight;\n}\n\n{\n    let card = mix(vec4<f32>(0.59,0.27,0.36,0.55),vec4<f32>(0.51,0.23,0.442,0.637),motion);\n    let anchor = vec2<f32>(card.x,card.y+card.w)+vec2<f32>(0.02,0.064)*vec2<f32>(1.,-1.);\n    let textPixel = (cameraUV-anchor)*vec2<f32>(1280.0,720.0);\n    let textUV = (vec2<f32>(2.0,34.8)+clamp(textPixel,vec2<f32>(.5),vec2<f32>(256.0,28.8)-.5))/frame.info.xy;\n    let label = textureSample(input1,linear_sampler,textUV);\n    let inside = all(textPixel>=vec2<f32>(0.)) && all(textPixel<vec2<f32>(256.0,28.8));\n    let weight = select(0.,opacity,inside);\n    color = color*(1.-label.a*weight)+label.rgb*weight;\n}\nreturn vec4<f32>(color,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "wordmark",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "type"
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "classic-title"
+                ]
+              }
+            ],
+            "shader": "let background = textureSample(input0, linear_sampler, uv);\nlet glyph = textureSample(input1, linear_sampler, uv);\nlet phase = fract(uv.x * 1.1 - uv.y * .28 - frame.info.z / 3.2 + .5) - .5;\nlet shine = exp(-phase * phase * 100.) * .10 + exp(-phase * phase * 2900.) * .12;\nreturn vec4<f32>(mix(background.rgb, vec3<f32>(.82 + shine), glyph.a), 1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "interview-marquee",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "wordmark"
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "marquee",
+                  "marquee-second"
+                ]
+              }
+            ],
+            "shader": "\nlet b=textureSample(input0,linear_sampler,uv);\nlet origin=vec2<f32>(.51,.055);\nlet sampleUV=(uv-origin)/vec2<f32>(.435,.58)+vec2<f32>(0.,.335);\nlet m=textureSample(input1,linear_sampler,clamp(sampleUV,vec2<f32>(0.),vec2<f32>(1.)));\nlet a=select(0.,smoothstep(.78,1.,frame.info.w),all(sampleUV>=vec2<f32>(0.)) && all(sampleUV<vec2<f32>(1.)));\nreturn vec4<f32>(b.rgb*(1.-m.a*a)+m.rgb*a,1.);"
+          }
+        ]
+      },
+      "vertical": {
+        "profile": "producer.render/1",
+        "clock": "timeline",
+        "passes": [
+          {
+            "kind": "fragment",
+            "id": "city-film",
+            "inputs": [
+              {
+                "kind": "image",
+                "asset": "classic-skyline"
+              }
+            ],
+            "shader": "let xy=vec2<f32>(.5+(uv.x-.5)*min(1.,frame.info.x/frame.info.y/1.77778),uv.y);\nlet tm=frame.info.z*5.;let t=63.-abs(63.-(tm%126.));let a=floor(t);let b=min(63.,a+1.);\nlet coord=clamp(xy,vec2<f32>(.002,.003),vec2<f32>(.998,.997));\nlet A=textureSample(input0,linear_sampler,(vec2<f32>(a%8.,floor(a/8.))+coord)/8.);\nlet B=textureSample(input0,linear_sampler,(vec2<f32>(b%8.,floor(b/8.))+coord)/8.);\nlet v=mix(A.rgb,B.rgb,fract(t));let l=dot(v,vec3<f32>(.2126,.7152,.0722));\nlet rgb=mix(vec3<f32>(l*.64,l*.89,l),v,.63)*.88+vec3<f32>(.019,.039,.055);\nreturn vec4<f32>(rgb,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "conversation",
+            "inputs": [
+              {
+                "kind": "layers",
+                "nodes": [
+                  "host"
+                ]
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "guest"
+                ]
+              }
+            ],
+            "shader": "let progress=frame.info.w;let drift=vec2<f32>(.008*sin(frame.info.z*.72),.006*sin(frame.info.z*1.06));var rgb=vec3<f32>(0.);var alpha=0.;\n{\n    let motion = smoothstep(0.,.88,progress);\n    let box = mix(vec4<f32>(0.055,0.203,0.89,0.745), vec4<f32>(0.055,0.203,0.89,0.347),motion);\n    let q = (uv-drift-box.xy)/box.zw;\n    let size = box.zw*frame.info.xy;\n    let panel = vec4<f32>(0.055,0.203,0.89,0.745);\n    let extent=panel.zw*vec2<f32>(720.0,1280.0)/frame.info.xy;\n    let center=panel.xy+panel.zw*.5;\n    let start=max(center-extent*.5,vec2<f32>(0.));\n    let stop=min(center+extent*.5,vec2<f32>(1.));\n    let visible=stop-start;\n    let aspect=(box.z/box.w)/(visible.x/visible.y);\n    let sourceUV=.5+(q-.5)*min(vec2<f32>(aspect,1./aspect),vec2<f32>(1.))/max(frame.controls.x,1.);\n    let camera=textureSample(input0,linear_sampler,mix(start,stop,clamp(sourceUV,vec2<f32>(.002),vec2<f32>(.998))));\n    let accent = vec3<f32>(.68,.26,.92);\n    let corner = 14.;\n    let d = abs((q-.5)*size) - (size*.5-corner);\n    let sd = length(max(d,vec2<f32>(0.))) + min(max(d.x,d.y),0.) - corner;\n    let axis = q.y + (q.x-.5)*.24;\n    let blade = mix(-.24,1.24,smoothstep(.10,.91,progress))-axis;\n    let opening = 1.;\n    let edge = 0.;\n    let pixel = (q-.5)*size/min(size.x,size.y);\n    let distance = length(pixel);\n    let ring = 1.-smoothstep(.001,.005,abs(distance-.11));\n    let idle = vec3<f32>(.032,.036,.065) + accent*(.078*exp(-distance*5.)+.27*ring);\n    let picture = mix(idle,camera.rgb,camera.a);\n    let scrim = .30*smoothstep(.70,.99,q.y);\n    let face = mix(accent*.83,picture*(1.-scrim),1.-smoothstep(-2.4,-.8,sd));\n    let mask = opening*(1.-smoothstep(-.3,1.,sd));\n    let rail = accent*exp(-abs(sd)*.27)*.17;\n    let light = mix(accent,vec3<f32>(1.),.6)*edge;\n    rgb = mix(rgb,face+light,mask) + opening*rail;\n    alpha = max(alpha,max(mask,opening*.20*exp(-abs(sd)*.27)));\n}\n\n{\n    let motion = smoothstep(0.,.88,progress);\n    let box = mix(vec4<f32>(0.055,0.63,0.89,0.29), vec4<f32>(0.055,0.575,0.89,0.357),motion);\n    let q = (uv-drift-box.xy)/box.zw;\n    let size = box.zw*frame.info.xy;\n    let panel = vec4<f32>(0.055,0.575,0.89,0.357);\n    let extent=panel.zw*vec2<f32>(720.0,1280.0)/frame.info.xy;\n    let center=panel.xy+panel.zw*.5;\n    let start=max(center-extent*.5,vec2<f32>(0.));\n    let stop=min(center+extent*.5,vec2<f32>(1.));\n    let visible=stop-start;\n    let aspect=(box.z/box.w)/(visible.x/visible.y);\n    let sourceUV=.5+(q-.5)*min(vec2<f32>(aspect,1./aspect),vec2<f32>(1.))/1.;\n    let camera=textureSample(input1,linear_sampler,mix(start,stop,clamp(sourceUV,vec2<f32>(.002),vec2<f32>(.998))));\n    let accent = vec3<f32>(.28,.83,.81);\n    let corner = 14.;\n    let d = abs((q-.5)*size) - (size*.5-corner);\n    let sd = length(max(d,vec2<f32>(0.))) + min(max(d.x,d.y),0.) - corner;\n    let axis = q.y + (q.x-.5)*.24;\n    let blade = mix(-.24,1.24,smoothstep(.10,.91,progress))-axis;\n    let opening = smoothstep(-.004,.004,blade);\n    let edge = exp(-abs(blade)*64.)*sin(progress*3.14159);\n    let pixel = (q-.5)*size/min(size.x,size.y);\n    let distance = length(pixel);\n    let ring = 1.-smoothstep(.001,.005,abs(distance-.11));\n    let idle = vec3<f32>(.032,.036,.065) + accent*(.078*exp(-distance*5.)+.27*ring);\n    let picture = mix(idle,camera.rgb,camera.a);\n    let scrim = .30*smoothstep(.70,.99,q.y);\n    let face = mix(accent*.83,picture*(1.-scrim),1.-smoothstep(-2.4,-.8,sd));\n    let mask = opening*(1.-smoothstep(-.3,1.,sd));\n    let rail = accent*exp(-abs(sd)*.27)*.17;\n    let light = mix(accent,vec3<f32>(1.),.6)*edge;\n    rgb = mix(rgb,face+light,mask) + opening*rail;\n    alpha = max(alpha,max(mask,opening*.20*exp(-abs(sd)*.27)));\n}\nreturn vec4<f32>(rgb,alpha);"
+          },
+          {
+            "kind": "fragment",
+            "id": "hero",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "city-film"
+              },
+              {
+                "kind": "pass",
+                "id": "conversation"
+              }
+            ],
+            "shader": "let t=frame.info.z;let pix=uv*frame.info.xy;\nlet phase=dot(pix,vec2<f32>(.00085,-.00115))-t*.16;\nlet crest=.5+.5*cos(6.283185*phase);\nlet ripple=crest*crest;\nlet bend=vec2<f32>(sin(pix.y*.008-t*.9),cos(pix.x*.006+t*.8))*4.2*ripple;\nlet st=(pix+bend+t*vec2<f32>(26.,-12.))/43.;let df=abs(fract(st+.5)-.5)*43.;\nlet line=1.-smoothstep(.32,1.48,min(df.x,df.y));\nlet glow=exp(-length((uv-vec2<f32>(-.02,1.04))*vec2<f32>(3.1,3.8))*1.75);\nlet city=textureSample(input0,linear_sampler,uv).rgb;\nlet blur=(textureSample(input0,linear_sampler,uv+vec2<f32>(.006,.004)).rgb+textureSample(input0,linear_sampler,uv-vec2<f32>(.006,.004)).rgb)*.5;\nvar rgb=vec3<f32>(.010,.010,.021)+mix(city,blur,.7)*.44+vec3<f32>(.91,.22,.49)*glow+vec3<f32>(.19,.14,.67)*exp(-length((uv-vec2<f32>(.16,.94))*4.)*1.7);\nlet highlight=ripple*ripple*ripple;\nrgb+=line*(vec3<f32>(.073,.094,.19)+highlight*vec3<f32>(.24,.11,.35));\nlet feed=textureSample(input1,linear_sampler,uv);\nreturn vec4<f32>(rgb*(1.-feed.a)+feed.rgb,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "type",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "hero"
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "host-caption",
+                  "guest-caption"
+                ]
+              }
+            ],
+            "shader": "\nlet cameraUV=uv-vec2<f32>(.008*sin(frame.info.z*.72),.006*sin(frame.info.z*1.06));\nlet motion=smoothstep(0.,.88,frame.info.w);\nlet opacity=smoothstep(.65,1.,frame.info.w);\nvar color=textureSample(input0,linear_sampler,uv).rgb;\n\n{\n    let card = mix(vec4<f32>(0.055,0.203,0.89,0.745),vec4<f32>(0.055,0.203,0.89,0.347),motion);\n    let anchor = vec2<f32>(card.x,card.y+card.w)+vec2<f32>(0.02,0.05)*vec2<f32>(1.,-1.);\n    let textPixel = (cameraUV-anchor)*vec2<f32>(720.0,1280.0);\n    let textUV = (vec2<f32>(2.0,2.0)+clamp(textPixel,vec2<f32>(.5),vec2<f32>(256.0,33.6)-.5))/frame.info.xy;\n    let label = textureSample(input1,linear_sampler,textUV);\n    let inside = all(textPixel>=vec2<f32>(0.)) && all(textPixel<vec2<f32>(256.0,33.6));\n    let weight = select(0.,opacity,inside);\n    color = color*(1.-label.a*weight)+label.rgb*weight;\n}\n\n{\n    let card = mix(vec4<f32>(0.055,0.63,0.89,0.29),vec4<f32>(0.055,0.575,0.89,0.357),motion);\n    let anchor = vec2<f32>(card.x,card.y+card.w)+vec2<f32>(0.02,0.05)*vec2<f32>(1.,-1.);\n    let textPixel = (cameraUV-anchor)*vec2<f32>(720.0,1280.0);\n    let textUV = (vec2<f32>(2.0,39.6)+clamp(textPixel,vec2<f32>(.5),vec2<f32>(256.0,33.6)-.5))/frame.info.xy;\n    let label = textureSample(input1,linear_sampler,textUV);\n    let inside = all(textPixel>=vec2<f32>(0.)) && all(textPixel<vec2<f32>(256.0,33.6));\n    let weight = select(0.,opacity,inside);\n    color = color*(1.-label.a*weight)+label.rgb*weight;\n}\nreturn vec4<f32>(color,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "wordmark",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "type"
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "classic-title"
+                ]
+              }
+            ],
+            "shader": "let background = textureSample(input0, linear_sampler, uv);\nlet glyph = textureSample(input1, linear_sampler, uv);\nlet phase = fract(uv.x * 1.1 - uv.y * .28 - frame.info.z / 3.2 + .5) - .5;\nlet shine = exp(-phase * phase * 100.) * .10 + exp(-phase * phase * 2900.) * .12;\nreturn vec4<f32>(mix(background.rgb, vec3<f32>(.82 + shine), glyph.a), 1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "interview-marquee",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "wordmark"
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "marquee",
+                  "marquee-second"
+                ]
+              }
+            ],
+            "shader": "\nlet b=textureSample(input0,linear_sampler,uv);\nlet origin=vec2<f32>(.055,.947);\nlet sampleUV=(uv-origin)/vec2<f32>(.89,.48)+vec2<f32>(0.,.335);\nlet m=textureSample(input1,linear_sampler,clamp(sampleUV,vec2<f32>(0.),vec2<f32>(1.)));\nlet a=select(0.,smoothstep(.78,1.,frame.info.w),all(sampleUV>=vec2<f32>(0.)) && all(sampleUV<vec2<f32>(1.)));\nreturn vec4<f32>(b.rgb*(1.-m.a*a)+m.rgb*a,1.);"
+          }
+        ]
+      },
+      "opening-landscape": {
+        "profile": "producer.render/1",
+        "clock": "timeline",
+        "passes": [
+          {
+            "kind": "fragment",
+            "id": "city-film",
+            "inputs": [
+              {
+                "kind": "image",
+                "asset": "classic-skyline"
+              }
+            ],
+            "shader": "let xy=vec2<f32>(.5+(uv.x-.5)*min(1.,frame.info.x/frame.info.y/1.77778),uv.y);\nlet tm=frame.info.z*5.;let t=63.-abs(63.-(tm%126.));let a=floor(t);let b=min(63.,a+1.);\nlet coord=clamp(xy,vec2<f32>(.002,.003),vec2<f32>(.998,.997));\nlet A=textureSample(input0,linear_sampler,(vec2<f32>(a%8.,floor(a/8.))+coord)/8.);\nlet B=textureSample(input0,linear_sampler,(vec2<f32>(b%8.,floor(b/8.))+coord)/8.);\nlet v=mix(A.rgb,B.rgb,fract(t));let l=dot(v,vec3<f32>(.2126,.7152,.0722));\nlet rgb=mix(vec3<f32>(l*.64,l*.89,l),v,.63)*.88+vec3<f32>(.019,.039,.055);\nreturn vec4<f32>(rgb,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "hero",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "city-film"
+              }
+            ],
+            "shader": "let t=frame.info.z;let pix=uv*frame.info.xy;\nlet phase=dot(pix,vec2<f32>(.00085,-.00115))-t*.16;\nlet crest=.5+.5*cos(6.283185*phase);\nlet ripple=crest*crest;\nlet bend=vec2<f32>(sin(pix.y*.008-t*.9),cos(pix.x*.006+t*.8))*4.2*ripple;\nlet st=(pix+bend+t*vec2<f32>(26.,-12.))/43.;let df=abs(fract(st+.5)-.5)*43.;\nlet line=1.-smoothstep(.32,1.48,min(df.x,df.y));\nlet glow=exp(-length((uv-vec2<f32>(-.02,1.04))*vec2<f32>(3.1,3.8))*1.75);\nlet city=textureSample(input0,linear_sampler,uv).rgb;\nlet blur=(textureSample(input0,linear_sampler,uv+vec2<f32>(.006,.004)).rgb+textureSample(input0,linear_sampler,uv-vec2<f32>(.006,.004)).rgb)*.5;\nvar rgb=vec3<f32>(.010,.010,.021)+mix(city,blur,.7)*.44+vec3<f32>(.91,.22,.49)*glow+vec3<f32>(.19,.14,.67)*exp(-length((uv-vec2<f32>(.16,.94))*4.)*1.7);\nlet highlight=ripple*ripple*ripple;\nrgb+=line*(vec3<f32>(.073,.094,.19)+highlight*vec3<f32>(.24,.11,.35));\nreturn vec4<f32>(rgb,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "type",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "hero"
+              }
+            ],
+            "shader": "return textureSample(input0,linear_sampler,uv);"
+          },
+          {
+            "kind": "fragment",
+            "id": "wordmark",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "type"
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "classic-title"
+                ]
+              }
+            ],
+            "shader": "let background = textureSample(input0, linear_sampler, uv);\nlet glyph = textureSample(input1, linear_sampler, uv);\nlet phase = fract(uv.x * 1.1 - uv.y * .28 - frame.info.z / 3.2 + .5) - .5;\nlet shine = exp(-phase * phase * 100.) * .10 + exp(-phase * phase * 2900.) * .12;\nreturn vec4<f32>(mix(background.rgb, vec3<f32>(.82 + shine), glyph.a), 1.);"
+          }
+        ]
+      },
+      "opening-vertical": {
+        "profile": "producer.render/1",
+        "clock": "timeline",
+        "passes": [
+          {
+            "kind": "fragment",
+            "id": "city-film",
+            "inputs": [
+              {
+                "kind": "image",
+                "asset": "classic-skyline"
+              }
+            ],
+            "shader": "let xy=vec2<f32>(.5+(uv.x-.5)*min(1.,frame.info.x/frame.info.y/1.77778),uv.y);\nlet tm=frame.info.z*5.;let t=63.-abs(63.-(tm%126.));let a=floor(t);let b=min(63.,a+1.);\nlet coord=clamp(xy,vec2<f32>(.002,.003),vec2<f32>(.998,.997));\nlet A=textureSample(input0,linear_sampler,(vec2<f32>(a%8.,floor(a/8.))+coord)/8.);\nlet B=textureSample(input0,linear_sampler,(vec2<f32>(b%8.,floor(b/8.))+coord)/8.);\nlet v=mix(A.rgb,B.rgb,fract(t));let l=dot(v,vec3<f32>(.2126,.7152,.0722));\nlet rgb=mix(vec3<f32>(l*.64,l*.89,l),v,.63)*.88+vec3<f32>(.019,.039,.055);\nreturn vec4<f32>(rgb,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "hero",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "city-film"
+              }
+            ],
+            "shader": "let t=frame.info.z;let pix=uv*frame.info.xy;\nlet phase=dot(pix,vec2<f32>(.00085,-.00115))-t*.16;\nlet crest=.5+.5*cos(6.283185*phase);\nlet ripple=crest*crest;\nlet bend=vec2<f32>(sin(pix.y*.008-t*.9),cos(pix.x*.006+t*.8))*4.2*ripple;\nlet st=(pix+bend+t*vec2<f32>(26.,-12.))/43.;let df=abs(fract(st+.5)-.5)*43.;\nlet line=1.-smoothstep(.32,1.48,min(df.x,df.y));\nlet glow=exp(-length((uv-vec2<f32>(-.02,1.04))*vec2<f32>(3.1,3.8))*1.75);\nlet city=textureSample(input0,linear_sampler,uv).rgb;\nlet blur=(textureSample(input0,linear_sampler,uv+vec2<f32>(.006,.004)).rgb+textureSample(input0,linear_sampler,uv-vec2<f32>(.006,.004)).rgb)*.5;\nvar rgb=vec3<f32>(.010,.010,.021)+mix(city,blur,.7)*.44+vec3<f32>(.91,.22,.49)*glow+vec3<f32>(.19,.14,.67)*exp(-length((uv-vec2<f32>(.16,.94))*4.)*1.7);\nlet highlight=ripple*ripple*ripple;\nrgb+=line*(vec3<f32>(.073,.094,.19)+highlight*vec3<f32>(.24,.11,.35));\nreturn vec4<f32>(rgb,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "type",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "hero"
+              }
+            ],
+            "shader": "return textureSample(input0,linear_sampler,uv);"
+          },
+          {
+            "kind": "fragment",
+            "id": "wordmark",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "type"
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "classic-title"
+                ]
+              }
+            ],
+            "shader": "let background = textureSample(input0, linear_sampler, uv);\nlet glyph = textureSample(input1, linear_sampler, uv);\nlet phase = fract(uv.x * 1.1 - uv.y * .28 - frame.info.z / 3.2 + .5) - .5;\nlet shine = exp(-phase * phase * 100.) * .10 + exp(-phase * phase * 2900.) * .12;\nreturn vec4<f32>(mix(background.rgb, vec3<f32>(.82 + shine), glyph.a), 1.);"
+          }
+        ]
+      },
+      "host-landscape": {
+        "profile": "producer.render/1",
+        "clock": "timeline",
+        "passes": [
+          {
+            "kind": "fragment",
+            "id": "city-film",
+            "inputs": [
+              {
+                "kind": "image",
+                "asset": "classic-skyline"
+              }
+            ],
+            "shader": "let xy=vec2<f32>(.5+(uv.x-.5)*min(1.,frame.info.x/frame.info.y/1.77778),uv.y);\nlet tm=frame.info.z*5.;let t=63.-abs(63.-(tm%126.));let a=floor(t);let b=min(63.,a+1.);\nlet coord=clamp(xy,vec2<f32>(.002,.003),vec2<f32>(.998,.997));\nlet A=textureSample(input0,linear_sampler,(vec2<f32>(a%8.,floor(a/8.))+coord)/8.);\nlet B=textureSample(input0,linear_sampler,(vec2<f32>(b%8.,floor(b/8.))+coord)/8.);\nlet v=mix(A.rgb,B.rgb,fract(t));let l=dot(v,vec3<f32>(.2126,.7152,.0722));\nlet rgb=mix(vec3<f32>(l*.64,l*.89,l),v,.63)*.88+vec3<f32>(.019,.039,.055);\nreturn vec4<f32>(rgb,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "conversation",
+            "inputs": [
+              {
+                "kind": "layers",
+                "nodes": [
+                  "host"
+                ]
+              }
+            ],
+            "shader": "let progress=0.;let drift=vec2<f32>(.008*sin(frame.info.z*.72),.006*sin(frame.info.z*1.06));var rgb=vec3<f32>(0.);var alpha=0.;\n{\n    let motion = smoothstep(0.,.88,progress);\n    let box = mix(vec4<f32>(0.075,0.213,0.85,0.722), vec4<f32>(0.048,0.23,0.442,0.637),motion);\n    let q = (uv-drift-box.xy)/box.zw;\n    let size = box.zw*frame.info.xy;\n    let panel = vec4<f32>(0.075,0.213,0.85,0.722);\n    let extent=panel.zw*vec2<f32>(1280.0,720.0)/frame.info.xy;\n    let center=panel.xy+panel.zw*.5;\n    let start=max(center-extent*.5,vec2<f32>(0.));\n    let stop=min(center+extent*.5,vec2<f32>(1.));\n    let visible=stop-start;\n    let aspect=(box.z/box.w)/(visible.x/visible.y);\n    let sourceUV=.5+(q-.5)*min(vec2<f32>(aspect,1./aspect),vec2<f32>(1.))/max(frame.controls.x,1.);\n    let camera=textureSample(input0,linear_sampler,mix(start,stop,clamp(sourceUV,vec2<f32>(.002),vec2<f32>(.998))));\n    let accent = vec3<f32>(.68,.26,.92);\n    let corner = 14.;\n    let d = abs((q-.5)*size) - (size*.5-corner);\n    let sd = length(max(d,vec2<f32>(0.))) + min(max(d.x,d.y),0.) - corner;\n    let axis = q.x + (q.y-.5)*.32;\n    let blade = mix(-.24,1.24,smoothstep(.10,.91,progress))-axis;\n    let opening = 1.;\n    let edge = 0.;\n    let pixel = (q-.5)*size/min(size.x,size.y);\n    let distance = length(pixel);\n    let ring = 1.-smoothstep(.001,.005,abs(distance-.11));\n    let idle = vec3<f32>(.032,.036,.065) + accent*(.078*exp(-distance*5.)+.27*ring);\n    let picture = mix(idle,camera.rgb,camera.a);\n    let scrim = .30*smoothstep(.70,.99,q.y);\n    let face = mix(accent*.83,picture*(1.-scrim),1.-smoothstep(-2.4,-.8,sd));\n    let mask = opening*(1.-smoothstep(-.3,1.,sd));\n    let rail = accent*exp(-abs(sd)*.27)*.17;\n    let light = mix(accent,vec3<f32>(1.),.6)*edge;\n    rgb = mix(rgb,face+light,mask) + opening*rail;\n    alpha = max(alpha,max(mask,opening*.20*exp(-abs(sd)*.27)));\n}\nreturn vec4<f32>(rgb,alpha);"
+          },
+          {
+            "kind": "fragment",
+            "id": "hero",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "city-film"
+              },
+              {
+                "kind": "pass",
+                "id": "conversation"
+              }
+            ],
+            "shader": "let t=frame.info.z;let pix=uv*frame.info.xy;\nlet phase=dot(pix,vec2<f32>(.00085,-.00115))-t*.16;\nlet crest=.5+.5*cos(6.283185*phase);\nlet ripple=crest*crest;\nlet bend=vec2<f32>(sin(pix.y*.008-t*.9),cos(pix.x*.006+t*.8))*4.2*ripple;\nlet st=(pix+bend+t*vec2<f32>(26.,-12.))/43.;let df=abs(fract(st+.5)-.5)*43.;\nlet line=1.-smoothstep(.32,1.48,min(df.x,df.y));\nlet glow=exp(-length((uv-vec2<f32>(-.02,1.04))*vec2<f32>(3.1,3.8))*1.75);\nlet city=textureSample(input0,linear_sampler,uv).rgb;\nlet blur=(textureSample(input0,linear_sampler,uv+vec2<f32>(.006,.004)).rgb+textureSample(input0,linear_sampler,uv-vec2<f32>(.006,.004)).rgb)*.5;\nvar rgb=vec3<f32>(.010,.010,.021)+mix(city,blur,.7)*.44+vec3<f32>(.91,.22,.49)*glow+vec3<f32>(.19,.14,.67)*exp(-length((uv-vec2<f32>(.16,.94))*4.)*1.7);\nlet highlight=ripple*ripple*ripple;\nrgb+=line*(vec3<f32>(.073,.094,.19)+highlight*vec3<f32>(.24,.11,.35));\nlet feed=textureSample(input1,linear_sampler,uv);\nreturn vec4<f32>(rgb*(1.-feed.a)+feed.rgb,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "type",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "hero"
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "marquee",
+                  "marquee-second"
+                ]
+              }
+            ],
+            "shader": "\nlet b=textureSample(input0,linear_sampler,uv);\nlet origin=vec2<f32>(.085,.941);\nlet q=(uv-origin)/vec2<f32>(.83,.57)+vec2<f32>(0.,.335);\nlet m=textureSample(input1,linear_sampler,clamp(q,vec2<f32>(0.),vec2<f32>(1.)));\nlet a=select(0.,1.,all(q>=vec2<f32>(0.)) && all(q<vec2<f32>(1.)));\nreturn vec4<f32>(b.rgb*(1.-m.a*a)+m.rgb*a,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "wordmark",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "type"
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "classic-title"
+                ]
+              }
+            ],
+            "shader": "let background = textureSample(input0, linear_sampler, uv);\nlet glyph = textureSample(input1, linear_sampler, uv);\nlet phase = fract(uv.x * 1.1 - uv.y * .28 - frame.info.z / 3.2 + .5) - .5;\nlet shine = exp(-phase * phase * 100.) * .10 + exp(-phase * phase * 2900.) * .12;\nreturn vec4<f32>(mix(background.rgb, vec3<f32>(.82 + shine), glyph.a), 1.);"
+          }
+        ]
+      },
+      "host-vertical": {
+        "profile": "producer.render/1",
+        "clock": "timeline",
+        "passes": [
+          {
+            "kind": "fragment",
+            "id": "city-film",
+            "inputs": [
+              {
+                "kind": "image",
+                "asset": "classic-skyline"
+              }
+            ],
+            "shader": "let xy=vec2<f32>(.5+(uv.x-.5)*min(1.,frame.info.x/frame.info.y/1.77778),uv.y);\nlet tm=frame.info.z*5.;let t=63.-abs(63.-(tm%126.));let a=floor(t);let b=min(63.,a+1.);\nlet coord=clamp(xy,vec2<f32>(.002,.003),vec2<f32>(.998,.997));\nlet A=textureSample(input0,linear_sampler,(vec2<f32>(a%8.,floor(a/8.))+coord)/8.);\nlet B=textureSample(input0,linear_sampler,(vec2<f32>(b%8.,floor(b/8.))+coord)/8.);\nlet v=mix(A.rgb,B.rgb,fract(t));let l=dot(v,vec3<f32>(.2126,.7152,.0722));\nlet rgb=mix(vec3<f32>(l*.64,l*.89,l),v,.63)*.88+vec3<f32>(.019,.039,.055);\nreturn vec4<f32>(rgb,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "conversation",
+            "inputs": [
+              {
+                "kind": "layers",
+                "nodes": [
+                  "host"
+                ]
+              }
+            ],
+            "shader": "let progress=0.;let drift=vec2<f32>(.008*sin(frame.info.z*.72),.006*sin(frame.info.z*1.06));var rgb=vec3<f32>(0.);var alpha=0.;\n{\n    let motion = smoothstep(0.,.88,progress);\n    let box = mix(vec4<f32>(0.055,0.203,0.89,0.745), vec4<f32>(0.055,0.203,0.89,0.347),motion);\n    let q = (uv-drift-box.xy)/box.zw;\n    let size = box.zw*frame.info.xy;\n    let panel = vec4<f32>(0.055,0.203,0.89,0.745);\n    let extent=panel.zw*vec2<f32>(720.0,1280.0)/frame.info.xy;\n    let center=panel.xy+panel.zw*.5;\n    let start=max(center-extent*.5,vec2<f32>(0.));\n    let stop=min(center+extent*.5,vec2<f32>(1.));\n    let visible=stop-start;\n    let aspect=(box.z/box.w)/(visible.x/visible.y);\n    let sourceUV=.5+(q-.5)*min(vec2<f32>(aspect,1./aspect),vec2<f32>(1.))/max(frame.controls.x,1.);\n    let camera=textureSample(input0,linear_sampler,mix(start,stop,clamp(sourceUV,vec2<f32>(.002),vec2<f32>(.998))));\n    let accent = vec3<f32>(.68,.26,.92);\n    let corner = 14.;\n    let d = abs((q-.5)*size) - (size*.5-corner);\n    let sd = length(max(d,vec2<f32>(0.))) + min(max(d.x,d.y),0.) - corner;\n    let axis = q.y + (q.x-.5)*.24;\n    let blade = mix(-.24,1.24,smoothstep(.10,.91,progress))-axis;\n    let opening = 1.;\n    let edge = 0.;\n    let pixel = (q-.5)*size/min(size.x,size.y);\n    let distance = length(pixel);\n    let ring = 1.-smoothstep(.001,.005,abs(distance-.11));\n    let idle = vec3<f32>(.032,.036,.065) + accent*(.078*exp(-distance*5.)+.27*ring);\n    let picture = mix(idle,camera.rgb,camera.a);\n    let scrim = .30*smoothstep(.70,.99,q.y);\n    let face = mix(accent*.83,picture*(1.-scrim),1.-smoothstep(-2.4,-.8,sd));\n    let mask = opening*(1.-smoothstep(-.3,1.,sd));\n    let rail = accent*exp(-abs(sd)*.27)*.17;\n    let light = mix(accent,vec3<f32>(1.),.6)*edge;\n    rgb = mix(rgb,face+light,mask) + opening*rail;\n    alpha = max(alpha,max(mask,opening*.20*exp(-abs(sd)*.27)));\n}\nreturn vec4<f32>(rgb,alpha);"
+          },
+          {
+            "kind": "fragment",
+            "id": "hero",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "city-film"
+              },
+              {
+                "kind": "pass",
+                "id": "conversation"
+              }
+            ],
+            "shader": "let t=frame.info.z;let pix=uv*frame.info.xy;\nlet phase=dot(pix,vec2<f32>(.00085,-.00115))-t*.16;\nlet crest=.5+.5*cos(6.283185*phase);\nlet ripple=crest*crest;\nlet bend=vec2<f32>(sin(pix.y*.008-t*.9),cos(pix.x*.006+t*.8))*4.2*ripple;\nlet st=(pix+bend+t*vec2<f32>(26.,-12.))/43.;let df=abs(fract(st+.5)-.5)*43.;\nlet line=1.-smoothstep(.32,1.48,min(df.x,df.y));\nlet glow=exp(-length((uv-vec2<f32>(-.02,1.04))*vec2<f32>(3.1,3.8))*1.75);\nlet city=textureSample(input0,linear_sampler,uv).rgb;\nlet blur=(textureSample(input0,linear_sampler,uv+vec2<f32>(.006,.004)).rgb+textureSample(input0,linear_sampler,uv-vec2<f32>(.006,.004)).rgb)*.5;\nvar rgb=vec3<f32>(.010,.010,.021)+mix(city,blur,.7)*.44+vec3<f32>(.91,.22,.49)*glow+vec3<f32>(.19,.14,.67)*exp(-length((uv-vec2<f32>(.16,.94))*4.)*1.7);\nlet highlight=ripple*ripple*ripple;\nrgb+=line*(vec3<f32>(.073,.094,.19)+highlight*vec3<f32>(.24,.11,.35));\nlet feed=textureSample(input1,linear_sampler,uv);\nreturn vec4<f32>(rgb*(1.-feed.a)+feed.rgb,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "type",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "hero"
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "marquee",
+                  "marquee-second"
+                ]
+              }
+            ],
+            "shader": "\nlet b=textureSample(input0,linear_sampler,uv);\nlet origin=vec2<f32>(.055,.95);\nlet q=(uv-origin)/vec2<f32>(.89,.45)+vec2<f32>(0.,.335);\nlet m=textureSample(input1,linear_sampler,clamp(q,vec2<f32>(0.),vec2<f32>(1.)));\nlet a=select(0.,1.,all(q>=vec2<f32>(0.)) && all(q<vec2<f32>(1.)));\nreturn vec4<f32>(b.rgb*(1.-m.a*a)+m.rgb*a,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "wordmark",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "type"
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "classic-title"
+                ]
+              }
+            ],
+            "shader": "let background = textureSample(input0, linear_sampler, uv);\nlet glyph = textureSample(input1, linear_sampler, uv);\nlet phase = fract(uv.x * 1.1 - uv.y * .28 - frame.info.z / 3.2 + .5) - .5;\nlet shine = exp(-phase * phase * 100.) * .10 + exp(-phase * phase * 2900.) * .12;\nreturn vec4<f32>(mix(background.rgb, vec3<f32>(.82 + shine), glyph.a), 1.);"
+          }
+        ]
+      },
+      "screen-share-landscape": {
+        "profile": "producer.render/1",
+        "clock": "timeline",
+        "passes": [
+          {
+            "kind": "fragment",
+            "id": "city-film",
+            "inputs": [
+              {
+                "kind": "image",
+                "asset": "classic-skyline"
+              }
+            ],
+            "shader": "let xy=vec2<f32>(.5+(uv.x-.5)*min(1.,frame.info.x/frame.info.y/1.77778),uv.y);\nlet tm=frame.info.z*5.;let t=63.-abs(63.-(tm%126.));let a=floor(t);let b=min(63.,a+1.);\nlet coord=clamp(xy,vec2<f32>(.002,.003),vec2<f32>(.998,.997));\nlet A=textureSample(input0,linear_sampler,(vec2<f32>(a%8.,floor(a/8.))+coord)/8.);\nlet B=textureSample(input0,linear_sampler,(vec2<f32>(b%8.,floor(b/8.))+coord)/8.);\nlet v=mix(A.rgb,B.rgb,fract(t));let l=dot(v,vec3<f32>(.2126,.7152,.0722));\nlet rgb=mix(vec3<f32>(l*.64,l*.89,l),v,.63)*.88+vec3<f32>(.019,.039,.055);\nreturn vec4<f32>(rgb,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "conversation",
+            "inputs": [
+              {
+                "kind": "layers",
+                "nodes": [
+                  "packed-layers"
+                ]
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "packed-layers"
+                ]
+              }
+            ],
+            "shader": "\nlet cueHeight=min(48.,frame.info.y*.035);\nlet cueStart=1.-2.*cueHeight/frame.info.y;\nlet split=round(cueStart*0.67*frame.info.y)/frame.info.y;\n\nlet motion=smoothstep(.03,.91,frame.info.w);\nlet drift=vec2<f32>(.008*sin(frame.info.z*.72),.006*sin(frame.info.z*1.06));\nlet card=vec4<f32>(0.075,0.213,0.85,0.722);\nlet cardUV=(uv-drift-card.xy)/card.zw;\nlet cardPixels=card.zw*frame.info.xy;\nlet d=abs((cardUV-.5)*cardPixels)-(cardPixels*.5-14.);\nlet sd=length(max(d,vec2<f32>(0.)))+min(max(d.x,d.y),0.)-14.;\nlet plate=1.-smoothstep(-.3,1.,sd);\nlet fill=1.-smoothstep(-2.3,-.9,sd);\nlet reveal=mix(-.28,1.28,smoothstep(.09,.87,frame.info.w))\n    -cardUV.x+(cardUV.y-.5)*.25;\nlet open=smoothstep(-.004,.004,reveal);\nlet trail=exp(-48.*abs(reveal))*sin(frame.info.w*3.14159);\nlet packedAspect=frame.info.x/(split*frame.info.y);\nlet cardAspect=cardPixels.x/cardPixels.y;\nlet mediaAspect=cardAspect/packedAspect;\nlet mediaCenter=vec2<f32>(.5,.5);\nlet mediaFit=min(vec2<f32>(1.,mediaAspect),vec2<f32>(1./mediaAspect,1.));\nlet mediaUV=.5+(cardUV-mediaCenter-frame.screenPan)/(mediaFit*max(1.,frame.controls.z));\nlet inside=all(mediaUV>=vec2<f32>(0.)) && all(mediaUV<=vec2<f32>(1.));\nlet tex=textureSample(input0,linear_sampler,vec2<f32>(clamp(mediaUV.x,0.,1.),\n    clamp(mediaUV.y*split,0.,split-.5/frame.info.y)));\nlet media=select(vec4<f32>(0.),tex,inside);\nlet empty=vec3<f32>(.025,.027,.052)+vec3<f32>(.058,.025,.093)*exp(-3.*length(cardUV-.5));\nlet edge=mix(vec3<f32>(.34,.40,.68),vec3<f32>(.54,.38,.79),uv.x)*.75;\nlet panel=vec4<f32>((mix(edge,mix(empty,media.rgb,media.a),fill)+.16*trail*vec3<f32>(.7,.55,1.))*plate*open,plate*open);\n\nlet window=mix(card,vec4<f32>(0.104,0.69,0.226,0.207),motion);\nlet q=(uv-drift-window.xy)/window.zw;\nlet size=window.zw*frame.info.xy;\nlet corner=mix(14.,12.,motion);\nlet e=abs((q-.5)*size)-(size*.5-corner);\nlet dist=length(max(e,vec2<f32>(0.)))+min(max(e.x,e.y),0.)-corner;\nlet camera=1.-smoothstep(-.3,1.,dist);\nlet cameraFill=1.-smoothstep(-2.4,-.9,dist);\nlet packedHeight=(cueStart-split)*frame.info.y;\nlet sizeRatio=vec2<f32>(frame.info.x,packedHeight)/vec2<f32>(1.7777778,1.);\nlet storage=min(sizeRatio.x,sizeRatio.y)*vec2<f32>(1.7777778,1.);\nlet lens=(size.x/size.y)/1.7777778;\nlet coord=.5+(q-.5)*min(vec2<f32>(lens,1./lens),vec2<f32>(1.))/max(frame.controls.x,1.);\nlet sampleUV=vec2<f32>(.5,(cueStart+split)*.5)\n    +(clamp(coord,vec2<f32>(.002),vec2<f32>(.998))-.5)*storage/frame.info.xy;\nlet live=textureSample(input1,linear_sampler,sampleUV);\nlet shadow=motion*.42*exp(-max(dist,0.)/14.);\nlet cameraRim=mix(vec3<f32>(.68,.26,.92),vec3<f32>(.90,.61,1.),motion);\nlet host=vec4<f32>(mix(cameraRim,mix(empty,live.rgb,live.a),cameraFill)*camera,camera);\nlet beneath=vec4<f32>(panel.rgb*(1.-shadow),panel.a+shadow*(1.-panel.a));\nreturn host+beneath*(1.-host.a);\n"
+          },
+          {
+            "kind": "fragment",
+            "id": "hero",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "city-film"
+              },
+              {
+                "kind": "pass",
+                "id": "conversation"
+              }
+            ],
+            "shader": "let t=frame.info.z;let pix=uv*frame.info.xy;\nlet phase=dot(pix,vec2<f32>(.00085,-.00115))-t*.16;\nlet crest=.5+.5*cos(6.283185*phase);\nlet ripple=crest*crest;\nlet bend=vec2<f32>(sin(pix.y*.008-t*.9),cos(pix.x*.006+t*.8))*4.2*ripple;\nlet st=(pix+bend+t*vec2<f32>(26.,-12.))/43.;let df=abs(fract(st+.5)-.5)*43.;\nlet line=1.-smoothstep(.32,1.48,min(df.x,df.y));\nlet glow=exp(-length((uv-vec2<f32>(-.02,1.04))*vec2<f32>(3.1,3.8))*1.75);\nlet city=textureSample(input0,linear_sampler,uv).rgb;\nlet blur=(textureSample(input0,linear_sampler,uv+vec2<f32>(.006,.004)).rgb+textureSample(input0,linear_sampler,uv-vec2<f32>(.006,.004)).rgb)*.5;\nvar rgb=vec3<f32>(.010,.010,.021)+mix(city,blur,.7)*.44+vec3<f32>(.91,.22,.49)*glow+vec3<f32>(.19,.14,.67)*exp(-length((uv-vec2<f32>(.16,.94))*4.)*1.7);\nlet highlight=ripple*ripple*ripple;\nrgb+=line*(vec3<f32>(.073,.094,.19)+highlight*vec3<f32>(.24,.11,.35));\nlet feed=textureSample(input1,linear_sampler,uv);\nreturn vec4<f32>(rgb*(1.-feed.a)+feed.rgb,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "type",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "hero"
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "packed-layers"
+                ]
+              }
+            ],
+            "shader": "\nlet cueHeight=min(48.,frame.info.y*.035);\nlet cueStart=1.-2.*cueHeight/frame.info.y;\nlet split=round(cueStart*0.67*frame.info.y)/frame.info.y;\n\nlet b=textureSample(input0,linear_sampler,uv);\nlet p=uv-vec2<f32>(.105,.941);\nlet size=vec2<f32>(.78,.053);\nlet q=p/size;\nlet source=vec2<f32>(q.x,cueStart+q.y*(1.-cueStart));\nlet m=textureSample(input1,linear_sampler,clamp(source,vec2<f32>(0.),vec2<f32>(1.)));\nlet amount=select(0.,1.,all(q>=vec2<f32>(0.)) && all(q<vec2<f32>(1.)));\nreturn vec4<f32>(b.rgb*(1.-m.a*amount)+m.rgb*amount,1.);\n"
+          },
+          {
+            "kind": "fragment",
+            "id": "wordmark",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "type"
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "classic-title"
+                ]
+              }
+            ],
+            "shader": "let background = textureSample(input0, linear_sampler, uv);\nlet glyph = textureSample(input1, linear_sampler, uv);\nlet phase = fract(uv.x * 1.1 - uv.y * .28 - frame.info.z / 3.2 + .5) - .5;\nlet shine = exp(-phase * phase * 100.) * .10 + exp(-phase * phase * 2900.) * .12;\nreturn vec4<f32>(mix(background.rgb, vec3<f32>(.82 + shine), glyph.a), 1.);"
+          }
+        ]
+      },
+      "screen-share-vertical": {
+        "profile": "producer.render/1",
+        "clock": "timeline",
+        "passes": [
+          {
+            "kind": "fragment",
+            "id": "city-film",
+            "inputs": [
+              {
+                "kind": "image",
+                "asset": "classic-skyline"
+              }
+            ],
+            "shader": "let xy=vec2<f32>(.5+(uv.x-.5)*min(1.,frame.info.x/frame.info.y/1.77778),uv.y);\nlet tm=frame.info.z*5.;let t=63.-abs(63.-(tm%126.));let a=floor(t);let b=min(63.,a+1.);\nlet coord=clamp(xy,vec2<f32>(.002,.003),vec2<f32>(.998,.997));\nlet A=textureSample(input0,linear_sampler,(vec2<f32>(a%8.,floor(a/8.))+coord)/8.);\nlet B=textureSample(input0,linear_sampler,(vec2<f32>(b%8.,floor(b/8.))+coord)/8.);\nlet v=mix(A.rgb,B.rgb,fract(t));let l=dot(v,vec3<f32>(.2126,.7152,.0722));\nlet rgb=mix(vec3<f32>(l*.64,l*.89,l),v,.63)*.88+vec3<f32>(.019,.039,.055);\nreturn vec4<f32>(rgb,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "conversation",
+            "inputs": [
+              {
+                "kind": "layers",
+                "nodes": [
+                  "packed-layers"
+                ]
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "packed-layers"
+                ]
+              }
+            ],
+            "shader": "\nlet cueHeight=min(48.,frame.info.y*.035);\nlet cueStart=1.-2.*cueHeight/frame.info.y;\nlet split=round(cueStart*0.61*frame.info.y)/frame.info.y;\n\nlet motion=smoothstep(.03,.91,frame.info.w);\nlet drift=vec2<f32>(.008*sin(frame.info.z*.72),.006*sin(frame.info.z*1.06));\nlet card=vec4<f32>(0.055,0.203,0.89,0.745);\nlet cardUV=(uv-drift-card.xy)/card.zw;\nlet cardPixels=card.zw*frame.info.xy;\nlet d=abs((cardUV-.5)*cardPixels)-(cardPixels*.5-14.);\nlet sd=length(max(d,vec2<f32>(0.)))+min(max(d.x,d.y),0.)-14.;\nlet plate=1.-smoothstep(-.3,1.,sd);\nlet fill=1.-smoothstep(-2.3,-.9,sd);\nlet reveal=mix(-.28,1.28,smoothstep(.09,.87,frame.info.w))\n    -cardUV.x+(cardUV.y-.5)*.25;\nlet open=smoothstep(-.004,.004,reveal);\nlet trail=exp(-48.*abs(reveal))*sin(frame.info.w*3.14159);\nlet packedAspect=frame.info.x/(split*frame.info.y);\nlet cardAspect=cardPixels.x/cardPixels.y;\nlet mediaAspect=cardAspect/packedAspect;\nlet mediaCenter=vec2<f32>(.5,.42);\nlet mediaFit=min(vec2<f32>(1.,mediaAspect),vec2<f32>(1./mediaAspect,1.));\nlet mediaUV=.5+(cardUV-mediaCenter-frame.screenPan)/(mediaFit*max(1.,frame.controls.z));\nlet inside=all(mediaUV>=vec2<f32>(0.)) && all(mediaUV<=vec2<f32>(1.));\nlet tex=textureSample(input0,linear_sampler,vec2<f32>(clamp(mediaUV.x,0.,1.),\n    clamp(mediaUV.y*split,0.,split-.5/frame.info.y)));\nlet media=select(vec4<f32>(0.),tex,inside);\nlet empty=vec3<f32>(.025,.027,.052)+vec3<f32>(.058,.025,.093)*exp(-3.*length(cardUV-.5));\nlet edge=mix(vec3<f32>(.34,.40,.68),vec3<f32>(.54,.38,.79),uv.x)*.75;\nlet panel=vec4<f32>((mix(edge,mix(empty,media.rgb,media.a),fill)+.16*trail*vec3<f32>(.7,.55,1.))*plate*open,plate*open);\n\nlet window=mix(card,vec4<f32>(0.082,0.73,0.34,0.19),motion);\nlet q=(uv-drift-window.xy)/window.zw;\nlet size=window.zw*frame.info.xy;\nlet corner=mix(14.,12.,motion);\nlet e=abs((q-.5)*size)-(size*.5-corner);\nlet dist=length(max(e,vec2<f32>(0.)))+min(max(e.x,e.y),0.)-corner;\nlet camera=1.-smoothstep(-.3,1.,dist);\nlet cameraFill=1.-smoothstep(-2.4,-.9,dist);\nlet packedHeight=(cueStart-split)*frame.info.y;\nlet sizeRatio=vec2<f32>(frame.info.x,packedHeight)/vec2<f32>(1.7777778,1.);\nlet storage=min(sizeRatio.x,sizeRatio.y)*vec2<f32>(1.7777778,1.);\nlet lens=(size.x/size.y)/1.7777778;\nlet coord=.5+(q-.5)*min(vec2<f32>(lens,1./lens),vec2<f32>(1.))/max(frame.controls.x,1.);\nlet sampleUV=vec2<f32>(.5,(cueStart+split)*.5)\n    +(clamp(coord,vec2<f32>(.002),vec2<f32>(.998))-.5)*storage/frame.info.xy;\nlet live=textureSample(input1,linear_sampler,sampleUV);\nlet shadow=motion*.42*exp(-max(dist,0.)/14.);\nlet cameraRim=mix(vec3<f32>(.68,.26,.92),vec3<f32>(.90,.61,1.),motion);\nlet host=vec4<f32>(mix(cameraRim,mix(empty,live.rgb,live.a),cameraFill)*camera,camera);\nlet beneath=vec4<f32>(panel.rgb*(1.-shadow),panel.a+shadow*(1.-panel.a));\nreturn host+beneath*(1.-host.a);\n"
+          },
+          {
+            "kind": "fragment",
+            "id": "hero",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "city-film"
+              },
+              {
+                "kind": "pass",
+                "id": "conversation"
+              }
+            ],
+            "shader": "let t=frame.info.z;let pix=uv*frame.info.xy;\nlet phase=dot(pix,vec2<f32>(.00085,-.00115))-t*.16;\nlet crest=.5+.5*cos(6.283185*phase);\nlet ripple=crest*crest;\nlet bend=vec2<f32>(sin(pix.y*.008-t*.9),cos(pix.x*.006+t*.8))*4.2*ripple;\nlet st=(pix+bend+t*vec2<f32>(26.,-12.))/43.;let df=abs(fract(st+.5)-.5)*43.;\nlet line=1.-smoothstep(.32,1.48,min(df.x,df.y));\nlet glow=exp(-length((uv-vec2<f32>(-.02,1.04))*vec2<f32>(3.1,3.8))*1.75);\nlet city=textureSample(input0,linear_sampler,uv).rgb;\nlet blur=(textureSample(input0,linear_sampler,uv+vec2<f32>(.006,.004)).rgb+textureSample(input0,linear_sampler,uv-vec2<f32>(.006,.004)).rgb)*.5;\nvar rgb=vec3<f32>(.010,.010,.021)+mix(city,blur,.7)*.44+vec3<f32>(.91,.22,.49)*glow+vec3<f32>(.19,.14,.67)*exp(-length((uv-vec2<f32>(.16,.94))*4.)*1.7);\nlet highlight=ripple*ripple*ripple;\nrgb+=line*(vec3<f32>(.073,.094,.19)+highlight*vec3<f32>(.24,.11,.35));\nlet feed=textureSample(input1,linear_sampler,uv);\nreturn vec4<f32>(rgb*(1.-feed.a)+feed.rgb,1.);"
+          },
+          {
+            "kind": "fragment",
+            "id": "type",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "hero"
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "packed-layers"
+                ]
+              }
+            ],
+            "shader": "\nlet cueHeight=min(48.,frame.info.y*.035);\nlet cueStart=1.-2.*cueHeight/frame.info.y;\nlet split=round(cueStart*0.61*frame.info.y)/frame.info.y;\n\nlet b=textureSample(input0,linear_sampler,uv);\nlet p=uv-vec2<f32>(.085,.949);\nlet size=vec2<f32>(.80,.042);\nlet q=p/size;\nlet source=vec2<f32>(q.x,cueStart+q.y*(1.-cueStart));\nlet m=textureSample(input1,linear_sampler,clamp(source,vec2<f32>(0.),vec2<f32>(1.)));\nlet amount=select(0.,1.,all(q>=vec2<f32>(0.)) && all(q<vec2<f32>(1.)));\nreturn vec4<f32>(b.rgb*(1.-m.a*amount)+m.rgb*amount,1.);\n"
+          },
+          {
+            "kind": "fragment",
+            "id": "wordmark",
+            "inputs": [
+              {
+                "kind": "pass",
+                "id": "type"
+              },
+              {
+                "kind": "layers",
+                "nodes": [
+                  "classic-title"
+                ]
+              }
+            ],
+            "shader": "let background = textureSample(input0, linear_sampler, uv);\nlet glyph = textureSample(input1, linear_sampler, uv);\nlet phase = fract(uv.x * 1.1 - uv.y * .28 - frame.info.z / 3.2 + .5) - .5;\nlet shine = exp(-phase * phase * 100.) * .10 + exp(-phase * phase * 2900.) * .12;\nreturn vec4<f32>(mix(background.rgb, vec3<f32>(.82 + shine), glyph.a), 1.);"
+          }
+        ]
+      }
+    },
+    "outputGraphs": {
+      "landscape": "landscape",
+      "vertical": "vertical",
+      "opening-landscape": "opening-landscape",
+      "opening-vertical": "opening-vertical",
+      "host-landscape": "host-landscape",
+      "host-vertical": "host-vertical",
+      "screen-share-landscape": "screen-share-landscape",
+      "screen-share-vertical": "screen-share-vertical"
+    },
+    "controls": [],
+    "actions": {},
+    "theme": {},
+    "layoutTransitionMs": 920,
+    "reversibleLayoutTransitions": {
+      "landscape": "host-landscape",
+      "vertical": "host-vertical",
+      "screen-share-landscape": "host-landscape",
+      "screen-share-vertical": "host-vertical"
+    }
+  },
+  "show": {
+    "set": "classic",
+    "authority": "local",
+    "segments": [
+      {
+        "id": "interview",
+        "title": "Interview",
+        "landscape": "landscape",
+        "vertical": "vertical",
+        "sequence": null
+      },
+      {
+        "id": "opening",
+        "title": "Opening",
+        "landscape": "opening-landscape",
+        "vertical": "opening-vertical",
+        "sequence": null
+      },
+      {
+        "id": "host",
+        "title": "Host",
+        "landscape": "host-landscape",
+        "vertical": "host-vertical",
+        "sequence": null
+      },
+      {
+        "id": "screen-share",
+        "title": "Screen Share",
+        "landscape": "screen-share-landscape",
+        "vertical": "screen-share-vertical",
+        "sequence": null
+      }
+    ]
+  }
+}

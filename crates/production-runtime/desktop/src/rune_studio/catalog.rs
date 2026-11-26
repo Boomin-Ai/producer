@@ -52,9 +52,7 @@ pub(super) fn create_room(root: &Path, name: &str, starter: Option<Starter>) -> 
         .to_ascii_lowercase();
     project.production.id = project.room.clone();
     project.production.title = name.into();
-    if let Some(starter) = starter {
-        starter.apply(&mut project)?;
-    }
+    starter.unwrap_or(Starter::Classic).apply(&mut project)?;
     project.compile()?;
     let mut file = fs::File::create(dir.path().join("room.json"))?;
     serde_json::to_writer_pretty(&mut file, &project)?;
@@ -88,7 +86,7 @@ pub(super) fn starters(s: &Studio, width: f32) -> El {
     if s.naming {
         page = page
             .child(title(
-                s.starter.map_or("Blank studio", Starter::name),
+                s.starter.unwrap_or(Starter::Classic).name(),
                 26.,
                 700.,
                 TEXT,
@@ -101,7 +99,7 @@ pub(super) fn starters(s: &Studio, width: f32) -> El {
             )
             .child(row().child(button("create", "Create Studio", true, Studio::create)));
     } else {
-        page = page.child(title("Get in the studio, Producer.", 28., 700., TEXT));
+        page = page.child(title("Choose a studio", 28., 700., TEXT));
         let columns = if width >= 696. { 2 } else { 1 };
         let card_width = (available - 14. * (columns - 1) as f32) / columns as f32;
         for (r, starters) in Starter::ALL.chunks(columns).enumerate() {
@@ -120,7 +118,7 @@ pub(super) fn starters(s: &Studio, width: f32) -> El {
                         .w(card_width)
                         .radius(13.)
                         .clip_rounded(13.)
-                        .border(1., color(0x263443))
+                        .border(1., color(if starter == Starter::Classic { MINT } else { 0x263443 }))
                         .fill(color(0x101924))
                         .role("button")
                         .focusable(true)
@@ -142,13 +140,6 @@ pub(super) fn starters(s: &Studio, width: f32) -> El {
             }
             page = page.child(cards);
         }
-        page = page.child(
-            row().child(button("blank-studio", "Blank studio", false, |s| {
-                s.starter = None;
-                s.name = TextEdit::new("");
-                s.naming = true;
-            })),
-        );
     }
     col()
         .w_full()
@@ -247,7 +238,7 @@ pub(super) fn studios(s: &Studio, width: f32) -> El {
                 s.settings.reference = uuid::Uuid::new_v4().to_string();
                 s.page = Page::Starters;
                 s.naming = false;
-                s.starter = None;
+                s.starter = Some(Starter::Classic);
             }),
     );
     let mut iter = tiles.into_iter();

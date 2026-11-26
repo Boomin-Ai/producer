@@ -1,8 +1,9 @@
 //! Immutable native visual preparation. Rasterization/upload happens on the
 //! control worker; render/audio only reads typed records and retained textures.
 use crate::{
-    model::RoomProject,
+    model::{CanvasTransform, RoomProject},
     platform::{Draw, Frame, TextCache, TextSpec},
+    speaker_split::{Region, CENTER},
 };
 use anyhow::{bail, Result};
 use producer_native_media::boundary::OutputSize;
@@ -73,13 +74,20 @@ impl VisualCache {
         let weather_desk = project.production.sets.get(&project.scene)
             .is_some_and(|set| set.theme.contains_key("weather-desk"));
         // Device names and primary bindings do not affect GPU resources.
+        // In a set with authored guest layouts, solo layouts intentionally omit the guest.
+        let prefix = format!("sets/{}/layouts/", project.scene);
+        let places_guest = plan.nodes.iter().any(|node|
+            node.source.as_deref() == Some("rtc-guest") && node.path.starts_with(&prefix))
+            || project.production.sets.get(&project.scene).is_some_and(|set|
+                set.graphs.values().flat_map(|graph| &graph.passes).any(|pass|
+                    pass.inputs().iter().any(|input| matches!(input, GraphInput::Source { id } if id == "rtc-guest"))));
         let camera_slots: Vec<_> = project.inputs.iter()
             .filter(|(id, binding)| id.as_str() != "camera" && binding.kind == "camera")
             .map(|(id, binding)| (id, binding.slot))
             .collect();
         let key = format!(
             "{:x}",
-            Sha256::digest(serde_json::to_vec(&(&project.scene, project.output_layouts(), project.production.sets.get(&project.scene).map(|s| (&s.graphs,&s.output_graphs)), weather_desk, selected, targets, camera_slots, project.rtc_video_slot(), &project.production.assets, &fields))?)
+            Sha256::digest(serde_json::to_vec(&(&project.scene, project.output_layouts(), project.production.sets.get(&project.scene).map(|s| (&s.graphs,&s.output_graphs,s.canvas_fit)), weather_desk, places_guest, selected, targets, camera_slots, project.rtc_video_slot(), &project.production.assets, &fields))?)
         );
         if let Some(index) = self.entries.iter().position(|(cached, _)| cached == &key) {
             let entry = self.entries.remove(index).unwrap();
@@ -87,7 +95,7 @@ impl VisualCache {
             self.entries.push_front(entry);
             return Ok(prepared);
         }
-        let prepared = Arc::new(Visuals::prepare(project, plan, &fields)?);
+        let prepared = Arc::new(Visuals::prepare(project, plan, &fields, places_guest)?);
         self.entries.push_front((key, prepared.clone()));
         self.entries.truncate(3);
         Ok(prepared)
@@ -96,6 +104,7 @@ impl VisualCache {
 struct Element {
     key: String,
     wave_border: bool,
+    speaker_region: Option<Region>,
     depth: usize,
     tracks: Vec<(usize, Property)>,
     node: usize,
@@ -104,8 +113,11 @@ struct Element {
 }
 pub struct Visuals {
     outputs: [Vec<Element>; 2],
+    viewport: [CanvasTransform; 2],
     terminal: [Option<Draw>; 2],
     guest_slots: [bool; 2],
+    pub places_guest: bool,
+    speaker_split: bool,
     pub text: TextCache,
 }
 fn ink(i: &Ink) -> [f32; 4] {
@@ -163,35 +175,33 @@ fn image_slot(
     Ok(entry)
 }
 
-fn live_slot(project: &RoomProject, source: &str) -> Result<u32> {
+/// An authored camera can exist before a device is connected. Leave its surface
+/// empty until that input owns a slot, including when the guest is already live.
+fn live_slot(project: &RoomProject, source: &str) -> Result<Option<u32>> {
+    use producer_production_contract::{Role, Source};
     Ok(match source {
-        "camera" => 0,
-        "screen" => 1,
-        "movie" => 2,
-        "take" => 3,
-        "rtc-guest" => project
-            .rtc_video_slot()
-            .ok_or_else(|| anyhow::anyhow!("No free guest camera slot"))?
-            as u32,
-        _ => {
-            project
-                .inputs
-                .get(source)
-                .filter(|b| b.kind == "camera" && b.slot < 8)
-                .ok_or_else(|| anyhow::anyhow!("Unavailable visual source: {source}"))?
-                .slot
-        }
+        "camera" => Some(0),
+        "screen" => Some(1),
+        "movie" => Some(2),
+        "take" => Some(3),
+        "rtc-guest" => project.rtc_video_slot().map(|slot| slot as u32),
+        _ if matches!(project.production.sources.get(source), Some(Source::Live { role: Role::HostCamera })) =>
+            project.inputs.get(source).map(|binding| binding.slot),
+        _ => bail!("Unavailable visual source: {source}"),
     })
 }
 impl Visuals {
     pub fn has_guest_slot(&self, output: usize) -> bool { self.guest_slots[output] }
-    pub fn prepare(project: &RoomProject, plan: &Plan, fields: &crate::weather::Fields) -> Result<Self> {
+    pub fn has_speaker_split(&self) -> bool { self.speaker_split }
+    fn prepare(project: &RoomProject, plan: &Plan, fields: &crate::weather::Fields, places_guest: bool) -> Result<Self> {
         let weather_desk = project.production.sets.get(&project.scene)
             .is_some_and(|set| set.theme.contains_key("weather-desk"));
         let mut programs = std::collections::HashMap::new();
         let mut graph_specs = Vec::<crate::platform::GraphSpec>::new();
         let mut terminal = [None; 2];
+        let mut viewport = [CanvasTransform::IDENTITY; 2];
         let mut guest_slots = [false; 2];
+        let mut speaker_split = false;
         let mut outputs: [Vec<Element>; 2] = std::array::from_fn(|_| Vec::new());
         let mut strings = Vec::<CString>::new();
         let mut specs = Vec::<TextSpec>::new();
@@ -205,6 +215,7 @@ impl Visuals {
             let prefix = format!("sets/{}/layouts/{name}/", project.scene);
             let mut count = 0;
             let set=project.production.sets.get(&project.scene).ok_or_else(||anyhow::anyhow!("Set unavailable for output"))?;
+            viewport[out] = project.canvas.transform(set, &set.layouts[name]);
             let groups: std::collections::BTreeMap<_,_>=set.layouts.get(name).into_iter().flat_map(|layout|layout.root.children.iter()).enumerate().map(|(i,n)|(n.id.as_str(),i as u32+1)).collect();
             let mut jobs=Vec::new();
             let mut graph_pixels=0u64;
@@ -231,17 +242,19 @@ impl Visuals {
                 // The headline occupies a fixed region in the output graph's
                 // text atlas. Preserve that UV region at every target size.
                 let (width, height) = if depth == 1 && n.path.ends_with("/headline")
+                    && set.canvas_fit == producer_production_contract::CanvasFit::Reflow
                     && crate::headline::supports(set, name)
                 {
                     (set.layouts[name].width, set.layouts[name].height)
                 } else {
                     (size.width, size.height)
                 };
+                let frame = viewport[out].rect(n.frame);
                 let rect = [
-                    n.frame.x as f32 / width as f32,
-                    n.frame.y as f32 / height as f32,
-                    n.frame.width as f32 / width as f32,
-                    n.frame.height as f32 / height as f32,
+                    frame.x as f32 / width as f32,
+                    frame.y as f32 / height as f32,
+                    frame.width as f32 / width as f32,
+                    frame.height as f32 / height as f32,
                 ];
                 let mut base = Draw::solid(rect, [0.; 4]);
                 base.group=n.path[prefix.len()..].split('/').nth(1).and_then(|n|groups.get(n)).copied().unwrap_or(0);
@@ -344,37 +357,25 @@ impl Visuals {
                     }
                     content = Some(d);
                 } else if let Some(source) = &n.source {
-                    let slot = match source.as_str() {
-                        "camera" => 0,
-                        "screen" => 1,
-                        "movie" => 2,
-                        "take" => 3,
-                        "rtc-guest" => {
-                            guest_slots[out] = true;
-                            project.rtc_video_slot().ok_or_else(|| anyhow::anyhow!("Free a camera slot to place the RTC guest"))? as u32
-                        }
-                        _ => project
-                            .inputs
-                            .get(source)
-                            .filter(|b| b.kind == "camera")
-                            .map(|b| b.slot)
-                            .ok_or_else(|| {
-                                anyhow::anyhow!("Native visual source is not qualified: {source}")
-                            })?,
-                    };
-                    let mut d = base;
-                    d.kind = 1;
-                    d.source = slot;
-                    d.surface[1] = 0.; // Grain belongs to authored surfaces, never raw video.
-                    content = Some(d);
+                    guest_slots[out] |= source == "rtc-guest";
+                    if let Some(slot) = live_slot(project, source)? {
+                        let mut d = base;
+                        d.kind = 1;
+                        d.source = slot;
+                        d.surface[1] = 0.; // Grain belongs to authored surfaces, never raw video.
+                        content = Some(d);
+                    }
                 }
                 let wave_border = weather_desk && is_presenter_edge(&n.path);
+                let key = &n.path[prefix.len()..];
+                let speaker_region = Region::from_path(key);
+                speaker_split |= speaker_region.is_some();
                 count += usize::from(fill.is_some()) + usize::from(content.is_some());
                 if count > MAX_DRAWS {
                     bail!("Native visual draw budget exceeded; working output retained");
                 }
                 outputs[out].push(Element {
-                    key: n.path[prefix.len()..].to_owned(), wave_border, node: index, depth, tracks,
+                    key: key.to_owned(), wave_border, speaker_region, node: index, depth, tracks,
                     fill,
                     content,
                 });
@@ -465,7 +466,7 @@ impl Visuals {
                             }
                             GraphInput::Source { id } => {
                                 guest_slots[out] |= id == "rtc-guest";
-                                live_slot(project, id)? as i32
+                                live_slot(project, id)?.map_or(-1, |slot| slot as i32)
                             }
                             GraphInput::Image { asset } => {
                                 8 + image_slot(
@@ -516,7 +517,10 @@ impl Visuals {
         let text = TextCache::with_graphs(&specs, &graph_specs)?;
         Ok(Self {
             outputs,
+            viewport,
             guest_slots,
+            places_guest,
+            speaker_split,
             terminal,
             text,
         })
@@ -533,7 +537,7 @@ impl Visuals {
         camera_wave: bool,
         out: &mut Vec<Draw>,
     ) {
-        self.draw_transition(plan,samples,output,size,frames,active,production_seconds,production_seconds,production_seconds,camera_wave,out,None,None)
+        self.draw_transition(plan,samples,output,size,frames,active,production_seconds,production_seconds,production_seconds,camera_wave,out,None,None,CENTER)
     }
     pub fn draw_transition(
         &self,
@@ -550,6 +554,7 @@ impl Visuals {
         out: &mut Vec<Draw>,
         transition: Option<(&LayoutBlend,f32)>,
         graph_progress: Option<f32>,
+        speaker_share: f32,
     ) {
         out.clear();
         let progress = graph_progress.unwrap_or_else(|| transition.map_or(1., |(_, p)| p));
@@ -582,14 +587,22 @@ impl Visuals {
             for &(slot, prop) in &e.tracks {
                 if let Some(Some(sample)) = samples.get(slot) { property(prop,sample.value); }
             }
-            let pivot = [(node.frame.x + node.pivot.x * node.frame.width) as f32,
-                         (node.frame.y + node.pivot.y * node.frame.height) as f32];
-            let pose = poses[e.depth].child(pivot,[tx,ty],scale,angle,visible);
+            let fit = self.viewport[output];
+            let frame = fit.rect(node.frame);
+            let pivot = [(frame.x + node.pivot.x * frame.width) as f32,
+                         (frame.y + node.pivot.y * frame.height) as f32];
+            let motion = fit.scale as f32;
+            let pose = poses[e.depth].child(pivot,[tx * motion, ty * motion],scale,angle,visible);
             poses[e.depth + 1] = pose;
             if !pose.visible || opacity <= 0. {
                 continue;
             }
             for mut d in [e.fill, e.content].into_iter().flatten() {
+                if let Some(region) = e.speaker_region {
+                    d.rect = region.rect(speaker_share, size, output == 1);
+                    d.metrics[1] = d.rect[2] * w;
+                    d.metrics[2] = d.rect[3] * h;
+                }
                 if let Some((blend,phase))=transition {
                     if let Some(prior)=blend.from[output].get(index).copied().flatten() {
                         for (v,start) in d.rect.iter_mut().zip(prior.rect) {*v=start+(*v-start)*phase;}
@@ -721,6 +734,37 @@ fn fit_source(d: &mut Draw, fit: Option<Fit>, width: usize, height: usize, size:
 mod tests {
     use super::*;
     #[test]
+    fn unbound_cohost_camera_stays_empty_and_binds_independently_of_host_and_guest() {
+        use producer_production_contract::{Role, Source};
+        let mut project = RoomProject::demo();
+        project.production.sources.insert("camera-2".into(), Source::Live { role: Role::HostCamera });
+        project.production.sources.insert("rtc-guest".into(), Source::Live { role: Role::Guest });
+        assert_eq!(live_slot(&project, "camera-2").unwrap(), None);
+        assert_eq!(live_slot(&project, "rtc-guest").unwrap(), Some(4));
+
+        project.configure_input("camera", "camera", "front", "Host camera").unwrap();
+        assert!(project.configure_input("camera-2", "camera", "front", "Already used").is_err());
+        project.configure_input("camera-2", "camera", "side", "Co-host camera").unwrap();
+        let reopened: RoomProject = serde_json::from_slice(&serde_json::to_vec(&project).unwrap()).unwrap();
+        assert_eq!(live_slot(&reopened, "camera").unwrap(), Some(0));
+        assert_eq!(live_slot(&reopened, "camera-2").unwrap(), Some(4));
+        assert_eq!(live_slot(&reopened, "rtc-guest").unwrap(), Some(5));
+        assert!(reopened.lanes.iter().any(|lane| lane.source == "camera-2"));
+        assert!(reopened.production.sequences["main"].placements.iter().any(|p| p.source == "camera-2"));
+        let mut full = reopened.clone();
+        for number in 3..=5 {
+            full.add_input("camera", &format!("device-{number}"), "Existing camera").unwrap();
+        }
+        assert_eq!(live_slot(&full, "rtc-guest").unwrap(), None);
+        full.remove_source("camera-4").unwrap();
+        assert_eq!(live_slot(&full, "rtc-guest").unwrap(), Some(6));
+        assert_eq!(live_slot(&full, "camera-2").unwrap(), Some(4));
+        project.remove_source("camera-2").unwrap();
+        assert_eq!(live_slot(&project, "camera-2").unwrap(), None);
+        assert_eq!(live_slot(&project, "rtc-guest").unwrap(), Some(4));
+    }
+
+    #[test]
     fn camera_wave_targets_the_bezel_and_its_video_mask() {
         for layout in ["landscape", "vertical", "presenter-landscape", "presenter-vertical"] {
             let root = format!("sets/atmosphere/layouts/{layout}/root");
@@ -769,6 +813,35 @@ mod tests {
 #[cfg(test)]
 mod resource_tests {
     use super::*;
+    #[test]
+    fn speaker_split_deforms_the_authored_host_and_guest_slots_on_both_outputs() {
+        let directory = tempfile::tempdir().unwrap();
+        crate::starter_sets::install(directory.path()).unwrap();
+        let mut project: RoomProject =
+            serde_json::from_slice(&std::fs::read(directory.path().join("room.json")).unwrap()).unwrap();
+        project.mount_set(Some(crate::speaker_split::ID.into()), None).unwrap();
+        let project = project.live_set().unwrap();
+        let plan = project.compile().unwrap();
+        let visuals = VisualCache::default().prepare(&project, &plan).unwrap();
+        assert!(visuals.has_speaker_split());
+        let mut draws = Vec::new();
+        for (output, (_, size)) in project.output_layouts().into_iter().enumerate() {
+            assert!(visuals.has_guest_slot(output));
+            visuals.draw_transition(
+                &plan, &[], output, size, &std::array::from_fn(|_| None), [false; 8],
+                0., 0., 0., false, &mut draws, None, None, 0.64,
+            );
+            assert_eq!(draws.len(), 3);
+            for region in [Region::Host, Region::Guest, Region::Divider] {
+                let expected = region.rect(0.64, size, output == 1);
+                assert!(draws.iter().any(|draw| {
+                    draw.metrics[3] == 0. &&
+                        draw.rect.iter().zip(expected).all(|(&actual, expected)| (actual - expected).abs() < 1e-6)
+                }));
+            }
+        }
+    }
+
     #[test]
     fn changing_the_primary_camera_reuses_prepared_visuals() {
         let mut project = crate::visual_fixture::project(false);

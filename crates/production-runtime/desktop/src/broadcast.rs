@@ -322,8 +322,11 @@ impl Broadcast {
     pub fn active(&self) -> bool {
         self.0.lock().unwrap().start.is_some()
     }
-    pub fn sending_to_studio_site(&self) -> bool {
-        let state = self.0.lock().unwrap();
+    pub fn try_view(&self) -> Option<(Status, bool)> {
+        let state = self.0.try_lock().ok()?;
+        Some((Self::status_from(&state), Self::sending_to_studio_site(&state)))
+    }
+    fn sending_to_studio_site(state: &State) -> bool {
         state.start.is_some() && state.senders.iter().any(|sender| {
             if sender.error.is_some() || sender.frames.load(std::sync::atomic::Ordering::Relaxed) == 0 {
                 return false;
@@ -477,7 +480,9 @@ impl Broadcast {
         }
     }
     pub fn status(&self) -> Status {
-        let s = self.0.lock().unwrap();
+        Self::status_from(&self.0.lock().unwrap())
+    }
+    fn status_from(s: &State) -> Status {
         let elapsed = s.start.map_or(0, |t| t.elapsed().as_secs());
         let destinations = s
             .senders

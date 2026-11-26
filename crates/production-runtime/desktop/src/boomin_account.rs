@@ -254,8 +254,11 @@ async fn account(
     })
 }
 pub(crate) async fn avatar(raw: &str) -> Result<image::RgbaImage> {
+    remote_image(raw, true).await
+}
+pub(crate) async fn remote_image(raw: &str, square: bool) -> Result<image::RgbaImage> {
     let url = url::Url::parse(API)?.join(raw)?;
-    ensure!(url.scheme() == "https", "Invalid avatar URL");
+    ensure!(url.scheme() == "https", "Invalid image URL");
     let mut res = reqwest::Client::builder()
         .https_only(true)
         .timeout(Duration::from_secs(8))
@@ -268,16 +271,18 @@ pub(crate) async fn avatar(raw: &str) -> Result<image::RgbaImage> {
     while let Some(chunk) = res.chunk().await? {
         ensure!(
             data.len() + chunk.len() <= 8 * 1024 * 1024,
-            "Avatar exceeds image budget"
+            "Image exceeds download budget"
         );
         data.extend(chunk);
     }
     let reader = image::ImageReader::new(std::io::Cursor::new(data)).with_guessed_format()?;
-    let img = reader
-        .decode()?
-        .resize_to_fill(96, 96, image::imageops::FilterType::Triangle)
-        .into_rgba8();
-    Ok(img)
+    let image = reader.decode()?;
+    let preview = if square {
+        image.resize_to_fill(96, 96, image::imageops::FilterType::Triangle)
+    } else {
+        image.thumbnail(240, 160)
+    };
+    Ok(preview.into_rgba8())
 }
 async fn resolve(
     base: &Path,
@@ -410,9 +415,7 @@ pub fn prepare_room(
         .filter(|t| !t.is_empty())
         .unwrap_or("Studio")
         .into();
-    if let Some(starter) = starter {
-        starter.apply(&mut project)?;
-    }
+    starter.unwrap_or(crate::studio_presets::Starter::Classic).apply(&mut project)?;
     project.compile()?;
     save_json(&tmp.path().join("room.json"), &project)?;
     save_json(
@@ -434,12 +437,12 @@ mod tests {
     fn reopening_and_signout_preserve_local_room_edits() {
         let root = tempfile::tempdir().unwrap();
         let room:RemoteRoom=serde_json::from_value(json!({"id":"71111111-2222-4333-8444-555555555555","title":"Main Stage","is_default":true})).unwrap();
-        let first = prepare_room(root.path(), "brand-a", &room, Some(crate::studio_presets::Starter::Podcast)).unwrap();
+        let first = prepare_room(root.path(), "brand-a", &room, None).unwrap();
         let mut project: crate::model::RoomProject =
             serde_json::from_slice(&fs::read(first.join("room.json")).unwrap()).unwrap();
         assert_eq!(project.room, room.id.to_string());
         assert_eq!(project.production.id, format!("room-{}", room.id));
-        assert_eq!(project.mounted_set.as_deref(), Some("podcast-studio"));
+        assert_eq!(project.mounted_set.as_deref(), Some("classic"));
         project.production.title = "My local edit".into();
         save_json(&first.join("room.json"), &project).unwrap();
         assert_eq!(first, prepare_room(root.path(), "brand-a", &room, None).unwrap());

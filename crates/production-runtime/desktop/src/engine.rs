@@ -62,6 +62,7 @@ pub enum RoomCommand {
     SceneRemove {
         id: String,
     },
+    CameraGrade { source: String, grade: crate::model::CameraGrade },
     SourceRemove {
         source: String,
     },
@@ -269,12 +270,14 @@ impl Snapshot {
     pub fn movie_loaded(&self) -> bool { self.movie_playback.loaded }
 }
 pub struct Handle {
+    grades: crate::platform::GradeSlots,
     pub studio_audio: crate::studio_audio::Desk,
     pub waiting_guests: Mutex<Vec<crate::room_share::WaitingGuest>>,
     pub root:PathBuf,
     pub assistant_requests: Mutex<std::collections::VecDeque<(crate::ipc::AssistantRequest, SyncSender<serde_json::Value>, Instant)>>,
     pub ipo_line_chart: std::sync::atomic::AtomicBool,
     pub host_zoom: std::sync::atomic::AtomicU32,
+    speaker_share: std::sync::atomic::AtomicU32,
     pub screen_zoom: std::sync::atomic::AtomicU32,
     screen_pan: AtomicU64,
     pub quiz_answer: std::sync::atomic::AtomicI32,
@@ -315,6 +318,10 @@ impl Handle {
     }
     pub fn snapshot(&self) -> Snapshot {
         self.snapshot.lock().unwrap().clone()
+    }
+
+    pub fn try_snapshot(&self) -> Option<Snapshot> {
+        Some(self.snapshot.try_lock().ok()?.clone())
     }
 
     pub(crate) fn screen_pan(&self) -> [f32; 2] {
@@ -992,12 +999,14 @@ pub(crate) fn initial_room(root: &Path) -> Result<(Arc<Handle>,Receiver<Envelope
     };
     let (tx, rx) = mpsc::sync_channel(16);
     let handle = Arc::new(Handle {
+        grades: Arc::new(std::sync::RwLock::new(snapshot.project.grade_slots())),
         studio_audio: crate::studio_audio::Desk::open(root)?,
         waiting_guests: Mutex::default(),
         root:root.to_path_buf(),
         assistant_requests:Mutex::default(),
         ipo_line_chart: std::sync::atomic::AtomicBool::new(false),
         host_zoom: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
+        speaker_share: std::sync::atomic::AtomicU32::new(crate::speaker_split::CENTER.to_bits()),
         screen_zoom: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
         screen_pan: AtomicU64::new(0),
         quiz_answer: std::sync::atomic::AtomicI32::new(0),
@@ -1088,7 +1097,8 @@ fn apply(
             }
             // Claim the existing default endpoint before admitting a second
             // capture of the same physical device.
-            if !restoring && !state.project.inputs.contains_key(&kind) {
+            if !restoring && !state.project.inputs.contains_key(&kind)
+                && state.project.lanes.iter().any(|lane| lane.source == kind) {
                 if let Some(d) = devices
                     .as_array()
                     .and_then(|a| a.iter().find(|d| d["default"].as_bool() == Some(true)))
@@ -1132,6 +1142,12 @@ fn apply(
             }
             if kind == "camera" { state.cameras = devices; } else { state.microphones = devices; }
             changed = true;
+        }
+        RoomCommand::CameraGrade { source, grade } => {
+            state.project.validate_grade(&source, grade)?;
+            changed = state.project.camera_grades.get(&source).copied().unwrap_or_default() != grade;
+            if grade == Default::default() { state.project.camera_grades.remove(&source); }
+            else { state.project.camera_grades.insert(source, grade); }
         }
         RoomCommand::SourceRemove { source } => {
             if state.recording || state.take.busy() {
@@ -1692,12 +1708,14 @@ fn start_prepared_preview(handle: &Arc<Handle>, project: Arc<RoomProject>, plan:
 
 pub type SetSlotBounds = std::collections::BTreeMap<String, std::collections::BTreeMap<String, producer_production_contract::Rect>>;
 
-fn editor_slot_bounds(plan: &Plan, id: &str) -> SetSlotBounds {
+fn editor_slot_bounds(project: &RoomProject, plan: &Plan, id: &str) -> SetSlotBounds {
     let prefix = format!("sets/{id}/layouts/");
     let mut slots = SetSlotBounds::new();
     for node in plan.nodes.iter().filter(|node| node.source.is_some()) {
         if let Some((layout, path)) = node.path.strip_prefix(&prefix).and_then(|path| path.split_once('/')) {
-            slots.entry(layout.to_owned()).or_default().insert(path.to_owned(), node.frame);
+            let set = &project.production.sets[id];
+            let fit = project.canvas.transform(set, &set.layouts[layout]);
+            slots.entry(layout.to_owned()).or_default().insert(path.to_owned(), fit.rect(node.frame));
         }
     }
     slots
@@ -1839,7 +1857,7 @@ fn control(
                             let next = next.live_set()?;
                             let prepared = prepare_publish(&root, next, 0., true, state.revision, &mut set_edit_cache)?;
                             if let RenderOp::Publish { project, plan, visuals, .. } = &prepared {
-                                slots = editor_slot_bounds(plan, id);
+                                slots = editor_slot_bounds(project, plan, id);
                                 if set_edit.is_none() {set_edit=Some(start_prepared_preview(&handle,project.clone(),plan.clone(),visuals.clone(),handle.set_edit_media.clone())?);}
                             }
                             let preview = &set_edit.as_ref().unwrap().render;
@@ -1925,7 +1943,13 @@ fn control(
                     }
                     Ok(serde_json::json!({"ok":true}))
                 })();
-                let reply=result.unwrap_or_else(|e|{state.error=Some(e.to_string());serde_json::json!({"ok":false,"error":e.to_string()})});
+                let reply = result.unwrap_or_else(|error| {
+                    let message = error.to_string();
+                    if envelope.reply.is_none() {
+                        state.error = Some(message.clone());
+                    }
+                    serde_json::json!({"ok": false, "error": message})
+                });
                 state.producer_rtc=peer.as_mut().map(|p|p.status()).unwrap_or_else(crate::producer_rtc::idle);
         state.producer_rtc["onStage"]=serde_json::json!(rtc_staged);
         if observed["sessionId"]==state.producer_rtc["sessionId"] && state.producer_rtc["role"]=="host" {state.producer_rtc["stageTimeMs"]=history.elapsed_ms().into();}
@@ -2351,6 +2375,7 @@ fn control(
                 RoomCommand::SourceRemove{source} if source=="microphone" => Some(false),
                 _ => None,
             };
+            let grade_only = matches!(&envelope.command, RoomCommand::CameraGrade { .. });
             let gain_only = matches!(&envelope.command, RoomCommand::Gain { .. });
             let workspace_only = matches!(
                 &envelope.command,
@@ -2407,7 +2432,9 @@ fn control(
                 &mut prepared_plan,
             ) }
             .and_then(|changed| {
-                if changed && gain_only {
+                if changed && grade_only {
+                    persist(&root, &state.project)?;
+                } else if changed && gain_only {
                     // Mixer changes do not alter layout, capture, transport or
                     // graphics resources. Keep them off the compilation path.
                     render.request(RenderOp::Mix {
@@ -2467,6 +2494,9 @@ fn control(
                 Ok(())
             });
             let result=result.and_then(|()|{
+                if grade_only || input_or_size {
+                    *handle.grades.write().unwrap() = state.project.grade_slots();
+                }
                 if let (Some(enabled),Some(session))=(rtc_mic,peer.as_ref()){
                     if state.producer_rtc["role"]=="host"{session.set_media(Some(enabled),None)?;}
                 }
@@ -2554,6 +2584,7 @@ fn render_loop(
     let mut program_clock: Option<crate::program_clock::Clock> = None;
     let mut guest: Option<crate::p0_call::Guest> = None;
     let mut native = NativeRoom::new()?;
+    native.target.set_grades(handle.grades.clone());
     if let Some(output) = preview_output {
         *output.lock().unwrap() = Some(native.shared.clone());
     } else {
@@ -2576,6 +2607,7 @@ fn render_loop(
     }
     let mut chart_mix = 0f32;
     let mut chart_tick = platform::host_time();
+    let mut speaker_focus = crate::speaker_split::Focus::default();
     let mut headline_opacity = f32::from(project.production.sets.get(&project.scene)
         .is_some_and(crate::headline::visible));
     let mut set_motion = SetMotionClock::Timeline;
@@ -2904,6 +2936,7 @@ fn render_loop(
             }
         }
         let wanted = ((host - origin - 0.04).max(0.) * 48000.) as i64;
+        let measure_speakers = !preview && visuals.has_speaker_split();
         if wanted - audio_cursor > 4800 {
             clock_skipped += (wanted - audio_cursor) as u64;
             audio_cursor = wanted / 480 * 480;
@@ -2955,6 +2988,11 @@ fn render_loop(
                 }
                 mix_metered_channel(&mut pcm, &movie_pcm, gain, input_peaks.get_mut(source).unwrap());
             }
+            let host_level = if measure_speakers && guest.is_some() {
+                crate::speaker_split::rms(&pcm)
+            } else {
+                0.
+            };
             if state.playing {
                 for ((source, worker), peak) in [
                     ("movie", movie.as_ref()),
@@ -2980,7 +3018,10 @@ fn render_loop(
             }
             let mic_peak = native.shared.mic_peak.load(Ordering::Relaxed) as f32 / 1000. * gain;
             handle.studio_audio.mix(&mut pcm, mic_peak);
-            if let Some(input) = &guest { input.mix(&mut pcm); }
+            let guest_level = guest.as_ref().map(|input| input.mix(&mut pcm, measure_speakers));
+            if measure_speakers {
+                speaker_focus.observe(host_level, guest_level);
+            }
             native.audio(&pcm, &raw_mic, origin + audio_cursor as f64 / 48000.);
             audio_cursor += BLOCK_FRAMES as i64;
         }
@@ -3075,6 +3116,18 @@ fn render_loop(
                 set_motion.sample(host, position.as_f64(), state.playing);
             let chart_target = if handle.ipo_line_chart.load(Ordering::Relaxed) { 1. } else { 0. };
             let delta = (host - chart_tick).max(0.) as f32;
+            let speaker_share = if preview {
+                f32::from_bits(handle.speaker_share.load(Ordering::Relaxed))
+            } else if measure_speakers {
+                let share = speaker_focus.advance(delta);
+                handle.speaker_share.store(share.to_bits(), Ordering::Relaxed);
+                share
+            } else {
+                speaker_focus = crate::speaker_split::Focus::default();
+                let center = crate::speaker_split::CENTER;
+                handle.speaker_share.store(center.to_bits(), Ordering::Relaxed);
+                center
+            };
             let step = (delta / 0.85).min(1.);
             chart_tick = host;
             chart_mix += (chart_target - chart_mix).clamp(-step, step);
@@ -3118,6 +3171,7 @@ fn render_loop(
                     &mut draws[i],
                     layout_blend.as_ref().map(|b|(b,b.phase(host))),
                     graph_progress,
+                    speaker_share,
                 );
                 for draw in draws[i].iter_mut().filter(|d| d.kind == 5) {
                     draw.opacity = headline_opacity * headline_opacity * (3. - 2. * headline_opacity);
@@ -3131,7 +3185,7 @@ fn render_loop(
                 }
                 let suppress_guest_fallback = resting_layouts.is_some_and(|layouts|
                     layouts.values().any(|target| target == layout));
-                if let Some(slot) = guest_slot.filter(|_| !frame_visuals.has_guest_slot(i) && !suppress_guest_fallback) {
+                if let Some(slot) = guest_slot.filter(|_| !frame_visuals.places_guest && !suppress_guest_fallback) {
                     let height = 0.8 * size.width as f32 * 9. / (16. * size.height as f32);
                     let mut draw = platform::Draw::solid([0.1,(1.-height)/2.,0.8,height],[1.;4]);
                     draw.metrics = [0.,0.8*size.width as f32,height*size.height as f32,0.];

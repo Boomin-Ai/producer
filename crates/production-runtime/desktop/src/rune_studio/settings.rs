@@ -177,24 +177,45 @@ pub(super) fn account(s: &Studio) -> El {
     }
     body
 }
+#[derive(Clone, Copy)]
+pub(super) enum StudioSheet {
+    Preferences,
+    DeskTheme,
+}
+
+pub(super) fn open_theme(s: &mut Studio) {
+    s.studio_settings = Some(StudioSheet::DeskTheme);
+}
+
 pub(super) fn open_studio(s: &mut Studio) {
-    s.settings.section = Section::App;
-    s.studio_settings = true;
+    s.settings.section = Section::Output;
+    s.studio_settings = Some(StudioSheet::Preferences);
 }
 
 pub(super) fn open_output(s: &mut Studio) {
     s.settings.section = Section::Output;
     if s.page == Page::Studio {
-        s.studio_settings = true;
+        s.studio_settings = Some(StudioSheet::Preferences);
     } else {
         s.page = Page::Settings;
     }
 }
 
 fn output(s: &Studio) -> El {
-    let mut body = col().key("output-settings")
-        .gap(10.)
-        .child(detail("Video", "H.264 · 30 fps"))
+    let mut body = col().key("output-settings").gap(10.);
+    if let Some(live) = &s.live {
+        let current = live.snapshot.project.canvas.view;
+        let mut choices = row().gap(5.).flex_wrap();
+        for (key, label, view) in [
+            ("monitor-landscape", "Landscape", CanvasView::Landscape),
+            ("monitor-portrait", "Portrait", CanvasView::Vertical),
+            ("monitor-both", "Both", CanvasView::Both),
+        ] {
+            choices = choices.child(command(key, label, current == view, RoomCommand::CanvasView { view }));
+        }
+        body = body.child(title("Studio monitors", 14., 650., TEXT)).child(choices);
+    }
+    body = body.child(detail("Video", "H.264 · 30 fps"))
         .child(detail("Program audio", "AAC · 48 kHz stereo"))
         .child(detail(
             "Orientation",
@@ -289,75 +310,99 @@ fn detail(label: &str, value: &str) -> El {
                 .child(el().grow(1.))
                 .child(title(value, 14., 450., MUTED)),
         )
-        .child(el().w_full().h(1.).fill(color(0x1b2a37)))
+        .child(el().w_full().h(1.).fill(color(theme::SEAM)))
+}
+
+fn layout_preferences(s: &Studio) -> El {
+    let body = col().w_full().padding(16.).gap(8.);
+    use crate::workspace::DeskTheme;
+    let Some(live) = &s.live else { return body };
+    let current = live.snapshot.project.workspace.theme;
+    let mut choices = row().w_full().gap(8.);
+    for (key, label, preset) in [
+        ("classic", "Classic", DeskTheme::Classic),
+        ("orbital", "Orbital Green", DeskTheme::OrbitalGreen),
+    ] {
+        let selected = current == preset;
+        let preview = theme::with(preset, || {
+            let sidebar = || col().w(20.).h_full().gap(3.)
+                .child(el().w_full().h(5.).radius(2.).fill(color(MINT)))
+                .child(el().w_full().grow(1.).radius(2.).fill(color(SURFACE)));
+            row().w_full().h(46.).padding(6.).gap(4.).radius(5.).fill(color(BG))
+                .child(sidebar())
+                .child(el().grow(1.).h_full().radius(2.).fill(color(PANEL)).border(1., color(theme::TRANSPORT_BORDER)))
+                .child(sidebar())
+        });
+        let mut footer = row().items_center().gap(4.)
+            .child(title(label, 12., 600., TEXT).grow(1.));
+        if selected { footer = footer.child(title("✓", 13., 650., MINT)); }
+        choices = choices.child(col().key(format!("desk-theme-{key}"))
+            .role("button").label(label).focusable(true).focus_selected(selected)
+            .w(0.).min_w(0.).grow(1.).padding(7.).gap(5.).radius(7.)
+            .fill(color(SURFACE)).hover_fill(color(theme::SELECTED_HOVER))
+            .border(1., color(if selected { MINT } else { theme::TRANSPORT_BORDER }))
+            .child(preview).child(footer)
+            .on_press(move |s: &mut Studio| s.send(RoomCommand::Workspace {
+                command: WorkspaceCommand::SetTheme { theme: preset },
+            })));
+    }
+    body.child(choices).child(title("Saved for this studio", 11., 450., MUTED))
 }
 
 fn preferences(s: &Studio, name: &str, narrow: bool) -> El {
-    let (heading, sub) = s.settings.section.labels();
-    let body = col()
-        .w_full()
-        .padding(if narrow { 16. } else { 48. })
-        .gap(13.)
-        .child(title(heading, 22., 700., TEXT))
-        .child(title(format!("{sub} · {name}"), 13., 450., MUTED))
-        .child(el().w_full().h(1.).fill(color(0x253442)));
+    let body = col().w_full().padding(if narrow { 16. } else { 40. }).gap(8.);
     match s.settings.section {
         Section::App => {
-            let body = body.child(
-                row()
-                    .gap(6.)
-                    .child(button("general", "General", !s.settings.shortcuts, |s| {
-                        s.settings.shortcuts = false
-                    }))
-                    .child(button(
-                        "shortcuts",
-                        "Shortcuts",
-                        s.settings.shortcuts,
-                        |s| s.settings.shortcuts = true,
-                    )),
-            );
+            let mut body = body.child(detail("Workspace", name))
+                .child(detail("Build", env!("CARGO_PKG_VERSION")))
+                .child(button("shortcuts", if s.settings.shortcuts { "▾  Keyboard shortcuts" } else { "▸  Keyboard shortcuts" },
+                    false, |s| s.settings.shortcuts = !s.settings.shortcuts).self_start());
             if s.settings.shortcuts {
-                body.child(detail("Edit studio layout", "⌘ E"))
-                    .child(detail("Dismiss a menu", "Esc"))
-            } else {
-                body.child(detail("Workspace", name))
-                    .child(detail("Build", env!("CARGO_PKG_VERSION")))
+                body = body.child(detail("Edit studio layout", "⌘ E")).child(detail("Dismiss a menu", "Esc"));
             }
+            body
         }
         Section::Output => body.child(output(s)),
-
         Section::Integrations => body.child(channels::preferences(s)),
     }
 }
 
-pub(super) fn studio_overlay(s: &Studio, width: f32, height: f32) -> El {
-    let name = s.settings.account.as_ref().map_or("Local workspace", |a| a.name.as_str());
-    let w = (width - 32.).min(600.);
-    let h = (height - 64.).min(480.);
-    let mut tabs = row().gap(5.);
-    for section in [Section::App, Section::Integrations, Section::Output] {
-        let (label, _) = section.labels();
-        tabs = tabs.child(button(format!("prefs-{label}"), label, s.settings.section == section, move |s| {
-            s.settings.section = section;
-            if section == Section::Integrations {
-                channels::Channels::preferences(s);
+pub(super) fn studio_overlay(s: &Studio, width: f32, height: f32, sheet: StudioSheet) -> El {
+    let scroll_body = |body| col().h(0.).grow(1.).min_h(0.).child(body).scroll(Default::default());
+    let (heading, trigger, w, h, content) = match sheet {
+        StudioSheet::DeskTheme => ("Desk theme", "layout-theme", 420., 200., scroll_body(layout_preferences(s))),
+        StudioSheet::Preferences => {
+            let name = s.settings.account.as_ref().map_or("Local workspace", |a| a.name.as_str());
+            let mut tabs = row().flex_wrap().gap(5.).px(16.).py(4.);
+            for section in [Section::App, Section::Integrations, Section::Output] {
+                let (label, _) = section.labels();
+                tabs = tabs.child(button(format!("prefs-{label}"), label, s.settings.section == section, move |s| {
+                    s.settings.section = section;
+                    if section == Section::Integrations {
+                        channels::Channels::preferences(s);
+                    }
+                }));
             }
-        }));
-    }
+            let content = col().w_full().h(0.).grow(1.).min_h(0.).child(tabs)
+                .child(el().w_full().h(1.).fill(color(theme::SEAM)))
+                .child(scroll_body(preferences(s, name, true)));
+            ("Studio settings", "studio-settings", 560., 420., content)
+        }
+    };
+    let w = (width - 24.).clamp(1., w);
+    let h = (height - 40.).clamp(1., h);
     el().key("studio-settings-backdrop").absolute(0., 0.).w_full().h_full()
         .fill(Color::BLACK.alpha(0.56))
         .child(
             col().key("studio-settings-sheet").absolute((width - w) / 2., (height - h) / 2.)
                 .size(w, h).radius(12.).clip_rounded(12.).border(1., color(0x304151))
-                .role("dialog").label("Studio settings").focus_return("studio-settings")
+                .role("dialog").label(heading).focus_return(trigger)
                 .fill(color(PANEL))
                 .child(row().h(48.).px(16.).items_center()
-                    .child(title("Studio settings", 16., 650., TEXT))
+                    .child(title(heading, 16., 650., TEXT))
                     .child(el().grow(1.))
-                    .child(button("close-studio-settings", "Done", false, |s| s.studio_settings = false)))
-                .child(tabs.px(16.))
-                .child(col().h(0.).grow(1.).min_h(0.)
-                    .child(preferences(s, name, true)).scroll(Default::default())),
+                    .child(button("close-studio-settings", "Done", false, |s| s.studio_settings = None)))
+                .child(content),
         )
 }
 
