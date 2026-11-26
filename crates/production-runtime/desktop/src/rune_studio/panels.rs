@@ -1373,7 +1373,8 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 }
                 let mut layouts = row().flex_wrap().gap(5.);
                 let slots = super::editor::layout_slots(p, set, &pair);
-                for layout in p.set_layout_choices(key) {
+                let shots = if !has_rundown || s.show_shots { p.set_layout_choices(key) } else { Vec::new() };
+                for layout in shots {
                     let k = key.clone();
                     let scene = p.active_scene.clone();
                     let chosen = layout.pair;
@@ -1383,7 +1384,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                         .iter().all(|(_, id)| slot_ready(snap, id));
                     let label = format!("{} · {}", layout.label, if ready { "Ready" } else { "Needs source" });
                     let label_text = if key == "my-first-million" && chosen.landscape == "landscape" { "Two hosts".into() } else { layout.label };
-                    let thumbnail = s.set_library.shot_image(key, &chosen.landscape, 62., 35.);
+                    let thumbnail = s.set_library.shot_image(key, set, &chosen.landscape, 62., 35.);
                     let mut item = row().key(format!("layout-{}", chosen.landscape))
                         .role("button").label(&label).help(&label).focusable(true)
                         .gap(6.).px(6.).items_center().radius(6.)
@@ -1429,7 +1430,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                             .focusable(true).h(44.).px(6.).gap(8.).items_center().radius(6.)
                             .border(1., color(if current { MINT } else { theme::SLIDER_RAIL_COMPACT }))
                             .fill(color(if current { theme::TOOL_SELECTED } else { SURFACE })).hover_fill(color(theme::SELECTED_HOVER));
-                        if let Some(image) = s.set_library.shot_image(key, &segment.landscape, 54., 31.) {
+                        if let Some(image) = s.set_library.shot_image(key, set, &segment.landscape, 54., 31.) {
                             part = part.child(image);
                         }
                         part = part.child(title(segment.title.clone(), 12., 640., TEXT).min_w(0.).grow(1.))

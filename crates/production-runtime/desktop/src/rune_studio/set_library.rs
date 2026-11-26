@@ -72,12 +72,18 @@ impl Library {
         self.images = Some(images);
     }
 
-    pub(super) fn shot_image(&self, set: &str, landscape: &str, width: f32, height: f32) -> Option<El> {
-        if set != "my-first-million" { return None; }
-        let shot = landscape.strip_suffix("-landscape").unwrap_or("conversation");
-        let key = format!("mfm-{shot}");
-        let image = self.local.get(key.as_str()).filter(|image| image.size().is_some())?;
-        Some(el().size(width, height).clip_rounded(4.).pixels_fit(image.pixels(), SurfaceFit::Fill))
+    pub(super) fn shot_image(&self, id: &str, set: &producer_production_contract::Set,
+        landscape: &str, width: f32, height: f32) -> Option<El> {
+        if id == "my-first-million" {
+            let shot = landscape.strip_suffix("-landscape").unwrap_or(landscape);
+            let key = format!("mfm-{}", if shot == "landscape" { "conversation" } else { shot });
+            if let Some(image) = self.local.get(key.as_str()).filter(|image| image.size().is_some()) {
+                return Some(el().size(width, height).clip_rounded(4.).pixels_fit(image.pixels(), SurfaceFit::Fill));
+            }
+        }
+        let layout = set.layouts.get(landscape)?;
+        Some(layout_thumbnail(&layout.root, width, height, width / layout.width.max(1) as f32,
+            height / layout.height.max(1) as f32).clip_rounded(4.))
     }
 
     pub fn poll(&mut self) -> bool {
@@ -463,7 +469,13 @@ pub(super) fn view(s: &Studio, width: f32, current: &str) -> El {
             let image = artwork(card_width, library.local.get(id.as_str()), fallback);
             let source = if bundled { "Producer" } else { "This studio" };
             let count = project.set_layout_choices(id).len();
-            let detail = if count == 1 {
+            let segments = project.production.shows.values().filter(|show| &show.set == id)
+                .map(|show| show.segments.iter().filter(|segment| segment.sequence.is_some()).count())
+                .max().unwrap_or(0);
+            let detail = if segments > 0 {
+                format!("{segments} {} · {count} {}", if segments == 1 { "segment" } else { "segments" },
+                    if count == 1 { "shot" } else { "shots" })
+            } else if count == 1 {
                 "1 layout".into()
             } else {
                 format!("{count} layouts")
