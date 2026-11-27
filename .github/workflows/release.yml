@@ -52,7 +52,7 @@ env:
 jobs:
   validate-public-source:
     if: ${{ inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish || inputs.resume_windows_run != '') }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2604
     permissions:
       actions: read
       contents: write
@@ -72,7 +72,7 @@ jobs:
       proof_digest: ${{ steps.draft.outputs.proof_digest }}
       engine_run: ${{ steps.draft.outputs.engine_run }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: useblacksmith/checkout@v1
       - name: Validate stable source and reserve one release draft
         id: draft
         run: |
@@ -121,7 +121,7 @@ jobs:
           PY
   promote-signed-candidate:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.promote_run != '' && inputs.resume_windows_run == '' }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2604
     permissions:
       actions: read
       contents: write
@@ -188,12 +188,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: ubuntu-latest
+          - platform: blacksmith-4vcpu-ubuntu-2604
             args: ""
             targets: ""
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: useblacksmith/checkout@v1
 
       - name: Install Linux system deps
         if: runner.os == 'Linux'
@@ -249,7 +249,7 @@ jobs:
     needs: [validate-public-source]
     permissions:
       contents: write
-    runs-on: macos-latest
+    runs-on: blacksmith-6vcpu-macos-15
     # Deliberately NOT named APPLE_* at job scope: tauri's bundler reads those
     # names and would sign/notarize the engine-less intermediate build.
     env:
@@ -509,7 +509,7 @@ jobs:
     needs: [validate-public-source]
     permissions:
       contents: write
-    runs-on: macos-15-intel
+    runs-on: blacksmith-6vcpu-macos-15
     timeout-minutes: 90
     # Deliberately NOT named APPLE_* at job scope: tauri's bundler reads those
     # names and would sign/notarize the engine-less intermediate build.
@@ -751,7 +751,7 @@ jobs:
     permissions:
       actions: read
       contents: write
-    runs-on: windows-2022
+    runs-on: blacksmith-4vcpu-windows-2025
     timeout-minutes: 120
     env:
       GH_TOKEN: ${{ github.token }}
@@ -993,7 +993,7 @@ jobs:
   publish-verified-release:
     if: ${{ !cancelled() && inputs.promote_run == '' && (github.event_name == 'push' || inputs.publish) && needs.validate-public-source.result == 'success' && needs.build-windows-live.result == 'success' && ((!inputs.windows_only && inputs.resume_windows_run == '' && needs.build.result == 'success' && needs.build-macos-arm64-live.result == 'success' && needs.build-macos-intel-live.result == 'success') || ((inputs.windows_only || inputs.resume_windows_run != '') && needs.build.result == 'skipped' && needs.build-macos-arm64-live.result == 'skipped' && needs.build-macos-intel-live.result == 'skipped')) }}
     needs: [validate-public-source, build, build-macos-arm64-live, build-macos-intel-live, build-windows-live]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2604
     permissions:
       actions: read
       contents: write
@@ -1003,7 +1003,7 @@ jobs:
       PRODUCER_SOURCE_SHA: ${{ needs.validate-public-source.outputs.source_sha }}
       PRODUCER_WINDOWS_ONLY: ${{ inputs.windows_only }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: useblacksmith/checkout@v1
         with:
           ref: ${{ needs.validate-public-source.outputs.source_sha }}
       - name: Require successful CI for this exact release commit

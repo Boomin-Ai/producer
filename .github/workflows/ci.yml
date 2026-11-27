@@ -31,9 +31,9 @@ jobs:
 
   frontend:
     if: ${{ !(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feat/producer-network-links' && inputs.network_mac_source_sha != '') }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2604
     steps:
-      - uses: actions/checkout@v4
+      - uses: useblacksmith/checkout@v1
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -97,12 +97,12 @@ jobs:
 
   server:
     if: ${{ !(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feat/producer-network-links' && inputs.network_mac_source_sha != '') }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2604
     defaults:
       run:
         working-directory: server
     steps:
-      - uses: actions/checkout@v4
+      - uses: useblacksmith/checkout@v1
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -118,9 +118,9 @@ jobs:
 
   sound-library-preview:
     if: ${{ !(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/feat/producer-network-links' && inputs.network_mac_source_sha != '') }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2604
     steps:
-      - uses: actions/checkout@v4
+      - uses: useblacksmith/checkout@v1
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -180,7 +180,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [blacksmith-4vcpu-ubuntu-2604, blacksmith-4vcpu-windows-2025, blacksmith-6vcpu-macos-15]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
