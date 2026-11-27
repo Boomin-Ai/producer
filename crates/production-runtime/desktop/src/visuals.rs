@@ -146,7 +146,57 @@ impl VisualCache {
         Ok(prepared)
     }
 }
+#[derive(Clone, Copy)]
+struct PodcastPanel {
+    side: usize,
+    caption: bool,
+}
+
+impl PodcastPanel {
+    fn for_node(key: &str) -> Option<Self> {
+        let (name, part) = key.rsplit('/').next()?.split_once('-').unwrap_or((key.rsplit('/').next()?, ""));
+        let side = match name { "host" => 0, "cohost" => 1, _ => return None };
+        let caption = match part {
+            "" | "backdrop" | "portrait" => false,
+            "accent" | "name" | "nameplate" => true,
+            _ => return None,
+        };
+        Some(Self { side, caption })
+    }
+}
+
+struct PodcastPair {
+    rects: [[f32; 4]; 2],
+    slots: [Option<usize>; 2],
+}
+
+impl PodcastPair {
+    fn solo(&self, available: impl Fn(usize) -> bool) -> Option<usize> {
+        match self.slots.map(|slot| slot.is_some_and(&available)) {
+            [true, false] => Some(0),
+            [false, true] => Some(1),
+            _ => None,
+        }
+    }
+
+    fn reframe(&self, draw: &mut Draw, panel: PodcastPanel) {
+        let [a,b] = self.rects;
+        let left = a[0].min(b[0]);
+        let top = a[1].min(b[1]);
+        let right = (a[0]+a[2]).max(b[0]+b[2]);
+        let bottom = (a[1]+a[3]).max(b[1]+b[3]);
+        if panel.caption {
+            let original = self.rects[panel.side];
+            draw.rect[0] += left - original[0];
+            draw.rect[1] += bottom - (original[1] + original[3]);
+        } else {
+            draw.rect = [left, top, right-left, bottom-top];
+        }
+    }
+}
+
 struct Element {
+    podcast_panel: Option<PodcastPanel>,
     key: String,
     wave_border: bool,
     framing_subject: Option<crate::model::MfmSubject>,
@@ -158,6 +208,7 @@ struct Element {
     content: Option<Draw>,
 }
 pub struct Visuals {
+    podcast_pair: [Option<PodcastPair>; 2],
     pub host_shots: [Option<Arc<Visuals>>; 2],
     pub pair: crate::model::SetLayoutPair,
     // None reuses the opening pair without introducing an Arc cycle.
@@ -442,6 +493,7 @@ impl Visuals {
                     })
                 } else { None };
                 outputs[out].push(Element {
+                    podcast_panel: PodcastPanel::for_node(key),
                     framing_subject,
                     key: key.to_owned(), wave_border, speaker_region, node: index, depth, tracks,
                     fill,
@@ -584,10 +636,20 @@ impl Visuals {
                 }
             }
         }
+        let pair = project.output_layout_pair();
+        let podcast_pair = std::array::from_fn(|out| {
+            if !(project.scene == "useful-information" || project.scene.starts_with("useful-information-copy"))
+                || pair.landscape != "landscape" || pair.vertical != "vertical" { return None; }
+            let find = |name: &str| outputs[out].iter().find(|entry| entry.key.rsplit('/').next() == Some(name));
+            let rects = [find("host-backdrop")?.fill?.rect, find("cohost-backdrop")?.fill?.rect];
+            let slots = [find("host")?,find("cohost")?].map(|entry| entry.content.filter(|d| d.kind == 1).map(|d| d.source as usize));
+            Some(PodcastPair { rects, slots })
+        });
         let text = TextCache::with_graphs(&specs, &graph_specs)?;
         Ok(Self {
             pair: project.output_layout_pair(),
             schedule: Vec::new(),
+            podcast_pair,
             host_shots: [None, None],
             outputs,
             viewport,
@@ -634,6 +696,11 @@ impl Visuals {
         let progress = graph_progress.unwrap_or_else(|| transition.map_or(1., |(_, p)| p));
         let (w,h) = (size.width as f32,size.height as f32);
         let mut poses = [Pose::IDENTITY; producer_production_contract::SPATIAL_DEPTH + 2];
+        let solo = self.podcast_pair[output].as_ref().and_then(|pair| {
+            let now = crate::platform::host_time();
+            pair.solo(|i| active[i] && frames[i].as_ref().is_some_and(|frame| now - frame.at < 2.0))
+                .map(|side| (pair, side))
+        });
         for (index,e) in self.outputs[output].iter().enumerate() {
             let node = &plan.nodes[e.node];
             let mut opacity = 1.;
@@ -672,6 +739,12 @@ impl Visuals {
                 continue;
             }
             for mut d in [e.fill, e.content].into_iter().flatten() {
+                if let (Some((pair, side)), Some(panel)) = (solo, e.podcast_panel) {
+                    if panel.side != side { continue; }
+                    pair.reframe(&mut d, panel);
+                    d.metrics[1] = d.rect[2] * w;
+                    d.metrics[2] = d.rect[3] * h;
+                }
                 if let Some(region) = e.speaker_region {
                     d.rect = region.rect(speaker_share, size, output == 1);
                     d.metrics[1] = d.rect[2] * w;
