@@ -253,12 +253,12 @@ const release={tag_name:'v0.4.88',draft:false,prerelease:false,assets:[
  {id:11,name:'Producer-setup.exe',size:456,browser_download_url:'https://github.com/Boomin-Ai/producer/releases/download/v0.4.88/Producer-setup.exe'},
 ]};
 test('stable installer downloads and metadata keep precedence and their existing envelopes',async()=>{
- const siliconTag='native-silicon-0.4.97';
- const newAsset={id:20,name:'Producer_0.4.97_aarch64.dmg',size:789,browser_download_url:`https://github.com/Boomin-Ai/producer/releases/download/${siliconTag}/Producer_0.4.97_aarch64.dmg`};
+ const siliconTag='native-silicon-0.5.0';
+ const newAsset={id:20,name:'Producer_0.5.0_aarch64.dmg',size:789,browser_download_url:`https://github.com/Boomin-Ai/producer/releases/download/${siliconTag}/Producer_0.5.0_aarch64.dmg`};
  const upstream=url=>String(url).endsWith('/releases/latest')?json(release):
   String(url).endsWith(`/releases/tags/${siliconTag}`)?json({...release,tag_name:siliconTag,assets:[newAsset]}):new Response('INSTALLER');
  const meta=await request('/download/meta.json',{upstream});assert.equal(meta.response.status,200);assert.equal(JSON.parse(meta.text).version,'v0.4.88');assert.equal(meta.assets.length,0);assert.equal(meta.calls.length,2);
- assert.deepEqual(JSON.parse(meta.text).platforms.macos,{name:newAsset.name,size:789,version:'0.4.97'});
+ assert.deepEqual(JSON.parse(meta.text).platforms.macos,{name:newAsset.name,size:789,version:'0.5.0'});
  const mac=await request('/download/macos',{upstream});assert.equal(mac.response.status,200);
  assert.ok(mac.calls[0].url.endsWith(`/releases/tags/${siliconTag}`));assert.match(mac.calls[1].url,/\?ck=20$/);
  const download=await request('/download/windows',{upstream});assert.equal(download.response.status,200);assert.equal(download.text,'INSTALLER');assert.equal(download.calls.length,2);assert.equal(download.assets.length,0);
@@ -311,4 +311,29 @@ test('HEAD cannot reflect invalid or over-budget lengths even with valid digest 
   const r=await request('/kleveland/set/internetdj/download',{method:'HEAD',upstream:()=>new Response(null,{headers:{'Content-Type':'application/json','Content-Length':length,'ETag':'"'+('a'.repeat(64))+'"','X-Content-SHA256':'b'.repeat(64)}})});
   assert.equal(r.response.status,503);assert.equal(r.text,'');assert.equal(r.response.headers.get('content-length'),null);assert.equal(r.response.headers.get('x-content-sha256'),null);privateCache(r.response);
  }
+});
+
+test('GitHub stars cache shares query variants, keeps stale counts and never leaks caller headers', async t => {
+  let stored;
+  const cache = {
+    match: async key => { assert.equal(key.url, canonical + '/api/stars'); return stored && json(stored); },
+    put: async (_, value) => { stored = await value.json(); },
+  };
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'caches');
+  Object.defineProperty(globalThis, 'caches', { configurable: true, value: { default: cache } });
+  t.after(() => previous ? Object.defineProperty(globalThis, 'caches', previous) : delete globalThis.caches);
+  const cold = await request('/api/stars', {upstream: () => json({})});
+  assert.equal(cold.response.status, 503);
+  const first = await request('/api/stars?q=1', {headers: {authorization:'private'}, upstream: () => json({stargazers_count:0})});
+  assert.deepEqual(JSON.parse(first.text), {count:0});
+  assert.equal(first.calls.length, 1);
+  assert.equal(new Headers(first.calls[0].init.headers).has('authorization'), false);
+  const hit = await request('/api/stars', {method:'HEAD'});
+  assert.equal(hit.response.status, 200);
+  assert.equal(hit.calls.length, 0);
+  assert.equal(hit.text, '');
+  stored.checkedAt = 0;
+  const stale = await request('/api/stars', {upstream: () => new Response(null, {status:429})});
+  assert.deepEqual(JSON.parse(stale.text), {count:0});
+  assert.equal((await request('/api/stars', {method:'POST'})).response.status, 405);
 });

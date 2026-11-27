@@ -1,0 +1,129 @@
+{
+  "set": "my-first-million",
+  "segments": [
+    {
+      "id": "opening",
+      "title": "Cold open",
+      "sequence": "mfm-opening",
+      "duration": 12,
+      "changes": [
+        {
+          "at": 0,
+          "landscape": "opening-landscape",
+          "portrait": "opening-vertical",
+          "sources": [
+            "camera",
+            "camera-2"
+          ],
+          "passes": [
+            "composite"
+          ]
+        },
+        {
+          "at": 4,
+          "landscape": "focus-shaan-landscape",
+          "portrait": "focus-shaan-vertical",
+          "sources": [
+            "camera"
+          ],
+          "passes": [
+            "composite"
+          ]
+        },
+        {
+          "at": 8,
+          "landscape": "focus-sam-landscape",
+          "portrait": "focus-sam-vertical",
+          "sources": [
+            "camera-2"
+          ],
+          "passes": [
+            "composite"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "conversation",
+      "title": "Host conversation",
+      "sequence": "mfm-conversation",
+      "duration": 1200,
+      "changes": [
+        {
+          "at": 0,
+          "landscape": "landscape",
+          "portrait": "vertical",
+          "sources": [
+            "camera",
+            "camera-2"
+          ],
+          "passes": [
+            "composite"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "guest-interview",
+      "title": "Guest interview",
+      "sequence": "mfm-guest-interview",
+      "duration": 900,
+      "changes": [
+        {
+          "at": 0,
+          "landscape": "interview-landscape",
+          "portrait": "interview-vertical",
+          "sources": [
+            "camera",
+            "camera-2",
+            "rtc-guest"
+          ],
+          "passes": [
+            "composite"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "breakdown",
+      "title": "On-screen breakdown",
+      "sequence": "mfm-breakdown",
+      "duration": 300,
+      "changes": [
+        {
+          "at": 0,
+          "landscape": "screen-share-landscape",
+          "portrait": "screen-share-vertical",
+          "sources": [
+            "screen",
+            "camera",
+            "camera-2"
+          ],
+          "passes": [
+            "composite"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "takeaway",
+      "title": "Takeaway & follow",
+      "sequence": "mfm-takeaway",
+      "duration": 60,
+      "changes": [
+        {
+          "at": 0,
+          "landscape": "follow-landscape",
+          "portrait": "follow-vertical",
+          "sources": [
+            "camera",
+            "camera-2"
+          ],
+          "passes": [
+            "composite"
+          ]
+        }
+      ]
+    }
+  ]
+}

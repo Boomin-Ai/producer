@@ -1,0 +1,48 @@
+body {display:block;height:auto;min-height:100dvh;overflow:auto}
+main {padding:clamp(50px,9vh,100px) 0 36px;overflow:visible}
+.site-nav {display:flex;align-items:center;gap:clamp(12px,3vw,30px);margin-left:auto;font-size:14px}
+.site-nav a,.eyebrow,.release-notes,.document-line a {text-decoration:none}
+.site-nav a:hover,.release-notes:hover,.document-line a:hover,.eyebrow[href]:hover {text-decoration:underline;text-underline-offset:.2em}
+.site-nav b {font-variant-numeric:tabular-nums}
+.feature-section,.footer {width:min(1120px,100%);margin-inline:auto}
+.feature-section {padding:clamp(30px,5vw,74px) 0;border-top:1px solid #3d4052;scroll-margin-top:16px}
+.release {display:grid;grid-template-columns:minmax(200px,.75fr) minmax(0,1.35fr);align-items:center;gap:clamp(22px,4vw,65px)}
+.eyebrow {color:#a8b9f2;font-size:.82rem;letter-spacing:.075em;font-weight:650}
+.feature-section h2 {font-family:"Inter Tight","Instrument Sans",sans-serif;font-weight:700;font-size:clamp(32px,4.2vw,68px);line-height:1.04;letter-spacing:-.045em;margin:12px 0 17px;text-wrap:balance}
+.feature-section p {color:#bec3d1;line-height:1.55;max-width:48ch;margin:0 0 20px}
+.feature-download,.release-notes {display:inline-flex;align-items:center;gap:5px;font-size:.87rem;margin:0 12px 9px 0}
+.feature-download {padding:10px 14px;background:#dce5ff;color:#151728;border-radius:7px;text-decoration:none;font-weight:650}
+.feature-download:hover {background:white}
+.demo,.outputs figure {margin:0;min-width:0}
+.demo video {width:100%;aspect-ratio:16/9;display:block;background:#10141a;border:1px solid #434859;border-radius:12px}
+.demo figcaption,.outputs figcaption {font-size:.77rem;color:#adb4c5}
+.demo figcaption {display:flex;justify-content:space-between;gap:8px;margin-top:9px}
+.protocol-intro {display:flex;align-items:end;justify-content:space-between;gap:25px}
+.protocol-intro p {max-width:43ch}
+.protocol-desk {background:linear-gradient(145deg,#192332,#0c131b 60%);border:1px solid #3b4a5a;border-radius:14px;overflow:hidden}
+.document-line,.timeline-head {display:flex;justify-content:space-between;gap:12px;align-items:center}
+.document-line {padding:16px 20px;border-bottom:1px solid #34404a}
+.document-line a {color:#b0c4dc;font-size:.82rem}
+.protocol-body {display:grid;grid-template-columns:minmax(160px,25%) minmax(0,1fr)}
+.protocol h3 {font-size:.81rem;margin:0 0 15px;color:#e3e9f3;font-weight:650}
+.protocol h3 span,.timeline-head {color:#adb8cb}
+.rundown,.program {padding:clamp(14px,2vw,25px)}
+.rundown {border-right:1px solid #34404a;background:#101a2480}
+#segments {display:grid;gap:6px}
+.protocol button {cursor:pointer;border:1px solid transparent;color:#d7dfec;background:transparent;font:inherit;font-size:.85rem;text-align:left;border-radius:6px;padding:8px}
+.protocol button[aria-pressed=true] {background:#183d35;border-color:#438674;color:#c4ffed}
+.protocol button:hover {background:#253748}
+#active-layout {float:right;color:#9edbc4}
+.outputs {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.3164fr);gap:8px}
+.outputs img {display:block;width:100%;height:auto;border-radius:4px;border:1px solid #31404b;background:#132520}
+.outputs figcaption {margin-top:5px}
+.timeline-head {font-size:.81rem;margin:18px 0 5px;font-variant-numeric:tabular-nums}
+#segment-time {width:100%;margin:5px 0;accent-color:#85dfba;cursor:pointer}
+#cues,#graph-path {display:flex;align-items:center;flex-wrap:wrap;gap:5px}
+#cues button {font-size:.75rem;padding:4px 8px}
+.graph {margin-top:15px;border-top:1px solid #34404a;padding-top:12px}
+.graph h3 {margin-bottom:8px}
+#graph-path span {font-size:.75rem;border-radius:4px;background:#233242;color:#d5e4ef;padding:4px 7px}
+.footer {padding:18px 0}
+@media(max-width:700px){.release{grid-template-columns:1fr}.protocol-intro{display:block}.protocol-body{grid-template-columns:1fr}.rundown{border-right:0;border-bottom:1px solid #34404a}#segments{display:flex;flex-wrap:wrap}.site-nav a span{display:none}.release-notes{margin-left:5px}}
+@media(max-width:375px){.site-nav{font-size:12px;gap:8px}.brand{font-size:14px}.document-line{padding:12px}.header-download{padding:6px}}

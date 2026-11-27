@@ -4,7 +4,7 @@
 // published Sets are visibility-gated by the API. Other paths use static assets.
 
 const REPO = "Boomin-Ai/producer";
-const APPLE_SILICON_RELEASE = "native-silicon-0.4.97";
+const APPLE_SILICON_RELEASE = "native-silicon-0.5.0";
 
 const PLATFORMS = {
   "macos": [/aarch64.*\.dmg$/i],
@@ -213,6 +213,34 @@ async function publicRelease(tag) {
   return release && !release.draft && !release.prerelease && Array.isArray(release.assets) && release.assets.length ? release : null;
 }
 
+// Keep a longer-lived edge copy so GitHub throttling does not erase the last count.
+async function repositoryStars(req) {
+  if (req.method !== "GET" && req.method !== "HEAD") return new Response(null, { status: 405, headers: { Allow: "GET, HEAD" } });
+  const cache = globalThis.caches?.default;
+  const key = new Request(new URL("/api/stars", req.url).origin + "/api/stars");
+  const previous = await cache?.match(key);
+  let data = previous ? await previous.json() : null;
+  if (!data || Date.now() - data.checkedAt >= 900_000) {
+    try {
+      const response = await fetch(`https://api.github.com/repos/${REPO}`, {
+        headers: { accept: "application/vnd.github+json", "user-agent": "producer-site" },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (response.ok) {
+        const count = (await response.json()).stargazers_count;
+        if (Number.isSafeInteger(count) && count >= 0) {
+          data = { count, checkedAt: Date.now() };
+          await cache?.put(key, Response.json(data, { headers: { "cache-control": "public, max-age=2592000" } }));
+        }
+      }
+    } catch { /* Keep the previous edge observation during an outage. */ }
+  }
+  return new Response(req.method === "HEAD" ? null : JSON.stringify({ count: data?.count ?? null }), {
+    status: data ? 200 : 503,
+    headers: { "content-type": "application/json", "cache-control": data ? "public, max-age=120" : "no-store" },
+  });
+}
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
@@ -258,6 +286,8 @@ export default {
       }
       return new Response(req.method === "HEAD" ? null : html, { status: upstream.status, headers });
     }
+
+    if (url.pathname === "/api/stars") return repositoryStars(req);
 
     if (url.pathname === "/download/meta.json") {
       const [rel, silicon] = await Promise.all([publicRelease(), publicRelease(APPLE_SILICON_RELEASE)]);
