@@ -113,6 +113,7 @@ typedef enum {
     AVCaptureSession *_camera, *_mic; NRFeed *_cameraFeed, *_micFeed;
     id<MTLTexture> _graphSurfaces[2][64], _graphDepth[2], _graphEmpty;
     id<MTLSamplerState> _graphSampler;
+    BOOL _profileRehearsal; NSDictionary *_profileResult[2]; uint64_t _profileGeneration[2];
     NSString *_cameraID, *_micID; uint64_t _cameraGeneration;
     SCStream *_screen;
     id _screenPickerObserver;
@@ -292,7 +293,13 @@ static id<MTLTexture> cvtexture(NRRoom *r,CVPixelBufferRef b,MTLPixelFormat fmt,
     return e==kCVReturnSuccess?CVMetalTextureGetTexture(*keep):nil;
 }
 
+#include "rehearsal_timing.inc"
 #include "render_graph.inc"
+
+uint64_t nr_device_registry_id(void *room) {
+    NRRoom *r = (__bridge NRRoom *)room;
+    return r->_device.registryID;
+}
 
 void *nr_create(void *ctx,NRFrameCallback frame,NRAudioCallback audio,NRStatusCallback status) {
     @autoreleasepool {
@@ -887,8 +894,9 @@ int nr_render(void *handle,uint32_t output,uint32_t w,uint32_t h,const NRDraw *d
         }
         NRVisualResources *resourcesForFrame=(__bridge NRVisualResources*)textCache;
         NRVisualResources *djResources=(__bridge NRVisualResources*)djCache;
+        NRRehearsalTiming *profile=r->_profileRehearsal ? [[NRRehearsalTiming alloc] initWithDevice:r->_device] : nil;
         id<MTLTexture> graphOutputs[64]={nil};
-        if(!encodeGraphs(r,command,output,draws,count,resourcesForFrame,textures,graphOutputs,djResources.images.firstObject)){
+        if(!encodeGraphs(r,command,output,draws,count,resourcesForFrame,textures,graphOutputs,djResources.images.firstObject,profile)){
             for(int i=0;i<8;i++){if(keep[i])CFRelease(keep[i]);if(held[i])CVPixelBufferRelease(held[i]);}
             CVPixelBufferRelease(result);finishCommand(r,output);return 0;
         }
@@ -910,6 +918,13 @@ int nr_render(void *handle,uint32_t output,uint32_t w,uint32_t h,const NRDraw *d
         r->_lastCommittedPTS[output]=pts;
         [command addCompletedHandler:^(id<MTLCommandBuffer> cb){@autoreleasepool {
             if(cb.status==MTLCommandBufferStatusCompleted) {
+                if(profile){
+                    NSDictionary *timings=[profile finish:cb];
+                    @synchronized(r->_commitGate[output]){
+                        r->_profileResult[output]=timings;
+                        r->_profileGeneration[output]=generation;
+                    }
+                }
                 BOOL preview=YES;
                 if(r->_pressure && output==0 && atomic_load(&r->_recordEnabled)){
                     size_t width=0;double age=0;
@@ -1195,10 +1210,18 @@ void nr_request_witness_microphone(const char *receiptPath) {
 #endif
 
 // Export the compositor result for authoring proofs, after GPU completion.
-bool nr_write_poster(CVPixelBufferRef pixel, const char *path) {
+bool nr_write_poster(CVPixelBufferRef pixel, const char *path, unsigned maxDimension) {
     @autoreleasepool {
         CIImage *image=[CIImage imageWithCVPixelBuffer:pixel];
-        CIContext *context=[CIContext contextWithOptions:nil];
+        static CIContext *context;
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{ context=[CIContext contextWithOptions:@{kCIContextCacheIntermediates:@NO}]; });
+        CGFloat longest = MAX(image.extent.size.width, image.extent.size.height);
+        if (maxDimension && longest > maxDimension) {
+            CGFloat ratio = maxDimension / longest;
+            image = [image imageByApplyingTransform:CGAffineTransformMakeScale(ratio,ratio)
+                                highQualityDownsample:YES];
+        }
         CGImageRef cg=[context createCGImage:image fromRect:image.extent];
         if(!cg)return false;
         NSBitmapImageRep *rep=[[NSBitmapImageRep alloc] initWithCGImage:cg];

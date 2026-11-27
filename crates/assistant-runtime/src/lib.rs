@@ -215,12 +215,50 @@ struct Claims {
     iat: u64,
 }
 
+// Registration lasts exactly as long as the stream future, including when its
+// caller drops or aborts that future. The lock never spans network work.
+#[derive(Default)]
+struct ActiveTurn {
+    slot: std::sync::Mutex<Option<(String, Arc<Notify>)>>,
+}
+
+struct TurnRegistration<'a>(&'a ActiveTurn);
+
+impl Drop for TurnRegistration<'_> {
+    fn drop(&mut self) { self.0.slot.lock().unwrap().take(); }
+}
+
+impl ActiveTurn {
+    async fn run<T>(&self, id: &str, stream: impl Future<Output = Result<T>>) -> Result<T> {
+        let cancel = Arc::new(Notify::new());
+        let _registration = {
+            let mut slot = self.slot.lock().unwrap();
+            if slot.is_some() {
+                return Err("Another assistant turn is running. Stop it first.".into());
+            }
+            *slot = Some((id.to_owned(), cancel.clone()));
+            TurnRegistration(self)
+        };
+        tokio::select! {
+            biased;
+            _ = cancel.notified() => Err("Assistant stopped.".into()),
+            result = stream => result,
+        }
+    }
+
+    fn cancel(&self, id: Option<&str>) {
+        if let Some((active, signal)) = self.slot.lock().unwrap().as_ref() {
+            if id.is_none_or(|target| target == active) { signal.notify_one(); }
+        }
+    }
+}
+
 pub struct Client {
     http: reqwest::Client,
     vault: Arc<dyn CredentialVault>,
     credentials: Mutex<CredentialStore>,
     sign_in: Mutex<Option<(SignInStatus, Arc<Notify>)>>,
-    turns: Mutex<HashMap<String, Arc<Notify>>>,
+    turns: ActiveTurn,
     models: Mutex<HashMap<String, Vec<Model>>>,
 }
 fn now() -> u64 {
@@ -305,7 +343,7 @@ impl Client {
             vault,
             credentials: Mutex::new(credentials),
             sign_in: Mutex::new(None),
-            turns: Mutex::new(HashMap::new()),
+            turns: ActiveTurn::default(),
             models: Mutex::new(HashMap::new()),
         }))
     }
@@ -629,16 +667,10 @@ impl Client {
         self.models.lock().await.remove(id);
         Ok(revoked)
     }
-    pub async fn cancel(&self, id: &str) {
-        if let Some(cancel) = self.turns.lock().await.get(id) {
-            cancel.notify_one();
-        }
-    }
-    pub async fn cancel_all(&self) {
-        for cancel in self.turns.lock().await.values() {
-            cancel.notify_one();
-        }
-    }
+    pub async fn cancel(&self, id: &str) { self.turns.cancel(Some(id)); }
+
+    pub async fn cancel_all(&self) { self.turns.cancel(None); }
+
     pub async fn turn(
         &self,
         id: &str,
@@ -678,21 +710,8 @@ impl Client {
             return Err("Refresh and select an available model before sending.".into());
         }
         let token = self.access(id).await?;
-        let cancel = Arc::new(Notify::new());
-        {
-            let mut turns = self.turns.lock().await;
-            if !turns.is_empty() {
-                return Err("Another assistant turn is running. Stop it first.".into());
-            }
-            turns.insert(turn_id.into(), cancel.clone());
-        }
         let request = json!({"model": model, "instructions": instructions, "input": input, "tools": tools, "include": ["reasoning.encrypted_content"], "store": false, "stream": true});
-        let result = tokio::select! {
-            _ = cancel.notified() => Err("Assistant stopped.".into()),
-            result = self.stream(token, request, &emit) => result,
-        };
-        self.turns.lock().await.remove(turn_id);
-        let output = result?;
+        let output = self.turns.run(turn_id, self.stream(token, request, &emit)).await?;
         let mut store = self.credentials.lock().await;
         if let Some(account) = store
             .accounts
@@ -1199,6 +1218,33 @@ mod tests {
         assert!(error.contains("response_timeout; 1 attempt"));
         fixture.await.unwrap();
     }
+    #[tokio::test]
+    async fn aborting_a_stream_releases_registration_and_the_next_turn_can_be_cancelled() {
+        let turns = Arc::new(ActiveTurn::default());
+        for (id, abort) in [("expired", true), ("next", false)] {
+            let (entered, running) = tokio::sync::oneshot::channel();
+            let worker = {
+                let turns = turns.clone();
+                tokio::spawn(async move {
+                    turns.run(id, async {
+                        entered.send(()).unwrap();
+                        std::future::pending::<Result<()>>().await
+                    }).await
+                })
+            };
+            running.await.unwrap();
+            assert!(turns.run("overlapping", async { Ok(()) }).await.is_err());
+            if abort {
+                worker.abort();
+                assert!(worker.await.unwrap_err().is_cancelled());
+            } else {
+                turns.cancel(Some(id));
+                assert_eq!(worker.await.unwrap().unwrap_err(), "Assistant stopped.");
+            }
+        }
+        assert_eq!(turns.run("fresh", async { Ok(42) }).await.unwrap(), 42);
+    }
+
     #[test]
     fn registration_uses_pkce_stable_host_and_issued_client() {
         let url = reqwest::Url::parse(

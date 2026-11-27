@@ -194,6 +194,8 @@ pub struct RoomProject {
     pub mfm_framing: MfmFraming,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub set_source_defaults: BTreeMap<String, BTreeMap<String, String>>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub authored_designs: BTreeMap<String, Arc<crate::authored_set::SavedDesign>>,
     #[serde(default)]
     pub speaker_segments: BTreeMap<String, std::collections::BTreeSet<String>>,
     #[serde(default)]
@@ -545,6 +547,7 @@ impl RoomProject {
             mfm_direction: HostDirection::default(),
             mfm_framing: Default::default(),
             set_source_defaults: Default::default(),
+            authored_designs: Default::default(),
             speaker_segments: BTreeMap::new(),
             untimed_segments: BTreeMap::new(),
             playing_segment: None,
@@ -917,6 +920,7 @@ impl RoomProject {
             self.production = old;
             return Err(e);
         }
+        self.authored_designs.retain(|id, _| self.production.sets.contains_key(id));
         Ok(())
     }
     pub fn trim(&mut self, clip: &str, start: f64, duration: f64, source_in: f64) -> Result<()> {

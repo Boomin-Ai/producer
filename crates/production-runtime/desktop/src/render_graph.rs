@@ -81,6 +81,11 @@ pub fn compile(body: &str, input_count: usize) -> Result<std::sync::Arc<Program>
     }
     let result = Arc::new(translate(body, input_count)?);
     let mut entries = cache.lock().unwrap();
+    // Another worker can finish translating the same shader while this worker
+    // is outside the lock. Keep one shared program identity for both callers.
+    if let Some((_, _, existing)) = entries.iter().find(|(s, n, _)| s == body && *n == input_count) {
+        return Ok(existing.clone());
+    }
     if entries.len() >= 128 {
         entries.pop_front();
     }

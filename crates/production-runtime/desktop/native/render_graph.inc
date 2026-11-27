@@ -46,13 +46,14 @@ static id<MTLRenderPipelineState> fragmentPipeline(id<MTLDevice> device,NSString
 
 static BOOL encodeLayers(NRRoom *r,id<MTLCommandBuffer> command,id<MTLTexture> target,
                          uint64_t groups,const NRDraw *draws,size_t count,NRVisualResources *resources,
-                         id<MTLTexture> __strong *live,id<MTLTexture> __strong *graphOutputs,id<MTLTexture> djTitle) {
+                         id<MTLTexture> __strong *live,id<MTLTexture> __strong *graphOutputs,id<MTLTexture> djTitle, NRRehearsalTiming *profile, int profileSlot) {
     uint32_t w=(uint32_t)target.width,h=(uint32_t)target.height;
     MTLRenderPassDescriptor *pass=[MTLRenderPassDescriptor renderPassDescriptor];
     pass.colorAttachments[0].texture=target;
     pass.colorAttachments[0].loadAction=MTLLoadActionClear;
     pass.colorAttachments[0].storeAction=MTLStoreActionStore;
     pass.colorAttachments[0].clearColor=groups?MTLClearColorMake(0,0,0,0):MTLClearColorMake(.018,.027,.038,1);
+        if(profile) [profile attach:pass kind:@"layers" slot:profileSlot];
         NSArray *text=resources.images;
         id<MTLRenderCommandEncoder> encoder=[command renderCommandEncoderWithDescriptor:pass];if(!encoder)return NO;[encoder setRenderPipelineState:r->_pipeline];
         [encoder setFragmentTexture:r->_white atIndex:0];
@@ -89,7 +90,7 @@ static BOOL encodeLayers(NRRoom *r,id<MTLCommandBuffer> command,id<MTLTexture> t
 
 static BOOL encodeGraphs(NRRoom *r,id<MTLCommandBuffer> command,uint32_t output,
                          const NRDraw *draws,size_t count,NRVisualResources *resources,
-                         id<MTLTexture> __strong *live, id<MTLTexture> __strong *results,id<MTLTexture> djTitle) {
+                         id<MTLTexture> __strong *live, id<MTLTexture> __strong *results,id<MTLTexture> djTitle, NRRehearsalTiming *profile) {
     @synchronized(r->_commitGate[output]) {
         BOOL explicitOutput=NO;
         for(size_t i=0;i<count;i++){
@@ -110,7 +111,7 @@ static BOOL encodeGraphs(NRRoom *r,id<MTLCommandBuffer> command,uint32_t output,
                     r->_graphSurfaces[output][slot]=target;
                 }
                 if(p->groups) {
-                    if(!encodeLayers(r,command,target,p->groups,draws,count,resources,live,results,djTitle))return NO;
+                    if(!encodeLayers(r,command,target,p->groups,draws,count,resources,live,results,djTitle,profile,(int)slot))return NO;
                     results[slot]=target;
                     continue;
                 }
@@ -132,6 +133,7 @@ static BOOL encodeGraphs(NRRoom *r,id<MTLCommandBuffer> command,uint32_t output,
                     pass.colorAttachments[0].clearColor=MTLClearColorMake(0,0,0,0);
                 } else pass.colorAttachments[0].loadAction=MTLLoadActionDontCare;
                 pass.colorAttachments[0].storeAction=MTLStoreActionStore;
+                if(profile) [profile attach:pass kind:p->geometry ? @"geometry" : @"fragment" slot:(int)slot];
                 id<MTLRenderCommandEncoder> enc=[command renderCommandEncoderWithDescriptor:pass];
                 if(!enc)return NO;
                 [enc setRenderPipelineState:p->pipeline];
@@ -147,7 +149,7 @@ static BOOL encodeGraphs(NRRoom *r,id<MTLCommandBuffer> command,uint32_t output,
                 if(p->geometry) {
                     NRGeometry *g=p->geometry;
                     float cameraTime=draw->accent[0]==2.f ? draw->accent[3] : draw->accent[2];
-                    NRShot shot=evaluateShot(g,cameraTime,(float)p->width/p->height);
+                    NRShot shot=evaluateShot(g,cameraTime,(float)p->width/p->height,draw->accent[0]==2.f);
                     // Mesh animation keeps playing when a layout camera settles.
                     shot.eye.w=draw->accent[2];
                     [enc setDepthStencilState:g->depthState];
@@ -189,7 +191,7 @@ static BOOL encodeGraphs(NRRoom *r,id<MTLCommandBuffer> command,uint32_t output,
                 if(!final)results[slot]=target;
             }
         }
-        if(!explicitOutput && !encodeLayers(r,command,r->_rgb[output],0,draws,count,resources,live,results,djTitle))return NO;
+        if(!explicitOutput && !encodeLayers(r,command,r->_rgb[output],0,draws,count,resources,live,results,djTitle,profile,-1))return NO;
         for(size_t i=0;i<64;i++)if(!results[i])r->_graphSurfaces[output][i]=nil;
     }
     return YES;

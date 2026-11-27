@@ -3,7 +3,10 @@ mod headline;
 mod glb;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 mod virtual_camera;
+#[cfg(debug_assertions)]
+mod authoring_bench;
 mod posters;
+mod inspect_picture;
 mod render_graph;
 mod weather;
 mod room_share;
@@ -96,15 +99,52 @@ fn main() -> Result<()> {
             return Ok(());
         }
         Some("--assistant-log") => return assistant_log::print(&root(), args.get(2).map_or("latest", String::as_str)),
+        Some("--export-authored-set") => {
+            anyhow::ensure!(args.len()==4,"Expected set ID and new package folder");
+            return authored_set::package::export(&root(),&args[2],std::path::Path::new(&args[3]));
+        }
+        Some("--import-authored-set") => {
+            anyhow::ensure!((3..=4).contains(&args.len()),"Expected package folder and optional new set ID");
+            return authored_set::package::import(&root(),std::path::Path::new(&args[2]),args.get(3).map(String::as_str));
+        }
         Some("--rehearse-authored-set") => {
-            anyhow::ensure!(args.len()==4,"Expected design JSON and preview directory");
-            let mut room: model::RoomProject = serde_json::from_slice(&std::fs::read(root().join("room.json"))?)?;
+            anyhow::ensure!((4..=5).contains(&args.len()), "Expected design JSON, preview directory and optionally a new rehearsal studio directory");
+            // A portable rehearsal starts from generated sources. Exporting it cannot carry
+            // device assignments, recordings, credentials or projects from the running studio.
+            let mut room: model::RoomProject = if args.get(4).is_some() {
+                model::RoomProject::demo()
+            } else {
+                serde_json::from_slice(&std::fs::read(root().join("room.json"))?)?
+            };
             let design: serde_json::Value=serde_json::from_slice(&std::fs::read(&args[2])?)?;
             let id=design["id"].as_str().context("Missing set ID")?.to_owned();
-            let engine::RoomCommand::Document{command}=authored_set::command(&room,design)? else {unreachable!()};
-            room.command(command)?;
+            authored_set::prepare(&room, design)?.install(&mut room)?;
             render_graph::inspect(&room.production.sets[&id])?;
             posters::authored_pairs(&room,&id,std::path::Path::new(&args[3]), |_| Ok(()))?;
+            if let Some(dir) = args.get(4) {
+                use std::io::Write;
+                room.room.clone_from(&id);
+                room.production.title = id.replace('-', " ");
+                room.mount_set(Some(id), None)?;
+                let bytes = serde_json::to_vec_pretty(&room)?;
+                std::fs::create_dir(dir).context("Choose a new rehearsal studio directory")?;
+                let mut file = tempfile::NamedTempFile::new_in(dir)?;
+                file.write_all(&bytes)?;
+                file.persist_noclobber(std::path::Path::new(dir).join("room.json"))?;
+            }
+            return Ok(());
+        }
+        #[cfg(debug_assertions)]
+        Some("--qualify-author-load") => return authoring_bench::loaded(&args[2..]),
+        #[cfg(debug_assertions)]
+        Some("--benchmark-author-edits") => return authoring_bench::run(&args[2..]),
+        #[cfg(debug_assertions)]
+        Some("--rehearse-layout-cues") => return engine::motion_rehearsal::run(&args[2..]),
+        Some("--inspect-set-picture") => {
+            anyhow::ensure!(args.len() == 4, "Expected query JSON file and output directory");
+            let room = serde_json::from_slice(&std::fs::read(root().join("room.json"))?)?;
+            let query = serde_json::from_slice(&std::fs::read(&args[2])?)?;
+            println!("{}", inspect_picture::capture(&root(), &room, query, std::path::Path::new(&args[3]))?);
             return Ok(());
         }
         Some("--check-set-graph") => {

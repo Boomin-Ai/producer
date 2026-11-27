@@ -1,5 +1,11 @@
 //! Immutable native visual preparation. Rasterization/upload happens on the
 //! control worker; render/audio only reads typed records and retained textures.
+/// Both descriptors identify the portable system UI face in native playback.
+pub(crate) const DEFAULT_SYSTEM_FONT: &str = "0000000000000000000000000000000000000000000000000000000000000000";
+pub(crate) fn is_system_font(hash: &str) -> bool {
+    hash == DEFAULT_SYSTEM_FONT || hash == "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530"
+}
+
 use crate::{
     model::{CanvasTransform, RoomProject},
     platform::{Draw, Frame, TextCache, TextSpec},
@@ -19,10 +25,15 @@ const MAX_GRAPH_SURFACE_PIXELS: u64 = 32 * 1024 * 1024;
 pub struct VisualCache {
     root: std::path::PathBuf,
     entries: std::collections::VecDeque<(String, Arc<Visuals>)>,
+    profile_labels: bool,
 }
 impl VisualCache {
     pub fn new(root: &std::path::Path) -> Self {
-        Self { root: root.to_owned(), entries: Default::default() }
+        Self { root: root.to_owned(), entries: Default::default(), profile_labels: false }
+    }
+
+    pub(crate) fn for_inspection(root: &std::path::Path) -> Self {
+        Self { profile_labels: true, ..Self::new(root) }
     }
 
     pub fn merge_warmed(&mut self, cache: Self) {
@@ -61,18 +72,25 @@ impl VisualCache {
             .map(|t| &plan.targets[t.target])
             
             .collect();
-        let graph_fields = project
-            .production
-            .sets
-            .get(&project.scene)
-            .is_some_and(|set| {
-                set.graphs.values().any(|g| {
-                    g.passes.iter().any(|p| {
-                        let GraphPass::Fragment { fields, .. } = p else { return false };
-                        fields.iter().any(Option::is_some)
-                    })
-                })
-            });
+        let set = project.production.sets.get(&project.scene)
+            .ok_or_else(|| anyhow::anyhow!("Set unavailable for output"))?;
+        let layout_info = project.output_layouts().map(|(name, size)| {
+            let layout = &set.layouts[name];
+            (name, size, layout.width, layout.height, set.output_graphs.get(name))
+        });
+        let mut graph_ids = std::collections::BTreeSet::new();
+        for (_, _, _, _, graph) in &layout_info {
+            graph_ids.extend(graph.iter().copied());
+        }
+        for (_, node) in &selected {
+            if let Some(Paint::Graph { graph }) = node.style.as_ref().and_then(|s| s.fill.as_ref()) {
+                graph_ids.insert(graph);
+            }
+        }
+        let graphs: std::collections::BTreeMap<_, _> = graph_ids.into_iter()
+            .map(|name| (name, &set.graphs[name])).collect();
+        let graph_fields = graphs.values().flat_map(|g| &g.passes).any(|pass|
+            matches!(pass, GraphPass::Fragment { fields, .. } if fields.iter().any(Option::is_some)));
         let fields = if graph_fields
             || selected.iter().any(|(_, node)| {
                 node.style
@@ -100,7 +118,7 @@ impl VisualCache {
             .collect();
         let key = format!(
             "{:x}",
-            Sha256::digest(serde_json::to_vec(&(&project.scene, host_shots.then_some(&plan.digest), schedule.map(|s| (&s.layout_changes, &plan.digest)), project.output_layouts(), project.production.sets.get(&project.scene).map(|s| (&s.graphs,&s.output_graphs,s.canvas_fit)), weather_desk, places_guest, selected, targets, camera_slots, project.rtc_video_slot(), &project.production.assets, &fields))?)
+            Sha256::digest(serde_json::to_vec(&(&project.scene, host_shots.then_some(&plan.digest), schedule.map(|s| (&s.layout_changes, &plan.digest)), layout_info, (&graphs, set.canvas_fit, crate::headline::visible(set)), weather_desk, places_guest, selected, targets, camera_slots, project.rtc_video_slot(), &project.production.assets, &fields))?)
         );
         if let Some(index) = self.entries.iter().position(|(cached, _)| cached == &key) {
             let entry = self.entries.remove(index).unwrap();
@@ -108,7 +126,7 @@ impl VisualCache {
             self.entries.push_front(entry);
             return Ok(prepared);
         }
-        let mut prepared = Visuals::prepare(&self.root, project, plan, &fields, places_guest)?;
+        let mut prepared = Visuals::prepare(&self.root, project, plan, &fields, places_guest, self.profile_labels)?;
         if let Some(segment) = schedule {
             let mut pairs = std::collections::BTreeMap::new();
             for change in &segment.layout_changes {
@@ -222,6 +240,7 @@ pub struct Visuals {
     pub places_guest: bool,
     speaker_split: bool,
     pub text: TextCache,
+    pub(crate) pass_labels: Vec<String>,
 }
 fn ink(i: &Ink) -> [f32; 4] {
     let n = u32::from_str_radix(&i.color[1..], 16).expect("validated ink");
@@ -301,11 +320,12 @@ impl Visuals {
     }
     pub fn has_guest_slot(&self, output: usize) -> bool { self.guest_slots[output] }
     pub fn has_speaker_split(&self) -> bool { self.speaker_split }
-    fn prepare(root: &std::path::Path, project: &RoomProject, plan: &Plan, fields: &crate::weather::Fields, places_guest: bool) -> Result<Self> {
+    fn prepare(root: &std::path::Path, project: &RoomProject, plan: &Plan, fields: &crate::weather::Fields, places_guest: bool, profile_labels: bool) -> Result<Self> {
         let weather_desk = project.production.sets.get(&project.scene)
             .is_some_and(|set| set.theme.contains_key("weather-desk"));
         let mut programs = std::collections::HashMap::new();
         let mut graph_specs = Vec::<crate::platform::GraphSpec>::new();
+        let mut pass_labels = Vec::new();
         let mut terminal = [None; 2];
         let mut viewport = [CanvasTransform::IDENTITY; 2];
         let mut guest_slots = [false; 2];
@@ -429,8 +449,7 @@ impl Visuals {
                 if let Some(text) = &n.text {
                     // The current adapter has one explicit portable system-font
                     // asset. Other fonts must gain a real loader, never silently substitute.
-                    const SYSTEM_UI_DESCRIPTOR: &str = "de6b5f13575bf711d64495f34b9248020c7fc281d0d56f3bf768d7c8fa363530";
-                    if !n.font.as_deref().is_some_and(|hash| hash == SYSTEM_UI_DESCRIPTOR || hash == "0000000000000000000000000000000000000000000000000000000000000000") {
+                    if !n.font.as_deref().is_some_and(is_system_font) {
                         bail!("Native text requires the qualified system-font asset");
                     }
                     let (w, h) = (n.frame.width.ceil() as u32, n.frame.height.ceil() as u32);
@@ -590,6 +609,7 @@ impl Visuals {
                                         "output graph exceeds texture budget"
                                     );
                                     let index = graph_specs.len() as i32;
+                                    if profile_labels { pass_labels.push(format!("{graph}/{id}/layers[{}]", nodes.join(","))); }
                                     graph_specs.push(crate::platform::GraphSpec {
                                         geometry: std::ptr::null(),
                                         source: std::ptr::null(),
@@ -625,6 +645,7 @@ impl Visuals {
                     }
                     anyhow::ensure!(graph_specs.len() < 64, "too many native graph targets");
                     produced.insert(id.clone(), graph_specs.len() as i32);
+                    if profile_labels { pass_labels.push(format!("{graph}/{id}")); }
                     graph_specs.push(crate::platform::GraphSpec {
                         geometry, source, entry,
                         width,
@@ -677,6 +698,7 @@ impl Visuals {
             speaker_split,
             terminal,
             text,
+            pass_labels,
         })
     }
     pub fn draws(

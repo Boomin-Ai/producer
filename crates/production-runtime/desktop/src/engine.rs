@@ -1,3 +1,5 @@
+#[cfg(debug_assertions)]
+pub(crate) mod motion_rehearsal;
 use crate::{
     assets,
     model::{self, CanvasView, RoomProject, SetLayoutPair},
@@ -142,6 +144,9 @@ pub enum RoomCommand {
         layout: Option<SetLayoutPair>,
     },
     CloneSet { id: String },
+    // Reviewed internal proposal. Socket clients submit ordinary studio commands.
+    #[serde(skip_deserializing)]
+    ApplyAuthoredDesign { revision: u64, candidate: Arc<crate::authored_set::Prepared> },
     SetBindSource { id: String, layout: SetLayoutPair, key: String, source: String },
     SetEditSave {
         id: String,
@@ -258,6 +263,8 @@ pub struct Snapshot {
     pub set_motion_position: f64,
     pub program_kind: String,
     pub program_revision: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub authored_pair_receipt: Option<serde_json::Value>,
     pub preview_output_frames: [u64; 2],
     pub preview_cpu_p99_ms: f64,
     pub position: f64,
@@ -268,6 +275,7 @@ pub struct Snapshot {
     pub record_path: Option<PathBuf>,
     pub render_frames: u64,
     pub refused_frames: u64,
+    pub skipped_render_deadlines: u64,
     pub cpu_p99_ms: f64,
     movie_playback: VideoDiagnostics,
     pub frame_age_ms: [f64; 3],
@@ -321,7 +329,7 @@ impl Handle {
     }
     pub fn request(&self, command: RoomCommand) -> Result<serde_json::Value> {
         let broadcast=matches!(command,RoomCommand::BroadcastStart|RoomCommand::BroadcastStop);
-        let private_edit=matches!(command,RoomCommand::SetEditPreview{..}|RoomCommand::SetEditSave{..}|RoomCommand::SetBindSource{..});
+        let private_edit=matches!(command,RoomCommand::ApplyAuthoredDesign{..}|RoomCommand::SetMount{..}|RoomCommand::SetEditPreview{..}|RoomCommand::SetEditSave{..}|RoomCommand::SetBindSource{..});
         let (tx, rx) = mpsc::sync_channel(1);
         self.tx
             .try_send(Envelope {
@@ -679,6 +687,7 @@ struct RenderStats {
     playing: bool,
     render_frames: u64,
     refused_frames: u64,
+    skipped_render_deadlines: u64,
     cpu_p99_ms: f64,
     movie_playback: VideoDiagnostics,
     source_frames: [u64; 3],
@@ -714,6 +723,7 @@ impl RenderStats {
         s.set_motion_position = self.set_motion_position;
         s.render_frames = self.render_frames;
         s.refused_frames = self.refused_frames;
+        s.skipped_render_deadlines = self.skipped_render_deadlines;
         s.cpu_p99_ms = self.cpu_p99_ms;
         s.movie_playback = self.movie_playback.clone();
         s.source_frames = self.source_frames;
@@ -794,6 +804,11 @@ impl ReversibleLayout {
     fn phase(&self, now: f64) -> f32 {
         let elapsed = ((now - self.started) / self.duration).max(0.) as f32;
         (self.initial + if self.reverse { -elapsed } else { elapsed }).clamp(0., 1.)
+    }
+
+    fn graph_progress(&self, now: f64) -> f32 {
+        let phase = self.phase(now);
+        phase * phase * (3. - 2. * phase)
     }
 
     fn done(&self, phase: f32) -> bool {
@@ -917,6 +932,12 @@ impl Renderer {
         &self, project: RoomProject, revision: u64, cache: &mut crate::visuals::VisualCache,
         root: &Path,
     ) -> Result<()> {
+        self.request(self.prepare_layout(project, revision, cache, root)?)
+    }
+    fn prepare_layout(
+        &self, project: RoomProject, revision: u64, cache: &mut crate::visuals::VisualCache,
+        root: &Path,
+    ) -> Result<RenderOp> {
         let (previous, plan) = self.prepared.lock().unwrap().clone();
         // Compilation depends on the document, selected set, and both output sizes.
         // A staged document edit still takes the full validation and publish path.
@@ -924,10 +945,10 @@ impl Renderer {
             || previous.canvas.landscape != project.canvas.landscape
             || previous.canvas.vertical != project.canvas.vertical
         {
-            return publish(self, root, project, 0., true, revision, cache);
+            return prepare_publish(root, project, 0., true, revision, cache);
         }
         let visuals = cache.prepare(&project, &plan)?;
-        self.request(RenderOp::Layout { project: Arc::new(project), plan, visuals, revision })
+        Ok(RenderOp::Layout { project: Arc::new(project), plan, visuals, revision })
     }
 
     fn warm_layouts(&self, root: PathBuf) -> std::thread::JoinHandle<crate::visuals::VisualCache> {
@@ -1005,6 +1026,7 @@ pub(crate) fn initial_room(root: &Path) -> Result<(Arc<Handle>,Receiver<Envelope
         set_motion_position: 0.,
         program_kind: "set".into(),
         program_revision: 1,
+        authored_pair_receipt: None,
         preview_output_frames: [0; 2],
         preview_cpu_p99_ms: 0.,
         position: 0.,
@@ -1015,6 +1037,7 @@ pub(crate) fn initial_room(root: &Path) -> Result<(Arc<Handle>,Receiver<Envelope
         record_path: None,
         render_frames: 0,
         refused_frames: 0,
+        skipped_render_deadlines: 0,
         cpu_p99_ms: 0.,
         movie_playback: VideoDiagnostics::default(),
         frame_age_ms: [-1.; 3],
@@ -1102,6 +1125,10 @@ fn apply(
             let base = format!("{id}-copy");
             let name = (1..).map(|i| if i == 1 { base.clone() } else { format!("{base}-{i}") })
                 .find(|key| !state.project.production.sets.contains_key(key)).unwrap();
+            if let Some(design) = state.project.authored_designs.get(&id) {
+                let copy = design.renamed(&name)?;
+                state.project.authored_designs.insert(name.clone(), Arc::new(copy));
+            }
             state.project.production.sets.insert(name, template);
             changed = true;
         }
@@ -1234,6 +1261,7 @@ fn apply(
             state.error = None;
         }
         RoomCommand::Monitor { .. }
+        | RoomCommand::ApplyAuthoredDesign { .. }
         | RoomCommand::MarqueeReveal { .. } | RoomCommand::Headline { .. }
         | RoomCommand::SetEditPreview { .. } | RoomCommand::SetEditSave { .. } | RoomCommand::SetBindSource { .. }
         | RoomCommand::OperationOutcome { .. } | RoomCommand::RevokePermission { .. } | RoomCommand::GrantPermission { .. }
@@ -1790,6 +1818,110 @@ pub(crate) fn set_edit_project(project: &RoomProject, id: &str, draft: &producer
     Ok(next)
 }
 
+/// Native callbacks carry the exact adopted revision. Queue acceptance alone cannot confirm a picture.
+fn completed_pair(handle: &Handle, revision: u64) -> Result<[f64; 2]> {
+    let media = handle.media.lock().unwrap().clone().context("Program outputs are unavailable")?;
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        let mut times = [None; 2];
+        for (i, timestamp) in times.iter_mut().enumerate() {
+            if let Ok(slot) = media.frames[i + 3].try_lock() {
+                if let Some(frame) = slot.as_ref() {
+                    anyhow::ensure!(frame.generation <= revision, "Program revision {revision} was superseded");
+                    if frame.generation == revision {
+                        *timestamp = Some(f64::from_bits(media.first_revision_at[i].load(Ordering::Relaxed)));
+                    }
+                }
+            }
+        }
+        if let [Some(landscape), Some(vertical)] = times { return Ok([landscape, vertical]); }
+        anyhow::ensure!(Instant::now() < deadline, "Timed out waiting for both program outputs at revision {revision}");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+/// Finish a native design take only when both output surfaces report its revision.
+/// Keep the previous document durable until the candidate has produced both pictures.
+fn activate_authored(
+    root: &Path, handle: &Handle, state: &mut Snapshot, next: &RoomProject, id: &str,
+    render: &Renderer, cache: &mut crate::visuals::VisualCache, op: RenderOp,
+) -> Result<()> {
+    let source_hash = next.authored_designs[id].verified_revision(id, &next.production.sets[id])?;
+    let (revision, pair) = match &op {
+        RenderOp::Layout { revision, project, .. } | RenderOp::Publish { revision, project, .. } =>
+            (*revision, project.output_layout_pair()),
+        _ => bail!("Expected a prepared pair"),
+    };
+    let recovery = revision.checked_add(1).context("Program revision exhausted")?;
+    let previous = handle.program.lock().unwrap().clone();
+    let result = (|| -> Result<_> {
+        render.request(op)?;
+        let first = completed_pair(handle, revision)?;
+        persist(root, next)?;
+        Ok(first)
+    })();
+    match result {
+        Ok(first) => {
+            state.authored_pair_receipt = Some(serde_json::json!({"set":id,"sourceHash":source_hash,
+                "programRevision":revision,"layouts":pair,"firstFrameAt":{"landscape":first[0],"vertical":first[1]}}));
+            Ok(())
+        }
+        Err(error) => {
+            // A timed-out submission may already have reached the GPU. Reserve fresh generations
+            // even on failure so a callback from the rejected candidate cannot satisfy a retry.
+            state.program_revision = recovery;
+            state.authored_pair_receipt = None;
+            let restore = (|| -> Result<()> {
+                publish(render, root, (*previous).clone(), state.program_position, state.program_playing, recovery, cache)?;
+                completed_pair(handle, recovery)?;
+                persist(root, &state.project)
+            })();
+            *handle.snapshot.lock().unwrap() = state.clone();
+            if let Err(restore_error) = restore {
+                bail!("Authored take failed: {error:#}. Previous output could not be confirmed: {restore_error:#}");
+            }
+            Err(error.context("Authored take failed; restored previous program"))
+        }
+    }
+}
+
+fn commit_set_edit(
+    root: &Path, handle: &Handle, state: &mut Snapshot, next: RoomProject, id: &str,
+    render: &Renderer, visual_cache: &mut crate::visuals::VisualCache,
+) -> Result<()> {
+    // Publish the current program composition, including its running show and
+    // shot override. The layout inspected in the editor can be a different shot.
+    let active = matches!(state.program_kind.as_str(), "set" | "show")
+        && state.project.mounted_set.as_deref() == Some(id);
+    let revision = state.program_revision + 1;
+    let change = if active {
+        let program = next.live_set()?;
+        let plan = program.compile()?;
+        let visuals = visual_cache.prepare(&program, &plan)?;
+        Some(RenderOp::Layout { project: Arc::new(program), plan, visuals, revision })
+    } else { None };
+    if let Some(change) = change {
+        let reviewed = next.authored_designs.get(id).is_some_and(|r| r.verified_revision(id, &next.production.sets[id]).is_ok());
+        if reviewed {
+            activate_authored(root, handle, state, &next, id, render, visual_cache, change)?;
+        } else {
+            persist(root, &next)?;
+            if let Err(error) = render.request(change) {
+                persist(root, &state.project)?;
+                return Err(error);
+            }
+        }
+        state.program_revision = revision;
+    } else {
+        persist(root, &next)?;
+    }
+    state.project = next;
+    state.revision += 1;
+    state.assistant_context = state.project.assistant_context();
+    *handle.snapshot.lock().unwrap() = state.clone();
+    Ok(())
+}
+
 fn control(
     root: PathBuf,
     handle: Arc<Handle>,
@@ -1918,7 +2050,7 @@ fn control(
                 let reply=history.list(participant.as_deref(),before.as_deref()).unwrap_or_else(|e|serde_json::json!({"ok":false,"error":e.to_string()}));
                 if let Some(tx)=envelope.reply{let _=tx.try_send(reply);}continue;
             }
-            if matches!(&envelope.command, RoomCommand::SetEditPreview { .. } | RoomCommand::SetEditSave { .. } | RoomCommand::SetBindSource { .. }) {
+            if matches!(&envelope.command, RoomCommand::ApplyAuthoredDesign { .. } | RoomCommand::SetEditPreview { .. } | RoomCommand::SetEditSave { .. } | RoomCommand::SetBindSource { .. }) {
                 let result = (|| -> Result<SetSlotBounds> {
                     let mut slots = SetSlotBounds::new();
                     // Resolve a single assignment against the committed document on the
@@ -1935,6 +2067,12 @@ fn control(
                         &assignment
                     } else { &envelope.command };
                     match edit {
+                        RoomCommand::ApplyAuthoredDesign { revision, candidate } => {
+                            anyhow::ensure!(state.revision == *revision, "Studio changed after review. Prepare a fresh proposal.");
+                            let mut next = state.project.clone();
+                            candidate.install(&mut next)?;
+                            commit_set_edit(&root, &handle, &mut state, next, candidate.id(), &render, &mut visual_cache)?;
+                        }
                         RoomCommand::SetEditPreview { id: Some(id), draft: Some(draft), layout } => {
                             let mut next = set_edit_project(&state.project, id, draft)?;
                             next.mount_set(Some(id.clone()), layout.clone())?;
@@ -1958,6 +2096,13 @@ fn control(
                                 bail!("This set changed while you were editing. Reopen it to use the current version.");
                             }
                             let mut next = set_edit_project(&state.project, id, draft)?;
+                            if let RoomCommand::SetBindSource { key, source, .. } = &envelope.command {
+                                if let Some(design) = next.authored_designs.get(id) {
+                                    if let Some(updated) = design.rebound(id, expected, draft, key, source)? {
+                                        next.authored_designs.insert(id.clone(), Arc::new(updated));
+                                    }
+                                }
+                            }
                             let previous = crate::set_slots::bindings(expected);
                             let revised = crate::set_slots::bindings(draft);
                             let defaults = next.set_source_defaults.entry(id.clone()).or_default();
@@ -1973,29 +2118,7 @@ fn control(
                             let live = live.live_set()?;
                             let plan = live.compile()?;
                             set_edit_cache.prepare(&live, &plan)?;
-                            // Publish the current program composition, including its running show and
-                            // shot override. The layout inspected in the editor can be a different shot.
-                            let active = matches!(state.program_kind.as_str(), "set" | "show")
-                                && state.project.mounted_set.as_ref() == Some(id);
-                            let revision = state.program_revision + 1;
-                            let change = if active {
-                                let program = next.live_set()?;
-                                let plan = program.compile()?;
-                                let visuals = visual_cache.prepare(&program, &plan)?;
-                                Some(RenderOp::Layout { project: Arc::new(program), plan, visuals, revision })
-                            } else { None };
-                            persist(&root, &next)?;
-                            if let Some(change) = change {
-                                if let Err(error) = render.request(change) {
-                                    persist(&root, &state.project)?;
-                                    return Err(error);
-                                }
-                                state.program_revision = revision;
-                            }
-                            state.project = next;
-                            state.revision += 1;
-                            state.assistant_context = state.project.assistant_context();
-                            *handle.snapshot.lock().unwrap() = state.clone();
+                            commit_set_edit(&root, &handle, &mut state, next, id, &render, &mut visual_cache)?;
                         }
                         _ => bail!("Choose a set and its draft"),
                     }
@@ -2018,7 +2141,7 @@ fn control(
                 }
                 if let Some(tx) = envelope.reply {
                     let _ = tx.try_send(match result {
-                        Ok(slots) => serde_json::json!({"ok": true, "programRevision": state.program_revision, "slots": slots}),
+                        Ok(slots) => serde_json::json!({"ok": true, "programRevision": state.program_revision, "authoredPairReceipt": state.authored_pair_receipt.as_ref().filter(|r|r["programRevision"] == state.program_revision), "slots": slots}),
                         Err(e) => serde_json::json!({"ok": false, "error": e.to_string()}),
                     });
                 }
@@ -2281,15 +2404,25 @@ fn control(
                             let has_set = next.mounted_set.is_some();
                             let live = next.live_set()?;
                             let revision = state.program_revision + 1;
-                            if state.program_kind == "set" && has_set
+                            let switch = state.program_kind == "set" && has_set
                                 && matches!(envelope.command, RoomCommand::SetMount { .. })
                                 && state.project.mounted_set == next.mounted_set
-                                && state.project.mounted_layout != next.mounted_layout
-                            {
-                                render.switch_layout(live, revision, &mut visual_cache, &root)?;
+                                && state.project.mounted_layout != next.mounted_layout;
+                            let playing = !matches!(envelope.command, RoomCommand::RunSegment { paused: true, .. });
+                            let prepared = if switch {
+                                render.prepare_layout(live, revision, &mut visual_cache, &root)?
                             } else {
-                                let playing = !matches!(envelope.command, RoomCommand::RunSegment { paused: true, .. });
-                                publish(&render, &root, live, 0., playing, revision, &mut visual_cache)?;
+                                prepare_publish(&root, live, 0., playing, revision, &mut visual_cache)?
+                            };
+                            let authored = next.mounted_set.as_deref().filter(|id|
+                                matches!(envelope.command, RoomCommand::SetMount { .. }) && next.authored_designs.contains_key(*id));
+                            let confirmed = authored.is_some();
+                            if let Some(id) = authored {
+                                activate_authored(&root, &handle, &mut state, &next, id, &render, &mut visual_cache, prepared)?;
+                            } else {
+                                render.request(prepared)?;
+                            }
+                            if !switch {
                                 state.program_position = 0.;
                                 state.program_playing = playing;
                             }
@@ -2312,7 +2445,7 @@ fn control(
                                 state.assistant_context = state.project.assistant_context();
                                 *handle.snapshot.lock().unwrap() = state.clone();
                             }
-                            persist(&root, &state.project)?;
+                            if !confirmed { persist(&root, &state.project)?; }
                         }
                         RoomCommand::SendToOutput { .. } => {
                             handle.journal.legacy(||publish(
@@ -3424,8 +3557,7 @@ fn render_loop(
             }
             let music=handle.studio_audio.dj_visual.bands();
             let mut dj_title=None;
-            let graph_progress = reversible_layout.as_ref().zip(phase)
-                .map(|(_, phase)| phase * phase * (3. - 2. * phase));
+            let graph_progress = reversible_layout.as_ref().map(|blend| blend.graph_progress(host));
             let resting_layouts = project.production.sets.get(&project.scene)
                 .map(|set| &set.reversible_layout_transitions);
             for (i, (layout, size)) in frame_visuals.pair.ids().into_iter().zip([project.canvas.landscape, project.canvas.vertical])
@@ -3520,6 +3652,7 @@ fn render_loop(
             let finished = Instant::now();
             next_render += render_interval;
             if next_render <= finished {
+                state.skipped_render_deadlines += 1 + (finished.duration_since(next_render).as_nanos() / render_interval.as_nanos()) as u64;
                 let remainder =
                     finished.duration_since(next_render).as_nanos() % render_interval.as_nanos();
                 next_render = finished + render_interval - Duration::from_nanos(remainder as u64);
@@ -3646,6 +3779,65 @@ fn active_source_time(
 #[cfg(test)]
 mod playback_tests {
     use super::*;
+
+    #[test]
+    fn authored_take_confirms_both_native_outputs_and_recovers_from_a_missing_orientation() -> Result<()> {
+        let root = tempfile::tempdir()?;
+        let mut room = RoomProject::demo();
+        let id = "pair-proof";
+        let looks: Vec<_> = ["first","second"].iter().map(|name| serde_json::json!({
+            "id":name,"layers":[{"id":"back","content":{"kind":"group"},
+            "landscape":[0,0,1,1],"vertical":[0,0,1,1]}]
+        })).collect();
+        let design = serde_json::json!({"op":"authorSet","id":id,"looks":looks});
+        crate::authored_set::prepare(&room, design)?.install(&mut room)?;
+        let pair = |name: &str| SetLayoutPair {landscape:format!("{name}-landscape"),vertical:format!("{name}-vertical")};
+        persist(root.path(), &room)?;
+        let handle = start(root.path().to_path_buf())?;
+        struct Worker(Arc<Handle>);
+        impl Drop for Worker {
+            fn drop(&mut self) {
+                self.0.closed.store(true, Ordering::Release);
+                let deadline = Instant::now() + Duration::from_secs(5);
+                while !self.0.done.load(Ordering::Acquire) && Instant::now() < deadline {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }
+        }
+        let _worker = Worker(handle.clone());
+        let request = |name: &str| RoomCommand::SetMount {id:Some(id.into()),layout:Some(pair(name))};
+        let initial = handle.request(request("first"))?;
+        anyhow::ensure!(initial["ok"] == true, "{initial}");
+        let receipt = &initial["state"]["authoredPairReceipt"];
+        assert_eq!(receipt["sourceHash"], room.authored_designs[id].verified_revision(id, &room.production.sets[id])?);
+        assert!(receipt["firstFrameAt"]["landscape"].as_f64().unwrap() > 0.);
+        assert!(receipt["firstFrameAt"]["vertical"].as_f64().unwrap() > 0.);
+        let revision = receipt["programRevision"].as_u64().unwrap();
+        let media = handle.media.lock().unwrap().clone().unwrap();
+        let vertical = media.frames[4].lock().unwrap();
+        let other = handle.clone();
+        let request = request("second");
+        let rejected = std::thread::spawn(move || other.request(request));
+        // Hold just the vertical monitor callback until adoption and rollback have both run.
+        for wanted in ["second","first"] {
+            let deadline = Instant::now() + Duration::from_secs(8);
+            while handle.program.lock().unwrap().output_layout_pair() != pair(wanted) {
+                anyhow::ensure!(Instant::now() < deadline, "Missing program transition to {wanted}");
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+        drop(vertical);
+        let rejected = rejected.join().unwrap()?;
+        assert_eq!(rejected["ok"], false);
+        assert!(rejected["error"].as_str().unwrap().contains("restored previous program"));
+        let stored:RoomProject = serde_json::from_slice(&fs::read(root.path().join("room.json"))?)?;
+        assert_eq!(stored.mounted_layout, Some(pair("first")));
+        let snapshot = handle.snapshot();
+        assert!(snapshot.authored_pair_receipt.is_none());
+        assert_eq!(snapshot.program_revision, revision + 2);
+        assert!(completed_pair(&handle, snapshot.program_revision).is_ok());
+        Ok(())
+    }
 
     #[test]
     fn flythrough_holds_the_displayed_frame_and_resumes_independently_of_transport() {

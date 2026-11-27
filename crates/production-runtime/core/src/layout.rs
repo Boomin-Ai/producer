@@ -48,6 +48,15 @@ fn aspect(n: &Node, inputs: &LayoutInputs) -> Option<ResolvedAspect> {
             }
         })
 }
+/// Largest rectangle at the validated display ratio that fits the supplied pixel bounds.
+pub fn contained_dimensions(width: f64, height: f64, ratio: Ratio) -> (f64, f64) {
+    let aspect = f64::from(ratio.width) / f64::from(ratio.height);
+    if width / height > aspect {
+        (height * aspect, height)
+    } else {
+        (width, width / aspect)
+    }
+}
 /// Preserve legacy explicit-frame placement when no new constraint is present.
 pub(crate) fn place(
     n: &Node,
@@ -63,11 +72,7 @@ pub(crate) fn place(
             AspectMode::Width => height = width / ratio,
             AspectMode::Height => width = height * ratio,
             AspectMode::Contain => {
-                if width / height > ratio {
-                    width = height * ratio;
-                } else {
-                    height = width / ratio;
-                }
+                (width, height) = contained_dimensions(width, height, r.ratio);
             }
         }
     }

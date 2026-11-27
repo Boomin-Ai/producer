@@ -1,0 +1,10 @@
+let delta = endPt - startPt;
+let t = clamp(dot(position.xy - startPt, delta) / max(dot(delta, delta), 1.0e-8), 0.0, 1.0);
+let distancePx = length(position.xy - (startPt + t * delta));
+let width = frame.params.z;
+let crest = pow(0.5 + 0.5 * cos(6.2831853 * (t - phase)), 9.0);
+let core = 1.0 - smoothstep(0.0, width + 0.5, distancePx);
+let halo = exp(-distancePx / max(width * 2.5, 1.0));
+let opacity = clamp(core * (0.38 + 0.60 * crest) + 0.27 * halo * crest, 0.0, 1.0);
+let pigment = mix(ink, glint, crest);
+let surface = vec4<f32>(pigment * opacity, opacity) + base * (1.0 - opacity);

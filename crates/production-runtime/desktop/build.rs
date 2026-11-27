@@ -7,6 +7,7 @@ fn main() {
         println!("cargo:rerun-if-changed=native/recording.inc");
         println!("cargo:rerun-if-changed=native/p0_pressure.inc");
         println!("cargo:rerun-if-changed=native/render_graph.inc");
+        println!("cargo:rerun-if-changed=native/rehearsal_timing.inc");
         println!("cargo:rerun-if-changed=native/geometry.inc");
         if std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() == Ok("aarch64") {
             let shim = "../../../src-tauri/src/live/shim.m";

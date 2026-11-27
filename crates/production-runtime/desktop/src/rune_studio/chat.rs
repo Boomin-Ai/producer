@@ -30,6 +30,7 @@ fn request(handle: &Handle, c: RoomCommand) -> Result<()> {
     Ok(())
 }
 fn prepare(
+    room_root: &std::path::Path,
     s: &Snapshot,
     id: &str,
     pair: &SetLayoutPair,
@@ -41,45 +42,46 @@ fn prepare(
     if let Some(v) = &reply.room_command {
         *candidate = Some(v.clone());
         let mut previews = Vec::new();
-        let command = if v["op"] == "authorSet" {
-            crate::authored_set::command(&s.project, v.clone())?
-        } else {
-            assistant::room_action(v.clone())?
-        };
-        if let RoomCommand::Workspace { command } = &command {
-            s.project.workspace.clone().apply_studio(command.clone())?;
-        }
-        if let RoomCommand::CameraGrade { source, grade } = &command {
-            s.project.validate_grade(source, *grade)?;
-        }
-        if let RoomCommand::Document {
-            command: transaction,
-        } = &command
-        {
+        let command = if matches!(v["op"].as_str(), Some("authorSet" | "editAuthoredSet" | "recoverAuthoredSet")) {
+            let candidate = crate::authored_set::prepare(&s.project, v.clone())?;
             let mut project = s.project.clone();
-            project.command(transaction.clone())?;
-            for (id, set) in &project.production.sets {
-                if s.project.production.sets.get(id) != Some(set) {
-                    crate::render_graph::inspect(set)?;
-                    if v["op"] == "authorSet" {
-                        let scratch = tempfile::tempdir()?;
-                        for (label, dir) in crate::posters::authored_pairs(&project,id,scratch.path(),|label| {
-                            turn.check()?;
-                            turn.step(&format!("Render {label}"));
-                            Ok(())
-                        })? {
-                            let thumbnail = |file: &str| -> Result<rune::Pixels> {
-                                let bitmap = image::open(dir.join(file))?.thumbnail(384,384).to_rgba8();
-                                let pixels = rune::Pixels::new();
-                                pixels.set(bitmap.width(),bitmap.height(),bitmap.into_raw());
-                                Ok(pixels)
-                            };
-                            previews.push((label,thumbnail("landscape.png")?,thumbnail("portrait.png")?));
+            candidate.install(&mut project)?;
+            let id = candidate.id();
+            crate::render_graph::inspect(&project.production.sets[id])?;
+            let scratch = tempfile::tempdir()?;
+            for (label, dir) in crate::posters::authored_pairs_in(room_root,&project,id,scratch.path(),384,|label| {
+                turn.check()?;
+                turn.step(&format!("Render {label}"));
+                Ok(())
+            })? {
+                let thumbnail = |file: &str| -> Result<rune::Pixels> {
+                    let bitmap = image::open(dir.join(file))?.to_rgba8();
+                    let pixels = rune::Pixels::new();
+                    pixels.set(bitmap.width(),bitmap.height(),bitmap.into_raw());
+                    Ok(pixels)
+                };
+                previews.push((label,thumbnail("landscape.png")?,thumbnail("portrait.png")?));
+            }
+            turn.record("rehearsal", serde_json::from_slice(&std::fs::read(scratch.path().join("rehearsal.json"))?)?)?;
+            RoomCommand::ApplyAuthoredDesign { revision: s.revision, candidate: Arc::new(candidate) }
+        } else {
+            let command = assistant::room_action(v.clone())?;
+            match &command {
+                RoomCommand::Workspace { command } => { s.project.workspace.clone().apply_studio(command.clone())?; }
+                RoomCommand::CameraGrade { source, grade } => s.project.validate_grade(source, *grade)?,
+                RoomCommand::Document { command: transaction } => {
+                    let mut project = s.project.clone();
+                    project.command(transaction.clone())?;
+                    for (id, set) in &project.production.sets {
+                        if s.project.production.sets.get(id) != Some(set) {
+                            crate::render_graph::inspect(set)?;
                         }
                     }
                 }
+                _ => {}
             }
-        }
+            command
+        };
         return Ok(Some(Proposal::Room {
             revision: s.revision,
             previews,
@@ -96,7 +98,7 @@ fn prepare(
         .get(id)
         .context("Select a set first")?
         .clone();
-    let value = candidate.insert(base.clone());
+    let value = candidate.insert(if base.is_null() { serde_json::to_value(&old)? } else { base.clone() });
     for (i, edit) in reply.edits.iter().enumerate() {
         assistant::apply_edit(value, edit)
             .with_context(|| format!("Edit {} at {}", i + 1, edit.path))?;
@@ -186,7 +188,8 @@ pub(super) struct Chat {
     attachment_menu: bool,
     picking_image: bool,
     requested_review: bool,
-    applying: Option<mpsc::Receiver<Result<()>>>,
+    applying: Option<mpsc::Receiver<Result<Option<String>>>>,
+    saved_authored_set: Option<String>,
     room_reviewed: bool,
     turn: Option<Arc<Turn>>,
     generation: u64,
@@ -288,6 +291,7 @@ impl Chat {
         self.history.push(("user".into(), prompt.to_owned()));
         self.input = TextEdit::new("");
         self.proposal = None;
+        self.saved_authored_set = None;
         let turn = Arc::new(turn);
         self.turn = Some(turn.clone());
         self.receipts.insert(self.history.len() - 1, turn.clone());
@@ -318,7 +322,7 @@ impl Chat {
                 for attempt in 1..=2 {
                     turn.check()?;
                     turn.record("authoring_attempt", json!({"attempt":attempt}))?;
-                    let reply = assistant::turn(ctx.clone(), &history, &turn)?;
+                    let reply = assistant::turn(&handle.root, &snap.project, &ctx, &history, &turn)?;
                     turn.check()?;
                     turn.record("proposal", json!({"attempt":attempt,"reply":reply}))?;
                     turn.step(if reply.room_command.is_some() {
@@ -330,6 +334,7 @@ impl Chat {
                     });
                     let mut candidate = None;
                     match prepare(
+                        &handle.root,
                         &snap,
                         &id,
                         &pair,
@@ -339,6 +344,7 @@ impl Chat {
                         &turn,
                     ) {
                         Ok(p) => {
+                            turn.check()?;
                             anyhow::ensure!(
                                 attempt == 1 || p.is_some(),
                                 "Repair returned no edits"
@@ -351,7 +357,7 @@ impl Chat {
                                 candidate: p,
                             });
                         }
-                        Err(e) if attempt == 1 => {
+                        Err(e) if attempt == 1 && !turn.recovered() => {
                             turn.step("Repair draft");
                             turn.record(
                                 "validation_failed",
@@ -359,11 +365,15 @@ impl Chat {
                             )?;
                             if reply.room_command.is_none() {
                                 if let Some(doc) = candidate {
-                                    ctx["resources"]["sets"][&id] = doc.clone();
                                     ctx["set"] = doc;
                                 }
                             }
-                            history.push(("validator".into(),format!("Validation failed: {e:#}. Correct the proposed edits against the supplied draft.")));
+                            if let Some(command) = reply.room_command.as_ref().filter(|v|matches!(v["op"].as_str(),Some("authorSet"|"editAuthoredSet"|"recoverAuthoredSet"))) {
+                                ctx["resources"]["failedProposal"] = command.clone();
+                                history.push(("validator".into(),format!("Validation failed: {e:#}. Your previous proposal is retained locally. Inspect failedProposal by JSON pointer as needed. Return room_command {{op:'repairProposal',edits:[...]}} with add/replace/remove patches relative to the retained command, or return a full corrected proposal.")));
+                            } else {
+                                history.push(("validator".into(),format!("Validation failed: {e:#}. Correct the proposed edits against the supplied draft.")));
+                            }
                         }
                         Err(e) => return Err(e),
                     }
@@ -376,7 +386,7 @@ impl Chat {
             let (outcome, error) = match &stop {
                 Some((outcome, reason)) => (*outcome, Some(reason.as_str())),
                 None => (
-                    if err.is_some() { "failed" } else { "completed" },
+                    if err.is_some() { "failed" } else if turn.recovered() { "recovered" } else { "completed" },
                     err.as_deref(),
                 ),
             };
@@ -390,7 +400,6 @@ impl Chat {
             turn.stop(outcome, status);
             std::thread::spawn(move || {
                 let _ = turn.finish_log(outcome, Some(&reason));
-                assistant::cancel(&turn.id);
             });
             self.generation += 1;
         }
@@ -447,6 +456,7 @@ impl Chat {
     }
     pub(super) fn saved_set(&mut self) {
         self.proposal = None;
+        self.saved_authored_set = None;
         self.status = "Saved to studio".into();
     }
     fn apply(&mut self, live: &Live) {
@@ -460,17 +470,22 @@ impl Chat {
             return;
         }
         let (revision, cmd) = (*revision, command.clone());
+        let saved = match &cmd {
+            RoomCommand::ApplyAuthoredDesign { candidate, .. } => Some(candidate.id().to_owned()),
+            _ => None,
+        };
         let h = live.handle.clone();
         let (tx, rx) = mpsc::channel();
         self.applying = Some(rx);
         self.status = "Saving to studio…".into();
         std::thread::spawn(move || {
-            let result = (|| -> Result<()> {
+            let result = (|| -> Result<Option<String>> {
                 anyhow::ensure!(
                     h.snapshot().revision == revision,
                     "Studio changed. Ask for a fresh proposal."
                 );
-                request(&h, cmd)
+                request(&h, cmd)?;
+                Ok(saved)
             })();
             let _ = tx.send(result);
         });
@@ -590,11 +605,9 @@ impl Chat {
             }
             changed = true;
         }
-        if self.started.is_some_and(|at| at.elapsed().as_secs() >= 180) {
-            self.cancel(
-                "Request timed out. You can retry your message.",
-                "timed_out",
-            );
+        let answer = receive(&mut self.rx, "Assistant connection ended");
+        if let Some(reason) = self.turn.as_ref().and_then(|turn| turn.timeout()).filter(|_| answer.is_none()) {
+            self.cancel(reason, "timed_out");
             changed = true;
         } else if let Some((started, turn)) = self.started.zip(self.turn.as_ref()) {
             let stage = turn.stage.lock().unwrap();
@@ -606,16 +619,20 @@ impl Chat {
         }
         if let Some(result) = receive(&mut self.applying, "Assistant save ended") {
             match result {
-                Ok(()) => {
+                Ok(saved) => {
                     self.room_reviewed = false;
                     self.proposal = None;
-                    self.status = "Saved to studio".into();
+                    self.status = saved.as_deref().map_or_else(
+                        || "Saved to studio".into(),
+                        |id| format!("Saved {} to studio", crate::model::set_label(id)),
+                    );
+                    self.saved_authored_set = saved;
                 }
                 Err(e) => self.status = e.to_string(),
             }
             changed = true;
         }
-        if let Some(result) = receive(&mut self.rx, "Assistant connection ended") {
+        if let Some(result) = answer {
             let turn = self.turn.take();
             self.started = None;
             self.progress.clear();
@@ -1035,7 +1052,7 @@ fn proposal_card(s: &Studio) -> Option<El> {
         .child(paragraph(&detail, 11., MUTED));
     if let Proposal::Room { command, previews, .. } = proposal {
         if chat.room_reviewed && !previews.is_empty() {
-            card = card.child(paragraph("Offline preview · live inputs disconnected",11.,MUTED));
+            card = card.child(paragraph("Test inputs · blue host, amber guest",11.,MUTED));
             for (label,landscape,portrait) in previews {
                 card=card.child(title(label,12.,650.,TEXT)).child(row().gap(4.)
                     .child(el().size(136.,77.).pixels_fit(landscape,SurfaceFit::Fit))
@@ -1226,6 +1243,27 @@ pub(super) fn panel(s: &Studio, popout: bool) -> El {
                 .key("assistant-status")
                 .role("status"),
         );
+    }
+    if let Some((id, live)) = chat.saved_authored_set.as_ref().zip(s.live.as_ref()) {
+        let output = &live.snapshot;
+        let project = &output.project;
+        if output.program_kind == "set" && project.mounted_set.as_ref() == Some(id) {
+            transcript = transcript.child(
+                paragraph("On output", 12., MINT)
+                    .key("assistant-saved-set-output")
+                    .role("status"),
+            );
+        } else if project.production.sets.contains_key(id) {
+            let id = id.clone();
+            transcript = transcript.child(
+                action("assistant-show-saved-set", "Show on output", true, move |s| {
+                    s.set_selection = None;
+                    s.send(RoomCommand::SetMount { id: Some(id.clone()), layout: None });
+                })
+                .self_start()
+                .disabled(chat.busy()),
+            );
+        }
     }
     if !chat.progress.is_empty()
         && !chat.progress.starts_with("Model call ")

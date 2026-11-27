@@ -10,7 +10,7 @@ use std::{
     ptr::NonNull,
     sync::{
         atomic::{AtomicI64, AtomicU64, Ordering},
-        Arc, Mutex,
+        Arc, Condvar, Mutex, OnceLock,
     },
 };
 
@@ -122,6 +122,7 @@ impl Drop for TextCache {
     }
 }
 unsafe extern "C" {
+    fn nr_device_registry_id(room: *mut c_void) -> u64;
     fn nr_create(
         ctx: *mut c_void,
         frame: extern "C" fn(*mut c_void, u32, *mut c_void, f64, u64),
@@ -152,6 +153,8 @@ unsafe extern "C" {
     fn nr_prepare(room: *mut c_void, w0: u32, h0: u32, w1: u32, h1: u32) -> i32;
     fn CVPixelBufferGetWidth(buffer: *mut c_void) -> usize;
     fn CVPixelBufferGetHeight(buffer: *mut c_void) -> usize;
+    fn nr_set_rehearsal_timing(handle: *mut c_void, active: bool);
+    fn nr_rehearsal_timing(handle: *mut c_void, output: u32, generation: u64) -> *mut c_char;
     fn nr_render(
         room: *mut c_void,
         output: u32,
@@ -335,12 +338,33 @@ pub struct NativeTrack {
     pub height: u32,
     pub kind: u32,
 }
+/// Opt-in completion mailbox for private rendered pictures. Program output never waits on it.
+#[derive(Default)]
+pub(crate) struct PosterFrames {
+    frames: Mutex<[Option<Arc<Frame>>; 2]>,
+    completed: Condvar,
+}
+
+impl PosterFrames {
+    pub(crate) fn wait(&self, output: usize, generation: u64, submitted: f64) -> Result<Arc<Frame>> {
+        let matches = |f: &Frame| f.generation == generation && f.at == submitted;
+        let (mut frames, _) = self.completed.wait_timeout_while(
+            self.frames.lock().unwrap(),
+            std::time::Duration::from_secs(4),
+            |frames| !frames[output].as_deref().is_some_and(matches),
+        ).unwrap();
+        anyhow::ensure!(frames[output].as_deref().is_some_and(matches), "Output timed out");
+        Ok(frames[output].take().expect("matched private output"))
+    }
+}
+
 pub struct Shared {
     pub extra_frames: [Mutex<Option<Arc<Frame>>>; 4],
     pub recorder: crate::recording::Recorder,
     pub broadcast:crate::broadcast::Broadcast,
     pub clips:crate::clips::Clips,
     pub frames: [Mutex<Option<Arc<Frame>>>; 5],
+    pub(crate) poster_frames: OnceLock<PosterFrames>,
     // Access each timestamp under its corresponding program frame slot lock.
     pub first_revision_at: [AtomicU64; 2],
     pub statuses: [Mutex<String>; 10],
@@ -376,6 +400,7 @@ impl Shared {
                 broadcast:Default::default(),
                 clips:Default::default(),
                 frames: std::array::from_fn(|_| Mutex::new(None)),
+                poster_frames: OnceLock::new(),
                 statuses: std::array::from_fn(|_| Mutex::new(String::new())),
                 first_revision_at: Default::default(),
                 counts: std::array::from_fn(|_| AtomicU64::new(0)),
@@ -526,6 +551,16 @@ extern "C" fn frame_callback(
     };
     // Core Video retain, buffer queries, and release stay outside the slot lock.
     let frame = Arc::new(unsafe { Frame::retained(buffer, at, generation) });
+    if index >= 3 {
+        if let Some(private) = shared.poster_frames.get() {
+            let mut slots = private.frames.lock().unwrap();
+            // A delayed previous readback cannot replace a newer private picture.
+            if slots[index - 3].as_ref().is_none_or(|old| old.at <= frame.at) {
+                slots[index - 3] = Some(frame.clone());
+                private.completed.notify_one();
+            }
+        }
+    }
     if let Ok(mut slot) = shared.frames[index].try_lock() {
         if index >= 3 && slot.as_ref().map(|f| f.generation) != Some(generation) {
             shared.first_revision_at[index - 3].store(host_time().to_bits(), Ordering::Relaxed);
@@ -882,6 +917,24 @@ pub struct NativeRoom {
 }
 unsafe impl Send for NativeRoom {}
 impl NativeRoom {
+    pub(crate) fn set_rehearsal_timing(&mut self, active: bool) {
+        unsafe { nr_set_rehearsal_timing(self.ptr.as_ptr(),active) }
+    }
+
+    pub(crate) fn rehearsal_timing(&self, output: u32, generation: u64) -> Result<serde_json::Value> {
+        unsafe {
+            let ptr = nr_rehearsal_timing(self.ptr.as_ptr(), output, generation);
+            anyhow::ensure!(!ptr.is_null(), "Missing rehearsal timing receipt");
+            let parsed = serde_json::from_slice(CStr::from_ptr(ptr).to_bytes());
+            libc::free(ptr.cast());
+            Ok(parsed?)
+        }
+    }
+
+    pub fn device_registry_id(&self) -> u64 {
+        unsafe { nr_device_registry_id(self.ptr.as_ptr()) }
+    }
+
     pub fn new() -> Result<Self> {
         let (shared, audio) = Shared::new()?;
         let shared = Arc::new(shared);

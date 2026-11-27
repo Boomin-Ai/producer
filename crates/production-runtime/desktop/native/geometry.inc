@@ -133,10 +133,12 @@ static NRGeometry *prepareGeometry(id<MTLDevice> device,const NRGraphSpec *spec,
     return geometry;
 }
 
-static NRShot evaluateShot(NRGeometry *geometry,float seconds,float aspect) {
+static NRShot evaluateShot(NRGeometry *geometry,float seconds,float aspect,BOOL layoutClock) {
     const NRCameraKey *keys=geometry->keys.bytes;
     size_t count=geometry->keys.length/sizeof(*keys);
-    float t=fmodf(fmaxf(seconds,0),keys[count-1].seconds);
+    // Layout progress has a closed endpoint. A completed camera move holds its last pose.
+    float end=keys[count-1].seconds;
+    float t=layoutClock ? fminf(fmaxf(seconds,0),end) : fmodf(fmaxf(seconds,0),end);
     size_t i=1;
     while(i<count-1 && t>keys[i].seconds)i++;
     NRCameraKey a=keys[i-1],b=keys[i];
