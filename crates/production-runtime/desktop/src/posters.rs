@@ -87,6 +87,25 @@ pub fn run(args: &[String], rehearsal: bool, outputs: bool) -> Result<()> {
     capture(&native, &mut cache, &project, out, time, 1)
 }
 
+/// Private rehearsal uses the program renderer with unconnected live inputs.
+pub(crate) fn authored_pairs(project: &model::RoomProject, id: &str, out: &Path, mut check: impl FnMut(&str) -> Result<()>) -> Result<Vec<(String, std::path::PathBuf)>> {
+    let native = platform::NativeRoom::new()?;
+    native.prepare([project.canvas.landscape, project.canvas.vertical])?;
+    let mut cache = visuals::VisualCache::new(&root());
+    let mut rendered = Vec::new();
+    for (index, choice) in project.set_layout_choices(id).into_iter().enumerate() {
+        check(&choice.label)?;
+        let dir = out.join(&choice.pair.landscape);
+        let mut candidate = project.clone();
+        candidate.mount_set(Some(id.into()), Some(choice.pair))?;
+        capture(&native, &mut cache, &candidate.live_set()?, &dir, 2., index as u64 + 1)
+            .with_context(|| format!("{} output rehearsal",choice.label))?;
+        rendered.push((choice.label,dir));
+    }
+    ensure!(!rendered.is_empty(),"No layout pairs to rehearse");
+    Ok(rendered)
+}
+
 fn capture(
     native: &platform::NativeRoom,
     cache: &mut visuals::VisualCache,

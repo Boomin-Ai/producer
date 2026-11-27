@@ -15,6 +15,7 @@ enum Proposal {
     },
     Room {
         revision: u64,
+        previews: Vec<(String, rune::Pixels, rune::Pixels)>,
         command: RoomCommand,
     },
 }
@@ -39,7 +40,12 @@ fn prepare(
 ) -> Result<Option<Proposal>> {
     if let Some(v) = &reply.room_command {
         *candidate = Some(v.clone());
-        let command = assistant::room_action(v.clone())?;
+        let mut previews = Vec::new();
+        let command = if v["op"] == "authorSet" {
+            crate::authored_set::command(&s.project, v.clone())?
+        } else {
+            assistant::room_action(v.clone())?
+        };
         if let RoomCommand::Workspace { command } = &command {
             s.project.workspace.clone().apply(command.clone())?;
         }
@@ -55,11 +61,28 @@ fn prepare(
             for (id, set) in &project.production.sets {
                 if s.project.production.sets.get(id) != Some(set) {
                     crate::render_graph::inspect(set)?;
+                    if v["op"] == "authorSet" {
+                        let scratch = tempfile::tempdir()?;
+                        for (label, dir) in crate::posters::authored_pairs(&project,id,scratch.path(),|label| {
+                            turn.check()?;
+                            turn.step(&format!("Render {label}"));
+                            Ok(())
+                        })? {
+                            let thumbnail = |file: &str| -> Result<rune::Pixels> {
+                                let bitmap = image::open(dir.join(file))?.thumbnail(384,384).to_rgba8();
+                                let pixels = rune::Pixels::new();
+                                pixels.set(bitmap.width(),bitmap.height(),bitmap.into_raw());
+                                Ok(pixels)
+                            };
+                            previews.push((label,thumbnail("landscape.png")?,thumbnail("portrait.png")?));
+                        }
+                    }
                 }
             }
         }
         return Ok(Some(Proposal::Room {
             revision: s.revision,
+            previews,
             command,
         }));
     }
@@ -430,7 +453,7 @@ impl Chat {
         if self.busy() {
             return;
         }
-        let Some(Proposal::Room { revision, command }) = &self.proposal else {
+        let Some(Proposal::Room { revision, command, .. }) = &self.proposal else {
             return;
         };
         if !self.room_reviewed {
@@ -976,6 +999,7 @@ fn proposal_card(s: &Studio) -> Option<El> {
                 crate::model::set_label(&layout.landscape)
             ),
         ),
+        Proposal::Room { previews, .. } if !previews.is_empty() => ("Set draft", format!("{} layouts · Landscape and portrait", previews.len())),
         Proposal::Room { command, .. } => {
             let name = serde_json::to_value(command)
                 .ok()
@@ -1009,8 +1033,15 @@ fn proposal_card(s: &Studio) -> Option<El> {
         .min_w(0.)
         .child(title(heading, 12., 650., TEXT))
         .child(paragraph(&detail, 11., MUTED));
-    if let Proposal::Room { command, .. } = proposal {
-        if chat.room_reviewed {
+    if let Proposal::Room { command, previews, .. } = proposal {
+        if chat.room_reviewed && !previews.is_empty() {
+            card = card.child(paragraph("Offline preview · live inputs disconnected",11.,MUTED));
+            for (label,landscape,portrait) in previews {
+                card=card.child(title(label,12.,650.,TEXT)).child(row().gap(4.)
+                    .child(el().size(136.,77.).pixels_fit(landscape,SurfaceFit::Fit))
+                    .child(el().size(44.,77.).pixels_fit(portrait,SurfaceFit::Fit)));
+            }
+        } else if chat.room_reviewed {
             card = card.child(
                 paragraph(
                     &serde_json::to_string_pretty(command).unwrap_or_default(),
@@ -1437,6 +1468,7 @@ mod tests {
                 .push(("assistant".into(), "I can change the studio output.".into()));
             studio.chat.proposal = Some(Proposal::Room {
                 revision: 2,
+                previews: Vec::new(),
                 command: RoomCommand::CanvasView {
                     view: CanvasView::Landscape,
                 },

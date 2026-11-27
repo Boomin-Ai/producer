@@ -15,6 +15,7 @@ mod rtc_signaling;
 mod program_clock;
 mod assets;
 mod assistant;
+mod authored_set;
 mod assistant_log;
 mod assistant_image;
 mod clips;
@@ -53,7 +54,7 @@ mod rune_studio;
 mod visual_fixture;
 mod visuals;
 mod workspace;
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use std::{
     path::PathBuf,
@@ -95,6 +96,17 @@ fn main() -> Result<()> {
             return Ok(());
         }
         Some("--assistant-log") => return assistant_log::print(&root(), args.get(2).map_or("latest", String::as_str)),
+        Some("--rehearse-authored-set") => {
+            anyhow::ensure!(args.len()==4,"Expected design JSON and preview directory");
+            let mut room: model::RoomProject = serde_json::from_slice(&std::fs::read(root().join("room.json"))?)?;
+            let design: serde_json::Value=serde_json::from_slice(&std::fs::read(&args[2])?)?;
+            let id=design["id"].as_str().context("Missing set ID")?.to_owned();
+            let engine::RoomCommand::Document{command}=authored_set::command(&room,design)? else {unreachable!()};
+            room.command(command)?;
+            render_graph::inspect(&room.production.sets[&id])?;
+            posters::authored_pairs(&room,&id,std::path::Path::new(&args[3]), |_| Ok(()))?;
+            return Ok(());
+        }
         Some("--check-set-graph") => {
             anyhow::ensure!(args.len()==4, "Expected set ID and draft JSON path");
             let room: model::RoomProject = serde_json::from_slice(&std::fs::read(root().join("room.json"))?)?;
