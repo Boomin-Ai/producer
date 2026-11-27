@@ -934,10 +934,10 @@ impl Renderer {
         self.request(RenderOp::Layout { project: Arc::new(project), plan, visuals, revision })
     }
 
-    fn warm_layouts(&self) -> std::thread::JoinHandle<crate::visuals::VisualCache> {
+    fn warm_layouts(&self, root: PathBuf) -> std::thread::JoinHandle<crate::visuals::VisualCache> {
         let (project, plan) = self.prepared.lock().unwrap().clone();
         std::thread::spawn(move || {
-            let mut cache = crate::visuals::VisualCache::default();
+            let mut cache = crate::visuals::VisualCache::new(&root);
             if project.mounted_set.as_ref() == Some(&project.scene) {
                 let current = project.output_layout_pair();
                 for choice in project.set_layout_choices(&project.scene).into_iter()
@@ -1712,7 +1712,7 @@ fn ensure_preview<'a>(
     state: &Snapshot,
 ) -> Result<&'a PreviewRuntime> {
     if slot.is_none() {
-        let mut cache = crate::visuals::VisualCache::default();
+        let mut cache = crate::visuals::VisualCache::new(&root);
         *slot = Some(start_preview_worker(handle, state.project.clone(), handle.preview_media.clone())?);
         publish(
             &slot.as_ref().unwrap().render,
@@ -1733,7 +1733,7 @@ fn start_preview_worker(
     output: Arc<Mutex<Option<Arc<Shared>>>>,
 ) -> Result<PreviewRuntime> {
     let plan = project.compile()?;
-    let visuals = crate::visuals::VisualCache::default().prepare(&project, &plan)?;
+    let visuals = crate::visuals::VisualCache::new(&handle.root).prepare(&project, &plan)?;
     start_prepared_preview(handle, Arc::new(project), plan, visuals, output)
 }
 
@@ -1806,7 +1806,7 @@ fn control(
     let worker_handle = handle.clone();
     let project = Arc::new(state.project.live_set()?);
     let plan = project.compile()?;
-    let mut visual_cache = crate::visuals::VisualCache::default();
+    let mut visual_cache = crate::visuals::VisualCache::new(&root);
     let visuals = visual_cache.prepare(&project, &plan)?;
     let prepared=Mutex::new((project.clone(),plan.clone()));
     let worker = std::thread::Builder::new()
@@ -1835,7 +1835,7 @@ fn control(
     let mut p0 = crate::p0_call::Probe::default();
     let mut preview: Option<PreviewRuntime> = None;
     let mut set_edit: Option<PreviewRuntime> = None;
-    let mut set_edit_cache = crate::visuals::VisualCache::default();
+    let mut set_edit_cache = crate::visuals::VisualCache::new(&root);
     let importing = Arc::new(AtomicBool::new(false));
     if let Ok(bytes) = fs::read(root.join("movie.json")) {
         if let Ok(grant) = serde_json::from_slice::<assets::ImportedAsset>(&bytes) {
@@ -1851,7 +1851,7 @@ fn control(
     if watch_weather { crate::weather::start(root.clone(),handle.closed.clone())?; }
     let mut last_fields=Default::default();
     let mut field_check=Instant::now();
-    let mut preview_field_cache=crate::visuals::VisualCache::default();
+    let mut preview_field_cache=crate::visuals::VisualCache::new(&root);
     let mut handled_show_end = None;
     let mut run_clock = crate::show_playback::RunClock::default();
     let update_run_time = |clock: &crate::show_playback::RunClock, state: &mut Snapshot| {
@@ -1913,7 +1913,7 @@ fn control(
         if warmer.is_none() && matches!(incoming, Err(mpsc::RecvTimeoutError::Timeout))
             && state.program_kind == "set" && warmed_set.as_ref() != Some(&live.scene)
         {
-            warmer = Some(render.warm_layouts());
+            warmer = Some(render.warm_layouts(root.clone()));
             warmed_set = Some(live.scene.clone());
         }
         if let Ok(envelope) = incoming {
@@ -2784,7 +2784,7 @@ fn render_loop(
         if let Some(binding) = project.inputs.get("microphone") {
             native.microphone_device(&binding.device)?;
         }
-        native.shared.clips.load(&crate::root());
+        native.shared.clips.load(&handle.root);
         *handle.media.lock().unwrap() = Some(native.shared.clone());
     }
     native.prepare([project.canvas.landscape, project.canvas.vertical])?;

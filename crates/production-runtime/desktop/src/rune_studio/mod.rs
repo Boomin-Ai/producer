@@ -176,7 +176,6 @@ impl Live {
             handle.closed.store(true, Ordering::Release);
             return Err(e);
         }
-        *crate::ACTIVE_ROOT.write().unwrap() = Some(path);
         crate::room_share::maintain_presence(&handle);
         let snap = handle.snapshot();
         if pending.is_some() {
@@ -204,7 +203,7 @@ impl Live {
             previewing.clone(),
             reviewing.clone(),
             guest_view.clone(),
-        )?;
+        ).inspect_err(|_| handle.closed.store(true, Ordering::Release))?;
         Ok(Self {
             handle,
             performance: StudioPerformance::new(snap.output_frames[0].max(snap.output_frames[1])),
@@ -469,6 +468,7 @@ impl Studio {
     fn finish_open(&mut self, result: anyhow::Result<Live>) {
         match result {
             Ok(l) => {
+                *crate::ACTIVE_ROOT.write().unwrap() = Some(l.handle.root.clone());
                 if std::env::var_os("PRODUCER_DEV_OPEN_LOCAL_ROOM").is_some() {
                     if let Ok(relative) = l.handle.root.strip_prefix(&self.base) {
                         if let (Ok(bytes), Ok(mut file)) = (
