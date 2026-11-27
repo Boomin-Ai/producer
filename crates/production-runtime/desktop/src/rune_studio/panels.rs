@@ -272,12 +272,13 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
                 .on_drag(move |s: &mut Studio, d, _| {
                     let Some(l) = &s.live else { return; };
                     if matches!(d.phase, rune::Phase::Down) {
-                        d.data = l.handle.frame_position();
+                        s.frame_grab = Some(l.handle.frame_position());
                     }
-                    let [x, y] = d.data;
+                    let Some([x, y]) = s.frame_grab else { return; };
                     l.handle.set_frame_position(if d.cancelled() { [x, y] } else {
-                        [x + d.dx / frame_width, y + d.dy / frame_height]
+                        [x + d.dx / frame_width.max(1.), y + d.dy / frame_height.max(1.)]
                     });
+                    if matches!(d.phase, rune::Phase::Up) || d.cancelled() { s.frame_grab = None; }
                 });
         }
         views = views.child(monitor);
