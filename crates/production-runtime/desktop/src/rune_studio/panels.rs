@@ -255,33 +255,15 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
         ) {
             continue;
         }
-        let frame_width = frame_height * ratios[i];
-        let layout = p.output_layout_pair();
-        let frame_draggable = !snap.previewing && snap.program_kind == "set"
-            && p.mounted_set.as_ref().and_then(|id| p.production.sets.get(id))
-                .is_some_and(|set| crate::render_graph::supports_frame_drag(set, layout.ids()[i]));
-        let mut monitor = el().key(format!("monitor-{i}"))
-            .role("img")
-            .label(name)
-            .size(frame_width, frame_height)
-            .border(1., color(0x263544))
-            .fill(color(0x03070c))
-            .native_surface(&l.surfaces[i], SurfaceFit::Fit);
-        if frame_draggable {
-            monitor = monitor.hit().cursor(rune::Cursor::Grab).help("Drag the camera frame")
-                .on_drag(move |s: &mut Studio, d, _| {
-                    let Some(l) = &s.live else { return; };
-                    if matches!(d.phase, rune::Phase::Down) {
-                        s.frame_grab = Some(l.handle.frame_position());
-                    }
-                    let Some([x, y]) = s.frame_grab else { return; };
-                    l.handle.set_frame_position(if d.cancelled() { [x, y] } else {
-                        [x + d.dx / frame_width.max(1.), y + d.dy / frame_height.max(1.)]
-                    });
-                    if matches!(d.phase, rune::Phase::Up) || d.cancelled() { s.frame_grab = None; }
-                });
-        }
-        views = views.child(monitor);
+        views = views.child(
+            el().key(format!("monitor-{i}"))
+                .role("img")
+                .label(name)
+                .size(frame_height * ratios[i], frame_height)
+                .border(1., color(0x263544))
+                .fill(color(0x03070c))
+                .native_surface(&l.surfaces[i], SurfaceFit::Fit),
+        );
     }
     let mic = p_mic(snap);
     let camera = (0. ..1000.).contains(&snap.frame_age_ms[0]);
@@ -1633,16 +1615,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                         }
                     }));
                 }
-                let frame_motion = pair.ids().iter()
-                    .any(|id| crate::render_graph::supports_frame_drag(set, id));
-                let frame_draggable = on && !has_show && frame_motion;
-                if frame_draggable {
-                    b = b.child(button("reset-camera-frame", "Reset camera frame", false, |s| {
-                        if let Some(l) = &s.live { l.handle.set_frame_position([0., 0.]); }
-                    }));
-                }
-                let screen_pan = !frame_motion && uses("frame.screenPan");
-                if screen_pan {
+                if uses("frame.screenPan") {
                     let [x, y] = l.handle.screen_pan();
                     let controls_width = if !shelf { width } else if has_show { overview_width } else { end_width };
                     let size = (controls_width - 24.).clamp(84., 144.);
@@ -1976,7 +1949,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                     ));
                 }
                 let mfm = key == "my-first-million";
-                let layout_controls = mfm || frame_draggable || uses("frame.controls.x") || uses("frame.controls.z") || screen_pan
+                let layout_controls = mfm || uses("frame.controls.x") || uses("frame.controls.z") || uses("frame.screenPan")
                     || (on && pair.ids().iter().any(|id| crate::headline::supports(set, id)))
                     || set.theme.contains_key("marquee") || set.theme.contains_key("weather-desk") || (on && pair.has_flythrough(set))
                     || (on && set.theme.contains_key("quiz")) || (set.theme.contains_key("ipo-chart") && uses("frame.controls.y"));

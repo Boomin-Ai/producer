@@ -220,7 +220,6 @@ pub struct Visuals {
     terminal: [Option<Draw>; 2],
     guest_slots: [bool; 2],
     pub places_guest: bool,
-    pub frame_drag: [bool; 2],
     speaker_split: bool,
     pub text: TextCache,
 }
@@ -665,9 +664,6 @@ impl Visuals {
             let slots = [find("host")?,find("cohost")?].map(|entry| entry.content.filter(|d| d.kind == 1).map(|d| d.source as usize));
             Some(PodcastPair { rects, slots })
         });
-        let frame_drag = pair.ids().map(|id| {
-            crate::render_graph::supports_frame_drag(&project.production.sets[&project.scene], id)
-        });
         let text = TextCache::with_graphs(&specs, &graph_specs)?;
         Ok(Self {
             pair: project.output_layout_pair(),
@@ -678,7 +674,6 @@ impl Visuals {
             viewport,
             guest_slots,
             places_guest,
-            frame_drag,
             speaker_split,
             terminal,
             text,

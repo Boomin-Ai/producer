@@ -296,7 +296,6 @@ pub struct Handle {
     speaker_share: std::sync::atomic::AtomicU32,
     pub screen_zoom: std::sync::atomic::AtomicU32,
     screen_pan: AtomicU64,
-    frame_position: AtomicU64,
     pub quiz_answer: std::sync::atomic::AtomicI32,
     camera_border_wave: AtomicBool,
     pub rtc_feed:Mutex<Option<crate::p0_call::Guest>>,
@@ -350,16 +349,6 @@ impl Handle {
         // Both axes reach the renderer in the same frame.
         let packed = u64::from(x.to_bits()) | (u64::from(y.to_bits()) << 32);
         self.screen_pan.store(packed, Ordering::Relaxed);
-    }
-
-    pub(crate) fn frame_position(&self) -> [f32; 2] {
-        let position = self.frame_position.load(Ordering::Relaxed);
-        [f32::from_bits(position as u32), f32::from_bits((position >> 32) as u32)]
-    }
-
-    pub(crate) fn set_frame_position(&self, position: [f32; 2]) {
-        let [x, y] = position.map(|axis| axis.clamp(-0.13, 0.13).to_bits());
-        self.frame_position.store(u64::from(x) | (u64::from(y) << 32), Ordering::Relaxed);
     }
 
 }
@@ -1050,7 +1039,6 @@ pub(crate) fn initial_room(root: &Path) -> Result<(Arc<Handle>,Receiver<Envelope
         speaker_share: std::sync::atomic::AtomicU32::new(crate::speaker_split::CENTER.to_bits()),
         screen_zoom: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
         screen_pan: AtomicU64::new(0),
-        frame_position: AtomicU64::new(0),
         quiz_answer: std::sync::atomic::AtomicI32::new(0),
         camera_border_wave: AtomicBool::new(camera_border_wave),
         rtc_feed:Mutex::default(),
@@ -2816,7 +2804,6 @@ fn render_loop(
         transport.play(now(origin))?;
     }
     let mut chart_mix = 0f32;
-    let mut frame_position = [0f32; 2];
     let mut chart_tick = platform::host_time();
     let mut speaker_focus = crate::speaker_split::Focus::default();
     let mut director = crate::host_director::Director::default();
@@ -3415,10 +3402,6 @@ fn render_loop(
             let host_zoom = f32::from_bits(handle.host_zoom.load(Ordering::Relaxed));
             let screen_zoom = f32::from_bits(handle.screen_zoom.load(Ordering::Relaxed));
             let screen_pan = handle.screen_pan();
-            let position_ease = 1. - (-delta * 26.).exp();
-            for (position, target) in frame_position.iter_mut().zip(handle.frame_position()) {
-                *position += (target - *position) * position_ease;
-            }
             let quiz_answer = handle.quiz_answer.load(Ordering::Relaxed) as f32;
             let camera_wave = handle.camera_border_wave.load(Ordering::Relaxed);
             if layout_blend.as_ref().is_some_and(|b| b.phase(host) >= 1.) {
@@ -3471,8 +3454,7 @@ fn render_loop(
                     draw.surface[2] = chart_mix;
                     draw.surface[1] = screen_zoom;
                     // Terminal graph draws carry uniform values in place of texture coordinates.
-                    let pan = if frame_visuals.frame_drag[i] { frame_position } else { screen_pan };
-                    draw.uv[..2].copy_from_slice(&pan);
+                    draw.uv[..2].copy_from_slice(&screen_pan);
                     draw.material=music;
                 }
                 let suppress_guest_fallback = resting_layouts.is_some_and(|layouts|
