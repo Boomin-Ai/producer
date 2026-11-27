@@ -1497,7 +1497,7 @@ pub(super) fn panel(s: &Studio, mut b: El, split: bool, hidden_header: bool) -> 
         return local_list(s, b.child(subhead("Local clip queue")), queued);
     }
     let tab = |key: &str, name: String, selected, action: fn(&mut Studio)| button(key.to_owned(), name, selected, action).px(6.).h(25.);
-    let narrow = !split && s.live.as_ref().is_some_and(|live| {
+    let narrow = !split && s.live.as_ref().is_none_or(|live| {
         let workspace = &live.snapshot.project.workspace;
         let edge = workspace.panels[&PanelId::Publish].edge;
         !edge.side() || workspace.docks[&edge].size < 265.
@@ -1929,6 +1929,113 @@ mod tests {
     }
 
     #[test]
+    fn compact_queue_and_composer_handle_native_paste_and_drop() {
+        const W: u32 = 246;
+        const H: u32 = 650;
+        let scratch = tempfile::tempdir().unwrap();
+        let mut studio = Studio::new(scratch.path().into());
+        studio.publish.scope = Some(("studio".into(), "test".into()));
+        studio.publish.channels = serde_json::from_value(json!([
+            {"id":"t", "platform":"threads", "status":"active", "display_name":"Useful Information"}
+        ]))
+        .unwrap();
+        studio.publish.jobs = serde_json::from_value(json!([
+            {"id":"job", "channel_id":"t", "state":"scheduled", "due_at":"2099-12-01T18:00:00Z"}
+        ]))
+        .unwrap();
+        studio.publish.jobs[0].title = "The next episode".into();
+        studio.publish.tab = PublishTab::Scheduled;
+        let mut rt = rune::Runtime::new(
+            studio,
+            |s, _| {
+                let body = if s.publish.composing {
+                    inline_composer(s, false)
+                } else {
+                    col()
+                        .gap(6.)
+                        .child(
+                            row()
+                                .items_center()
+                                .child(subhead("Publish").grow(1.))
+                                .child(header_actions(s, false).unwrap()),
+                        )
+                        .child(panel(s, col(), false, false))
+                };
+                col()
+                    .w_full()
+                    .h_full()
+                    .padding(8.)
+                    .fill(color(BG))
+                    .child(body)
+            },
+            (W as f32, H as f32),
+            rune::Env::default(),
+        );
+        let snapshot = |rt: &mut rune::Runtime<Studio>, name: &str| {
+            let Some(dir) = std::env::var_os("PRODUCER_PUBLISH_TEST_PNG_DIR") else {
+                return;
+            };
+            let dir = PathBuf::from(dir);
+            fs::create_dir_all(&dir).unwrap();
+            use rune::render::{Gpu, Offscreen, Renderer, OFFSCREEN_FORMAT};
+            let gpu = Gpu::headless();
+            let mut renderer = Renderer::new(&gpu.device, OFFSCREEN_FORMAT);
+            let target = Offscreen::new(&gpu.device, W, H);
+            renderer.render_runtime_to_offscreen(&gpu.device, &gpu.queue, &target, rt);
+            rune::render::write_png(&dir.join(name), W, H, &target.read(&gpu.device)).unwrap();
+        };
+        let click = |rt: &mut rune::Runtime<Studio>, key: &str| {
+            let (x, y) = rt.find(key).unwrap();
+            rt.pointer_down(x, y);
+            rt.pointer_up(x, y);
+            rt.frame(0.03);
+        };
+        rt.frame(0.);
+        assert!(rt.find("publish-view-menu").is_some());
+        snapshot(&mut rt, "compact-publish.png");
+        click(&mut rt, "publish-new");
+        click(&mut rt, "Post caption");
+        rt.paste("Two views of the studio");
+        assert_eq!(rt.state.publish.caption.text, "Two views of the studio");
+        let image_path = scratch.path().join("detail.png");
+        image::RgbImage::from_pixel(64, 40, image::Rgb([26, 154, 121]))
+            .save(&image_path)
+            .unwrap();
+        let png = rune::ClipboardImage::from_png(fs::read(&image_path).unwrap()).unwrap();
+        rt.paste_content(rune::ClipboardContent::default().with_image(png));
+        rt.frame(0.03);
+        let at = rt.find("Post caption").unwrap();
+        rt.drop_files(vec![image_path], Some(at));
+        rt.frame(0.03);
+        assert_eq!(rt.state.publish.files.len(), 2);
+        assert_eq!(rt.state.publish.pasted_images.len(), 1);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline
+            && rt
+                .state
+                .publish
+                .thumbnails
+                .values()
+                .any(|v| matches!(v, Thumbnail::Loading(_)))
+        {
+            rt.state.publish.poll_thumbnails();
+            std::thread::yield_now();
+        }
+        rt.frame(0.03);
+        assert!(rt.find("publish-thumbnail-0").is_some());
+        assert!(rt.find("publish-thumbnail-1").is_some());
+        snapshot(&mut rt, "composer-photos.png");
+        click(&mut rt, "publish-remove-1");
+        click(&mut rt, "publish-remove-0");
+        let video = scratch.path().join("interview.mp4");
+        fs::write(&video, b"video fixture").unwrap();
+        rt.drop_files(vec![video.clone()], Some(rt.find("Post caption").unwrap()));
+        rt.frame(0.03);
+        assert_eq!(rt.state.publish.files, [video]);
+        snapshot(&mut rt, "composer-video.png");
+    }
+
+    #[test]
     fn queue_opens_immediately_and_staging_failure_restores_the_draft() {
         let scratch = tempfile::tempdir().unwrap();
         let mut studio = Studio::new(scratch.path().into());
@@ -1936,7 +2043,8 @@ mod tests {
         p.scope = Some(("studio".into(), "test".into()));
         p.channels = serde_json::from_value(json!([
             {"id":"t","platform":"threads","status":"active"}
-        ])).unwrap();
+        ]))
+        .unwrap();
         p.selected.insert("t".into());
         p.composing = true;
         p.caption.text = "Draft survives a local storage error".into();
@@ -1952,7 +2060,10 @@ mod tests {
             std::thread::sleep(Duration::from_millis(1));
         }
         assert!(studio.publish.composing);
-        assert_eq!(studio.publish.caption.text, "Draft survives a local storage error");
+        assert_eq!(
+            studio.publish.caption.text,
+            "Draft survives a local storage error"
+        );
         assert_eq!(studio.publish.files, [missing]);
         assert!(studio.publish.selected.contains("t"));
         assert!(studio.publish.notice.contains("Could not save"));
