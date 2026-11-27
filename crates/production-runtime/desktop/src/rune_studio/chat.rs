@@ -682,7 +682,7 @@ pub(super) fn target(s: &Studio, p: &crate::model::RoomProject) -> Option<(Strin
     let selected = s
         .set_selection
         .as_ref()
-        .is_some_and(|(scene, set, _)| scene == &p.active_scene && set == &id);
+        .is_some_and(|selection| selection.scene == p.active_scene && selection.set == id);
     if selected {
         return Some((id, pair));
     }
