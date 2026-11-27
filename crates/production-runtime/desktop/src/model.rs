@@ -1359,12 +1359,12 @@ impl RoomProject {
         let selected = if let Some(id) = id.as_deref() {
             let set = self.production.sets.get(id).context("Unknown Set")?;
             if let Some(pair) = pair {
-                if !pair.exists_in(set) && pair != SetLayoutPair::default() {
+                if !pair.exists_in(set) {
                     bail!("The Set does not have that pair of layouts");
                 }
                 Some(pair)
             } else if self.mounted_set.as_deref() == Some(id) {
-                self.mounted_layout.clone()
+                self.mounted_layout.clone().filter(|pair| pair.exists_in(set)).or_else(|| self.set_layout_choices(id).into_iter().next().map(|choice| choice.pair))
             } else {
                 self.set_layout_choices(id).into_iter().next().map(|choice| choice.pair)
             }

@@ -107,6 +107,7 @@ pub fn command(project: &RoomProject, payload: serde_json::Value) -> Result<Room
             let mut root: Node = serde_json::from_value(
                 serde_json::json!({"id":"stage","content":{"kind":"group"}}),
             )?;
+            root.frame = Some(rect([0., 0., 1., 1.], size.width, size.height)?);
             for layer in &look.layers {
                 let coords = if suffix == "landscape" {
                     layer.landscape
@@ -164,4 +165,44 @@ pub fn command(project: &RoomProject, payload: serde_json::Value) -> Result<Room
     Ok(RoomCommand::Document {
         command: Command::Transaction { operations },
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn three_looks_are_six_authored_views_with_independent_sources() {
+        let mut room = RoomProject::demo();
+        let layer = |id: &str, source: &str| json!({"id":id,"content":{"kind":"source","source":source,"fit":"cover"},"landscape":[0,0,0.5,1],"vertical":[0,0,1,0.5]});
+        let host = layer("host", "camera");
+        let design = json!({"op":"authorSet","id":"signal-room","materials":{"rim":"return textureSampleLevel(input0, linear_sampler, uv, 0.);"},"looks":[
+            {"id":"opening","layers":[{"id":"back","landscape":[0,0,1,1],"vertical":[0,0,1,1],"content":{"kind":"group"}}]},
+            {"id":"solo","material":"rim","layers":[host.clone()]},
+            {"id":"duo","material":"rim","layers":[host,layer("guest","rtc-guest")]}
+        ]});
+        let mut invalid = design.clone();
+        invalid["looks"][1]["layers"][0]["vertical"] = json!([0, 0, 0, 1]);
+        assert!(command(&room, invalid)
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("solo-vertical/host"));
+        let RoomCommand::Document { command: tx } = command(&room, design.clone()).unwrap() else {
+            unreachable!()
+        };
+        room.command(tx).unwrap();
+        assert!(command(&room, design).is_err());
+        assert_eq!(room.production.sets["signal-room"].layouts.len(), 6);
+        let pairs = room.set_layout_choices("signal-room");
+        assert_eq!(pairs.len(), 3);
+        for choice in pairs {
+            room.mount_set(Some("signal-room".into()), Some(choice.pair.clone()))
+                .unwrap();
+            let live = room.live_set().unwrap();
+            assert_eq!(live.output_layout_pair(), choice.pair);
+            live.compile().unwrap();
+        }
+    }
 }
