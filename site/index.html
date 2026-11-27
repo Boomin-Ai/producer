@@ -398,7 +398,17 @@
     }
   </style>
   <link rel="stylesheet" href="/protocol/home.css">
-</head>
+<style>
+.service{display:grid;grid-template-columns:1fr 1fr;align-items:start;gap:clamp(26px,6vw,85px);padding-bottom:80px}
+.service .service-label{font-size:14px;color:#b7afff;font-weight:600;margin:0}
+.service form{background:#171923;border:1px solid #454658;border-radius:20px;padding:clamp(20px,3vw,36px);text-align:left}
+.service h3{font-size:24px;margin:0 0 22px}.contact{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.service label{display:block;font-size:14px;color:#dddfea;font-weight:550}
+.service input,.service textarea{display:block;width:100%;box-sizing:border-box;margin:7px 0 16px;padding:12px;border:1px solid #545566;border-radius:8px;background:#101119;color:white;font:inherit}
+.service textarea{resize:vertical}.service button{background:#edeaff;color:#181525;border:0;border-radius:9px;padding:13px 20px;font:inherit;font-weight:650;cursor:pointer}
+.service #result:not(:empty){margin:12px 0 0}.service #result:empty{display:none}
+@media(max-width:720px){.service{grid-template-columns:1fr}.contact{grid-template-columns:1fr}.site-nav a:first-child{display:inline}}
+</style></head>
 <body>
   <header class="topbar">
     <a class="brand" href="/">
@@ -406,7 +416,7 @@
       <span>Producer</span>
     </a>
     <nav class="site-nav" aria-label="Main navigation">
-      <a href="#production-protocol">Protocol</a>
+      <a href="#services">Producer Services</a><a href="/protocol/overview.html#production-protocol">Protocol</a>
       <a href="https://github.com/Boomin-Ai/Producer" aria-label="Star Producer on GitHub">☆ <span>GitHub</span> <b data-stars></b></a>
     </nav>
     <a class="header-download" href="https://github.com/Boomin-Ai/producer/releases">
@@ -447,49 +457,17 @@
     </div>
   </main>
 
-  <section id="show-release" class="feature-section release" aria-labelledby="release-title">
-    <div>
-      <a class="eyebrow" href="https://github.com/Boomin-Ai/Producer/releases/tag/native-silicon-0.5.0">Producer 0.5.0</a>
-      <h2 id="release-title">Run a podcast from a live rundown.</h2>
-      <p>Press play on My First Million. The cold open introduces both hosts, then cuts to Shaan and Sam while landscape and portrait stay in sync.</p>
-      <a class="feature-download" href="/download/macos">Download for Apple Silicon <span data-mac-version></span> ↓</a>
-      <a class="release-notes" href="https://github.com/Boomin-Ai/Producer/releases/tag/native-silicon-0.5.0">Release notes ↗</a>
-    </div>
-    <figure class="demo">
-      <video controls playsinline preload="none" poster="/protocol/show-run.jpg" aria-label="My First Million running in the native Producer studio">
-        <source src="/protocol/show-run.mp4" type="video/mp4">
-        <track src="/protocol/show-run.vtt" kind="captions" srclang="en" label="English" default>
-      </video>
-      <figcaption>My First Million <span>Native studio capture · 12 sec</span></figcaption>
-    </figure>
+  <section id="services" class="feature-section service" aria-labelledby="service-title">
+    <div><p class="service-label">Producer Services</p><h2 id="service-title">You host.<br>We run the show.</h2>
+    <p>We build a custom set for your show and run your recording, from bringing guests on screen to calling the final cut. The set is yours to use again.</p></div>
+    <form id="inquiry" action="/inquiries" method="post">
+      <h3>Tell us about your show</h3>
+      <div class="contact"><label>Your name<input name="name" autocomplete="name" maxlength="100" required></label>
+      <label>Email<input name="email" type="email" autocomplete="email" maxlength="254" required></label></div>
+      <label>What would you like to produce?<textarea name="brief" rows="3" maxlength="1500" placeholder="Tell us about the format, your guests, and any date you have in mind." required></textarea></label>
+      <button type="submit">Request production <span aria-hidden="true">↗</span></button><p role="status" id="result"></p>
+    </form>
   </section>
-  <section id="production-protocol" class="feature-section protocol" aria-labelledby="protocol-title">
-    <div class="protocol-intro">
-      <div><span class="eyebrow">Producer Protocol v1</span><h2 id="protocol-title">Anatomy of a show.</h2></div>
-      <p>The set defines the layouts. The show sequences them. Scrub the cold open to see how the same cut reaches two screens.</p>
-    </div>
-    <div class="protocol-desk">
-      <div class="document-line"><strong>My First Million</strong><a href="https://github.com/Boomin-Ai/Producer/tree/native-silicon-0.5.0/protocol/v1/my-first-million">Production document ↗</a></div>
-      <div class="protocol-body">
-        <div class="rundown"><h3>Show <span>/ Segments</span></h3><div id="segments"></div></div>
-        <div class="program">
-          <h3>Set <span>/ Layout</span> <strong id="active-layout">Opening</strong></h3>
-          <div class="outputs"><figure><img id="landscape-output" src="/protocol/opening-landscape.jpg" alt="Opening landscape output" width="840" height="473" loading="lazy"><figcaption>Landscape</figcaption></figure><figure><img id="portrait-output" src="/protocol/opening-vertical.jpg" alt="Opening portrait output" width="281" height="500" loading="lazy"><figcaption>Portrait</figcaption></figure></div>
-          <div class="timeline-head"><label for="segment-time">Segment timeline</label><output id="time-readout" for="segment-time">0:00 / 0:12</output></div>
-          <input type="range" min="0" max="12" step=".1" value="0" disabled id="segment-time">
-          <div id="cues" aria-label="Layout changes"></div>
-          <div class="graph"><h3>Render graph</h3><div id="graph-path"></div></div>
-        </div>
-      </div>
-    </div>
-    <noscript><p>Enable JavaScript to scrub the example. The production document includes the full rundown and layouts.</p></noscript>
-  </section>
-
-  <footer class="footer">
-    <span>Free and open source</span>
-    <a href="https://github.com/Boomin-Ai/Producer">GitHub</a>
-  </footer>
-
   <dialog class="installer" aria-labelledby="installer-heading">
     <form method="dialog">
       <button class="close-dialog" type="submit" aria-label="Close downloads">×</button>
@@ -607,6 +585,25 @@
     })();
   </script>
   <script type="module" src="/hero-effects.js"></script>
-  <script type="module" src="/protocol/home.js"></script>
+  <script>
+fetch('/api/stars').then(r=>r.json()).then(repo=>{
+ if(Number.isInteger(repo.count))document.querySelector('[data-stars]').textContent=repo.count.toLocaleString();
+}).catch(()=>{});
+if (['#production-protocol','#show-release'].includes(location.hash)) location.replace('/protocol/overview.html'+location.hash);
+fetch('/download/meta.json').then(r=>r.json()).then(meta=>{
+ const version=meta.platforms?.macos?.version;
+ if(version)document.querySelectorAll('[data-mac-version]').forEach(el=>el.textContent='v'+version);
+}).catch(()=>{});
+const inquiry=document.querySelector('#inquiry');
+let submission=crypto.randomUUID();
+inquiry.addEventListener('input',()=>{submission=crypto.randomUUID()});
+inquiry.addEventListener('submit',async e=>{
+ e.preventDefault();const submit=inquiry.querySelector('button'),status=document.querySelector('#result');
+ if(submit.disabled)return;submit.disabled=true;status.textContent='Sending…';
+ try{const body=new URLSearchParams(new FormData(inquiry));body.set('submission_id',submission);const r=await fetch(inquiry.action,{method:'POST',body});if(!r.ok)throw Error();
+ inquiry.reset();submission=crypto.randomUUID();status.textContent='Thanks! We received your production request.'}
+ catch{status.textContent='Your request could not be confirmed. Your details are still here. Please try again.'}finally{submit.disabled=false}
+});
+</script>
 </body>
 </html>
