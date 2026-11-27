@@ -197,6 +197,7 @@ impl PodcastPair {
 }
 
 struct Element {
+    solo_headline: Option<(u32, u32)>,
     podcast_panel: Option<PodcastPanel>,
     key: String,
     wave_border: bool,
@@ -423,6 +424,7 @@ impl Visuals {
                         fill = Some(base);
                     }
                 }
+                let mut solo_headline = None;
                 let mut content = None;
                 if let Some(text) = &n.text {
                     // The current adapter has one explicit portable system-font
@@ -463,6 +465,22 @@ impl Visuals {
                                 TextAlign::Right => 2,
                             }),
                         });
+                        if out == 1 && name.is_some() && n.path.ends_with("/episode-topic")
+                            && (project.scene == "useful-information" || project.scene.starts_with("useful-information-copy"))
+                            && project.output_layout_pair().vertical == "vertical" {
+                            let font_size = specs.last().unwrap().font_size * 1.60;
+                            let height = (font_size * 2.65).ceil() as u32;
+                            pixels += u64::from(w) * u64::from(height);
+                            if specs.len() >= 128 || pixels > 8_388_608 || height > 4096 {
+                                bail!("Native text cache budget exceeded; working output retained");
+                            }
+                            solo_headline = Some((specs.len() as u32, height));
+                            specs.push(TextSpec {
+                                rgba: std::ptr::null(), value: strings.last().unwrap().as_ptr(),
+                                width: w, height, font_size, weight: style.map_or(700, |s| s.weight as u32),
+                                align: specs.last().unwrap().align, single_line: 0,
+                            });
+                        }
                     }
                     content = Some(d);
                 } else if let Some(source) = &n.source {
@@ -494,7 +512,7 @@ impl Visuals {
                     })
                 } else { None };
                 outputs[out].push(Element {
-                    podcast_panel: PodcastPanel::for_node(key),
+                    solo_headline, podcast_panel: PodcastPanel::for_node(key),
                     framing_subject,
                     key: key.to_owned(), wave_border, speaker_region, node: index, depth, tracks,
                     fill,
@@ -763,7 +781,17 @@ impl Visuals {
                             d.rect[3] += offset;
                             d.metrics[2] = d.rect[3] * h;
                         }
-                        Some("topic-label" | "episode-topic") => d.rect[1] += offset * 0.62,
+                        Some("topic-label" | "episode-topic") => {
+                            d.rect[1] += offset * 0.36;
+                            if let Some((texture, height)) = e.solo_headline.filter(|_| d.kind == 2) {
+                                let expanded = d.rect[3] * height as f32 / d.metrics[2];
+                                if expanded - d.rect[3] <= offset * 0.64 {
+                                    d.rect[3] = expanded;
+                                    d.metrics[2] = height as f32;
+                                    d.source = texture;
+                                }
+                            }
+                        }
                         _ => {}
                     }
                 }
