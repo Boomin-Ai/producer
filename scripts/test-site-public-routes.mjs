@@ -312,3 +312,36 @@ test('HEAD cannot reflect invalid or over-budget lengths even with valid digest 
   assert.equal(r.response.status,503);assert.equal(r.text,'');assert.equal(r.response.headers.get('content-length'),null);assert.equal(r.response.headers.get('x-content-sha256'),null);privateCache(r.response);
  }
 });
+
+test('GitHub stars cache shares query variants, keeps stale counts and never leaks caller headers', async t => {
+  let stored;
+  const cache = {
+    match: async key => { assert.equal(key.url, canonical + '/api/stars'); return stored && json(stored); },
+    put: async (_, value) => { stored = await value.json(); },
+  };
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'caches');
+  Object.defineProperty(globalThis, 'caches', { configurable: true, value: { default: cache } });
+  t.after(() => previous ? Object.defineProperty(globalThis, 'caches', previous) : delete globalThis.caches);
+  const cold = await request('/api/stars', {upstream: () => json({})});
+  assert.equal(cold.response.status, 503);
+  const first = await request('/api/stars?q=1', {headers: {authorization:'private'}, upstream: () => json({stargazers_count:0})});
+  assert.deepEqual(JSON.parse(first.text), {count:0});
+  assert.equal(first.calls.length, 1);
+  assert.equal(new Headers(first.calls[0].init.headers).has('authorization'), false);
+  const hit = await request('/api/stars', {method:'HEAD'});
+  assert.equal(hit.response.status, 200);
+  assert.equal(hit.calls.length, 0);
+  assert.equal(hit.text, '');
+  stored.checkedAt = 0;
+  const stale = await request('/api/stars', {upstream: () => new Response(null, {status:429})});
+  assert.deepEqual(JSON.parse(stale.text), {count:0});
+  assert.equal((await request('/api/stars', {method:'POST'})).response.status, 405);
+});
+
+test('a cold edge can read the real repository counter when the GitHub API throttles it', async () => {
+  const result = await request('/api/stars', {upstream: input => String(input).startsWith('https://api.github.com/')
+    ? new Response(null, {status:403}) : new Response('<script>{"stargazerCount":1299,"watcherCount":0}</script>')});
+  assert.equal(result.response.status, 200);
+  assert.deepEqual(JSON.parse(result.text), {count:1299});
+  assert.equal(result.calls.length, 2);
+});

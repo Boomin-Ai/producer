@@ -213,6 +213,44 @@ async function publicRelease(tag) {
   return release && !release.draft && !release.prerelease && Array.isArray(release.assets) && release.assets.length ? release : null;
 }
 
+// Keep a longer-lived edge copy so GitHub throttling does not erase the last count.
+async function repositoryStars(req) {
+  if (req.method !== "GET" && req.method !== "HEAD") return new Response(null, { status: 405, headers: { Allow: "GET, HEAD" } });
+  const cache = globalThis.caches?.default;
+  const key = new Request(new URL("/api/stars", req.url).origin + "/api/stars");
+  const previous = await cache?.match(key);
+  let data = previous ? await previous.json() : null;
+  if (!data || Date.now() - data.checkedAt >= 900_000) {
+    const publicHeaders = { "user-agent": "producer-site" };
+    let count;
+    try {
+      const response = await fetch(`https://api.github.com/repos/${REPO}`, {
+        headers: { ...publicHeaders, accept: "application/vnd.github+json" }, signal: AbortSignal.timeout(3000),
+      });
+      if (response.ok) count = (await response.json()).stargazers_count;
+    } catch { /* Try the public repository page if this edge has no observation. */ }
+    if (!data && !(Number.isSafeInteger(count) && count >= 0)) {
+      try {
+        const page = await fetch(`https://github.com/${REPO}`, { headers: publicHeaders, signal: AbortSignal.timeout(3000) });
+        if (page.ok) {
+          const match = (await page.text()).match(/"stargazerCount"\s*:\s*(\d+)\s*,/);
+          if (match) count = Number(match[1]);
+        }
+      } catch { /* A cold edge can retry when GitHub recovers. */ }
+    }
+    if (Number.isSafeInteger(count) && count >= 0) {
+      data = { count, checkedAt: Date.now() };
+      try {
+        await cache?.put(key, Response.json(data, { headers: { "cache-control": "public, max-age=2592000" } }));
+      } catch { /* Return the fresh observation even when the edge cache is unavailable. */ }
+    }
+  }
+  return new Response(req.method === "HEAD" ? null : JSON.stringify({ count: data?.count ?? null }), {
+    status: data ? 200 : 503,
+    headers: { "content-type": "application/json", "cache-control": data ? "public, max-age=120" : "no-store" },
+  });
+}
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
@@ -258,6 +296,8 @@ export default {
       }
       return new Response(req.method === "HEAD" ? null : html, { status: upstream.status, headers });
     }
+
+    if (url.pathname === "/api/stars") return repositoryStars(req);
 
     if (url.pathname === "/download/meta.json") {
       const [rel, silicon] = await Promise.all([publicRelease(), publicRelease(APPLE_SILICON_RELEASE)]);
