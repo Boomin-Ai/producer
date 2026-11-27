@@ -4,11 +4,11 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use producer_production_contract::geometry::{GeometryScene, Mesh};
 use sha2::{Digest, Sha256};
 
-pub fn prepare(scene: &GeometryScene) -> Result<Vec<u8>> {
+pub fn prepare(root: &std::path::Path, scene: &GeometryScene) -> Result<Vec<u8>> {
     let mut json = serde_json::to_value(scene)?;
     if let Some(hash) = &scene.environment {
         ensure!(hash.len()==64 && hash.bytes().all(|b|b.is_ascii_hexdigit()), "Invalid environment digest");
-        let bytes=std::fs::read(crate::root().join("assets").join(format!("{hash}.png")))?;
+        let bytes=std::fs::read(root.join("assets").join(format!("{hash}.png")))?;
         ensure!(bytes.len()<=2_097_152 && format!("{:x}",Sha256::digest(&bytes))==*hash,"Invalid environment map");
         let reader=image::ImageReader::new(std::io::Cursor::new(&bytes)).with_guessed_format()?;
         let (width,height)=reader.into_dimensions()?;
@@ -28,7 +28,7 @@ pub fn prepare(scene: &GeometryScene) -> Result<Vec<u8>> {
                 json["objects"][i]["sharedBuffer"]=serde_json::json!(previous);
                 continue;
             }
-            let path=crate::root().join("assets").join(format!("{digest}.vclip"));
+            let path=root.join("assets").join(format!("{digest}.vclip"));
             let len=usize::try_from(std::fs::metadata(&path)?.len())?;
             clip_bytes=clip_bytes.checked_add(len).context("Clip size overflow")?;
             ensure!(len>=16 && clip_bytes<=32*1024*1024,"Vertex clip budget exceeded");
@@ -45,7 +45,7 @@ pub fn prepare(scene: &GeometryScene) -> Result<Vec<u8>> {
         }
         let Mesh::Glb { digest } = &object.mesh else { continue };
         ensure!(digest.len()==64 && digest.bytes().all(|b|b.is_ascii_hexdigit()), "Invalid GLB digest");
-        let path = crate::root().join("assets").join(format!("{digest}.glb"));
+        let path = root.join("assets").join(format!("{digest}.glb"));
         ensure!(std::fs::metadata(&path)?.len() <= 8_388_608, "GLB exceeds import budget");
         let bytes = std::fs::read(path)?;
         ensure!(format!("{:x}", Sha256::digest(&bytes)) == *digest, "GLB digest mismatch");

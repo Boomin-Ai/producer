@@ -11,7 +11,7 @@ pub fn run(args: &[String], rehearsal: bool, outputs: bool) -> Result<()> {
     let room: model::RoomProject =
         serde_json::from_slice(&std::fs::read(root().join("room.json"))?)?;
     let mut project = room.live_set()?;
-    let mut cache = visuals::VisualCache::default();
+    let mut cache = visuals::VisualCache::new(&root());
     let native = platform::NativeRoom::new()?;
     native.prepare([project.canvas.landscape, project.canvas.vertical])?;
     if rehearsal {
@@ -164,7 +164,7 @@ pub fn filmstrip(args: &[String]) -> Result<()> {
     let mut project=room.live_set()?;
     let renderer=platform::NativeRoom::new()?;
     renderer.prepare([project.canvas.landscape,project.canvas.vertical])?;
-    let mut cache=visuals::VisualCache::default();
+    let mut cache=visuals::VisualCache::new(&root());
     let mut revision=0;
     let mut documents=Vec::new();
     for (index,file) in args[1..=2].iter().enumerate() {

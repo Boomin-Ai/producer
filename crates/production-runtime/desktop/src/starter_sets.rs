@@ -574,7 +574,11 @@ mod tests {
         assert!(!saved.production.sets.contains_key("studio"));
         assert!(!saved.production.sets.contains_key("waves"));
         assert_eq!(saved.mounted_set.as_deref(), Some("classic"));
-        assert_eq!(saved.production.sets.len(), 6);
+        let installed: Vec<_> = saved.production.sets.keys().map(String::as_str).collect();
+        assert_eq!(installed, ["atmosphere", "atmosphere-aerie", "classic", "meridian-avenue",
+            "my-first-million", "speaker-split", "useful-information"]);
+        assert_eq!(saved.set_layout_choices("useful-information").len(), 7);
+        assert!(saved.production.shows.values().all(|show| show.set != "useful-information"));
         assert_eq!(saved.set_layout_choices("my-first-million").len(), 7);
         let mut show = saved.clone();
         for id in ["opening", "conversation", "guest-interview", "breakdown", "takeaway"] {

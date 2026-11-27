@@ -16,11 +16,15 @@ pub const MAX_DRAWS: usize = 1024;
 // Budget for intermediate color, layer and depth surfaces per output. An
 // eight-pass 1080p graph also needs space for its layer textures.
 const MAX_GRAPH_SURFACE_PIXELS: u64 = 32 * 1024 * 1024;
-#[derive(Default)]
 pub struct VisualCache {
+    root: std::path::PathBuf,
     entries: std::collections::VecDeque<(String, Arc<Visuals>)>,
 }
 impl VisualCache {
+    pub fn new(root: &std::path::Path) -> Self {
+        Self { root: root.to_owned(), entries: Default::default() }
+    }
+
     pub fn merge_warmed(&mut self, cache: Self) {
         for entry in cache.entries {
             if !self.entries.iter().any(|(key, _)| key == &entry.0) {
@@ -76,7 +80,7 @@ impl VisualCache {
                     .and_then(|s| s.text.as_ref())
                     .is_some_and(|t| t.field.as_deref().is_some_and(|f| f != "dj-track"))
             }) {
-            crate::weather::fields(&crate::root())?
+            crate::weather::fields(&self.root)?
         } else {
             Default::default()
         };
@@ -104,7 +108,7 @@ impl VisualCache {
             self.entries.push_front(entry);
             return Ok(prepared);
         }
-        let mut prepared = Visuals::prepare(project, plan, &fields, places_guest)?;
+        let mut prepared = Visuals::prepare(&self.root, project, plan, &fields, places_guest)?;
         if let Some(segment) = schedule {
             let mut pairs = std::collections::BTreeMap::new();
             for change in &segment.layout_changes {
@@ -176,6 +180,7 @@ fn ink(i: &Ink) -> [f32; 4] {
     ]
 }
 fn image_slot(
+    root: &std::path::Path,
     project: &RoomProject,
     asset: &str,
     slots: &mut std::collections::HashMap<String, (u32, u32, u32)>,
@@ -187,7 +192,7 @@ fn image_slot(
     if let Some(&entry) = slots.get(digest) {
         return Ok(entry);
     }
-    let path = crate::root().join("assets").join(format!("{digest}.png"));
+    let path = root.join("assets").join(format!("{digest}.png"));
     let file = std::fs::File::open(path)?;
     use std::io::Read;
     let mut bytes = Vec::new();
@@ -243,7 +248,7 @@ impl Visuals {
     }
     pub fn has_guest_slot(&self, output: usize) -> bool { self.guest_slots[output] }
     pub fn has_speaker_split(&self) -> bool { self.speaker_split }
-    fn prepare(project: &RoomProject, plan: &Plan, fields: &crate::weather::Fields, places_guest: bool) -> Result<Self> {
+    fn prepare(root: &std::path::Path, project: &RoomProject, plan: &Plan, fields: &crate::weather::Fields, places_guest: bool) -> Result<Self> {
         let weather_desk = project.production.sets.get(&project.scene)
             .is_some_and(|set| set.theme.contains_key("weather-desk"));
         let mut programs = std::collections::HashMap::new();
@@ -334,7 +339,7 @@ impl Visuals {
                                 base.material = [3., 1.6, 14., 0.];
                             }
                             Paint::Image { asset, fit } => {
-                                let (slot,w,h)=image_slot(project,asset,&mut image_slots,&mut images,&mut specs,&mut pixels)?;
+                                let (slot,w,h)=image_slot(root,project,asset,&mut image_slots,&mut images,&mut specs,&mut pixels)?;
                                 base.kind = 3;
                                 base.source = slot;
                                 fit_source(&mut base,Some(*fit),w as usize,h as usize,size);
@@ -471,7 +476,7 @@ impl Visuals {
                         GraphPass::Geometry { id,scene,.. } => {
                             graph_pixels += u64::from(width) * u64::from(height);
                             anyhow::ensure!(graph_pixels <= MAX_GRAPH_SURFACE_PIXELS,"geometry depth target exceeds graph budget");
-                            strings.push(CString::new(crate::glb::prepare(scene)?)?);
+                            strings.push(CString::new(crate::glb::prepare(root, scene)?)?);
                             (id,strings.last().unwrap().as_ptr(),c_geometry_shader(),std::ptr::null(),[0.;4])
                         }
                         GraphPass::Fragment {id,shader,params,fields:bindings,..} => {
@@ -534,6 +539,7 @@ impl Visuals {
                             }
                             GraphInput::Image { asset } => {
                                 8 + image_slot(
+                                    root,
                                     project,
                                     asset,
                                     &mut image_slots,
@@ -905,7 +911,7 @@ mod resource_tests {
         project.mount_set(Some(crate::speaker_split::ID.into()), None).unwrap();
         let project = project.live_set().unwrap();
         let plan = project.compile().unwrap();
-        let visuals = VisualCache::default().prepare(&project, &plan).unwrap();
+        let visuals = VisualCache::new(&crate::root()).prepare(&project, &plan).unwrap();
         assert!(visuals.has_speaker_split());
         let mut draws = Vec::new();
         for (output, (_, size)) in project.output_layouts().into_iter().enumerate() {
@@ -928,7 +934,7 @@ mod resource_tests {
     #[test]
     fn changing_the_primary_camera_reuses_prepared_visuals() {
         let mut project = crate::visual_fixture::project(false);
-        let mut cache = VisualCache::default();
+        let mut cache = VisualCache::new(&crate::root());
         let original = cache.prepare(&project, &project.compile().unwrap()).unwrap();
         project.configure_input("camera", "camera", "facetime", "FaceTime").unwrap();
         let rebound = cache.prepare(&project, &project.compile().unwrap()).unwrap();
@@ -939,7 +945,7 @@ mod resource_tests {
     #[test]
     fn prepared_text_is_reused_for_editorial_and_dock_changes() {
         let mut p = crate::visual_fixture::project(false);
-        let mut cache = VisualCache::default();
+        let mut cache = VisualCache::new(&crate::root());
         let a = cache.prepare(&p, &p.compile().unwrap()).unwrap();
         p.workspace
             .apply(crate::workspace::WorkspaceCommand::Visibility {
@@ -991,7 +997,7 @@ mod resource_tests {
             set.layouts.insert(format!("alternate-{orientation}"), set.layouts[orientation].clone());
         }
         let plan = project.compile().unwrap();
-        let mut cache = VisualCache::default();
+        let mut cache = VisualCache::new(&crate::root());
         let original = cache.prepare(&project, &plan).unwrap();
         let selection = project.mounted_layout.clone();
         project.mount_set(Some("studio".into()), Some(crate::model::SetLayoutPair {
@@ -1006,7 +1012,7 @@ mod resource_tests {
     #[test]
     fn unknown_font_is_refused_and_previous_resources_survive() {
         let mut p = crate::visual_fixture::project(false);
-        let mut cache = VisualCache::default();
+        let mut cache = VisualCache::new(&crate::root());
         let before = cache.prepare(&p, &p.compile().unwrap()).unwrap();
         let node = &mut p
             .production
@@ -1034,7 +1040,7 @@ mod admission_tests {
     fn cached_scene_does_not_hide_new_unsupported_animation() {
         use producer_production_contract::*;
         let mut p = crate::visual_fixture::project(false);
-        let mut cache = VisualCache::default();
+        let mut cache = VisualCache::new(&crate::root());
         let before = cache.prepare(&p, &p.compile().unwrap()).unwrap();
         p.production
             .sequences
