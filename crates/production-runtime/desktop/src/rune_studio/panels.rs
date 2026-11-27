@@ -1508,8 +1508,16 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 let end_width = 130. + extra * 0.40;
                 let show_id = super::editor::controller_show(s, snap, key);
                 let running = snap.program_kind == "show" && snap.program_segment.as_ref().is_some_and(|(id, _)| Some(id.as_str()) == show_id);
-                let pair = if running || (snap.active_host_shot.is_some() && p.mounted_set.as_ref() == Some(key)) { snap.program_layout.clone().unwrap_or(pair) } else { pair };
-                let on = running || (show_id.is_none() && snap.program_kind == "set" && (l.handle.is_set_on_output(key, &pair, set) || (snap.active_host_shot.is_some() && p.mounted_set.as_ref() == Some(key))));
+                let same_set = p.mounted_set.as_deref() == Some(key.as_str());
+                let set_on_output = show_id.is_none() && snap.program_kind == "set" && same_set;
+                let pair = if running || (same_set && snap.active_host_shot.is_some()) {
+                    snap.program_layout.clone().unwrap_or(pair)
+                } else if set_on_output {
+                    p.default_set_selection(key)
+                } else {
+                    pair
+                };
+                let on = running || set_on_output;
                 let header = set_controls_header(snap, show_id, key, &pair, on, width, shelf);
                 let mut players = Vec::new();
                 if let Some((id, show)) = show_id.and_then(|id| p.production.shows.get(id).filter(|show| &show.set == key).map(|show| (id, show))) {
@@ -1569,14 +1577,14 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                         .on_press(move |s: &mut Studio| {
                             if let Some((show, segment)) = &show_segment {
                                 s.send(RoomCommand::ShowLayout { show: show.clone(), segment: segment.clone(), layout: Some(chosen.clone()) });
-                            } else if !active || snap_directed {
+                            } else if set_on_output && (!active || snap_directed) {
+                                s.set_selection = None;
+                                s.send(RoomCommand::SetMount {
+                                    id: Some(k.clone()),
+                                    layout: Some(chosen.clone()),
+                                });
+                            } else if !on && !active {
                                 s.set_selection = Some(super::editor::ControllerSelection::new(scene.clone(), k.clone(), chosen.clone(), selected_show.clone()));
-                                if on {
-                                    s.send(RoomCommand::SetMount {
-                                        id: Some(k.clone()),
-                                        layout: Some(chosen.clone()),
-                                    });
-                                }
                             }
                         },
                     ));

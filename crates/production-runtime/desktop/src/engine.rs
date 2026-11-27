@@ -351,11 +351,6 @@ impl Handle {
         self.screen_pan.store(packed, Ordering::Relaxed);
     }
 
-    pub fn is_set_on_output(&self, id: &str, pair: &SetLayoutPair, set: &producer_production_contract::Set) -> bool {
-        let program = self.program.lock().unwrap();
-        program.scene == id && program.output_layout_pair() == *pair
-            && program.production.sets.get(id) == Some(set)
-    }
 }
 static MOVIE_WORKERS: AtomicU64 = AtomicU64::new(0);
 struct MovieAdmission;
