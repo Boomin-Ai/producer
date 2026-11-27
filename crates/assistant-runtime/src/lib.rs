@@ -808,7 +808,7 @@ fn authorize_url(
                 query.append_pair("login_hint", &a.email);
             }
         } else {
-            query.append_pair("agent_name_hint", "Producer");
+            query.append_pair("agent_name_hint", "Producer").append_pair("prompt", "select_account");
         }
     }
     Ok(url.into())
@@ -985,6 +985,42 @@ impl EventStream {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn studio_signout_persists_and_new_login_can_choose_another_account() {
+        #[derive(Default)]
+        struct TestVault(std::sync::Mutex<Option<CredentialStore>>);
+        impl CredentialVault for TestVault {
+            fn load(&self) -> Result<Option<CredentialStore>> { Ok(self.0.lock().unwrap().clone()) }
+            fn save(&self, store: &CredentialStore) -> Result<()> {
+                *self.0.lock().unwrap() = Some(store.clone());
+                Ok(())
+            }
+        }
+        let vault = Arc::new(TestVault::default());
+        let mut store = CredentialStore::default();
+        for id in ["one", "two"] {
+            store.accounts.push(Account {
+                id: id.into(), client_id: id.into(), subject: id.into(), email: String::new(),
+                access_token: "fixture".into(), refresh_token: None, id_token: "fixture".into(),
+                expires_at: u64::MAX, scopes: vec![], verified: true,
+            });
+        }
+        store.active = Some("one".into());
+        vault.save(&store).unwrap();
+        let client = Client::new(vault.clone()).await.unwrap();
+        client.disconnect("one").await.unwrap();
+        let reopened = Client::new(vault.clone()).await.unwrap();
+        assert!(reopened.status().await.active.is_none());
+        let saved = vault.load().unwrap().unwrap();
+        assert!(saved.accounts[0].access_token.is_empty() && saved.accounts[0].id_token.is_empty());
+        assert_eq!(saved.accounts[1].access_token, "fixture");
+        let url = authorize_url(&saved.host_id, "http://localhost/", "state", "nonce", "verifier", None).unwrap();
+        let parsed = reqwest::Url::parse(&url).unwrap();
+        assert!(parsed.query_pairs().any(|(key, value)| key == "prompt" && value == "select_account"));
+        reopened.select("two").await.unwrap();
+        assert_eq!(Client::new(vault).await.unwrap().status().await.active.as_deref(), Some("two"));
+    }
+
     async fn read_test_request(socket: &mut tokio::net::TcpStream) {
         let mut request = Vec::new();
         loop {
