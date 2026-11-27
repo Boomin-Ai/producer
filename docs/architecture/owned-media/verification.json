@@ -1,0 +1,47 @@
+{
+  "passed": true,
+  "checks": [
+    "11 sections",
+    "12 architecture nodes",
+    "routing/visibility/self-exclusion",
+    "four recovery scenarios",
+    "seven phases",
+    "light/dark theme",
+    "all anchors valid",
+    "no duplicate IDs",
+    "no page overflow 320–1920px",
+    "all detail and phase content available for print",
+    "no JavaScript exceptions"
+  ],
+  "viewports": [
+    {
+      "width": 1920,
+      "content": 1920
+    },
+    {
+      "width": 1440,
+      "content": 1440
+    },
+    {
+      "width": 1024,
+      "content": 1024
+    },
+    {
+      "width": 768,
+      "content": 768
+    },
+    {
+      "width": 760,
+      "content": 760
+    },
+    {
+      "width": 390,
+      "content": 390
+    },
+    {
+      "width": 320,
+      "content": 320
+    }
+  ],
+  "applicationChanged": false
+}
