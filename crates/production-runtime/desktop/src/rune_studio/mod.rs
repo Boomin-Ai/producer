@@ -300,7 +300,7 @@ struct Studio {
     drag_tile: Option<(PanelId, [f32; 2])>,
     studio_panels: bool,
     panel_menu: Option<Edge>,
-    set_selection: Option<(String, String, crate::model::SetLayoutPair)>,
+    set_selection: Option<editor::ControllerSelection>,
     pending_trim: Option<RoomCommand>,
     channels: channels::Channels,
     naming: bool,

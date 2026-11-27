@@ -1317,27 +1317,11 @@ impl RoomProject {
         let Some(set) = self.production.sets.get(id) else { return Vec::new() };
         self.draft_layout_choices(id,set)
     }
-    pub fn draft_layout_choices(&self,id:&str,set:&Set)->Vec<SetLayoutChoice>{
-        let mut named = Vec::new();
-        for show in self.production.shows.values().filter(|show| show.set == id) {
-            for segment in show.segments.iter().filter(|s| s.sequence.is_none()) {
-                let pair = SetLayoutPair {
-                    landscape: segment.landscape.clone(),
-                    vertical: segment.vertical.clone(),
-                };
-                if pair.exists_in(set) && !named.iter().any(|choice: &SetLayoutChoice| choice.pair == pair) {
-                    named.push(SetLayoutChoice { label: segment.title.clone(), pair });
-                }
-            }
-        }
+    pub fn draft_layout_choices(&self, _id: &str, set: &Set) -> Vec<SetLayoutChoice> {
+        let mut named = Vec::<SetLayoutChoice>::new();
         let default = SetLayoutPair::default();
-        if default.exists_in(set) || named.is_empty() {
-            if let Some(index) = named.iter().position(|choice| choice.pair == default) {
-                let first = named.remove(index);
-                named.insert(0, first);
-            } else {
-                named.insert(0, SetLayoutChoice { label: "Default".into(), pair: default });
-            }
+        if default.exists_in(set) {
+            named.push(SetLayoutChoice { label: "Default".into(), pair: default });
         }
         for (key,layout) in &set.layouts {
             if named.iter().any(|c|c.pair.ids().contains(&key.as_str())){continue}

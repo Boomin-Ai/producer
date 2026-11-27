@@ -1,4 +1,5 @@
 use super::*;
+use crate::model::SetLayoutPair;
 use anyhow::{ensure, Context, Result};
 use producer_production_contract::{Content, Node, Paint};
 use serde::Deserialize;
@@ -10,6 +11,7 @@ const LINE: u32 = 0x263747;
 enum Collection {
     #[default]
     Installed,
+    Shows,
     Producer,
     Published,
 }
@@ -55,6 +57,9 @@ const POSTERS: &[(&str, &[u8])] = &[
     poster!("atmosphere-aerie"),
     poster!("meridian-avenue"),
     poster!("classic"),
+    poster!("classic-host"), poster!("classic-landscape"), poster!("classic-opening"), poster!("classic-screen-share"),
+    poster!("useful-information-landscape"), poster!("useful-information-focus-host"), poster!("useful-information-focus-cohost"), poster!("useful-information-interview"), poster!("useful-information-screen-share"), poster!("useful-information-follow"), poster!("useful-information-opening"),
+
     poster!("my-first-million"),
     poster!("mfm-opening"), poster!("mfm-conversation"), poster!("mfm-interview"),
     poster!("mfm-focus-shaan"), poster!("mfm-focus-sam"), poster!("mfm-screen-share"), poster!("mfm-follow"),
@@ -72,9 +77,13 @@ impl Library {
 
     pub(super) fn shot_image(&self, id: &str, set: &producer_production_contract::Set,
         landscape: &str, width: f32, height: f32) -> Option<El> {
-        if id == "my-first-million" {
+        {
             let shot = landscape.strip_suffix("-landscape").unwrap_or(landscape);
-            let key = format!("mfm-{}", if shot == "landscape" { "conversation" } else { shot });
+            let key = match (id, shot) {
+                ("my-first-million", "landscape") => "mfm-conversation".to_owned(),
+                ("my-first-million", _) => format!("mfm-{shot}"),
+                _ => format!("{id}-{shot}"),
+            };
             if let Some(image) = self.local.get(key.as_str()).filter(|image| image.size().is_some()) {
                 return Some(el().size(width, height).clip_rounded(4.).pixels_fit(image.pixels(), SurfaceFit::Fill));
             }
@@ -251,22 +260,27 @@ fn ink(node: &Node) -> Option<Color> {
 
 fn layout_thumbnail(root: &Node, width: f32, height: f32, sx: f32, sy: f32) -> El {
     let mut tile = el()
-        .size(width, height)
+        .clip_rounded(3.).size(width, height)
         .fill(ink(root).unwrap_or(color(0x12232e)));
     for node in &root.children {
         if let Some(frame) = node.frame {
-            let slot = el()
-                .absolute(frame.x as f32 * sx, frame.y as f32 * sy)
-                .size(frame.width as f32 * sx, frame.height as f32 * sy);
+            let w = frame.width as f32 * sx;
+            let h = frame.height as f32 * sy;
+            let slot = el().absolute(frame.x as f32 * sx, frame.y as f32 * sy).size(w, h);
             let preview = match node.content {
-                Content::Source { .. } => slot
-                    .radius(4.)
-                    .fill(color(0x294854))
-                    .border(1., color(0x40707e))
-                    .center()
-                    .child(rune::icon(glyphs::glyph("camera"), 16.).color(color(0x88b6c4))),
-                Content::Text { .. } => slot.radius(3.).fill(ink(node).unwrap_or(color(0x51717d))),
-                _ => slot.fill(ink(node).unwrap_or(color(0x182d39))),
+                Content::Source { .. } => {
+                    let radius = (w.min(h) * 0.08).min(4.);
+                    let slot = slot.clip_rounded(radius).radius(radius).fill(color(0x294854));
+                    if w >= 20. && h >= 14. {
+                        slot.center().child(rune::icon(glyphs::glyph("camera"), (h * 0.48).min(w * 0.45).min(18.)).color(color(0x88b6c4)))
+                    } else { slot }
+                }
+                Content::Text { .. } => {
+                    // A line of ink still reads as type at thumbnail scale.
+                    slot.center().child(el().size(w * 0.78, (h * 0.29).clamp(1., 5.)).radius(1.)
+                        .fill(color(0x94aab2)))
+                }
+                _ => match ink(node) { Some(fill) => slot.fill(fill), None => continue },
             };
             tile = tile.child(preview);
         }
@@ -338,6 +352,7 @@ pub(super) fn view(s: &Studio, width: f32, current: &str) -> El {
     let mut tabs = row().gap(5.).flex_wrap();
     for (label, key, choice) in [
         ("In this studio", "installed", Collection::Installed),
+        ("Shows", "shows", Collection::Shows),
         ("Producer", "producer", Collection::Producer),
         ("Published", "published", Collection::Published),
     ] {
@@ -352,7 +367,7 @@ pub(super) fn view(s: &Studio, width: f32, current: &str) -> El {
         .items_center()
         .gap(12.)
         .flex_wrap()
-        .child(title("Set library", 24., 650., TEXT))
+        .child(title("Sets and shows", 24., 650., TEXT))
         .child(el().grow(1.))
         .child(button(
             "library-back",
@@ -378,7 +393,7 @@ pub(super) fn view(s: &Studio, width: f32, current: &str) -> El {
         field("library-search", &library.filter, |s| {
             &mut s.set_library.filter
         })
-        .placeholder("Find a set", color(MUTED))
+        .placeholder(if library.collection == Collection::Shows { "Find a show" } else { "Find a set" }, color(MUTED))
         .max_w(300.)
     };
     let columns = if width >= 940. {
@@ -433,6 +448,26 @@ pub(super) fn view(s: &Studio, width: f32, current: &str) -> El {
         } else if library.notice.is_empty() {
             status = "Browse a creator’s public sets on Producer.dev.".into();
         }
+    } else if library.collection == Collection::Shows {
+        let filter = library.filter.text.trim().to_lowercase();
+        for (id, show) in project.production.shows.iter() {
+            let label = crate::model::set_label(id);
+            if !label.to_lowercase().contains(&filter) { continue; }
+            let Some(set) = project.production.sets.get(&show.set) else { continue };
+            let Some(first) = show.segments.first() else { continue };
+            let pair = SetLayoutPair { landscape: first.landscape.clone(), vertical: first.vertical.clone() };
+            let image = library.shot_image(&show.set, set, &pair.landscape, card_width, card_width * 9. / 16.)
+                .unwrap_or_else(|| placeholder(card_width, "panels"));
+            let detail = format!("{} · {} {}", crate::model::set_label(&show.set), show.segments.len(),
+                if show.segments.len() == 1 { "segment" } else { "segments" });
+            let selected = super::editor::ControllerSelection::new(project.active_scene.clone(), show.set.clone(), pair, Some(id.clone()));
+            cards.push(card(format!("prepare-show-{id}"), &label, detail, "Prepare show", image,
+                card_width, false, move |s| {
+                    super::editor::close(s);
+                    if s.editor.is_none() { s.set_selection = Some(selected.clone()); }
+                }));
+        }
+        if cards.is_empty() { status = "No shows match your search.".into(); }
     } else {
         let filter = library.filter.text.trim().to_lowercase();
         let mut sets: Vec<_> = project
@@ -467,12 +502,7 @@ pub(super) fn view(s: &Studio, width: f32, current: &str) -> El {
             let image = artwork(card_width, library.local.get(id.as_str()), fallback);
             let source = if bundled { "Producer" } else { "This studio" };
             let count = project.set_layout_choices(id).len();
-            let segments = project.production.shows.get(id).filter(|show| id == "my-first-million" && &show.set == id)
-                .map_or(0, |show| show.segments.len());
-            let detail = if segments > 0 {
-                format!("{segments} {} · {count} {}", if segments == 1 { "segment" } else { "segments" },
-                    if count == 1 { "shot" } else { "shots" })
-            } else if count == 1 {
+            let detail = if count == 1 {
                 "1 layout".into()
             } else {
                 format!("{count} layouts")
@@ -492,7 +522,13 @@ pub(super) fn view(s: &Studio, width: f32, current: &str) -> El {
                 image,
                 card_width,
                 id == current,
-                move |s| super::editor::open_selection(s, id.clone(), pair.clone()),
+                move |s| {
+                    if let Some(live) = &s.live {
+                        s.set_selection = Some(super::editor::ControllerSelection::new(
+                            live.snapshot.project.active_scene.clone(), id.clone(), pair.clone(), None));
+                    }
+                    super::editor::open_selection(s, id.clone(), pair.clone())
+                },
             );
             cards.push(if template {
                 col().w(card_width).child(entry).child(button("clone-podcast-set", "Clone starter set", false, |s| {

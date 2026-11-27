@@ -1378,10 +1378,10 @@ pub(super) fn edit_set_button() -> El {
     tool("edit-set", "settings", "Edit set", false, super::editor::open).size(22., 22.)
 }
 
-fn set_controls_header(snap: &Snapshot, key: &str, pair: &crate::model::SetLayoutPair, on: bool, width: f32, shelf: bool) -> El {
+fn set_controls_header(snap: &Snapshot, show_id: Option<&str>, key: &str, pair: &crate::model::SetLayoutPair, on: bool, width: f32, shelf: bool) -> El {
     let project = &snap.project;
     let mut heading = row().items_center().gap(6.)
-        .child(title(crate::model::set_label(key), 18., 650., TEXT).grow(1.));
+        .child(title(crate::model::set_label(show_id.unwrap_or(key)), 18., 650., TEXT).grow(1.));
     if project.workspace.panels[&PanelId::Controls].header == crate::workspace::HeaderMode::Hidden {
         heading = heading.child(edit_set_button());
     }
@@ -1391,7 +1391,7 @@ fn set_controls_header(snap: &Snapshot, key: &str, pair: &crate::model::SetLayou
         .filter(|_| snap.program_kind == "show")
         .and_then(|(id, segment)| {
             let show = project.production.shows.get(id)?;
-            (show.set == key).then_some((id, segment, show))
+            (show_id == Some(id.as_str()) && show.set == key).then_some((id, segment, show))
         });
     if let Some((show_id, current, show)) = active {
         let running = snap.program_playing;
@@ -1407,13 +1407,15 @@ fn set_controls_header(snap: &Snapshot, key: &str, pair: &crate::model::SetLayou
             .child(title(label, 11., 600., if running { MINT } else { TEXT }))
             .child(title(show_clock(snap.show_elapsed), 11., 600., TEXT).key("set-show-time"))
             .child(title("·", 11., 500., MUTED));
-    } else if key == "my-first-million" && project.production.shows.contains_key(key) {
+    } else if show_id.is_some() {
         status = status.child(title("Ready", 11., 600., TEXT)).child(title("·", 11., 500., MUTED));
     }
     status = status.child(title(if on { "On output" } else { "Prepared" }, 10., 500., MUTED));
 
     let scene = project.active_scene.clone();
     let set_id = key.to_owned();
+    let selected_show = show_id.map(str::to_owned);
+    let opener = show_id.and_then(|id| project.production.shows.get(id)?.segments.first().map(|seg| (id.to_owned(), seg.id.clone())));
     let layouts = pair.clone();
     let action_label = if on { "Switch output to studio scene" } else { "Show set on output" };
     let mut action = row().key("control-set-output").role("button").focusable(true)
@@ -1421,10 +1423,16 @@ fn set_controls_header(snap: &Snapshot, key: &str, pair: &crate::model::SetLayou
         .fill(color(SURFACE)).hover_fill(color(theme::GRIP_HOVER))
         .child(glyph(if on { "back" } else { "studio" }, 12., MUTED));
     if shelf || width >= 245. {
-        action = action.child(title(if on { "Studio scene" } else { "Take set" }, 10., 580., TEXT));
+        action = action.child(title(if on { "Studio scene" } else if show_id.is_some() { "Take show" } else { "Take set" }, 10., 580., TEXT));
     }
     action = action.on_press(move |s: &mut Studio| {
-        s.set_selection = Some((scene.clone(), set_id.clone(), layouts.clone()));
+        s.set_selection = Some(super::editor::ControllerSelection::new(scene.clone(), set_id.clone(), layouts.clone(), selected_show.clone()));
+        if !on {
+            if let Some((show, first)) = &opener {
+                s.send(RoomCommand::RunSegment { show: show.clone(), segment: first.clone(), paused: true, restart: true });
+                return;
+            }
+        }
         s.send(RoomCommand::SetMount {
             id: (!on).then(|| set_id.clone()),
             layout: (!on).then(|| layouts.clone()),
@@ -1498,12 +1506,11 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 let overview_width = 150. + extra * 0.25;
                 let center_width = 205. + extra * 0.35;
                 let end_width = 130. + extra * 0.40;
-                let running = snap.program_kind == "show" && p.mounted_set.as_ref() == Some(key);
+                let show_id = super::editor::controller_show(s, snap, key);
+                let running = snap.program_kind == "show" && snap.program_segment.as_ref().is_some_and(|(id, _)| Some(id.as_str()) == show_id);
                 let pair = if running || (snap.active_host_shot.is_some() && p.mounted_set.as_ref() == Some(key)) { snap.program_layout.clone().unwrap_or(pair) } else { pair };
-                let on = running || (snap.program_kind == "set" && (l.handle.is_set_on_output(key, &pair, set) || (snap.active_host_shot.is_some() && p.mounted_set.as_ref() == Some(key))));
-                let header = set_controls_header(snap, key, &pair, on, width, shelf);
-                let active = p.playing_segment.as_ref().filter(|_| running).map(|(id, _)| id.as_str());
-                let show_id = active.or_else(|| (key == "my-first-million").then_some(key.as_str()));
+                let on = running || (show_id.is_none() && snap.program_kind == "set" && (l.handle.is_set_on_output(key, &pair, set) || (snap.active_host_shot.is_some() && p.mounted_set.as_ref() == Some(key))));
+                let header = set_controls_header(snap, show_id, key, &pair, on, width, shelf);
                 let mut players = Vec::new();
                 if let Some((id, show)) = show_id.and_then(|id| p.production.shows.get(id).filter(|show| &show.set == key).map(|show| (id, show))) {
                     if let Some(player) = show_controller(s, snap, id, show, set) {
@@ -1539,6 +1546,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                     let scene = p.active_scene.clone();
                     let chosen = layout.pair;
                     let show_segment = p.playing_segment.clone().filter(|_| running);
+                    let selected_show = show_id.map(str::to_owned);
                     let active = chosen == pair;
                     let snap_directed = snap.active_host_shot.is_some();
                     let ready = crate::set_slots::for_pair(p, set, &chosen)
@@ -1562,7 +1570,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                             if let Some((show, segment)) = &show_segment {
                                 s.send(RoomCommand::ShowLayout { show: show.clone(), segment: segment.clone(), layout: Some(chosen.clone()) });
                             } else if !active || snap_directed {
-                                s.set_selection = Some((scene.clone(), k.clone(), chosen.clone()));
+                                s.set_selection = Some(super::editor::ControllerSelection::new(scene.clone(), k.clone(), chosen.clone(), selected_show.clone()));
                                 if on {
                                     s.send(RoomCommand::SetMount {
                                         id: Some(k.clone()),

@@ -296,13 +296,38 @@ pub(super) fn open(s: &mut Studio) {
     };
     open_selection(s, id, pair);
 }
+#[derive(Clone)]
+pub(super) struct ControllerSelection {
+    pub scene: String,
+    pub set: String,
+    pub layout: SetLayoutPair,
+    pub show: Option<String>,
+}
+
+impl ControllerSelection {
+    pub fn new(scene: String, set: String, layout: SetLayoutPair, show: Option<String>) -> Self {
+        Self { scene, set, layout, show }
+    }
+}
+
+pub(super) fn controller_show<'a>(s: &'a Studio, snap: &'a Snapshot, set: &str) -> Option<&'a str> {
+    let project = &snap.project;
+    let selected = s.set_selection.as_ref().filter(|sel| sel.scene == project.active_scene && sel.set == set);
+    let id = match selected {
+        Some(sel) => sel.show.as_deref()?,
+        None if snap.program_kind == "show" => snap.program_segment.as_ref()?.0.as_str(),
+        None => return None,
+    };
+    project.production.shows.get(id).filter(|show| show.set == set).map(|_| id)
+}
+
 pub(super) fn selection(
     s: &Studio,
     p: &crate::model::RoomProject,
 ) -> Option<(String, SetLayoutPair)> {
-    if let Some((scene, id, pair)) = &s.set_selection {
-        if scene == &p.active_scene && p.set_layout_choices(id).iter().any(|c| c.pair == *pair) {
-            return Some((id.clone(), pair.clone()));
+    if let Some(sel) = &s.set_selection {
+        if sel.scene == p.active_scene && p.production.sets.get(&sel.set).is_some_and(|set| sel.layout.exists_in(set)) {
+            return Some((sel.set.clone(), sel.layout.clone()));
         }
     }
     let id = p.mounted_set.as_ref().or_else(|| {
@@ -353,8 +378,9 @@ pub(super) fn close(s: &mut Studio) {
         });
     }
     if let (Some(l), Some(e)) = (&s.live, &s.editor) {
-        s.set_selection = (l.snapshot.program_kind != "set").then(|| (
-            l.snapshot.project.active_scene.clone(), e.id.clone(), e.pair.clone(),
+        let show = controller_show(s, &l.snapshot, &e.id).map(str::to_owned);
+        s.set_selection = Some(ControllerSelection::new(
+            l.snapshot.project.active_scene.clone(), e.id.clone(), e.pair.clone(), show,
         ));
     }
     s.editor = None;
