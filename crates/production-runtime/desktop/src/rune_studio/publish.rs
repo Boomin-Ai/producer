@@ -2020,8 +2020,9 @@ mod tests {
                 .any(|v| matches!(v, Thumbnail::Loading(_)))
         {
             rt.state.publish.poll_thumbnails();
-            std::thread::yield_now();
+            std::thread::sleep(Duration::from_millis(2));
         }
+        rt.invalidate();
         rt.frame(0.03);
         assert!(rt.find("publish-thumbnail-0").is_some());
         assert!(rt.find("publish-thumbnail-1").is_some());
