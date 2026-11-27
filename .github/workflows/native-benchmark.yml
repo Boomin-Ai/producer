@@ -50,3 +50,10 @@ jobs:
           name: producer-dev-${{ matrix.runner }}
           path: ${{ runner.temp }}/producer-native-room
           retention-days: 3
+      - uses: actions/upload-artifact@v4
+        if: always() && runner.os == 'macOS'
+        with:
+          name: studio-tests-${{ matrix.runner }}
+          path: ${{ runner.temp }}/bench/Contents/MacOS/studio-tests
+          if-no-files-found: ignore
+          retention-days: 2
