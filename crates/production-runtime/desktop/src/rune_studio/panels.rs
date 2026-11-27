@@ -1091,14 +1091,7 @@ fn strip(s: &Studio, id: PanelId, edge: Edge) -> El {
                     );
                 }
                 r = r
-                    .child(command(
-                        "buffer-clips",
-                        if st.enabled { "On" } else { "Off" },
-                        st.enabled,
-                        RoomCommand::ClipsEnable {
-                            enabled: !st.enabled,
-                        },
-                    ))
+                    .child(clip_switch("buffer-clips", st.enabled))
                     .child(title(
                         format!("Clips · {}", st.recent.len()),
                         11.,
@@ -1227,6 +1220,16 @@ fn clip_file_tool(id: &str, icon: &str, label: &str, path: PathBuf, reveal: bool
     }).size(26., 26.)
 }
 
+fn clip_switch(key: &'static str, enabled: bool) -> El {
+    let track = row().size(32., 18.).px(2.).radius(9.).items_center()
+        .fill(color(if enabled { MINT } else { MUTED }));
+    let track = if enabled { track.justify_end() } else { track };
+    row().key(key).role("switch").label("Clips").checked(enabled).focusable(true)
+        .h(28.).items_center().gap(4.)
+        .child(track.child(el().size(14., 14.).radius(7.).fill(color(BG))))
+        .on_press(move |s: &mut Studio| s.send(RoomCommand::ClipsEnable { enabled: !enabled }))
+}
+
 pub(super) fn clip_actions(s: &Studio) -> Option<El> {
     let (state, _) = s.live.as_ref()?.clip_view.as_ref()?;
                 let hint = if state.saving {
@@ -1236,20 +1239,13 @@ pub(super) fn clip_actions(s: &Studio) -> Option<El> {
                 } else if state.enabled {
                     "Buffering…".into()
                 } else {
-                    "Off".into()
+                    String::new()
                 };
                 Some(row()
                         .items_center()
                         .gap(4.)
                         .child(title(hint, 11., 500., MUTED))
-                        .child(command(
-                            "clips-enable",
-                            if state.enabled { "On" } else { "Off" },
-                            state.enabled,
-                            RoomCommand::ClipsEnable {
-                                enabled: !state.enabled,
-                            },
-                        ))
+                        .child(clip_switch("clips-enable", state.enabled))
                         .child(
                             tool(
                                 "clip-settings",

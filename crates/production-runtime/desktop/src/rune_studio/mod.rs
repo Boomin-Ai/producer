@@ -270,7 +270,14 @@ impl Drop for Live {
         }
     }
 }
+struct RoomTransition {
+    started: Instant,
+    opening: bool,
+    result: mpsc::Receiver<anyhow::Result<Option<Live>>>,
+}
+
 struct Studio {
+    room_transition: Option<RoomTransition>,
     chat: chat::Chat,
     editor: Option<editor::Editor>,
     set_library: set_library::Library,
@@ -350,6 +357,7 @@ impl Studio {
             .unwrap_or_default();
         let (job_tx, job_rx) = mpsc::channel();
         Self {
+            room_transition: None,
             job_tx,
             job_rx,
             editor: None,
@@ -425,7 +433,33 @@ impl Studio {
                 return;
             }
         }
-        match Live::start(path, self.pending.clone(), !self.quiet) {
+        if self.room_transition.is_some() { return; }
+        let pending = self.pending.clone();
+        let capture = !self.quiet;
+        self.transition(true, move || Live::start(path, pending, capture).map(Some));
+    }
+    fn transition(&mut self, opening: bool, task: impl FnOnce() -> anyhow::Result<Option<Live>> + Send + 'static) {
+        let (send, result) = mpsc::channel();
+        self.room_transition = Some(RoomTransition { started: Instant::now(), opening, result });
+        std::thread::spawn(move || { let _ = send.send(task()); });
+    }
+    fn close_room(&mut self) {
+        if self.room_transition.is_some() { return; }
+        if let Some(reason) = self.live.as_ref().and_then(Live::switch_blocker) {
+            self.switch_notice = Some(reason);
+            return;
+        }
+        if let Some(live) = self.live.take() {
+            self.transition(false, move || {
+                let handle = live.handle.clone();
+                drop(live);
+                while !handle.done.load(Ordering::Acquire) { std::thread::sleep(Duration::from_millis(10)); }
+                Ok(None)
+            });
+        }
+    }
+    fn finish_open(&mut self, result: anyhow::Result<Live>) {
+        match result {
             Ok(l) => {
                 if std::env::var_os("PRODUCER_DEV_OPEN_LOCAL_ROOM").is_some() {
                     if let Ok(relative) = l.handle.root.strip_prefix(&self.base) {
@@ -461,7 +495,9 @@ impl Studio {
                 self.marquee_cue = None;
                 self.headline_notice = None;
                 self.chat = Default::default();
-                self.live = Some(l);
+                if let Some(previous) = self.live.replace(l) {
+                    std::thread::spawn(move || drop(previous));
+                }
                 self.pending = None;
                 self.page = Page::Studio;
                 self.network = Default::default();
@@ -504,6 +540,22 @@ impl Studio {
         });
     }
     fn tick(&mut self, _: f64, _: &mut Tx) -> bool {
+        if let Some(transition) = &self.room_transition {
+            let result = match transition.result.try_recv() {
+                Ok(result) => result,
+                Err(mpsc::TryRecvError::Empty) => return true,
+                Err(mpsc::TryRecvError::Disconnected) => Err(anyhow::anyhow!("Studio transition interrupted")),
+            };
+            self.room_transition = None;
+            match result {
+                Ok(None) => {
+                    *crate::ACTIVE_ROOT.write().unwrap() = None;
+                    self.page = Page::Studios;
+                }
+                other => self.finish_open(other.and_then(|room| room.ok_or_else(|| anyhow::anyhow!("Studio missing")))),
+            }
+            return true;
+        }
         let mut accounts =
             self.settings.poll(&mut self.error) | self.channels.poll(&mut self.error) | self.people.poll();
         accounts |= publish::poll(self) | network::poll(self) | self.set_library.poll();
@@ -676,7 +728,22 @@ pub(super) fn run() {
 }
 fn view(s: &Studio, cx: &mut Cx<Studio>) -> El {
     let palette = s.live.as_ref().filter(|_| s.page == Page::Studio).map(|l| l.snapshot.project.workspace.theme).unwrap_or_default();
-    theme::with(palette, || desk_view(s, cx))
+    theme::with(palette, || {
+        if let Some(t) = &s.room_transition {
+            let elapsed = t.started.elapsed().as_millis();
+            if elapsed >= 180 {
+                let mut dots = row().gap(4.);
+                for i in 0..3 {
+                    dots = dots.child(el().size(5., 5.).radius(3.)
+                        .fill(color(if (elapsed / 180) % 3 == i { MINT } else { MUTED })));
+                }
+                return col().key("room-transition").w_full().h_full().center().gap(9.).fill(color(BG))
+                    .child(dots).child(title(if t.opening { "Opening studio…" } else { "Closing studio…" }, 12., 500., TEXT));
+            }
+            return desk_view(s, cx).disabled(true);
+        }
+        desk_view(s, cx)
+    })
 }
 fn desk_view(s: &Studio, cx: &mut Cx<Studio>) -> El {
     cx.help_look(rune::HelpLook::system(true)

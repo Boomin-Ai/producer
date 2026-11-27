@@ -156,6 +156,9 @@ pub(super) fn studios(s: &Studio, width: f32) -> El {
     let cols = ((available + 14.) / 234.).floor().max(1.) as usize;
     let tile_width = (available - 14. * (cols - 1) as f32) / cols as f32;
     let mut page = col().w_full().px(22.).py(14.).gap(14.);
+    if s.live.is_some() {
+        page = page.child(button("close-active-room", "Close active studio", false, Studio::close_room).self_start());
+    }
     let mut tiles = Vec::new();
     let account = s.settings.account.as_ref();
     let mut entries = Vec::new();
