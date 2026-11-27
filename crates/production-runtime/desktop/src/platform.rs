@@ -685,6 +685,9 @@ impl CaptureInput {
         .context("Could not start capture endpoint")?;
         Ok(Self { ptr, shared, audio })
     }
+    pub fn start_camera(&self) {
+        unsafe { nr_capture(self.ptr.as_ptr(), 1, 0, 0) }
+    }
     pub fn frame(&self) -> Option<Arc<Frame>> {
         self.shared.frame.lock().unwrap().clone()
     }

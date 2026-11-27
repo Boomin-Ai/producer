@@ -871,6 +871,7 @@ enum RenderOp {
     ScreenCapture(ScreenCaptureTarget),
     RemoveSource(String),
     CameraDevice(String),
+    StartBoundCamera { source: String, device: String },
     Input {
         source: String,
         endpoint: platform::CaptureInput,
@@ -2002,6 +2003,18 @@ fn control(
                         }
                         _ => bail!("Choose a set and its draft"),
                     }
+                    // Binding and capture have separate lifetimes. Even selecting the
+                    // current binding must activate an idle device on the program renderer.
+                    if let RoomCommand::SetBindSource { source, .. } = &envelope.command {
+                        if source == "camera" {
+                            render.request(RenderOp::Capture(true, false, false))?;
+                        } else if let Some(input) = state.project.inputs.get(source).filter(|i| i.kind == "camera") {
+                            render.request(RenderOp::StartBoundCamera {
+                                source: source.clone(),
+                                device: input.device.clone(),
+                            })?;
+                        }
+                    }
                     Ok(slots)
                 })();
                 if let Err(error) = &result {
@@ -3014,6 +3027,14 @@ fn render_loop(
                                 movie = None;
                             }
                             _ => {}
+                        }
+                    }
+                    RenderOp::StartBoundCamera { source, device } => {
+                        match inputs.entry(source) {
+                            std::collections::btree_map::Entry::Occupied(entry) => entry.get().start_camera(),
+                            std::collections::btree_map::Entry::Vacant(entry) => {
+                                entry.insert(platform::CaptureInput::new(false, &device, origin)?);
+                            }
                         }
                     }
                     RenderOp::CameraDevice(id) => native.camera_device(&id)?,
