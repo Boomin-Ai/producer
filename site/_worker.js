@@ -251,8 +251,54 @@ async function repositoryStars(req) {
   });
 }
 
+async function acceptInquiry(req, env, ctx) {
+  const reply = (status, accepted = false) => Response.json({accepted}, {status, headers: {"Cache-Control":"no-store"}});
+  if (req.method !== "POST") return reply(405);
+  if (req.headers.get("Origin") !== new URL(req.url).origin) return reply(403);
+  if (!req.headers.get("Content-Type")?.startsWith("application/x-www-form-urlencoded")) return reply(415);
+  const length = Number(req.headers.get("Content-Length"));
+  if (!length || length > 16384) return reply(413);
+  const form = new URLSearchParams(await req.text());
+  const field = key => (form.get(key) || "").trim();
+  const id = field("submission_id"), name = field("name"), email = field("email"), brief = field("brief");
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(id) ||
+      !name || name.length > 100 || !brief || brief.length > 1500 || email.length > 254 ||
+      !/^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(email)) return reply(422);
+  const db = env.INQUIRIES;
+  if (!db) return reply(503);
+  const address = req.headers.get("CF-Connecting-IP") || "";
+  const fingerprint = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(new Date().toISOString().slice(0,10) + ":" + address));
+  const sender = Array.from(new Uint8Array(fingerprint), b => b.toString(16).padStart(2,"0")).join("");
+  const saved = await db.prepare(`INSERT OR IGNORE INTO inquiries(id,name,email,brief,sender_hash)
+    SELECT ?,?,?,?,? WHERE (SELECT count(*) FROM inquiries WHERE sender_hash=? AND created_at >= datetime('now','-1 hour')) < 10`)
+    .bind(id,name,email,brief,sender,sender).run();
+  if (!saved.meta.changes) {
+    const prior = await db.prepare("SELECT name,email,brief FROM inquiries WHERE id=?").bind(id).first();
+    if (!prior) return reply(429);
+    return prior.name === name && prior.email === email && prior.brief === brief ? reply(200,true) : reply(409);
+  }
+  ctx.waitUntil(notifyInquiry(env, {id,name,email,brief}));
+  return reply(201,true);
+}
+
+async function notifyInquiry(env, {id,name,email,brief}) {
+  let receipt = null;
+  try {
+    const result = await fetch("https://api.resend.com/emails", {
+      method:"POST", headers:{"Authorization":"Bearer "+env.RESEND_API_KEY,"Content-Type":"application/json","Idempotency-Key":"producer-services/"+id},
+      body:JSON.stringify({from:"Boomin <connect@boomin.ai>",to:["team@boomin.ai"],reply_to:email,
+        subject:"New Producer Services inquiry",text:`Name: ${name}\nEmail: ${email}\n\n${brief}`}),
+      signal:AbortSignal.timeout(12000)
+    });
+    if (result.ok) receipt = (await result.json()).id;
+  } finally {
+    await env.INQUIRIES.prepare("UPDATE inquiries SET notification=?,resend_id=? WHERE id=?")
+      .bind(receipt ? "accepted_by_resend" : "unconfirmed", receipt || null,id).run();
+  }
+}
+
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const url = new URL(req.url);
 
     // Canonical host is producer.dev; the old boomin.ai subdomain (and www)
@@ -263,6 +309,8 @@ export default {
       url.protocol = "https:";
       return Response.redirect(url.toString(), 301);
     }
+
+    if (url.pathname === "/inquiries") return acceptInquiry(req, env, ctx);
 
     // Public room pages reuse Boomin's dedicated room bundle. Only HTML and
     // assets pass through this site; API/WebSocket/media paths stay unchanged.
