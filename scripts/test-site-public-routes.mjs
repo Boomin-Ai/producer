@@ -337,3 +337,11 @@ test('GitHub stars cache shares query variants, keeps stale counts and never lea
   assert.deepEqual(JSON.parse(stale.text), {count:0});
   assert.equal((await request('/api/stars', {method:'POST'})).response.status, 405);
 });
+
+test('a cold edge can read the real repository counter when the GitHub API throttles it', async () => {
+  const result = await request('/api/stars', {upstream: input => String(input).startsWith('https://api.github.com/')
+    ? new Response(null, {status:403}) : new Response('<script>{"stargazerCount":1299,"watcherCount":0}</script>')});
+  assert.equal(result.response.status, 200);
+  assert.deepEqual(JSON.parse(result.text), {count:1299});
+  assert.equal(result.calls.length, 2);
+});

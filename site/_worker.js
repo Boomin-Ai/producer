@@ -221,19 +221,29 @@ async function repositoryStars(req) {
   const previous = await cache?.match(key);
   let data = previous ? await previous.json() : null;
   if (!data || Date.now() - data.checkedAt >= 900_000) {
+    const publicHeaders = { "user-agent": "producer-site" };
+    let count;
     try {
       const response = await fetch(`https://api.github.com/repos/${REPO}`, {
-        headers: { accept: "application/vnd.github+json", "user-agent": "producer-site" },
-        signal: AbortSignal.timeout(3000),
+        headers: { ...publicHeaders, accept: "application/vnd.github+json" }, signal: AbortSignal.timeout(3000),
       });
-      if (response.ok) {
-        const count = (await response.json()).stargazers_count;
-        if (Number.isSafeInteger(count) && count >= 0) {
-          data = { count, checkedAt: Date.now() };
-          await cache?.put(key, Response.json(data, { headers: { "cache-control": "public, max-age=2592000" } }));
+      if (response.ok) count = (await response.json()).stargazers_count;
+    } catch { /* Try the public repository page if this edge has no observation. */ }
+    if (!data && !(Number.isSafeInteger(count) && count >= 0)) {
+      try {
+        const page = await fetch(`https://github.com/${REPO}`, { headers: publicHeaders, signal: AbortSignal.timeout(3000) });
+        if (page.ok) {
+          const match = (await page.text()).match(/"stargazerCount"\s*:\s*(\d+)\s*,/);
+          if (match) count = Number(match[1]);
         }
-      }
-    } catch { /* Keep the previous edge observation during an outage. */ }
+      } catch { /* A cold edge can retry when GitHub recovers. */ }
+    }
+    if (Number.isSafeInteger(count) && count >= 0) {
+      data = { count, checkedAt: Date.now() };
+      try {
+        await cache?.put(key, Response.json(data, { headers: { "cache-control": "public, max-age=2592000" } }));
+      } catch { /* Return the fresh observation even when the edge cache is unavailable. */ }
+    }
   }
   return new Response(req.method === "HEAD" ? null : JSON.stringify({ count: data?.count ?? null }), {
     status: data ? 200 : 503,
