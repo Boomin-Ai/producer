@@ -1,3 +1,5 @@
+mod outbox;
+
 use super::publish_options::{InstagramFormat, Options};
 use super::*;
 use anyhow::{anyhow, bail, ensure, Context, Result};
@@ -25,7 +27,7 @@ pub(super) struct Publish {
     schedule: TextEdit,
     scheduled: bool,
     pub(super) files: Vec<PathBuf>,
-    pasted_images: Vec<tempfile::NamedTempFile>,
+    pasted_images: Vec<Arc<tempfile::NamedTempFile>>,
     thumbnails: BTreeMap<PathBuf, Thumbnail>,
     avatars: BTreeMap<String, Thumbnail>,
     awaiting_default: bool,
@@ -40,6 +42,15 @@ pub(super) struct Publish {
     pub(super) limit: usize,
     pub(super) notice: String,
     sync_error: String,
+    outbox: Vec<outbox::Post>,
+    staging: Option<mpsc::Receiver<Result<outbox::Post>>>,
+    delivering: Option<(String, mpsc::Receiver<Result<()>>)>,
+    loading_outbox: Option<mpsc::Receiver<Result<Vec<outbox::Post>>>>,
+    outbox_next: Option<Instant>,
+    retry_id: Option<String>,
+    delivery_errors: BTreeMap<String,String>,
+    tab_menu: bool,
+    job_menu: Option<String>,
     pending: bool,
     working: Option<mpsc::Receiver<Result<Done>>>,
     refreshing: Option<mpsc::Receiver<Result<Catalog>>>,
@@ -214,7 +225,6 @@ struct Catalog {
 enum Done {
     Browser(String),
     Submitted(String),
-    Batch(Vec<String>, Option<String>),
     Updated,
     Disconnected(String),
 }
@@ -416,81 +426,6 @@ impl Api {
         }
         bail!("Boomin could not confirm the clip upload")
     }
-    async fn create(
-        &self,
-        id: String,
-        provider: String,
-        text: String,
-        files: Vec<PathBuf>,
-        schedule: Option<String>,
-        options: Options,
-    ) -> Result<Done> {
-        let _lock = self.lock_submission()?;
-        ensure!(
-            !self.receipt.exists(),
-            "Check the previous submission first"
-        );
-        let mut overrides =
-            options.payload(&provider, &text, files.first().map(PathBuf::as_path))?;
-        let key = Uuid::new_v4().to_string();
-        let mut body = json!({"channel_id":id,"text":text,"intent_id":key});
-        if let Some(value) = schedule {
-            body["schedule_at"] = json!(schedule_utc(&value)?);
-        }
-        let format = options.format(files.first().map(PathBuf::as_path));
-        if provider == "instagram" {
-            if let Some(problem) = format.requirement(&files) { bail!("{problem}"); }
-            body["instagram_format"] = json!(format.key());
-        }
-        if provider == "instagram" && format == InstagramFormat::Reel {
-            if let Some(path) = options.cover {
-                ensure!(
-                    mime(&path)?.starts_with("image/"),
-                    "Choose an image for the Reel cover"
-                );
-                let upload = self.media(&path).await?;
-                let result = self
-                    .call("files/get", None, None, &[("file_id", &upload)])
-                    .await?;
-                let url = result["file"]["content_url"]
-                    .as_str()
-                    .context("Cover upload returned no public URL")?;
-                ensure!(url.starts_with("https://"), "Invalid cover URL");
-                overrides["cover_url"] = json!(url);
-            }
-        }
-        let text = overrides["caption"].as_str().unwrap_or(&text).to_owned();
-        body["overrides"] = overrides;
-        let name = if text.is_empty() {
-            files
-                .first()
-                .and_then(|p| p.file_name())
-                .and_then(|s| s.to_str())
-                .unwrap_or("Clip")
-                .to_owned()
-        } else {
-            text.chars().take(80).collect()
-        };
-        if !files.is_empty() {
-            let mut media = Vec::new();
-            for path in files {
-                media.push(json!({"upload_id":self.media(&path).await?}));
-            }
-            body["media"] = json!(media);
-        }
-        let mut titles = self.titles()?;
-        titles.insert(key.clone(), name);
-        let mut index = tempfile::NamedTempFile::new_in(self.receipt.parent().unwrap())?;
-        serde_json::to_writer(&mut index, &titles)?;
-        index.persist(self.receipt.with_extension("titles.json"))?;
-        let submission = Submission { key, body };
-        let mut tmp = tempfile::NamedTempFile::new_in(self.receipt.parent().unwrap())?;
-        serde_json::to_writer(&mut tmp, &submission)?;
-        tmp.as_file().sync_all()?;
-        tmp.persist_noclobber(&self.receipt)
-            .context("Check the previous submission first")?;
-        self.submit(&submission).await
-    }
     async fn submit(&self, submission: &Submission) -> Result<Done> {
         let response = match self
             .call("posts", Some(&submission.body), Some(&submission.key), &[])
@@ -665,60 +600,94 @@ fn submission_problem(p: &Publish) -> Option<String> {
     None
 }
 
+fn outbox_dir(s: &Studio) -> PathBuf {
+    let (brand,email) = s.publish.scope.as_ref().expect("Signed-in publisher");
+    s.base.join("publish").join(format!("{:x}.outbox",Sha256::digest(format!("{brand}\0{email}").as_bytes())))
+}
+
 fn send(s: &mut Studio) {
     let p = &s.publish;
+    if p.staging.is_some() || !p.composing || p.scope.is_none() { return; }
     if let Some(message) = submission_problem(p) { s.publish.notice = message; return; }
-    let targets: Vec<_> = p
-        .channels
-        .iter()
-        .filter(|c| p.selected.contains(&c.id) && c.status == "active")
-        .map(|c| {
-            (
-                c.id.clone(),
-                c.platform.clone(),
-                p.options.get(&c.id).cloned().unwrap_or_default(),
-                c.capabilities["features"]["instagram_tagging_and_trial"] == true,
-            )
-        })
-        .collect();
-    if targets.is_empty() {
-        return;
+    let text=p.caption.text.trim().to_owned();
+    let file=p.files.first().map(PathBuf::as_path);
+    let mut targets=Vec::new();
+    for c in p.channels.iter().filter(|c| p.selected.contains(&c.id) && c.status=="active") {
+        let options=p.options.get(&c.id).cloned().unwrap_or_default();
+        let overrides=match options.payload(&c.platform,&text,file) {
+            Ok(value)=>value, Err(e)=>{s.publish.notice=e.to_string();return;}
+        };
+        if c.capabilities["features"]["instagram_tagging_and_trial"] != true && (overrides["trial_post"]==true || overrides.get("userTags").is_some() || overrides.get("location").is_some()) {
+            s.publish.notice="This account does not support the selected Instagram options.".into(); return;
+        }
+        let format=(c.platform=="instagram").then(||options.format(file));
+        targets.push(outbox::Destination { id:c.id.clone(),label:c.label(),key:Uuid::new_v4().to_string(),
+            overrides,format:format.map(|f|f.key().to_owned()),cover:if format==Some(InstagramFormat::Reel){options.cover}else{None} });
     }
-    let text = p.caption.text.trim().to_owned();
-    let files = p.files.clone();
-    let schedule = p.scheduled.then(|| p.schedule.text.trim().to_owned());
-    start(s, move |api, rt| {
-        rt.block_on(async move {
-            for (_, provider, options, advanced) in &targets {
-                let params=options.payload(provider, &text, files.first().map(PathBuf::as_path))?;
-                ensure!(*advanced || !(params["trial_post"]==true || params.get("userTags").is_some() || params.get("location").is_some()), "This Boomin server needs an update to publish Instagram trials, locations, or user tags.");
-            }
-            let mut accepted = Vec::new();
-            for (id, provider, options, _) in targets {
-                match api
-                    .create(
-                        id.clone(),
-                        provider.clone(),
-                        text.clone(),
-                        files.clone(),
-                        schedule.clone(),
-                        options,
-                    )
-                    .await
-                {
-                    Ok(_) => accepted.push(id),
-                    Err(e) => {
-                        return Ok(Done::Batch(
-                            accepted,
-                            Some(format!("{}: {e}", platform(&provider))),
-                        ))
-                    }
-                }
-            }
-            Ok(Done::Batch(accepted, None))
-        })
+    if targets.is_empty(){return;}
+    let schedule=p.scheduled.then(||p.schedule.text.trim().to_owned());
+    let mut post=outbox::Post{id:Uuid::new_v4().to_string(),text,files:p.files.clone(),schedule:None,targets,error:None};
+    let root=outbox_dir(s);
+    let pasted=p.pasted_images.clone();
+    let (tx,rx)=mpsc::channel();
+    s.publish.staging=Some(rx);
+    std::thread::spawn(move || {
+        let _keep_pasted_alive=pasted;
+        let result=(||{post.schedule=schedule.as_deref().map(schedule_utc).transpose()?;post.stage(&root)})();
+        let _=tx.send(result);
     });
 }
+
+fn poll_delivery(s:&mut Studio)->bool {
+    let root=outbox_dir(s);
+    let p=&mut s.publish;
+    let mut changed=false;
+    if let Some(result)=p.loading_outbox.as_ref().and_then(|rx|rx.try_recv().ok()){
+        p.loading_outbox=None;
+        match result { Ok(posts)=>p.outbox=posts, Err(e)=>p.notice=e.to_string() }
+        p.outbox_next=Some(Instant::now()+Duration::from_secs(10));
+        changed=true;
+    }
+    if let Some(result)=p.staging.as_ref().and_then(|rx|rx.try_recv().ok()){
+        p.staging=None;
+        match result {
+            Ok(post)=>{
+                p.loading_outbox=None;
+                p.outbox.retain(|old|old.id!=post.id);
+                p.outbox.push(post);
+                p.tab=PublishTab::Scheduled;p.composing=false;
+                p.set_files(Vec::new());p.scheduled=false;p.schedule=Default::default();p.caption=Default::default();
+                p.options.clear();p.selected.clear();p.expanded=None;p.clips_open=false;p.notice.clear();
+            }
+            Err(e)=>p.notice=e.to_string(),
+        }
+        changed=true;
+    }
+    if let Some(result)=p.delivering.as_ref().and_then(|(_,rx)|rx.try_recv().ok()){
+        let (id,_)=p.delivering.take().unwrap();
+        if let Err(e)=result {p.delivery_errors.insert(id.clone(),e.to_string());}
+        p.outbox.retain(|post|post.id!=id);
+        p.outbox_next=None;p.next=None;p.history_next=None;p.loading_outbox=None;
+        changed=true;
+    }
+    if p.delivering.is_none() && p.loading_outbox.is_none() && p.outbox_next.is_none_or(|t| Instant::now()>=t){
+        let (tx,rx)=mpsc::channel();p.loading_outbox=Some(rx);
+        let dir=root.clone();
+        std::thread::spawn(move||{let _=tx.send(outbox::list(&dir));});
+    }
+    if s.publish.delivering.is_none() && s.publish.loading_outbox.is_none(){
+        let retry=s.publish.retry_id.take();
+        let id=retry.clone().or_else(||s.publish.outbox.iter().find(|post|post.error.is_none() && !s.publish.delivery_errors.contains_key(&post.id)).map(|post|post.id.clone()));
+        if let Some(id)=id{
+            let dir=root.join(&id);
+            s.publish.delivery_errors.remove(&id);
+            let rx=worker(s,move |api,rt|rt.block_on(outbox::deliver(&api,&dir,retry.is_some())));
+            s.publish.delivering=Some((id,rx));changed=true;
+        }
+    }
+    changed
+}
+
 fn finish(p: &mut Publish, ids: Vec<String>, error: Option<String>) -> String {
     let count = ids.len();
     for id in ids {
@@ -772,6 +741,7 @@ pub(super) fn poll(s: &mut Studio) -> bool {
     if s.publish.scope.is_none() {
         return changed;
     }
+    changed |= poll_delivery(s);
     if let Some(result) = s
         .publish
         .refreshing
@@ -817,7 +787,6 @@ pub(super) fn poll(s: &mut Studio) -> bool {
                 Err(e) => e.to_string(),
             },
             Ok(Done::Submitted(id)) => finish(p, vec![id], None),
-            Ok(Done::Batch(ids, error)) => finish(p, ids, error),
             Ok(Done::Updated) => "Queue updated".into(),
             Ok(Done::Disconnected(id)) => {
                 p.channels.retain(|channel| channel.id != id);
@@ -1005,13 +974,15 @@ fn attach_paths(s: &mut Studio, paths: Vec<PathBuf>) {
 
 fn composer_media(s: &Studio, mut b: El, wide: bool) -> El {
     let p = &s.publish;
-    let busy = p.working.is_some();
+    let busy = p.working.is_some() || p.staging.is_some();
     let threads = p.channels.iter().any(|channel| {
         channel.platform == "threads" && p.selected.contains(&channel.id)
     });
     let limit = if threads { 500 } else { 2200 };
     let count = p.caption.text.chars().count();
-    b = b.on_drop_files(|s: &mut Studio, paths, _| attach_paths(s, paths.to_vec()));
+    b = b.on_drop_files(|s: &mut Studio, paths, _| {
+        if s.publish.staging.is_none() && s.publish.working.is_none() { attach_paths(s, paths.to_vec()); }
+    });
     b = b.child(col().w_full().radius(7.).clip_rounded(7.)
         .border(1., color(theme::TRANSPORT_BORDER)).fill(color(SURFACE))
         .child(field("Post caption", &p.caption, |s| &mut s.publish.caption)
@@ -1031,7 +1002,7 @@ fn composer_media(s: &Studio, mut b: El, wide: bool) -> El {
                     Ok(file) => {
                         let path = file.path().to_owned();
                         attach_paths(s, vec![path.clone()]);
-                        if s.publish.files.contains(&path) { s.publish.pasted_images.push(file); }
+                        if s.publish.files.contains(&path) { s.publish.pasted_images.push(Arc::new(file)); }
                     }
                     Err(error) => s.publish.notice = error.to_string(),
                 }
@@ -1174,7 +1145,7 @@ fn avatar_badge(s: &Studio, provider: &str, name: &str, url: Option<&String>) ->
 
 fn destinations(s: &Studio, mut b: El) -> El {
     let p = &s.publish;
-    let busy = p.working.is_some();
+    let busy = p.working.is_some() || p.staging.is_some();
     b = b.child(row().gap(6.).items_center()
         .child(publish_icon("channels", 15., MUTED))
         .child(subhead("Publish to")));
@@ -1272,7 +1243,7 @@ fn destination_card(s: &Studio, channel: &Channel) -> El {
 
 fn delivery_details(s: &Studio, mut b: El) -> El {
     let p = &s.publish;
-    let busy = p.working.is_some();
+    let busy = p.working.is_some() || p.staging.is_some();
     if p.scheduled {
         b = b
             .child(title("Local time · YYYY-MM-DD HH:MM", 11., 450., MUTED))
@@ -1282,7 +1253,7 @@ fn delivery_details(s: &Studio, mut b: El) -> El {
 }
 fn delivery(s: &Studio, wide: bool) -> El {
     let p = &s.publish;
-    let busy = p.working.is_some();
+    let busy = p.working.is_some() || p.staging.is_some();
     let invalid = submission_problem(p).is_some();
     let schedule_disabled = busy || (!p.scheduled && invalid);
     let disabled = busy || invalid || p.pending || p.scheduled && p.schedule.text.trim().is_empty();
@@ -1298,7 +1269,7 @@ fn delivery(s: &Studio, wide: bool) -> El {
     } else {
         actions = actions.child(el().grow(1.));
     }
-    let label = if busy { "Working…" } else if p.scheduled { "Schedule post" } else { "Publish now" };
+    let label = if p.staging.is_some() { "Saving…" } else if busy { "Working…" } else if p.scheduled { "Schedule post" } else { "Publish now" };
     actions = actions.child(row().key("publish-submit").role("button").label(label)
         .focusable(true).h(30.).px(10.).gap(5.).items_center().radius(6.)
         .fill(color(if disabled { SURFACE } else { MINT }))
@@ -1400,10 +1371,8 @@ fn open_accounts(s: &mut Studio) {
 pub(super) fn header_actions(s: &Studio, split: bool) -> Option<El> {
     let signed = s.publish.scope.is_some();
     if !signed || s.publish.accounts_open || split { return None; }
-    let mut header = row().items_center().gap(4.)
-        .child(button("publish-accounts", "Accounts", false, open_accounts).disabled(!signed));
-    header = header.child(new_button(s));
-    Some(header)
+    Some(row().items_center().gap(3.).child(accounts_tool())
+        .child(panels::tool("publish-new", "plus", "New post", true, new_post).size(27., 27.)))
 }
 pub(super) fn panel(s: &Studio, mut b: El, split: bool, hidden_header: bool) -> El {
     let p = &s.publish;
@@ -1424,8 +1393,11 @@ pub(super) fn panel(s: &Studio, mut b: El, split: bool, hidden_header: bool) -> 
         return local_list(s, b.child(subhead("Local clip queue")), queued);
     }
     let tab = |key: &str, name: String, selected, action: fn(&mut Studio)| button(key.to_owned(), name, selected, action).px(6.).h(25.);
+    let ws = &s.live.as_ref().unwrap().snapshot.project.workspace;
+    let edge = ws.panels[&PanelId::Publish].edge;
+    let narrow = !split && (!edge.side() || ws.docks[&edge].size < 265.);
+    let delivery_count = p.jobs.len() + p.outbox.len();
     let tabs = row()
-            .flex_wrap()
             .gap(3.)
             .child(tab(
                 "publish-overview",
@@ -1447,7 +1419,7 @@ pub(super) fn panel(s: &Studio, mut b: El, split: bool, hidden_header: bool) -> 
             ))
             .child(tab(
                 "publish-queue",
-                format!("Scheduled · {}", p.jobs.len()),
+                format!("Scheduled · {delivery_count}"),
                 p.tab == PublishTab::Scheduled,
                 |s| {
                     s.publish.tab = PublishTab::Scheduled;
@@ -1459,7 +1431,24 @@ pub(super) fn panel(s: &Studio, mut b: El, split: bool, hidden_header: bool) -> 
         b = b.child(row().w_full().items_center().child(new_button(s))
             .child(el().grow(1.)).child(accounts_tool()));
     }
-    b = b.child(tabs);
+    if narrow {
+        let name = match p.tab {
+            PublishTab::Overview => "Overview".into(),
+            PublishTab::Local => format!("Local · {}", queued.len()),
+            PublishTab::Scheduled => format!("Scheduled · {delivery_count}"),
+        };
+        b = b.child(button("publish-view-menu", format!("{name}  ▾"), true, |s| s.publish.tab_menu = !s.publish.tab_menu)
+            .self_start().label("Choose Publish view"));
+        if p.tab_menu {
+            for (key, label, view) in [("overview","Overview",PublishTab::Overview),("local","Local clips",PublishTab::Local),("queue","Scheduled",PublishTab::Scheduled)] {
+                b=b.child(button(format!("publish-{key}"),label,p.tab==view,move|s|{
+                    s.publish.tab=view; s.publish.tab_menu=false; s.publish.next=None;
+                }).h(24.));
+            }
+        }
+    } else {
+        b = b.child(tabs);
+    }
     if !p.notice.is_empty() {
         b = b.child(title(&p.notice, 11., 500., MUTED).help(&p.notice));
     }
@@ -1576,6 +1565,22 @@ fn accounts_tool() -> El {
         .size(28., 28.)
 }
 
+fn local_date(input: &str) -> String {
+    // Boomin returns UTC timestamps, optionally with fractional seconds.
+    if !(input.ends_with('Z') || input.ends_with("+00:00")) { return input.into(); }
+    let Some(stamp)=input.get(..19).and_then(|s|std::ffi::CString::new(s).ok()) else { return input.into() };
+    let mut utc: libc::tm = unsafe { std::mem::zeroed() };
+    let mut local: libc::tm = unsafe { std::mem::zeroed() };
+    let mut buffer=[0i8;64];
+    unsafe {
+        if libc::strptime(stamp.as_ptr(), c"%Y-%m-%dT%H:%M:%S".as_ptr(), &mut utc).is_null(){return input.into();}
+        let epoch=libc::timegm(&mut utc);
+        if libc::localtime_r(&epoch,&mut local).is_null(){return input.into();}
+        if libc::strftime(buffer.as_mut_ptr(),buffer.len(),c"%b %e · %H:%M %Z".as_ptr(),&local)==0{return input.into();}
+        std::ffi::CStr::from_ptr(buffer.as_ptr()).to_string_lossy().into_owned()
+    }
+}
+
 fn post_list(s: &Studio, queued: &[crate::clips::Saved], mut b: El, split: bool, hidden_header: bool) -> El {
     let mut heading = row().key("publish-list-heading").w_full().items_center().gap(4.)
         .child(subhead(match s.publish.tab {
@@ -1593,7 +1598,7 @@ fn post_list(s: &Studio, queued: &[crate::clips::Saved], mut b: El, split: bool,
     }
     let p = &s.publish;
     let signed = p.scope.is_some();
-    let busy = p.working.is_some();
+    let busy = p.working.is_some() || p.staging.is_some();
     if p.tab == PublishTab::Overview {
         if !p.history_error.is_empty() {
             b = b
@@ -1614,7 +1619,21 @@ fn post_list(s: &Studio, queued: &[crate::clips::Saved], mut b: El, split: bool,
         b = b.child(title(&p.sync_error, 11., 500., MUTED));
     }
     {
-        if p.jobs.is_empty() {
+        for post in &p.outbox {
+            let error=post.error.as_ref().or_else(|| p.delivery_errors.get(&post.id));
+            let state=if error.is_some() {"Needs attention"} else if post.schedule.is_some() {"Scheduling…"} else {"Sending…"};
+            let mut card=col().w_full().min_w(0.).padding(7.).gap(3.).radius(5.).fill(color(SURFACE))
+                .child(subhead(&post.title()))
+                .child(title(state,10.,600.,if error.is_some(){ MUTED }else{ MINT }))
+                .child(title(post.targets.iter().map(|t| t.label.as_str()).collect::<Vec<_>>().join(" · "),10.,500.,MUTED));
+            if let Some(message)=error{
+                let id=post.id.clone();
+                card=card.child(title(message,10.,500.,MUTED).help(message))
+                    .child(button(format!("retry-delivery-{id}"),"Retry",false,move |s|s.publish.retry_id=Some(id.clone())).self_start());
+            }
+            b=b.child(card);
+        }
+        if p.jobs.is_empty() && p.outbox.is_empty() {
             b = b.child(title(
                 if !signed {
                     "Sign in to view your queue"
@@ -1670,7 +1689,11 @@ fn post_list(s: &Studio, queued: &[crate::clips::Saved], mut b: El, split: bool,
             };
             if let Some((op, label)) = action {
                 let id = job.id.clone();
-                card = card.child(
+                let menu = id.clone();
+                card=card.child(panels::tool(&format!("publish-job-menu-{id}"),"more","Post actions",p.job_menu.as_ref()==Some(&id),move|s|{
+                    s.publish.job_menu=if s.publish.job_menu.as_ref()==Some(&menu){None}else{Some(menu.clone())};
+                }).size(24.,20.).self_start());
+                if p.job_menu.as_ref()==Some(&id) { card = card.child(
                     button(format!("publish-{op}-{id}"), label, false, move |s| {
                         let id = id.clone();
                         start(s, move |api, rt| {
@@ -1682,7 +1705,7 @@ fn post_list(s: &Studio, queued: &[crate::clips::Saved], mut b: El, split: bool,
                         });
                     })
                     .disabled(busy),
-                );
+                ); }
             }
             b = b.child(card);
         }
@@ -1960,20 +1983,23 @@ mod tests {
             .build()
             .unwrap();
         rt.block_on(async {
-            assert!(api
-                .create(
-                    "instagram-id".into(),
-                    "instagram".into(),
-                    "Clip".into(),
-                    vec![clip],
-                    Some("2099-12-01 11:00".into()),
-                    Options::default()
-                )
-                .await
-                .is_err());
-            assert!(api.receipt.exists());
-            api.recover().await.unwrap();
-            assert!(!api.receipt.exists());
+            let spool = scratch.path().join("outbox");
+            let make = |text: &str, channel: &str, files: Vec<PathBuf>, schedule: Option<String>| {
+                outbox::Post {
+                    id: Uuid::new_v4().to_string(), text: text.into(), files, schedule, error: None,
+                    targets: vec![outbox::Destination { id: channel.into(), label: channel.into(),
+                        key: Uuid::new_v4().to_string(), overrides: json!({}), cover: None,
+                        format: (channel=="instagram-id").then(|| "reel".into()) }],
+                }.stage(&spool).unwrap()
+            };
+            let staged=make("Clip","instagram-id",vec![clip.clone()],Some(schedule_utc("2099-12-01 11:00").unwrap()));
+            let dir=spool.join(&staged.id);
+            fs::remove_file(clip).unwrap();
+            assert!(calls.lock().unwrap().is_empty());
+            outbox::deliver(&api,&dir,false).await.unwrap();
+            assert!(outbox::list(&spool).unwrap()[0].error.is_some());
+            outbox::deliver(&api,&dir,true).await.unwrap();
+            assert!(outbox::list(&spool).unwrap().is_empty());
             let catalog = api.catalog().await.unwrap();
             assert_eq!(catalog.jobs[0].state, "scheduled");
             assert_eq!(catalog.channels[0].label(), "Instagram · Studio");
@@ -1986,28 +2012,14 @@ mod tests {
                     .count(),
                 1
             );
-            api.create(
-                "threads-id".into(),
-                "threads".into(),
-                "Text post".into(),
-                vec![],
-                None,
-                Options::default(),
-            )
-            .await
-            .unwrap();
-            assert!(api
-                .create(
-                    "threads-id".into(),
-                    "threads".into(),
-                    "invalid".into(),
-                    vec![],
-                    None,
-                    Options::default()
-                )
-                .await
-                .is_err());
-            assert!(!api.receipt.exists());
+            let text=make("Text post","threads-id",vec![],None);
+            outbox::deliver(&api,&spool.join(&text.id),false).await.unwrap();
+            assert!(outbox::list(&spool).unwrap().is_empty());
+            let rejected=make("invalid","threads-id",vec![],None);
+            outbox::deliver(&api,&spool.join(&rejected.id),false).await.unwrap();
+            let failed=outbox::list(&spool).unwrap();
+            assert_eq!(failed[0].text,"invalid");
+            assert!(failed[0].error.as_ref().unwrap().contains("Reconnect Threads"));
             api.disconnect(&disconnect_id.to_string()).await.unwrap();
             let _ = api.client.get(format!("{root}/end")).send().await;
         });
