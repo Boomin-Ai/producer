@@ -1633,14 +1633,16 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                         }
                     }));
                 }
-                let frame_draggable = on && !has_show && pair.ids().iter()
+                let frame_motion = pair.ids().iter()
                     .any(|id| crate::render_graph::supports_frame_drag(set, id));
+                let frame_draggable = on && !has_show && frame_motion;
                 if frame_draggable {
                     b = b.child(button("reset-camera-frame", "Reset camera frame", false, |s| {
                         if let Some(l) = &s.live { l.handle.set_frame_position([0., 0.]); }
                     }));
                 }
-                if uses("frame.screenPan") {
+                let screen_pan = !frame_motion && uses("frame.screenPan");
+                if screen_pan {
                     let [x, y] = l.handle.screen_pan();
                     let controls_width = if !shelf { width } else if has_show { overview_width } else { end_width };
                     let size = (controls_width - 24.).clamp(84., 144.);
@@ -1974,7 +1976,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                     ));
                 }
                 let mfm = key == "my-first-million";
-                let layout_controls = mfm || frame_draggable || uses("frame.controls.x") || uses("frame.controls.z") || uses("frame.screenPan")
+                let layout_controls = mfm || frame_draggable || uses("frame.controls.x") || uses("frame.controls.z") || screen_pan
                     || (on && pair.ids().iter().any(|id| crate::headline::supports(set, id)))
                     || set.theme.contains_key("marquee") || set.theme.contains_key("weather-desk") || (on && pair.has_flythrough(set))
                     || (on && set.theme.contains_key("quiz")) || (set.theme.contains_key("ipo-chart") && uses("frame.controls.y"));
