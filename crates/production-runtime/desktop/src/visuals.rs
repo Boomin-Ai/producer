@@ -179,12 +179,13 @@ impl PodcastPair {
         }
     }
 
-    fn reframe(&self, draw: &mut Draw, panel: PodcastPanel) {
+    fn reframe(&self, draw: &mut Draw, panel: PodcastPanel, inset: f32) {
         let [a,b] = self.rects;
         let left = a[0].min(b[0]);
         let top = a[1].min(b[1]);
         let right = (a[0]+a[2]).max(b[0]+b[2]);
-        let bottom = (a[1]+a[3]).max(b[1]+b[3]);
+        let bottom = (a[1]+a[3]).max(b[1]+b[3]) - inset * 0.18;
+        let top = top + inset * 0.82;
         if panel.caption {
             let original = self.rects[panel.side];
             draw.rect[0] += left - original[0];
@@ -701,6 +702,16 @@ impl Visuals {
             pair.solo(|i| active[i] && frames[i].as_ref().is_some_and(|frame| now - frame.at < 2.0))
                 .map(|side| (pair, side))
         });
+        // On the phone canvas, reserve the recovered height for the question.
+        // Narrow sources already fit the full solo window.
+        let inset = solo.filter(|_| output == 1).and_then(|(pair, side)| {
+            let frame = frames[pair.slots[side]?].as_ref()?;
+            let [a,b] = pair.rects;
+            let height = (a[1]+a[3]).max(b[1]+b[3]) - a[1].min(b[1]);
+            let width = ((a[0]+a[2]).max(b[0]+b[2]) - a[0].min(b[0])) * w / h;
+            let aspect = (frame.width as f32 / frame.height.max(1) as f32).min(1.0);
+            Some((height - width / aspect).max(0.0))
+        }).unwrap_or(0.0);
         for (index,e) in self.outputs[output].iter().enumerate() {
             let node = &plan.nodes[e.node];
             let mut opacity = 1.;
@@ -741,9 +752,20 @@ impl Visuals {
             for mut d in [e.fill, e.content].into_iter().flatten() {
                 if let (Some((pair, side)), Some(panel)) = (solo, e.podcast_panel) {
                     if panel.side != side { continue; }
-                    pair.reframe(&mut d, panel);
+                    pair.reframe(&mut d, panel, inset);
                     d.metrics[1] = d.rect[2] * w;
                     d.metrics[2] = d.rect[3] * h;
+                }
+                if inset > 0.0 {
+                    let offset = inset * 0.82;
+                    match e.key.rsplit('/').next() {
+                        Some("masthead") => {
+                            d.rect[3] += offset;
+                            d.metrics[2] = d.rect[3] * h;
+                        }
+                        Some("topic-label" | "episode-topic") => d.rect[1] += offset * 0.62,
+                        _ => {}
+                    }
                 }
                 if let Some(region) = e.speaker_region {
                     d.rect = region.rect(speaker_share, size, output == 1);
