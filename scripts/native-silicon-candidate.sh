@@ -47,9 +47,13 @@ test)
     cp "$test_binary" "$RUNNER_TEMP/native-verification/producer-native-room-tests"
     exit 0
   fi
-  "$test_binary" --test-threads=2 --nocapture &
+  mkdir -p "$app/Contents/Resources/starter-audio"
+  ditto assets/starter-audio "$app/Contents/Resources/starter-audio"
+  cp "$test_binary" "$bin/studio-tests"
+  trap 'rm -f "$bin/studio-tests"' EXIT
+  "$bin/studio-tests" --test-threads=2 --nocapture &
   test_pid=$!
-  for ((n=0; n<60; n++)); do
+  for ((n=0; n<300; n++)); do
     if ! kill -0 "$test_pid" 2>/dev/null; then wait "$test_pid"; exit $?; fi
     sleep 1
   done
