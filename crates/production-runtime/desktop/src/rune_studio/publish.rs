@@ -692,6 +692,9 @@ fn send(s: &mut Studio) {
     let pasted = p.pasted_images.clone();
     let (tx, rx) = mpsc::channel();
     s.publish.staging = Some(rx);
+    s.publish.composing = false;
+    s.publish.tab = PublishTab::Scheduled;
+    s.publish.tab_menu = false;
     std::thread::spawn(move || {
         let _keep_pasted_alive = pasted;
         let result = (|| {
@@ -722,8 +725,6 @@ fn poll_delivery(s: &mut Studio) -> bool {
                 p.loading_outbox = None;
                 p.outbox.retain(|old| old.id != post.id);
                 p.outbox.push(post);
-                p.tab = PublishTab::Scheduled;
-                p.composing = false;
                 p.set_files(Vec::new());
                 p.scheduled = false;
                 p.schedule = Default::default();
@@ -734,7 +735,11 @@ fn poll_delivery(s: &mut Studio) -> bool {
                 p.clips_open = false;
                 p.notice.clear();
             }
-            Err(e) => p.notice = e.to_string(),
+            Err(e) => {
+                p.notice = format!("Could not save the post locally. {e}");
+                p.accounts_open = false;
+                p.composing = true;
+            }
         }
         changed = true;
     }
@@ -1006,7 +1011,7 @@ fn new_button(s: &Studio) -> El {
         .fill(color(theme::TOOL_SELECTED)).hover_fill(color(theme::SELECTED_HOVER))
         .child(publish_icon("plus", 14., MINT))
         .child(title("New post", 11., 650., MINT))
-        .on_press(new_post).disabled(s.publish.scope.is_none())
+        .on_press(new_post).disabled(s.publish.scope.is_none() || s.publish.staging.is_some())
 }
 pub(super) fn inline_composer(s: &Studio, wide: bool) -> El {
     let media = composer_media(s, col().gap(7.).min_w(0.), wide);
@@ -1471,7 +1476,7 @@ pub(super) fn header_actions(s: &Studio, split: bool) -> Option<El> {
     let signed = s.publish.scope.is_some();
     if !signed || s.publish.accounts_open || split { return None; }
     Some(row().items_center().gap(3.).child(accounts_tool())
-        .child(panels::tool("publish-new", "plus", "New post", true, new_post).size(27., 27.)))
+        .child(panels::tool("publish-new", "plus", "New post", true, new_post).size(27., 27.).disabled(s.publish.staging.is_some())))
 }
 pub(super) fn panel(s: &Studio, mut b: El, split: bool, hidden_header: bool) -> El {
     let p = &s.publish;
@@ -1497,7 +1502,7 @@ pub(super) fn panel(s: &Studio, mut b: El, split: bool, hidden_header: bool) -> 
         let edge = workspace.panels[&PanelId::Publish].edge;
         !edge.side() || workspace.docks[&edge].size < 265.
     });
-    let delivery_count = p.jobs.len() + p.outbox.len();
+    let delivery_count = p.jobs.len() + p.outbox.len() + usize::from(p.staging.is_some());
     let tabs = row()
             .gap(3.)
             .child(tab(
@@ -1720,6 +1725,13 @@ fn post_list(s: &Studio, queued: &[crate::clips::Saved], mut b: El, split: bool,
         b = b.child(title(&p.sync_error, 11., 500., MUTED));
     }
     {
+        if p.staging.is_some() {
+            let caption = p.caption.text.trim();
+            let title = if caption.is_empty() { "Media post" } else { caption };
+            b = b.child(col().key("publish-saving-post").padding(7.).gap(3.).radius(5.)
+                .fill(color(SURFACE)).child(subhead(title))
+                .child(super::title("Saving on this device…", 10., 500., MUTED)));
+        }
         for post in &p.outbox {
             let error=post.error.as_ref().or_else(|| p.delivery_errors.get(&post.id));
             let state=if error.is_some() {"Needs attention"} else if post.schedule.is_some() {"Scheduling…"} else {"Sending…"};
@@ -1734,7 +1746,7 @@ fn post_list(s: &Studio, queued: &[crate::clips::Saved], mut b: El, split: bool,
             }
             b=b.child(card);
         }
-        if p.jobs.is_empty() && p.outbox.is_empty() {
+        if p.jobs.is_empty() && p.outbox.is_empty() && p.staging.is_none() {
             b = b.child(title(
                 if !signed {
                     "Sign in to view your queue"
@@ -1768,7 +1780,7 @@ fn post_list(s: &Studio, queued: &[crate::clips::Saved], mut b: El, split: bool,
                     &job.title
                 }))
                 .child(title(
-                    format!("{} · {}", job.state, job.due_at.replace('T', " ")),
+                    format!("{} · {}", job.state, local_date(&job.due_at)),
                     11.,
                     450.,
                     MUTED,
@@ -1914,6 +1926,37 @@ mod tests {
         assert!(!rt.state.publish.thumbnails.contains_key(&files[0]));
         assert!(rt.find("publish-thumbnail-0").is_some());
         assert!(rt.find("publish-thumbnail-1").is_none());
+    }
+
+    #[test]
+    fn queue_opens_immediately_and_staging_failure_restores_the_draft() {
+        let scratch = tempfile::tempdir().unwrap();
+        let mut studio = Studio::new(scratch.path().into());
+        let p = &mut studio.publish;
+        p.scope = Some(("studio".into(), "test".into()));
+        p.channels = serde_json::from_value(json!([
+            {"id":"t","platform":"threads","status":"active"}
+        ])).unwrap();
+        p.selected.insert("t".into());
+        p.composing = true;
+        p.caption.text = "Draft survives a local storage error".into();
+        let missing = scratch.path().join("missing.png");
+        p.files.push(missing.clone());
+        send(&mut studio);
+        assert!(!studio.publish.composing);
+        assert!(studio.publish.tab == PublishTab::Scheduled);
+        assert!(studio.publish.staging.is_some());
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while studio.publish.staging.is_some() && Instant::now() < deadline {
+            poll_delivery(&mut studio);
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert!(studio.publish.composing);
+        assert_eq!(studio.publish.caption.text, "Draft survives a local storage error");
+        assert_eq!(studio.publish.files, [missing]);
+        assert!(studio.publish.selected.contains("t"));
+        assert!(studio.publish.notice.contains("Could not save"));
+        assert!(studio.publish.outbox.is_empty());
     }
 
     #[test]
