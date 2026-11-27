@@ -29,7 +29,7 @@ jobs:
           desktop=crates/production-runtime/desktop
           out="$RUNNER_TEMP/bench/Contents"
           mkdir -p "$out/MacOS" "$out/Resources"
-          cp -R "$desktop/starter-audio" "$out/Resources/"
+          cp -R assets/starter-audio "$out/Resources/"
           ln -s "$(command -v ffmpeg)" "$out/MacOS/ffmpeg"
           for trial in cold warm-1 warm-2 warm-3; do
             touch "$desktop/src/main.rs"
