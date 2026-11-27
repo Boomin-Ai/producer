@@ -18,12 +18,12 @@ def check(binary, output):
 
         def render(name, keys=()):
             events = [dict({"type": "click", "key": step} if isinstance(step, str) else step,
-                           t=0.8 + index * 0.6) for index, step in enumerate(keys)]
+                           t=2.5 + index * 0.6) for index, step in enumerate(keys)]
             script = room / "actions.json"
             script.write_text(json.dumps(events))
             tree = output / f"{name}.json"
             subprocess.run([binary, "--realtime", "--size", "1380x980", "--fps", "10",
-                            "--frames", str(30 + 6 * len(events)), "--script", script,
+                            "--frames", str(46 + 6 * len(events)), "--script", script,
                             "--tree", tree, "--snap", output / f"{name}.png"],
                            check=True, timeout=90, env=env)
             return {node["key"]: node for node in json.loads(tree.read_text())["elements"]
@@ -79,9 +79,14 @@ def check(binary, output):
                                 {"type": "type", "text": marker, "every": 0.01}, "save-set",
                                 "close-editor"])
         saved = json.loads(project_file.read_text())["production"]["sets"]
-        assert marker in json.dumps(saved[clone])
+        for orientation in ("landscape", "vertical"):
+            assert marker in json.dumps(saved[clone]["layouts"][orientation]), orientation
         assert saved["useful-information"] == before["useful-information"]
         controller(render("updated-clone-reopened"))
+        subprocess.run([binary, "--set-posters", output / "updated-clone"], env=env,
+                       check=True, timeout=90)
+        for orientation in ("landscape", "portrait"):
+            assert (output / "updated-clone" / f"{orientation}.png").stat().st_size > 0
         print(f"Set and show controller checks passed. Screenshots and accessibility trees in {output}.")
 
 
