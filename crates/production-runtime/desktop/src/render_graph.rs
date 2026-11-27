@@ -4,6 +4,16 @@ use anyhow::{anyhow, ensure, Context, Result};
 use naga::{back::msl, valid, ShaderStage, Statement};
 use std::ffi::CString;
 
+// This output pass opts into the existing two-axis shader input as frame
+// position. Older runtimes can still compile the graph at its centered pose.
+pub(crate) fn supports_frame_drag(set: &producer_production_contract::Set, layout: &str) -> bool {
+    use producer_production_contract::GraphPass;
+    set.output_graphs.get(layout)
+        .and_then(|id| set.graphs.get(id))
+        .and_then(|graph| graph.passes.last())
+        .is_some_and(|pass| matches!(pass, GraphPass::Fragment { id, .. } if id == "camera-frame-motion"))
+}
+
 pub const PRELUDE: &str = r#"
 struct Frame { info: vec4<f32>, params: vec4<f32>, controls: vec4<f32>, screenPan: vec2<f32>, headline: f32, dj: vec4<f32> }
 @group(0) @binding(0) var<uniform> frame: Frame;
