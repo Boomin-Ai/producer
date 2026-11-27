@@ -213,10 +213,7 @@ pub(super) fn studios(s: &Studio, width: f32) -> El {
                 ))
                 .on_press(move |s: &mut Studio| {
                     if let Some((brand, room)) = &remote {
-                        match crate::boomin_account::prepare_room(&s.base, brand, room, None) {
-                            Ok(path) => s.open(path),
-                            Err(e) => s.error = e.to_string(),
-                        }
+                        s.open_remote(brand.clone(), room.clone(), None);
                     } else {
                         s.open(path.clone())
                     }

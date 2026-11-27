@@ -421,10 +421,19 @@ impl Studio {
         }
     }
     fn open(&mut self, path: PathBuf) {
+        self.open_prepared(Some(path.clone()), move || Ok(path));
+    }
+    fn open_remote(&mut self, brand: String, room: crate::boomin_account::RemoteRoom, starter: Option<Starter>) {
+        let base = self.base.clone();
+        let path = crate::boomin_account::room_path(&base, &brand, room.id);
+        self.open_prepared(Some(path), move || crate::boomin_account::prepare_room(&base, &brand, &room, starter));
+    }
+    fn open_prepared(&mut self, existing: Option<PathBuf>, prepare: impl FnOnce() -> anyhow::Result<PathBuf> + Send + 'static) {
+        if self.room_transition.is_some() { return; }
         self.settings.profile_open = false;
         self.switch_notice = None;
         if let Some(l) = &self.live {
-            if l.handle.root == path {
+            if Some(&l.handle.root) == existing.as_ref() {
                 self.page = Page::Studio;
                 return;
             }
@@ -433,10 +442,9 @@ impl Studio {
                 return;
             }
         }
-        if self.room_transition.is_some() { return; }
         let pending = self.pending.clone();
         let capture = !self.quiet;
-        self.transition(true, move || Live::start(path, pending, capture).map(Some));
+        self.transition(true, move || Live::start(prepare()?, pending, capture).map(Some));
     }
     fn transition(&mut self, opening: bool, task: impl FnOnce() -> anyhow::Result<Option<Live>> + Send + 'static) {
         let (send, result) = mpsc::channel();
@@ -498,6 +506,7 @@ impl Studio {
                 if let Some(previous) = self.live.replace(l) {
                     std::thread::spawn(move || drop(previous));
                 }
+                self.rooms = catalog::catalog(&self.base).unwrap_or_default();
                 self.pending = None;
                 self.page = Page::Studio;
                 self.network = Default::default();
@@ -567,10 +576,7 @@ impl Studio {
             }
         }
         if let Some((brand, room)) = self.settings.created.take() {
-            match crate::boomin_account::prepare_room(&self.base, &brand, &room, self.starter) {
-                Ok(path) => self.open(path),
-                Err(e) => self.error = e.to_string(),
-            }
+            self.open_remote(brand, room, self.starter);
         }
         if let Some(result) = self.city_worker.as_ref().and_then(|rx| rx.try_recv().ok()) {
             self.city_worker = None;
@@ -661,13 +667,10 @@ impl Studio {
             return;
         }
         {
-            match catalog::create_room(&self.base, &self.name.text, self.starter) {
-                Ok(p) => {
-                    self.rooms = catalog::catalog(&self.base).unwrap_or_default();
-                    self.open(p);
-                }
-                Err(e) => self.error = e.to_string(),
-            }
+            let base = self.base.clone();
+            let name = self.name.text.clone();
+            let starter = self.starter;
+            self.open_prepared(None, move || catalog::create_room(&base, &name, starter));
         }
     }
     fn stop(&mut self) {
