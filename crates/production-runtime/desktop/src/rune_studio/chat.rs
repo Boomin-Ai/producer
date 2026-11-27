@@ -1365,6 +1365,23 @@ mod tests {
     }
 
     #[test]
+    fn assistant_offers_the_account_action_for_the_current_session() {
+        let mut rt = runtime();
+        for (state, sign_out, connect) in [
+            (Account::Connected, true, false),
+            (Account::Checking, false, false),
+            (Account::Disconnected, false, true),
+            (Account::Waiting, false, false),
+            (Account::Connected, true, false),
+        ] {
+            rt.update(|studio, _| studio.chat.account = state);
+            rt.frame(0.);
+            assert_eq!(rt.find("assistant-sign-out").is_some(), sign_out);
+            assert_eq!(rt.find("assistant-account-action").is_some(), connect);
+        }
+    }
+
+    #[test]
     fn assistant_model_call_keeps_one_key_and_updates_to_the_latest_call() {
         let mut rt = runtime();
         let first = Arc::new(Turn::new(1));
