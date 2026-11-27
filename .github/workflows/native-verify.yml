@@ -28,6 +28,8 @@ jobs:
           test "$(uname -m)" = arm64
           desktop=crates/production-runtime/desktop
           out="$RUNNER_TEMP/bench/Contents"
+          export PRODUCER_PUBLISH_TEST_PNG_DIR="$RUNNER_TEMP/publish-pngs"
+          mkdir -p "$PRODUCER_PUBLISH_TEST_PNG_DIR"
           mkdir -p "$out/MacOS" "$out/Resources"
           cp -R assets/starter-audio "$out/Resources/"
           ln -s "$(command -v ffmpeg)" "$out/MacOS/ffmpeg"
@@ -76,3 +78,10 @@ jobs:
           path: ${{ runner.temp }}/bench/Contents/MacOS/studio-tests
           if-no-files-found: ignore
           retention-days: 2
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: publish-rune-pngs
+          path: ${{ runner.temp }}/publish-pngs/*.png
+          if-no-files-found: warn
+          retention-days: 3
