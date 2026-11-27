@@ -369,7 +369,7 @@ impl Workspace {
         }
     }
     pub fn descriptors(&self) -> BTreeMap<&'static str, serde_json::Value> {
-        PanelId::ALL.into_iter().map(|id| {
+        PanelId::ALL.into_iter().filter(|id| *id != PanelId::Timeline).map(|id| {
             let panel = &self.panels[&id];
             let edges: Vec<_> = Edge::ALL.into_iter().filter(|edge| id.accepts(*edge)).collect();
             (id.key(), serde_json::json!({
@@ -531,6 +531,17 @@ impl Workspace {
     }
     pub fn visible(&self, p: PanelId) -> bool {
         self.panels[&p].visible
+    }
+    pub fn apply_studio(&mut self, command: WorkspaceCommand) -> Result<()> {
+        use WorkspaceCommand::*;
+        if matches!(command,
+            Place { panel: PanelId::Timeline, .. } | Move { panel: PanelId::Timeline, .. }
+            | Activate { panel: PanelId::Timeline } | Visibility { panel: PanelId::Timeline, visible: true }) {
+            bail!("Timeline is unavailable in this version of Studio");
+        }
+        self.apply(command)?;
+        self.apply_launch_visibility();
+        Ok(())
     }
     pub fn apply_launch_visibility(&mut self) {
         if self.visible(PanelId::Timeline) {

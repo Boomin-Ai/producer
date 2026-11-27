@@ -47,7 +47,7 @@ fn prepare(
             assistant::room_action(v.clone())?
         };
         if let RoomCommand::Workspace { command } = &command {
-            s.project.workspace.clone().apply(command.clone())?;
+            s.project.workspace.clone().apply_studio(command.clone())?;
         }
         if let RoomCommand::CameraGrade { source, grade } = &command {
             s.project.validate_grade(source, *grade)?;

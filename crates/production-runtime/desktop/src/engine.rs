@@ -965,7 +965,7 @@ pub(crate) fn initial_room(root: &Path) -> Result<(Arc<Handle>,Receiver<Envelope
     fs::create_dir_all(&root)?;
     fs::set_permissions(&root, fs::Permissions::from_mode(0o700))?;
     let project_path = root.join("room.json");
-    let project: RoomProject = if project_path.exists() {
+    let mut project: RoomProject = if project_path.exists() {
         let bytes = fs::read(&project_path)?;
         if bytes.len() > 8 * 1024 * 1024 {
             bail!("Native room project too large");
@@ -974,6 +974,7 @@ pub(crate) fn initial_room(root: &Path) -> Result<(Arc<Handle>,Receiver<Envelope
     } else {
         RoomProject::demo()
     };
+    project.workspace.apply_launch_visibility();
     let plan = project.compile()?;
     let program = Arc::new(project.live_set()?);
     let camera_border_wave = camera_border_wave(&root)?;
@@ -1282,14 +1283,14 @@ fn apply(
             changed = true;
         }
         RoomCommand::Workspace { command } => {
-            state.project.workspace.apply(command)?;
+            state.project.workspace.apply_studio(command)?;
             changed = true;
         }
         RoomCommand::Panel { panel, visible } => {
             state
                 .project
                 .workspace
-                .apply(crate::workspace::WorkspaceCommand::Visibility {
+                .apply_studio(crate::workspace::WorkspaceCommand::Visibility {
                     panel: crate::workspace::PanelId::parse(&panel)?,
                     visible,
                 })?;
@@ -1304,7 +1305,7 @@ fn apply(
             state
                 .project
                 .workspace
-                .apply(crate::workspace::WorkspaceCommand::Move {
+                .apply_studio(crate::workspace::WorkspaceCommand::Move {
                     panel: crate::workspace::PanelId::Timeline,
                     edge,
                 })?;

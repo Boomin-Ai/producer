@@ -98,6 +98,7 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
             let _ = ws.apply(command);
         }
     }
+    ws.apply_launch_visibility();
     let [left, right, top, bottom] = ws.layout_extents(w, h - 79., s.editing_docks);
     let streaming = l.broadcast_view.0.active;
     let bar_fill = if cfg!(target_os = "macos") { color(BG).alpha(0.93) } else { color(BG) };
@@ -268,8 +269,6 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
     let mic = p_mic(snap);
     let camera = (0. ..1000.).contains(&snap.frame_age_ms[0]);
     let sharing = snap.frame_age_ms[1] >= 0.;
-    let timeline = &ws.panels[&PanelId::Timeline];
-    let timeline_docked = timeline.visible && !ws.docks[&timeline.edge].hidden;
     let mut bar = row().key("program-transport").items_center().flex_wrap().gap(4.);
     bar = if expanded {
         bar.w_full().px(9.).py(6.).fill(color(theme::TRANSPORT))
@@ -324,21 +323,13 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
             expanded,
             super::settings::open_studio,
         ));
-    if timeline_docked || snap.previewing {
+    if snap.previewing {
         bar = bar.child(command(
             "monitor-live",
             "Program",
             !snap.previewing,
             RoomCommand::Monitor { preview: false },
         ).help("View the current program output"));
-    }
-    if timeline_docked {
-        bar = bar.child(command(
-            "monitor-preview",
-            "Timeline",
-            snap.previewing,
-            RoomCommand::Monitor { preview: true },
-        ).help("Preview the timeline in the studio monitors"));
     }
     let record_command = RoomCommand::Record { enabled: !snap.recording };
     let record_label = if snap.recording { "Stop recording" } else { "Record" };
