@@ -580,109 +580,206 @@ fn start(
     s.publish.working = Some(worker(s, run));
 }
 fn submission_problem(p: &Publish) -> Option<String> {
-    if p.selected.is_empty() { return Some("Choose an account.".into()); }
+    if p.selected.is_empty() {
+        return Some("Choose an account.".into());
+    }
     for id in &p.selected {
-        let Some(c) = p.channels.iter().find(|c| &c.id == id && c.status == "active") else { return Some("Reconnect the selected account.".into()); };
+        let Some(c) = p
+            .channels
+            .iter()
+            .find(|c| &c.id == id && c.status == "active")
+        else {
+            return Some("Reconnect the selected account.".into());
+        };
         let options = p.options.get(id).cloned().unwrap_or_default();
         let file = p.files.first().map(PathBuf::as_path);
         if c.platform == "instagram" {
             let format = options.format(file);
-            if let Some(message) = format.requirement(&p.files) { return Some(message.into()); }
-            if format == InstagramFormat::Story && !c.capabilities["media"]["kinds"].as_array().is_some_and(|k| k.iter().any(|v| v == "story")) {
+            if let Some(message) = format.requirement(&p.files) {
+                return Some(message.into());
+            }
+            if format == InstagramFormat::Story
+                && !c.capabilities["media"]["kinds"]
+                    .as_array()
+                    .is_some_and(|k| k.iter().any(|v| v == "story"))
+            {
                 return Some("This Boomin server does not support Stories yet.".into());
             }
         }
         if p.files.len() as u64 > c.capabilities["media"]["max_items"].as_u64().unwrap_or(1) {
             return Some(format!("Too many attachments for {}.", c.label()));
         }
-        if let Err(e) = options.payload(&c.platform, &p.caption.text, file) { return Some(e.to_string()); }
+        if let Err(e) = options.payload(&c.platform, &p.caption.text, file) {
+            return Some(e.to_string());
+        }
     }
     None
 }
 
 fn outbox_dir(s: &Studio) -> PathBuf {
-    let (brand,email) = s.publish.scope.as_ref().expect("Signed-in publisher");
-    s.base.join("publish").join(format!("{:x}.outbox",Sha256::digest(format!("{brand}\0{email}").as_bytes())))
+    let (brand, email) = s.publish.scope.as_ref().expect("Signed-in publisher");
+    s.base.join("publish").join(format!(
+        "{:x}.outbox",
+        Sha256::digest(format!("{brand}\0{email}").as_bytes())
+    ))
 }
 
 fn send(s: &mut Studio) {
     let p = &s.publish;
-    if p.staging.is_some() || !p.composing || p.scope.is_none() { return; }
-    if let Some(message) = submission_problem(p) { s.publish.notice = message; return; }
-    let text=p.caption.text.trim().to_owned();
-    let file=p.files.first().map(PathBuf::as_path);
-    let mut targets=Vec::new();
-    for c in p.channels.iter().filter(|c| p.selected.contains(&c.id) && c.status=="active") {
-        let options=p.options.get(&c.id).cloned().unwrap_or_default();
-        let overrides=match options.payload(&c.platform,&text,file) {
-            Ok(value)=>value, Err(e)=>{s.publish.notice=e.to_string();return;}
-        };
-        if c.capabilities["features"]["instagram_tagging_and_trial"] != true && (overrides["trial_post"]==true || overrides.get("userTags").is_some() || overrides.get("location").is_some()) {
-            s.publish.notice="This account does not support the selected Instagram options.".into(); return;
-        }
-        let format=(c.platform=="instagram").then(||options.format(file));
-        targets.push(outbox::Destination { id:c.id.clone(),label:c.label(),key:Uuid::new_v4().to_string(),
-            overrides,format:format.map(|f|f.key().to_owned()),cover:if format==Some(InstagramFormat::Reel){options.cover}else{None} });
+    if p.staging.is_some() || !p.composing || p.scope.is_none() {
+        return;
     }
-    if targets.is_empty(){return;}
-    let schedule=p.scheduled.then(||p.schedule.text.trim().to_owned());
-    let mut post=outbox::Post{created_ms:std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,id:Uuid::new_v4().to_string(),text,files:p.files.clone(),schedule:None,targets,error:None};
-    let root=outbox_dir(s);
-    let pasted=p.pasted_images.clone();
-    let (tx,rx)=mpsc::channel();
-    s.publish.staging=Some(rx);
+    if let Some(message) = submission_problem(p) {
+        s.publish.notice = message;
+        return;
+    }
+    let text = p.caption.text.trim().to_owned();
+    let file = p.files.first().map(PathBuf::as_path);
+    let mut targets = Vec::new();
+    for c in p
+        .channels
+        .iter()
+        .filter(|c| p.selected.contains(&c.id) && c.status == "active")
+    {
+        let options = p.options.get(&c.id).cloned().unwrap_or_default();
+        let overrides = match options.payload(&c.platform, &text, file) {
+            Ok(value) => value,
+            Err(e) => {
+                s.publish.notice = e.to_string();
+                return;
+            }
+        };
+        if c.capabilities["features"]["instagram_tagging_and_trial"] != true
+            && (overrides["trial_post"] == true
+                || overrides.get("userTags").is_some()
+                || overrides.get("location").is_some())
+        {
+            s.publish.notice =
+                "This account does not support the selected Instagram options.".into();
+            return;
+        }
+        let format = (c.platform == "instagram").then(|| options.format(file));
+        targets.push(outbox::Destination {
+            id: c.id.clone(),
+            label: c.label(),
+            key: Uuid::new_v4().to_string(),
+            overrides,
+            format: format.map(|f| f.key().to_owned()),
+            cover: if format == Some(InstagramFormat::Reel) {
+                options.cover
+            } else {
+                None
+            },
+        });
+    }
+    if targets.is_empty() {
+        return;
+    }
+    let schedule = p.scheduled.then(|| p.schedule.text.trim().to_owned());
+    let mut post = outbox::Post {
+        created_ms: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64,
+        id: Uuid::new_v4().to_string(),
+        text,
+        files: p.files.clone(),
+        schedule: None,
+        targets,
+        error: None,
+    };
+    let root = outbox_dir(s);
+    let pasted = p.pasted_images.clone();
+    let (tx, rx) = mpsc::channel();
+    s.publish.staging = Some(rx);
     std::thread::spawn(move || {
-        let _keep_pasted_alive=pasted;
-        let result=(||{post.schedule=schedule.as_deref().map(schedule_utc).transpose()?;post.stage(&root)})();
-        let _=tx.send(result);
+        let _keep_pasted_alive = pasted;
+        let result = (|| {
+            post.schedule = schedule.as_deref().map(schedule_utc).transpose()?;
+            post.stage(&root)
+        })();
+        let _ = tx.send(result);
     });
 }
 
-fn poll_delivery(s:&mut Studio)->bool {
-    let root=outbox_dir(s);
-    let p=&mut s.publish;
-    let mut changed=false;
-    if let Some(result)=p.loading_outbox.as_ref().and_then(|rx|rx.try_recv().ok()){
-        p.loading_outbox=None;
-        match result { Ok(posts)=>p.outbox=posts, Err(e)=>p.notice=e.to_string() }
-        p.outbox_next=Some(Instant::now()+Duration::from_secs(10));
-        changed=true;
-    }
-    if let Some(result)=p.staging.as_ref().and_then(|rx|rx.try_recv().ok()){
-        p.staging=None;
+fn poll_delivery(s: &mut Studio) -> bool {
+    let root = outbox_dir(s);
+    let p = &mut s.publish;
+    let mut changed = false;
+    if let Some(result) = p.loading_outbox.as_ref().and_then(|rx| rx.try_recv().ok()) {
+        p.loading_outbox = None;
         match result {
-            Ok(post)=>{
-                p.loading_outbox=None;
-                p.outbox.retain(|old|old.id!=post.id);
-                p.outbox.push(post);
-                p.tab=PublishTab::Scheduled;p.composing=false;
-                p.set_files(Vec::new());p.scheduled=false;p.schedule=Default::default();p.caption=Default::default();
-                p.options.clear();p.selected.clear();p.expanded=None;p.clips_open=false;p.notice.clear();
-            }
-            Err(e)=>p.notice=e.to_string(),
+            Ok(posts) => p.outbox = posts,
+            Err(e) => p.notice = e.to_string(),
         }
-        changed=true;
+        p.outbox_next = Some(Instant::now() + Duration::from_secs(10));
+        changed = true;
     }
-    if let Some(result)=p.delivering.as_ref().and_then(|(_,rx)|rx.try_recv().ok()){
-        let (id,_)=p.delivering.take().unwrap();
-        if let Err(e)=result {p.delivery_errors.insert(id.clone(),e.to_string());}
-        p.outbox.retain(|post|post.id!=id);
-        p.outbox_next=None;p.next=None;p.history_next=None;p.loading_outbox=None;
-        changed=true;
+    if let Some(result) = p.staging.as_ref().and_then(|rx| rx.try_recv().ok()) {
+        p.staging = None;
+        match result {
+            Ok(post) => {
+                p.loading_outbox = None;
+                p.outbox.retain(|old| old.id != post.id);
+                p.outbox.push(post);
+                p.tab = PublishTab::Scheduled;
+                p.composing = false;
+                p.set_files(Vec::new());
+                p.scheduled = false;
+                p.schedule = Default::default();
+                p.caption = Default::default();
+                p.options.clear();
+                p.selected.clear();
+                p.expanded = None;
+                p.clips_open = false;
+                p.notice.clear();
+            }
+            Err(e) => p.notice = e.to_string(),
+        }
+        changed = true;
     }
-    if p.delivering.is_none() && p.loading_outbox.is_none() && p.outbox_next.is_none_or(|t| Instant::now()>=t){
-        let (tx,rx)=mpsc::channel();p.loading_outbox=Some(rx);
-        let dir=root.clone();
-        std::thread::spawn(move||{let _=tx.send(outbox::list(&dir));});
+    if let Some(result) = p.delivering.as_ref().and_then(|(_, rx)| rx.try_recv().ok()) {
+        let (id, _) = p.delivering.take().unwrap();
+        if let Err(e) = result {
+            p.delivery_errors.insert(id.clone(), e.to_string());
+        }
+        p.outbox.retain(|post| post.id != id);
+        p.outbox_next = None;
+        p.next = None;
+        p.history_next = None;
+        p.loading_outbox = None;
+        changed = true;
     }
-    if s.publish.delivering.is_none() && s.publish.loading_outbox.is_none(){
-        let retry=s.publish.retry_id.take();
-        let id=retry.clone().or_else(||s.publish.outbox.iter().find(|post|post.error.is_none() && !s.publish.delivery_errors.contains_key(&post.id)).map(|post|post.id.clone()));
-        if let Some(id)=id{
-            let dir=root.join(&id);
+    if p.delivering.is_none()
+        && p.loading_outbox.is_none()
+        && p.outbox_next.is_none_or(|t| Instant::now() >= t)
+    {
+        let (tx, rx) = mpsc::channel();
+        p.loading_outbox = Some(rx);
+        let dir = root.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(outbox::list(&dir));
+        });
+    }
+    if s.publish.delivering.is_none() && s.publish.loading_outbox.is_none() {
+        let retry = s.publish.retry_id.take();
+        let id = retry.clone().or_else(|| {
+            s.publish
+                .outbox
+                .iter()
+                .find(|post| {
+                    post.error.is_none() && !s.publish.delivery_errors.contains_key(&post.id)
+                })
+                .map(|post| post.id.clone())
+        });
+        if let Some(id) = id {
+            let dir = root.join(&id);
             s.publish.delivery_errors.remove(&id);
-            let rx=worker(s,move |api,rt|rt.block_on(outbox::deliver(&api,&dir,retry.is_some())));
-            s.publish.delivering=Some((id,rx));changed=true;
+            let rx = worker(s, move |api, rt| {
+                rt.block_on(outbox::deliver(&api, &dir, retry.is_some()))
+            });
+            s.publish.delivering = Some((id, rx));
+            changed = true;
         }
     }
     changed
@@ -898,6 +995,7 @@ fn select_default(p: &mut Publish) {
 }
 pub(super) fn new_post(s: &mut Studio) {
     let p = &mut s.publish;
+    if p.staging.is_some() { return; }
     p.composing = true;
     p.awaiting_default = p.selected.is_empty();
     select_default(p);
@@ -938,6 +1036,7 @@ pub(super) fn inline_composer(s: &Studio, wide: bool) -> El {
         )
         .child(content)
         .child(delivery(s, wide))
+        .disabled(s.publish.staging.is_some())
 }
 pub(super) fn publish_icon(name: &str, size: f32, tint: u32) -> El {
     rune::icon(super::glyphs::glyph(name), size).color(color(tint))
@@ -965,7 +1064,7 @@ fn append_media(existing: &[PathBuf], picked: Vec<PathBuf>) -> Result<Vec<PathBu
 }
 
 fn attach_paths(s: &mut Studio, paths: Vec<PathBuf>) {
-    if s.publish.working.is_some() { return; }
+    if s.publish.working.is_some() || s.publish.staging.is_some() { return; }
     match append_media(&s.publish.files, paths) {
         Ok(files) => { s.publish.set_files(files); s.publish.notice.clear(); }
         Err(error) => s.publish.notice = error.to_string(),
