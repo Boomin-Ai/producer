@@ -1393,9 +1393,11 @@ pub(super) fn panel(s: &Studio, mut b: El, split: bool, hidden_header: bool) -> 
         return local_list(s, b.child(subhead("Local clip queue")), queued);
     }
     let tab = |key: &str, name: String, selected, action: fn(&mut Studio)| button(key.to_owned(), name, selected, action).px(6.).h(25.);
-    let ws = &s.live.as_ref().unwrap().snapshot.project.workspace;
-    let edge = ws.panels[&PanelId::Publish].edge;
-    let narrow = !split && (!edge.side() || ws.docks[&edge].size < 265.);
+    let narrow = !split && s.live.as_ref().is_some_and(|live| {
+        let workspace = &live.snapshot.project.workspace;
+        let edge = workspace.panels[&PanelId::Publish].edge;
+        !edge.side() || workspace.docks[&edge].size < 265.
+    });
     let delivery_count = p.jobs.len() + p.outbox.len();
     let tabs = row()
             .gap(3.)
