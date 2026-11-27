@@ -68,7 +68,7 @@ def validate(repo, run_id, version):
                 and matches[0]['conclusion'] == conclusion, f'Expected {name} to be {conclusion}')
 
     step(job('validate-public-source', 'success'), 'Validate stable source and reserve one release draft')
-    step(job('build (ubuntu-latest)', 'success'), 'Run tauri-apps/tauri-action@v0')
+    step(job('build (blacksmith-4vcpu-ubuntu-2604)', 'success'), 'Run tauri-apps/tauri-action@v0')
     intel = job('build-macos-intel-live', 'success')
     step(intel, 'Stage Intel installer in the release draft')
     step(intel, 'Stage notarized Intel updater archive')

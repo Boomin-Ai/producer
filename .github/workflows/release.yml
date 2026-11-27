@@ -509,7 +509,7 @@ jobs:
     needs: [validate-public-source]
     permissions:
       contents: write
-    runs-on: blacksmith-6vcpu-macos-15
+    runs-on: macos-15-intel
     timeout-minutes: 90
     # Deliberately NOT named APPLE_* at job scope: tauri's bundler reads those
     # names and would sign/notarize the engine-less intermediate build.
