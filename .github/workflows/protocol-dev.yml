@@ -32,3 +32,9 @@ jobs:
           path: crates/production-runtime/desktop/target/aarch64-apple-darwin/debug/producer-native-room
           if-no-files-found: error
 
+  assistant-account:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --locked --manifest-path crates/assistant-runtime/Cargo.toml
