@@ -49,7 +49,22 @@ def check(binary, root):
     for key in ("studios", "edit", "studio-link", "channels", "canvas-mode", "virtual-camera", "record", "broadcast"):
         x, y, width, height = result[key]["rect"]
         assert 72 <= x and 0 <= y and y + height <= 44
+    browsing = render(binary, seed, "1150x720", ["studios"])
+    assert {"room-0", "close-active-room"} <= browsing.keys()
+    closed = render(binary, seed, "1150x720", ["studios", "close-active-room"])
+    assert "room-0" in closed and "close-active-room" not in closed
+    reopened = render(binary, seed, "1150x720", ["studios", "close-active-room", "room-0"])
+    assert "studio-shell" in reopened
+
     project = (seed / "room.json").read_text()
+    clips = root / "clips-switch"
+    panel_fixture(clips, project, "clips", "right")
+    for keys, enabled in [((), False), (("clips-enable",), True), (("clips-enable", "clips-enable"), False)]:
+        elements = render(binary, clips, "1150x720", keys)
+        assert elements["clips-enable"]["role"] == "switch"
+        tree = json.loads((clips / "tree.json").read_text())
+        rolling = any(n.get("text", "").startswith(("Buffering", "Rolling")) for n in tree["elements"])
+        assert rolling == enabled
     shortcut = {"type": "key", "name": "e", "cmd": True}
     click = render(binary, seed, "1150x720", ["edit"])
     keyboard = render(binary, seed, "1150x720", [shortcut])
