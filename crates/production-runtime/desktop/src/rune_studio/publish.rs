@@ -626,7 +626,7 @@ fn send(s: &mut Studio) {
     }
     if targets.is_empty(){return;}
     let schedule=p.scheduled.then(||p.schedule.text.trim().to_owned());
-    let mut post=outbox::Post{id:Uuid::new_v4().to_string(),text,files:p.files.clone(),schedule:None,targets,error:None};
+    let mut post=outbox::Post{created_ms:std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,id:Uuid::new_v4().to_string(),text,files:p.files.clone(),schedule:None,targets,error:None};
     let root=outbox_dir(s);
     let pasted=p.pasted_images.clone();
     let (tx,rx)=mpsc::channel();
@@ -1986,6 +1986,7 @@ mod tests {
             let spool = scratch.path().join("outbox");
             let make = |text: &str, channel: &str, files: Vec<PathBuf>, schedule: Option<String>| {
                 outbox::Post {
+                    created_ms: 0,
                     id: Uuid::new_v4().to_string(), text: text.into(), files, schedule, error: None,
                     targets: vec![outbox::Destination { id: channel.into(), label: channel.into(),
                         key: Uuid::new_v4().to_string(), overrides: json!({}), cover: None,
