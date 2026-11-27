@@ -1936,7 +1936,7 @@ mod tests {
         let mut studio = Studio::new(scratch.path().into());
         studio.publish.scope = Some(("studio".into(), "test".into()));
         studio.publish.channels = serde_json::from_value(json!([
-            {"id":"t", "platform":"threads", "status":"active", "display_name":"Useful Information"}
+            {"id":"t", "platform":"threads", "status":"active", "display_name":"Useful Information","capabilities":{"media":{"max_items":10}}}
         ]))
         .unwrap();
         studio.publish.jobs = serde_json::from_value(json!([
@@ -1971,17 +1971,20 @@ mod tests {
             (W as f32, H as f32),
             rune::Env::default(),
         );
-        let snapshot = |rt: &mut rune::Runtime<Studio>, name: &str| {
-            let Some(dir) = std::env::var_os("PRODUCER_PUBLISH_TEST_PNG_DIR") else {
-                return;
-            };
+        use rune::render::{Gpu, Offscreen, Renderer, OFFSCREEN_FORMAT};
+        let mut capture = std::env::var_os("PRODUCER_PUBLISH_TEST_PNG_DIR").map(|dir| {
+            let gpu = Gpu::headless();
+            let renderer = Renderer::new(&gpu.device, OFFSCREEN_FORMAT);
+            let target = Offscreen::new(&gpu.device, W, H);
             let dir = PathBuf::from(dir);
             fs::create_dir_all(&dir).unwrap();
-            use rune::render::{Gpu, Offscreen, Renderer, OFFSCREEN_FORMAT};
-            let gpu = Gpu::headless();
-            let mut renderer = Renderer::new(&gpu.device, OFFSCREEN_FORMAT);
-            let target = Offscreen::new(&gpu.device, W, H);
-            renderer.render_runtime_to_offscreen(&gpu.device, &gpu.queue, &target, rt);
+            (gpu, renderer, target, dir)
+        });
+        let mut snapshot = |rt: &mut rune::Runtime<Studio>, name: &str| {
+            let Some((gpu, renderer, target, dir)) = capture.as_mut() else { return };
+            rt.settle_all();
+            for _ in 0..18 { rt.frame(0.05); }
+            renderer.render_runtime_to_offscreen(&gpu.device, &gpu.queue, target, rt);
             rune::render::write_png(&dir.join(name), W, H, &target.read(&gpu.device)).unwrap();
         };
         let click = |rt: &mut rune::Runtime<Studio>, key: &str| {
@@ -2006,6 +2009,7 @@ mod tests {
         rt.paste_content(rune::ClipboardContent::default().with_image(png));
         rt.frame(0.03);
         let at = rt.find("Post caption").unwrap();
+        image::RgbImage::from_pixel(64, 40, image::Rgb([204, 141, 40])).save(&image_path).unwrap();
         rt.drop_files(vec![image_path], Some(at));
         rt.frame(0.03);
         assert_eq!(rt.state.publish.files.len(), 2);
