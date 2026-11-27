@@ -1996,6 +1996,7 @@ mod tests {
         click(&mut rt, "publish-new");
         click(&mut rt, "Post caption");
         rt.paste("Two views of the studio");
+        rt.frame(0.03);
         assert_eq!(rt.state.publish.caption.text, "Two views of the studio");
         let image_path = scratch.path().join("detail.png");
         image::RgbImage::from_pixel(64, 40, image::Rgb([26, 154, 121]))
