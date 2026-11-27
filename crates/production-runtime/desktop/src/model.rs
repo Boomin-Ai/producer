@@ -1323,16 +1323,26 @@ impl RoomProject {
         if default.exists_in(set) {
             named.push(SetLayoutChoice { label: "Default".into(), pair: default });
         }
-        for (key,layout) in &set.layouts {
-            if named.iter().any(|c|c.pair.ids().contains(&key.as_str())){continue}
-            let suffix=match layout.orientation{Orientation::Landscape=>"landscape",Orientation::Vertical=>"vertical"};
-            let stem=key.strip_suffix(&format!("-{suffix}")).unwrap_or(key);
-            let mut pair=SetLayoutPair::default();
-            match layout.orientation{
-                Orientation::Landscape=>{pair.landscape=key.clone();let partner=format!("{stem}-vertical");if set.layouts.contains_key(&partner){pair.vertical=partner;}},
-                Orientation::Vertical=>{pair.vertical=key.clone();let partner=format!("{stem}-landscape");if set.layouts.contains_key(&partner){pair.landscape=partner;}}
+        for (key, layout) in &set.layouts {
+            if named.iter().any(|choice| choice.pair.ids().contains(&key.as_str())) {
+                continue;
             }
-            if pair.exists_in(set){named.push(SetLayoutChoice{label:set_label(stem),pair});}
+            let (own, other, orientation) = match layout.orientation {
+                Orientation::Landscape => ("landscape", "vertical", Orientation::Vertical),
+                Orientation::Vertical => ("vertical", "landscape", Orientation::Landscape),
+            };
+            let stem = key.strip_suffix(&format!("-{own}")).unwrap_or(key);
+            let sibling = format!("{stem}-{other}");
+            let partner = [sibling.as_str(), other].into_iter().find(|id| {
+                set.layouts.get(*id).is_some_and(|layout| layout.orientation == orientation)
+            }).or_else(|| set.layouts.iter().find(|(_, layout)| layout.orientation == orientation)
+                .map(|(id, _)| id.as_str()));
+            let Some(partner) = partner else { continue };
+            let pair = match layout.orientation {
+                Orientation::Landscape => SetLayoutPair { landscape: key.clone(), vertical: partner.into() },
+                Orientation::Vertical => SetLayoutPair { landscape: partner.into(), vertical: key.clone() },
+            };
+            named.push(SetLayoutChoice { label: set_label(stem), pair });
         }
         named
     }
@@ -1445,6 +1455,21 @@ pub fn time(seconds: f64) -> Result<Time> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn sets_offer_their_authored_layouts_without_a_show_or_conventional_names() {
+        let room = RoomProject::demo();
+        let mut set = room.production.sets["studio"].clone();
+        let wide = set.layouts["landscape"].clone();
+        let tall = set.layouts["vertical"].clone();
+        set.layouts.clear();
+        set.layouts.insert("wide-stage".into(), wide);
+        set.layouts.insert("phone-view".into(), tall);
+        let choices = room.draft_layout_choices("custom-set", &set);
+        assert_eq!(choices.len(), 1);
+        assert_eq!(choices[0].pair.landscape, "wide-stage");
+        assert_eq!(choices[0].pair.vertical, "phone-view");
+    }
 
     #[test]
     fn contain_fits_the_authored_stage_to_hd_and_square_outputs() {
