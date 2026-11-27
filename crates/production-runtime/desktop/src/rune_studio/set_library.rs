@@ -60,6 +60,14 @@ const POSTERS: &[(&str, &[u8])] = &[
     poster!("classic-host"), poster!("classic-landscape"), poster!("classic-opening"), poster!("classic-screen-share"),
     poster!("useful-information-landscape"), poster!("useful-information-focus-host"), poster!("useful-information-focus-cohost"), poster!("useful-information-interview"), poster!("useful-information-screen-share"), poster!("useful-information-follow"), poster!("useful-information-opening"),
 
+    poster!("layout-family-landscape"),
+    poster!("layout-family-duo"),
+    poster!("layout-family-interview"),
+    poster!("layout-family-content"),
+    poster!("layout-family-inset"),
+    poster!("layout-family-opening"),
+    poster!("layout-family-closing"),
+
     poster!("my-first-million"),
     poster!("mfm-opening"), poster!("mfm-conversation"), poster!("mfm-interview"),
     poster!("mfm-focus-shaan"), poster!("mfm-focus-sam"), poster!("mfm-screen-share"), poster!("mfm-follow"),
