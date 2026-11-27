@@ -31,20 +31,48 @@ jobs:
           mkdir -p "$out/MacOS" "$out/Resources"
           cp -R assets/starter-audio "$out/Resources/"
           ln -s "$(command -v ffmpeg)" "$out/MacOS/ffmpeg"
+          report="$RUNNER_TEMP/bench-timings.tsv"
+          printf 'trial\tphase\tseconds\texit_status\n' > "$report"
+          measure() {
+            local phase="$1" started=$SECONDS status=0
+            shift
+            "$@" || status=$?
+            printf '%s\t%s\t%s\t%s\n' "$trial" "$phase" "$((SECONDS-started))" "$status" | tee -a "$report"
+            return "$status"
+          }
+          build_tests() {
+            local status=0
+            cargo test --locked --manifest-path "$desktop/Cargo.toml" --no-run --message-format=json > "$RUNNER_TEMP/tests.jsonl" || status=$?
+            if (( status != 0 )); then
+              jq -r 'select(.reason == "compiler-message") | .message.rendered // empty' "$RUNNER_TEMP/tests.jsonl" >&2
+            fi
+            return "$status"
+          }
           for trial in cold warm-1 warm-2 warm-3; do
             touch "$desktop/src/main.rs"
-            start=$SECONDS
-            cargo test --locked --manifest-path "$desktop/Cargo.toml" --no-run --message-format=json > "$RUNNER_TEMP/tests.jsonl"
+            measure test-build build_tests
             exe=$(jq -rs 'map(select(.profile.test == true and .target.name == "producer-native-room" and .executable != null))|last.executable' "$RUNNER_TEMP/tests.jsonl")
             cp "$exe" "$out/MacOS/studio-tests"
-            "$out/MacOS/studio-tests" --test-threads=2
-            tests=$((SECONDS-start))
-            cargo build --locked --manifest-path "$desktop/Cargo.toml"
-            echo "$trial: tests ${tests}s; Dev executable $((SECONDS-start))s" >> "$GITHUB_STEP_SUMMARY"
+            measure test-run "$out/MacOS/studio-tests" --test-threads=2
+            measure dev-build cargo build --locked --manifest-path "$desktop/Cargo.toml"
           done
           cp "$desktop/target/debug/producer-native-room" "$RUNNER_TEMP/producer-native-room"
           strip -S "$RUNNER_TEMP/producer-native-room"
           codesign --force --sign - "$RUNNER_TEMP/producer-native-room"
+      - name: Summarize native timings
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f "$RUNNER_TEMP/bench-timings.tsv" ]]; then
+            awk -F '\t' 'NR == 1 { print "| Trial | Phase | Seconds | Exit status |"; print "|---|---|---:|---:|"; next } { printf "| %s | %s | %s | %s |\n", $1, $2, $3, $4 }' "$RUNNER_TEMP/bench-timings.tsv" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: timings-${{ matrix.runner }}
+          path: ${{ runner.temp }}/bench-timings.tsv
+          if-no-files-found: ignore
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
           name: producer-dev-${{ matrix.runner }}
