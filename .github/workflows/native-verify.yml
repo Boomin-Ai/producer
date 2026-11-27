@@ -1,0 +1,78 @@
+name: Native Dev verification (Blacksmith)
+on:
+  push:
+    branches: [bench/native-dev-verify]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [blacksmith-6vcpu-macos-15]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 70
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '13.0'
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.100.0
+      - name: Time native builds and execute the tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = arm64
+          desktop=crates/production-runtime/desktop
+          out="$RUNNER_TEMP/bench/Contents"
+          mkdir -p "$out/MacOS" "$out/Resources"
+          cp -R assets/starter-audio "$out/Resources/"
+          ln -s "$(command -v ffmpeg)" "$out/MacOS/ffmpeg"
+          report="$RUNNER_TEMP/bench-timings.tsv"
+          printf 'trial\tphase\tseconds\texit_status\n' > "$report"
+          measure() {
+            local phase="$1" started=$SECONDS status=0
+            shift
+            "$@" || status=$?
+            printf '%s\t%s\t%s\t%s\n' "$trial" "$phase" "$((SECONDS-started))" "$status" | tee -a "$report"
+            return "$status"
+          }
+          build_tests() {
+            local status=0
+            cargo test --locked --manifest-path "$desktop/Cargo.toml" --no-run --message-format=json > "$RUNNER_TEMP/tests.jsonl" || status=$?
+            if (( status != 0 )); then
+              jq -r 'select(.reason == "compiler-message") | .message.rendered // empty' "$RUNNER_TEMP/tests.jsonl" >&2
+            fi
+            return "$status"
+          }
+          for trial in cold; do
+            touch "$desktop/src/main.rs"
+            measure test-build build_tests
+            exe=$(jq -rs 'map(select(.profile.test == true and .target.name == "producer-native-room" and .executable != null))|last.executable' "$RUNNER_TEMP/tests.jsonl")
+            cp "$exe" "$out/MacOS/studio-tests"
+            measure test-run "$out/MacOS/studio-tests" --test-threads=2
+          done
+      - name: Summarize native timings
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f "$RUNNER_TEMP/bench-timings.tsv" ]]; then
+            awk -F '\t' 'NR == 1 { print "| Trial | Phase | Seconds | Exit status |"; print "|---|---|---:|---:|"; next } { printf "| %s | %s | %s | %s |\n", $1, $2, $3, $4 }' "$RUNNER_TEMP/bench-timings.tsv" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: timings-${{ matrix.runner }}
+          path: ${{ runner.temp }}/bench-timings.tsv
+          if-no-files-found: ignore
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: always() && runner.os == 'macOS'
+        with:
+          name: studio-tests-${{ matrix.runner }}
+          path: ${{ runner.temp }}/bench/Contents/MacOS/studio-tests
+          if-no-files-found: ignore
+          retention-days: 2
