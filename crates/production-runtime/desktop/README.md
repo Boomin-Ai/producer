@@ -108,3 +108,19 @@ This first room does **not** finish N1/N2 or replace production. Native compress
 ### Native surface renderer follow-up, 2026-11-18
 
 The [native 2D surface slice](../NATIVE-SURFACES.md) replaces the one-title strip with cached, individually styled system-font text and typed alpha-gradient surfaces, pixel radii, borders and grain. A public train fixture passed paired dark/light recording, local surface editing and dock roundtrips. This is a compositor specimen for Classic, rather than its completed eight-layout design. It does not qualify the pending full renderer, Assistant adapter or public beta. The previous camera/mic/take results retain their original exact-source scope.
+
+## Apple Silicon updates
+
+The signed native release checks the Apple Silicon feed on launch and every 15
+seconds while running. The sidebar icon opens the version and download action.
+Producer verifies the archive with the existing update key, checks Apple code
+signing and notarization, then replaces the app bundle when the user restarts.
+An open studio must close before restart. Apps installed before the native
+updater was added need one manual upgrade.
+
+The Blacksmith candidate includes `macos-arm64.json`. After publishing the
+verified GitHub release and checking its public assets, copy that exact generated
+file to `site/updates/macos-arm64.json` in the production Pages deployment. The
+file switches the download button and the uncached app update feed together. It
+also carries the archive length, checksum and signature. The desktop Cargo version supplies the bundle plist and release artifact version.
+The cross-platform Tauri updater feed uses its own release workflow.

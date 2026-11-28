@@ -18,6 +18,7 @@ mod settings;
 mod set_library;
 mod set_sources;
 mod timeline;
+mod updates;
 use crate::{
     engine::{self, Handle, RoomCommand, Snapshot},
     model::CanvasView,
@@ -276,6 +277,7 @@ struct RoomTransition {
 }
 
 struct Studio {
+    updates: updates::Updates,
     room_transition: Option<RoomTransition>,
     chat: chat::Chat,
     editor: Option<editor::Editor>,
@@ -364,6 +366,7 @@ impl Studio {
             chat: Default::default(),
             base,
             page: Page::Studios,
+            updates: Default::default(),
             rooms: rooms.unwrap_or_default(),
             error,
             live: None,
@@ -531,6 +534,7 @@ impl Studio {
         }
     }
     fn setup(&mut self, wake: Waker) {
+        self.updates.start();
         if std::env::var_os("PRODUCER_DEV_OPEN_LOCAL_ROOM").is_some() {
             self.open(self.dev_startup_studio());
         }
@@ -549,6 +553,7 @@ impl Studio {
         });
     }
     fn tick(&mut self, _: f64, _: &mut Tx) -> bool {
+        let update_changed = self.updates.poll();
         if let Some(transition) = &self.room_transition {
             let result = match transition.result.try_recv() {
                 Ok(result) => result,
@@ -566,7 +571,7 @@ impl Studio {
             return true;
         }
         let mut accounts =
-            self.settings.poll(&mut self.error) | self.channels.poll(&mut self.error) | self.people.poll();
+            update_changed | self.settings.poll(&mut self.error) | self.channels.poll(&mut self.error) | self.people.poll();
         accounts |= publish::poll(self) | network::poll(self) | self.set_library.poll();
         accounts |= people::poll_direct_invitation(self);
         if self.settings.account.is_some() {
@@ -772,7 +777,7 @@ fn desk_view(s: &Studio, cx: &mut Cx<Studio>) -> El {
                 .child(panels::workspace(s, width, height).disabled(true))
                 .child(settings::theme_overlay(s, width, height));
         }
-        return root.child(panels::workspace(s, width, height));
+        return updates::popover(root.child(panels::workspace(s, width, height)), s, width, height, true);
     }
-    settings::shell(s, width, height)
+    updates::popover(settings::shell(s, width, height), s, width, height, false)
 }

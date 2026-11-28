@@ -411,6 +411,14 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
             .items_center()
             .gap(10.)
             .child(title(mode, 10., 600., MUTED))
+            .child(if super::updates::available(s) {
+                el().key("producer-update-live").size(26., 22.).center().role("button")
+                    .label("Update available").help("Update available").focusable(true)
+                    .radius(5.).hover_fill(color(theme::ROW))
+                    .child(glyph("producer-update", 14., MINT)).on_press(super::updates::toggle)
+            } else {
+                el().size(0., 0.)
+            })
             .child(title(if snap.recording { "Recording" } else { "Studio" }, 10., 550., if snap.recording { 0xff6672 } else { MUTED }))
             .child(el().grow(1.))
             .child(title(fps, 10., 550., TEXT).help("Measured program frames per second"))
@@ -3023,6 +3031,10 @@ fn dock_picker(
 }
 
 pub(super) fn layout_key(s: &mut Studio, event: &rune::KeyEvent, _: &mut rune::Tx) -> bool {
+    if s.updates.open && matches!(event.key, rune::Key::Escape) {
+        s.updates.open = false;
+        return true;
+    }
     if s.studio_settings.is_some() {
         if matches!(event.key, rune::Key::Escape) {
             s.studio_settings = None;

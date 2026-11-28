@@ -509,7 +509,13 @@ pub(super) fn shell(s: &Studio, width: f32, height: f32) -> El {
             !settings,
             |s| s.page = Page::Studios,
         ))
-        .child(el().grow(1.))
+        .child(el().grow(1.));
+    if super::updates::available(s) {
+        rail = rail.child(rail_button(
+            "producer-update", "Update available", icon("producer-update", true), s.updates.open, super::updates::toggle,
+        ));
+    }
+    rail = rail
         .child(rail_button(
             "settings",
             "Settings",

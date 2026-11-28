@@ -11,7 +11,6 @@ jobs:
     env:
       CARGO_INCREMENTAL: '0'
       MACOSX_DEPLOYMENT_TARGET: '13.0'
-      VERSION: '0.5.2'
       PRODUCER_REQUIRE_ENGINE: '1'
     steps:
       - uses: actions/checkout@v4
@@ -19,6 +18,11 @@ jobs:
         with:
           toolchain: '1.100.0'
           targets: aarch64-apple-darwin
+      - name: Read the native release version
+        run: |
+          version="$(cargo metadata --locked --no-deps --format-version 1 --manifest-path crates/production-runtime/desktop/Cargo.toml | jq -er '.packages[] | select(.name == "producer-native-room") | .version')"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          printf 'VERSION=%s\n' "$version" >> "$GITHUB_ENV"
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: crates/production-runtime/desktop
@@ -61,6 +65,7 @@ jobs:
           "$RUNNER_TEMP/signer/node_modules/.bin/tauri" signer sign "$archive" --password "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" >/dev/null
           test -s "$archive.sig"
           (cd "$out" && shasum -a 256 *.dmg *.tar.gz *.sig > SHA256SUMS)
+          python3 scripts/native-silicon-update-feed.py "$VERSION" "$out" "$out/macos-arm64.json"
       - uses: actions/upload-artifact@v4
         with:
           name: Producer-Silicon-candidate-${{ github.sha }}

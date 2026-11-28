@@ -3,8 +3,10 @@
 // so users never leave the site. Public handles use Boomin's anonymous identity;
 // published Sets are visibility-gated by the API. Other paths use static assets.
 
+import appleSiliconUpdate from "./updates/macos-arm64.json" with { type: "json" };
+
 const REPO = "Boomin-Ai/producer";
-const APPLE_SILICON_RELEASE = "native-silicon-0.5.2";
+const APPLE_SILICON_RELEASE = `native-silicon-${appleSiliconUpdate.version}`;
 
 const PLATFORMS = {
   "macos": [/aarch64.*\.dmg$/i],
@@ -346,6 +348,15 @@ export default {
     }
 
     if (url.pathname === "/api/stars") return repositoryStars(req);
+
+    if (url.pathname === "/updates/macos-arm64.json") {
+      if (!["GET", "HEAD"].includes(req.method)) {
+        return new Response(null, { status: 405, headers: { Allow: "GET, HEAD" } });
+      }
+      return new Response(req.method === "HEAD" ? null : JSON.stringify(appleSiliconUpdate), {
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      });
+    }
 
     if (url.pathname === "/download/meta.json") {
       const [rel, silicon] = await Promise.all([publicRelease(), publicRelease(APPLE_SILICON_RELEASE)]);

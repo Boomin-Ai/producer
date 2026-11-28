@@ -1,6 +1,11 @@
 //! Operator toolbar glyphs, shared visually with the original studio artwork.
 pub fn glyph(name: &str) -> &'static rune::Icon {
     match name {
+        "producer-update" => &rune::Icon {
+            name: "producer-update",
+            view: 24.,
+            body: r#"<path d="M12 3v12m-4-4 4 4 4-4M4 16v4h16v-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>"#,
+        },
         "back" => &rune::Icon {
             name: "back",
             view: 24.,

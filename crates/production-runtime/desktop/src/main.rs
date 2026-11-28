@@ -48,6 +48,7 @@ mod clips_media;
 mod engine;
 mod ipc;
 mod model;
+mod native_update;
 mod set_slots;
 mod platform;
 mod presentation;
