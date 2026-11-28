@@ -12,6 +12,7 @@ mod panel_frame;
 mod theme;
 mod people;
 mod publish;
+mod quick_controls;
 mod publish_options;
 mod publish_history;
 mod settings;
@@ -315,6 +316,7 @@ struct Studio {
     mixer_scrub: Option<(f32, Instant)>,
     network: network::Network,
     publish: publish::Publish,
+    quick_controls: quick_controls::QuickControls,
     dj_deck: usize,
     sound_library: bool,
     sound_query: TextEdit,
@@ -394,6 +396,7 @@ impl Studio {
             settings: Default::default(),
             network: Default::default(),
             publish: Default::default(),
+            quick_controls: Default::default(),
             dj_deck: 0,
             sound_library: false,
             sound_query: TextEdit::new(""),
@@ -488,6 +491,7 @@ impl Studio {
                 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
                 self.camera.stop();
                 self.editor = None;
+                self.quick_controls = Default::default();
                 self.studio_settings = None;
                 self.mixer_scrub = None;
                 self.set_selection = None;

@@ -24,6 +24,7 @@ pub(super) fn header(s: &Studio, id: PanelId, mode: HeaderMode, split: bool) -> 
         }) => Some(panels::edit_set_button()),
         PanelId::Sources | PanelId::Scenes => Some(panels::list_add(id)),
         PanelId::Publish => publish::header_actions(s, split),
+        PanelId::QuickControls if mode != HeaderMode::Hidden => Some(quick_controls::column_picker(s)),
         PanelId::Assistant => Some(chat::logs_button()),
         PanelId::Clips => panels::clip_actions(s),
         PanelId::People => Some(people::trigger(s)),

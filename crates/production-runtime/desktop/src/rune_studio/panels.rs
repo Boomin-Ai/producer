@@ -524,6 +524,9 @@ pub(super) fn workspace(s: &Studio, w: f32, h: f32) -> El {
             return completed.child(sheet);
         }
     }
+    if let Some(composer) = super::quick_controls::publish_popout(s, ws.panels[&PanelId::QuickControls].edge, w, h) {
+        return completed.child(composer);
+    }
     if let Some((source, owner, anchor)) = &s.source {
         return completed.child(source_popout(s, source, ws.panels[owner].edge, anchor, w, h));
     }
@@ -569,8 +572,13 @@ pub(super) fn dock_popover_side(edge: Edge) -> rune::Side {
     }
 }
 pub(super) fn open_source(s: &mut Studio, source: &str, owner: PanelId, anchor: String) {
-    s.camera_info = Default::default();
     s.source = Some((source.into(), owner, anchor));
+    s.quick_controls.collapse();
+    load_camera_info(s, source);
+}
+
+pub(super) fn load_camera_info(s: &mut Studio, source: &str) {
+    s.camera_info = Default::default();
     let Some(l) = &s.live else {
         return;
     };
@@ -606,7 +614,7 @@ fn source_popout(s: &Studio, source: &str, edge: Edge, anchor: &str, w: f32, h: 
     };
     let width = 300_f32.min(w - 16.);
     let max_h = (h - 96.).clamp(96., 420.);
-    let mut pick = col()
+    col()
         .key("source-popout")
         .role("dialog")
         .label(heading)
@@ -630,7 +638,16 @@ fn source_popout(s: &Studio, source: &str, edge: Edge, anchor: &str, w: f32, h: 
                         .label("Close source settings")
                         .size(24., 24.),
                 ),
-        );
+        )
+        .child(source_settings(s, source, false))
+        .scroll(Default::default())
+}
+
+pub(super) fn source_settings(s: &Studio, source: &str, inline: bool) -> El {
+    let snap = &s.live.as_ref().unwrap().snapshot;
+    let p = &snap.project;
+    let kind = source_kind(p, source);
+    let mut pick = col().gap(6.).min_w(0.);
     if matches!(kind, "camera" | "microphone") {
         pick = pick.child(title("Input device", 11., 500., MUTED));
     }
@@ -658,10 +675,15 @@ fn source_popout(s: &Studio, source: &str, edge: Edge, anchor: &str, w: f32, h: 
         } else {
             &snap.microphones
         };
+        let has_source = p.lanes.iter().any(|lane| lane.source == source);
+        let locked = snap.recording || snap.take.busy() || snap.program_kind == "timeline";
         let mut available = false;
+        if inline && locked {
+            pick = pick.child(title("Device selection is unavailable during recording or timeline playback.", 11., 500., MUTED).wrap());
+        }
         for d in devices.as_array().into_iter().flatten() {
             if let (Some(id), Some(name)) = (d["id"].as_str(), d["name"].as_str()) {
-                let current = p.inputs.get(source).map_or(source == kind && d["default"] == true, |b| {
+                let current = has_source && p.inputs.get(source).map_or(source == kind && d["default"] == true, |b| {
                     if b.device.is_empty() {
                         d["default"] == true
                     } else {
@@ -675,7 +697,9 @@ fn source_popout(s: &Studio, source: &str, edge: Edge, anchor: &str, w: f32, h: 
                     || (source != kind && !p.inputs.contains_key(kind) && d["default"] == true
                         && p.lanes.iter().any(|lane| lane.source == kind));
                 available |= !used;
-                let reconnect = current && source != kind && kind == "camera" && !slot_ready(snap, source);
+                let reconnect = current && !slot_ready(snap, source);
+                let disabled = used || locked || current && !reconnect;
+                let restoring = !has_source && source == kind;
                 let (source, kind, id) = (source.to_string(), kind.to_owned(), id.to_owned());
                 let label = if reconnect {
                     "Reconnect"
@@ -701,21 +725,28 @@ fn source_popout(s: &Studio, source: &str, edge: Edge, anchor: &str, w: f32, h: 
                         .child(title(name, 12., 550., TEXT))
                         .child(el().grow(1.))
                         .child(title(label, 10., 500., if current { MINT } else { MUTED }))
-                        .disabled(used)
+                        .opacity(if disabled && !current { 0.55 } else { 1. })
+                        .hover_fill(color(if disabled { if current { 0x18382f } else { SURFACE } } else { theme::GRIP_HOVER }))
+                        .disabled(disabled)
                         .on_press(move |s: &mut Studio| {
-                            if !current || reconnect {
-                                s.send(RoomCommand::ConfigureInput {
-                                    source: source.clone(),
-                                    kind: kind.clone(),
-                                    device: id.clone(),
-                                });
+                            let command = if restoring {
+                                RoomCommand::AddInput { kind: kind.clone(), device: id.clone() }
+                            } else {
+                                RoomCommand::ConfigureInput { source: source.clone(), kind: kind.clone(), device: id.clone() }
+                            };
+                            s.send(command);
+                            if inline && kind == "camera" {
+                                s.camera_info = crate::platform::camera_controls(&id, 0, 0);
+                            } else if !inline {
                                 s.source = None;
                             }
                         }),
                 );
             }
         }
-        if !available && kind == "camera" && source != kind {
+        if inline && devices.as_array().is_none_or(Vec::is_empty) {
+            pick = pick.child(title(if kind == "camera" { "No camera found" } else { "No microphone found" }, 11., 500., MUTED));
+        } else if !available && kind == "camera" && source != kind {
             pick = pick.child(title("Connect another camera to use this input.", 11., 500., MUTED));
         }
     } else if kind == "screen" {
@@ -724,10 +755,17 @@ fn source_popout(s: &Studio, source: &str, edge: Edge, anchor: &str, w: f32, h: 
             ("Choose display", ScreenCaptureTarget::Display),
             ("Stop sharing", ScreenCaptureTarget::Stop),
         ] {
-            pick = pick.child(button(label, label, false, move |s| {
+            let disabled = if matches!(target, ScreenCaptureTarget::Stop) {
+                !slot_ready(snap, "screen")
+            } else {
+                inline && snap.program_kind == "timeline" && !p.lanes.iter().any(|lane| lane.source == "screen")
+            };
+            let item = button(label, label, false, move |s| {
                 s.source = None;
                 s.send(RoomCommand::ScreenCapture { target: target.clone() });
-            }));
+            });
+            pick = pick.child(if disabled { item.opacity(0.55).disabled(true) }
+                else { item.hover_fill(color(theme::GRIP_HOVER)) });
         }
     } else {
         pick = pick.child(
@@ -851,7 +889,7 @@ fn source_popout(s: &Studio, source: &str, edge: Edge, anchor: &str, w: f32, h: 
             |_| crate::platform::camera_effects(),
         ));
     }
-    if p.lanes.iter().any(|lane| lane.source == source) {
+    if !inline && p.lanes.iter().any(|lane| lane.source == source) {
         let source = source.to_owned();
         pick = pick.child(
             button("remove-source", "Remove source", false, move |s| {
@@ -863,7 +901,7 @@ fn source_popout(s: &Studio, source: &str, edge: Edge, anchor: &str, w: f32, h: 
             .disabled(snap.recording || snap.take.busy()),
         );
     }
-    pick.scroll(Default::default())
+    pick
 }
 fn p_mic(s: &Snapshot) -> (f32, bool) {
     s.project
@@ -1178,7 +1216,7 @@ fn dock(
         let frame = &ws.panels[&id];
         let mut panel = super::panel_frame::surface(id, frame);
         let split_publish = !edge.side() && span >= 480.;
-        let composing = id == PanelId::Publish && s.publish.composing;
+        let composing = id == PanelId::Publish && s.publish.composing && s.quick_controls.publish.is_none();
         if !ws.docks[&edge].collapsed && !composing {
             if let Some(header) = super::panel_frame::header(s, id, frame.header, split_publish) { panel = panel.child(header); }
         }
@@ -1219,7 +1257,7 @@ fn clip_file_tool(id: &str, icon: &str, label: &str, path: PathBuf, reveal: bool
     }).size(26., 26.)
 }
 
-fn clip_switch(key: &'static str, enabled: bool) -> El {
+pub(super) fn clip_switch(key: &'static str, enabled: bool) -> El {
     let track = row().size(32., 18.).px(2.).radius(9.).items_center()
         .fill(color(if enabled { MINT } else { MUTED }));
     let track = if enabled { track.justify_end() } else { track };
@@ -1227,6 +1265,76 @@ fn clip_switch(key: &'static str, enabled: bool) -> El {
         .h(28.).items_center().gap(4.)
         .child(track.child(el().size(14., 14.).radius(7.).fill(color(BG))))
         .on_press(move |s: &mut Studio| s.send(RoomCommand::ClipsEnable { enabled: !enabled }))
+}
+
+pub(super) fn clip_settings(s: &Studio, state: &crate::clips::Status, prefix: &str) -> El {
+    let cfg = &state.settings;
+    let locked = state.enabled || state.saving;
+    let mut next = cfg.clone();
+    next.queue_for_publish = !cfg.queue_for_publish;
+    let queue = command(
+        format!("{prefix}clips-local-queue"),
+        if cfg.queue_for_publish { "Local publish queue · On" } else { "Local publish queue · Off" },
+        cfg.queue_for_publish,
+        RoomCommand::ClipsConfigure { settings: next },
+    );
+    let mut lengths = row().gap(3.).flex_wrap();
+    for n in [15, 30, 60, 120] {
+        let mut next = cfg.clone();
+        next.seconds = n;
+        lengths = lengths.child(command(
+            format!("{prefix}clips-{n}"),
+            format!("{n}s"),
+            cfg.seconds == n,
+            RoomCommand::ClipsConfigure { settings: next },
+        ).disabled(locked));
+    }
+    let mut formats = row().gap(3.).flex_wrap();
+    for output in [crate::clips::Output::Landscape, crate::clips::Output::Vertical, crate::clips::Output::Both] {
+        let mut next = cfg.clone();
+        next.output = output;
+        formats = formats.child(command(
+            format!("{prefix}clips-{}", output.label()),
+            output.label(),
+            cfg.output == output,
+            RoomCommand::ClipsConfigure { settings: next },
+        ).disabled(locked));
+    }
+    let root = s.live.as_ref().unwrap().handle.root.clone();
+    let folder = cfg.directory(&root);
+    let folder_button = button(format!("{prefix}clips-folder"), "Change folder", false, |_| {})
+        .label("Change clips folder")
+        .help(folder.display().to_string())
+        .self_start()
+        .disabled(locked)
+        .on_press_tx(move |_: &mut Studio, tx| {
+            let root = root.clone();
+            tx.open_folder(Default::default(), move |s: &mut Studio, result, _| {
+                let Some(live) = s.live.as_ref().filter(|live| live.handle.root == root) else { return; };
+                match result {
+                    Ok(Some(folder)) => {
+                        if let Some((status, _)) = &live.clip_view {
+                            if !status.enabled && !status.saving {
+                                let mut settings = status.settings.clone();
+                                settings.folder = Some(folder);
+                                s.send(RoomCommand::ClipsConfigure { settings });
+                            }
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(error) => s.error = error.to_string(),
+                }
+            });
+        });
+    let mut content = col().gap(5.).min_w(0.)
+        .child(title("Duration", 11., 550., MUTED)).child(lengths)
+        .child(title("Output", 11., 550., MUTED)).child(formats)
+        .child(folder_button)
+        .child(queue);
+    if locked {
+        content = content.child(title("Turn Clips off to change duration, output, or folder.", 11., 450., MUTED).wrap());
+    }
+    content
 }
 
 pub(super) fn clip_actions(s: &Studio) -> Option<El> {
@@ -1263,8 +1371,8 @@ fn show_clock(seconds: f64) -> String {
     else { format!("{}:{:02}", seconds / 60, seconds % 60) }
 }
 
-fn show_controller(s: &Studio, snap: &Snapshot, show_id: &str,
-    show: &producer_production_contract::Show, set: &producer_production_contract::Set) -> Option<El> {
+pub(super) fn show_controller(s: &Studio, snap: &Snapshot, show_id: &str,
+    show: &producer_production_contract::Show, set: &producer_production_contract::Set, prefix: &str) -> Option<El> {
     let segments = &show.segments;
     let active = snap.program_kind == "show" && snap.project.playing_segment.as_ref()
         .is_some_and(|(id, _)| id == show_id);
@@ -1288,7 +1396,7 @@ fn show_controller(s: &Studio, snap: &Snapshot, show_id: &str,
         ("play", "Resume show")
     } else { ("play", "Play show") };
     let id = show_id.to_owned();
-    let header = row().key(format!("rundown-{show_id}")).role("button").focusable(true)
+    let header = row().key(format!("{prefix}rundown-{show_id}")).role("button").focusable(true)
         .label(format!("{} rundown · {}", if expanded { "Collapse" } else { "Expand" }, current.title))
         .help(if expanded { "Hide other segments" } else { "Show all segments" })
         .items_center().gap(6.).px(8.).h(30.).radius(5.).hover_fill(color(theme::SELECTED_HOVER))
@@ -1302,7 +1410,7 @@ fn show_controller(s: &Studio, snap: &Snapshot, show_id: &str,
     summary = summary.child(col().min_w(0.).gap(2.).grow(1.)
         .child(title(status, 9., 650., if playing { MINT } else { MUTED }))
         .child(title(current.title.clone(), 13., 650., TEXT)));
-    let mut timing = row().key("segment-time").items_center().gap(7.);
+    let mut timing = row().key(format!("{prefix}segment-time")).items_center().gap(7.);
     if let Some(limit) = duration {
         timing = timing.child(el().grow(1.).h(4.).radius(2.).clip_rounded(2.).fill(color(theme::SLIDER_RAIL_COMPACT))
             .child(el().h_full().w_frac((elapsed / limit.max(0.001)).clamp(0.,1.) as f32).fill(color(MINT))))
@@ -1312,7 +1420,7 @@ fn show_controller(s: &Studio, snap: &Snapshot, show_id: &str,
             .child(title(show_clock(elapsed), 11., 620., TEXT));
     }
     let control = |name: &str, icon: &str, label: &str, accent: bool, command: RoomCommand, available: bool| {
-        send_tool(&format!("show-{show_id}-{name}"), icon, label, accent, command)
+        send_tool(&format!("{prefix}show-{show_id}-{name}"), icon, label, accent, command)
             .size(30., 27.).opacity(if available { 1. } else { 0.32 }).disabled(!available)
     };
     let transport = row().items_center().gap(3.).h(31.)
@@ -1325,7 +1433,7 @@ fn show_controller(s: &Studio, snap: &Snapshot, show_id: &str,
             .child(title(show_clock(if active { snap.show_elapsed } else { 0. }), 11., 650., TEXT)));
     let mut player = col().gap(7.).px(7.).py(6.).min_w(0.).radius(6.)
         .fill(color(theme::TOOL)).child(summary).child(timing).child(transport);
-    if show.set == "my-first-million" {
+    if prefix.is_empty() && show.set == "my-first-million" {
         player = player.child(host_direction_settings(s, snap, show_id, &current.id));
     }
     let mut panel = col().gap(3.).py(4.).min_w(0.).radius(8.)
@@ -1333,7 +1441,7 @@ fn show_controller(s: &Studio, snap: &Snapshot, show_id: &str,
     if expanded {
         for (i, segment) in segments.iter().enumerate() {
             let is_current = i == index;
-            let item = row().key(format!("run-{show_id}-{}", segment.id)).role("button").focusable(true)
+            let item = row().key(format!("{prefix}run-{show_id}-{}", segment.id)).role("button").focusable(true)
                 .label(format!("{} · {}", if is_current && active { status } else { "Take" }, segment.title))
                 .items_center().gap(7.).px(8.).h(29.).radius(4.)
                 .fill(color(if is_current { theme::TOOL_SELECTED } else { SURFACE })).hover_fill(color(theme::SELECTED_HOVER))
@@ -1349,7 +1457,7 @@ fn show_controller(s: &Studio, snap: &Snapshot, show_id: &str,
     if expanded && current.sequence.is_some() {
         panel = panel.child(row().items_center().gap(4.).px(5.)
             .child(title("Timing", 10., 560., MUTED).grow(1.))
-            .child(command(format!("segment-timing-{show_id}"), if duration.is_some() { "Timed" } else { "Open-ended" },
+            .child(command(format!("{prefix}segment-timing-{show_id}"), if duration.is_some() { "Timed" } else { "Open-ended" },
                 duration.is_some(), RoomCommand::SegmentTiming { show: show_id.into(), segment: current.id.clone(), timed: duration.is_none() })
                 .help(if duration.is_some() { "Make this segment open-ended" } else { "Use the authored duration" })));
     }
@@ -1484,6 +1592,121 @@ fn mfm_zoom_control(pair: &crate::model::SetLayoutPair, subject: crate::model::M
         .child(step("in", "+", (percent + 10).min(300)))
 }
 
+pub(super) struct SetControlTarget<'a> {
+    pub key: String,
+    pub pair: crate::model::SetLayoutPair,
+    pub show_id: Option<&'a str>,
+    pub running: bool,
+    pub set_on_output: bool,
+}
+
+pub(super) fn set_control_target<'a>(s: &'a Studio, snap: &'a Snapshot) -> Option<SetControlTarget<'a>> {
+    let p = &snap.project;
+    let (key, pair) = super::editor::selection(s, p)?;
+    let show_id = super::editor::controller_show(s, snap, &key);
+    let running = snap.program_kind == "show" && snap.program_segment.as_ref().is_some_and(|(id, _)| Some(id.as_str()) == show_id);
+    let same_set = p.mounted_set.as_deref() == Some(key.as_str());
+    let set_on_output = show_id.is_none() && snap.program_kind == "set" && same_set;
+    let pair = if running || (same_set && snap.active_host_shot.is_some()) {
+        snap.program_layout.clone().unwrap_or(pair)
+    } else if set_on_output {
+        p.default_set_selection(&key)
+    } else {
+        pair
+    };
+
+    Some(SetControlTarget { key, pair, show_id, running, set_on_output })
+}
+
+pub(super) fn layout_buttons(
+    s: &Studio,
+    snap: &Snapshot,
+    target: &SetControlTarget<'_>,
+    shot_area: f32,
+    shortcut_columns: Option<usize>,
+) -> El {
+    let p = &snap.project;
+    let SetControlTarget { key, pair, show_id, running, set_on_output } = target;
+    let (show_id, running, set_on_output) = (*show_id, *running, *set_on_output);
+    let on = running || set_on_output;
+    let set = &p.production.sets[key];
+    let columns = ((shot_area + 5.) / 128.).floor().clamp(1., 4.);
+    let shot_width = ((shot_area - (columns - 1.) * 5.) / columns).clamp(76., 230.);
+    let prefix = if shortcut_columns.is_some() { "quick-" } else { "" };
+    let cards = p.set_layout_choices(key).into_iter().map(|layout| {
+        let k = key.clone();
+        let scene = p.active_scene.clone();
+        let chosen = layout.pair;
+        let show_segment = p.playing_segment.clone().filter(|_| running);
+        let selected_show = show_id.map(str::to_owned);
+        let active = chosen == *pair;
+        let snap_directed = snap.active_host_shot.is_some();
+        let ready = crate::set_slots::for_pair(p, set, &chosen)
+            .iter().all(|slot| slot_ready(snap, &slot.source));
+        let label = format!("{} · {}", layout.label, if ready { "Ready" } else { "Needs source" });
+        let label_text = if key == "my-first-million" && chosen.landscape == "landscape" { "Two hosts".into() } else { layout.label };
+        let thumbnail = s.set_library.shot_image(key, set, &chosen.landscape, 40., 23.);
+        let mut item = row().key(format!("{prefix}layout-{}", chosen.landscape)).min_w(0.)
+            .role("button").label(&label).help(&label).focusable(true)
+            .gap(4.).px(4.).items_center().radius(5.)
+            .border(1., color(if active { MINT } else { theme::SLIDER_RAIL_COMPACT }))
+            .fill(color(if active { theme::TOOL_SELECTED } else { SURFACE })).hover_fill(color(theme::SELECTED_HOVER));
+        if let Some(image) = thumbnail {
+            item = item.h(34.).child(image)
+                .child(title(label_text, 11., 580., TEXT).grow(1.));
+            if shortcut_columns.is_none() {
+                item = item.w(shot_width);
+            }
+        } else {
+            let label = title(label_text, 11., 550., if active { MINT } else { TEXT });
+            item = if shortcut_columns.is_some() {
+                item.h(34.).child(label.grow(1.))
+            } else {
+                item.h(28.).child(label)
+            };
+        }
+        if shortcut_columns.is_some() {
+            let already_selected = active && !running && (!set_on_output || !snap_directed);
+            item = if already_selected { item.disabled(true).hover_fill(color(theme::TOOL_SELECTED)) }
+                else { item.hover_fill(color(theme::GRIP_HOVER)) };
+        }
+        item.child(el().size(6.,6.).radius(3.).fill(color(if ready { MINT } else { 0xe9b666 })))
+            .on_press(move |s: &mut Studio| {
+                if let Some((show, segment)) = &show_segment {
+                    s.send(RoomCommand::ShowLayout { show: show.clone(), segment: segment.clone(), layout: Some(chosen.clone()) });
+                } else if set_on_output && (!active || snap_directed) {
+                    s.set_selection = None;
+                    s.send(RoomCommand::SetMount {
+                        id: Some(k.clone()),
+                        layout: Some(chosen.clone()),
+                    });
+                } else if !on && !active {
+                    s.set_selection = Some(super::editor::ControllerSelection::new(scene.clone(), k.clone(), chosen.clone(), selected_show.clone()));
+                }
+            })
+    });
+    let Some(columns) = shortcut_columns else {
+        return cards.fold(row().flex_wrap().gap(5.), |grid, card| grid.child(card));
+    };
+
+    // Size these cards against the actual inner width of the expanded editor.
+    // The outer dock width includes padding and can make a wrapped card spill.
+    let mut grid = col().w_full().min_w(0.).gap(5.);
+    let mut cards = cards.peekable();
+    while cards.peek().is_some() {
+        let mut line = row().w_full().min_w(0.).gap(5.);
+        for _ in 0..columns {
+            let mut cell = col().w(0.).min_w(0.).grow(1.);
+            if let Some(card) = cards.next() {
+                cell = cell.child(card.w_full());
+            }
+            line = line.child(cell);
+        }
+        grid = grid.child(line);
+    }
+    grid
+}
+
 fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
     let l = s.live.as_ref().unwrap();
     let snap = &l.snapshot;
@@ -1492,9 +1715,12 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
     match id {
         PanelId::Scenes | PanelId::Sources => studio_list(snap, id, false),
         PanelId::Mixer => super::mixer::channels(s, false),
+        PanelId::QuickControls => super::quick_controls::panel(s, width),
         PanelId::Controls => {
-            if let Some((selected, pair)) = super::editor::selection(s, p) {
-                let key = &selected;
+            if let Some(target) = set_control_target(s, snap) {
+                let SetControlTarget { key, pair, show_id, running, set_on_output } = &target;
+                let (show_id, running, set_on_output) = (*show_id, *running, *set_on_output);
+                let on = running || set_on_output;
                 let set = &p.production.sets[key];
                 let shelf = !edge.side();
                 // Allow compact shelves to pan across the three panes once their controls
@@ -1505,22 +1731,10 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 let overview_width = 150. + extra * 0.25;
                 let center_width = 205. + extra * 0.35;
                 let end_width = 130. + extra * 0.40;
-                let show_id = super::editor::controller_show(s, snap, key);
-                let running = snap.program_kind == "show" && snap.program_segment.as_ref().is_some_and(|(id, _)| Some(id.as_str()) == show_id);
-                let same_set = p.mounted_set.as_deref() == Some(key.as_str());
-                let set_on_output = show_id.is_none() && snap.program_kind == "set" && same_set;
-                let pair = if running || (same_set && snap.active_host_shot.is_some()) {
-                    snap.program_layout.clone().unwrap_or(pair)
-                } else if set_on_output {
-                    p.default_set_selection(key)
-                } else {
-                    pair
-                };
-                let on = running || set_on_output;
-                let header = set_controls_header(snap, show_id, key, &pair, on, width, shelf);
+                let header = set_controls_header(snap, show_id, key, pair, on, width, shelf);
                 let mut players = Vec::new();
                 if let Some((id, show)) = show_id.and_then(|id| p.production.shows.get(id).filter(|show| &show.set == key).map(|show| (id, show))) {
-                    if let Some(player) = show_controller(s, snap, id, show, set) {
+                    if let Some(player) = show_controller(s, snap, id, show, set, "") {
                         players.push(player);
                     }
                 }
@@ -1529,7 +1743,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 let shots_open = !s.folded_shots.contains(key);
                 let layout_open = s.expanded_layout_controls.contains(key);
                 let choices = p.set_layout_choices(key);
-                let active_shot = choices.iter().find(|choice| choice.pair == pair)
+                let active_shot = choices.iter().find(|choice| choice.pair == *pair)
                     .map(|choice| if key == "my-first-million" && pair.landscape == "landscape" { "Two hosts" } else { &choice.label }).unwrap_or("");
                 let owner = key.clone();
                 let mut shot_heading = row().items_center().h(27.).gap(3.).child(set_disclosure("set-shots-toggle", if has_show { "Shots" } else { "Layouts" },
@@ -1544,52 +1758,11 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                 let shot_area = if shelf {
                     if has_show { end_width } else { center_width }
                 } else { width - 20. };
-                let columns = ((shot_area + 5.) / 128.).floor().clamp(1., 4.);
-                let shot_width = ((shot_area - (columns - 1.) * 5.) / columns).clamp(76., 230.);
-                let mut layouts = row().flex_wrap().gap(5.);
-                let slots = crate::set_slots::for_pair(p, set, &pair);
-                for layout in choices.into_iter().filter(|_| shots_open) {
-                    let k = key.clone();
-                    let scene = p.active_scene.clone();
-                    let chosen = layout.pair;
-                    let show_segment = p.playing_segment.clone().filter(|_| running);
-                    let selected_show = show_id.map(str::to_owned);
-                    let active = chosen == pair;
-                    let snap_directed = snap.active_host_shot.is_some();
-                    let ready = crate::set_slots::for_pair(p, set, &chosen)
-                        .iter().all(|slot| slot_ready(snap, &slot.source));
-                    let label = format!("{} · {}", layout.label, if ready { "Ready" } else { "Needs source" });
-                    let label_text = if key == "my-first-million" && chosen.landscape == "landscape" { "Two hosts".into() } else { layout.label };
-                    let thumbnail = s.set_library.shot_image(key, set, &chosen.landscape, 40., 23.);
-                    let mut item = row().key(format!("layout-{}", chosen.landscape))
-                        .role("button").label(&label).help(&label).focusable(true)
-                        .gap(4.).px(4.).items_center().radius(5.)
-                        .border(1., color(if active { MINT } else { theme::SLIDER_RAIL_COMPACT }))
-                        .fill(color(if active { theme::TOOL_SELECTED } else { SURFACE })).hover_fill(color(theme::SELECTED_HOVER));
-                    if let Some(image) = thumbnail {
-                        item = item.w(shot_width).h(34.)
-                            .child(image).child(title(label_text, 11., 580., TEXT).grow(1.));
-                    } else {
-                        item = item.h(28.).child(title(label_text, 11., 550., if active { MINT } else { TEXT }));
-                    }
-                    layouts = layouts.child(item.child(el().size(6.,6.).radius(3.).fill(color(if ready { MINT } else { 0xe9b666 })))
-                        .on_press(move |s: &mut Studio| {
-                            if let Some((show, segment)) = &show_segment {
-                                s.send(RoomCommand::ShowLayout { show: show.clone(), segment: segment.clone(), layout: Some(chosen.clone()) });
-                            } else if set_on_output && (!active || snap_directed) {
-                                s.set_selection = None;
-                                s.send(RoomCommand::SetMount {
-                                    id: Some(k.clone()),
-                                    layout: Some(chosen.clone()),
-                                });
-                            } else if !on && !active {
-                                s.set_selection = Some(super::editor::ControllerSelection::new(scene.clone(), k.clone(), chosen.clone(), selected_show.clone()));
-                            }
-                        },
-                    ));
+                let slots = crate::set_slots::for_pair(p, set, pair);
+                if shots_open {
+                    shots = shots.child(layout_buttons(s, snap, &target, shot_area, None));
                 }
-                if shots_open { shots = shots.child(layouts); }
-                let sources = super::set_sources::rows(s,key,&pair,&slots);
+                let sources = super::set_sources::rows(s,key,pair,&slots);
                 let mut b = col().gap(5.);
                 let uses = |uniform: &str| {
                     on && pair.ids().iter().any(|id|set.output_graphs.get(*id).and_then(|g|set.graphs.get(g)).is_some_and(|g|g.passes.iter().any(|pass|matches!(pass,producer_production_contract::GraphPass::Fragment{shader,..} if shader.contains(uniform)))))
@@ -2015,76 +2188,7 @@ fn panel_body(s: &Studio, id: PanelId, edge: Edge, width: f32) -> El {
                     .disabled(!state.ready || state.saving),
                 );
                 if s.clip_settings {
-                    let cfg = &state.settings;
-                    let mut next = cfg.clone();
-                    next.queue_for_publish = !cfg.queue_for_publish;
-                    b = b.child(command(
-                        "clips-local-queue",
-                        if cfg.queue_for_publish {
-                            "Add saved clips to local queue · On"
-                        } else {
-                            "Add saved clips to local queue · Off"
-                        },
-                        cfg.queue_for_publish,
-                        RoomCommand::ClipsConfigure { settings: next },
-                    ));
-                    let mut lengths = row().gap(3.).flex_wrap();
-                    for n in [15, 30, 60, 120] {
-                        let mut next = cfg.clone();
-                        next.seconds = n;
-                        lengths = lengths.child(command(
-                            format!("clips-{n}"),
-                            format!("{n}s"),
-                            cfg.seconds == n,
-                            RoomCommand::ClipsConfigure { settings: next },
-                        ));
-                    }
-                    b = b.child(lengths);
-                    let mut formats = row().gap(3.).flex_wrap();
-                    for fmt in [
-                        crate::clips::Output::Landscape,
-                        crate::clips::Output::Vertical,
-                        crate::clips::Output::Both,
-                    ] {
-                        let mut next = cfg.clone();
-                        next.output = fmt;
-                        formats = formats.child(command(
-                            format!("clips-{}", fmt.label()),
-                            fmt.label(),
-                            cfg.output == fmt,
-                            RoomCommand::ClipsConfigure { settings: next },
-                        ));
-                    }
-                    let cfg = cfg.clone();
-                    b = b.child(formats).child(
-                        row().child(
-                            el().role("button")
-                                .label("Change clips folder")
-                                .key("clips-folder")
-                                .h(26.)
-                                .px(6.)
-                                .center()
-                                .fill(color(SURFACE))
-                                .child(title("Change folder", 11., 550., TEXT))
-                                .on_press_tx(move |_: &mut Studio, tx| {
-                                    let cfg = cfg.clone();
-                                    tx.open_folder(
-                                        Default::default(),
-                                        move |s: &mut Studio, r, _| match r {
-                                            Ok(Some(folder)) => {
-                                                let mut next = cfg.clone();
-                                                next.folder = Some(folder);
-                                                s.send(RoomCommand::ClipsConfigure {
-                                                    settings: next,
-                                                });
-                                            }
-                                            Ok(None) => {}
-                                            Err(e) => s.error = e.to_string(),
-                                        },
-                                    );
-                                }),
-                        ),
-                    );
+                    b = b.child(clip_settings(s, state, ""));
                 }
                 if let Some(err) = &state.error {
                     b = b.child(title(err, 11., 500., 0xffadb3));
@@ -3044,6 +3148,10 @@ pub(super) fn layout_key(s: &mut Studio, event: &rune::KeyEvent, _: &mut rune::T
     }
     if s.settings.profile_open && s.page != Page::Studio && matches!(event.key, rune::Key::Escape) {
         s.settings.profile_open = false;
+        return true;
+    }
+    if super::quick_controls::publish_open(s) && matches!(event.key, rune::Key::Escape) {
+        super::quick_controls::dismiss_publish(s);
         return true;
     }
     if s.source.is_some() && matches!(event.key, rune::Key::Escape) {

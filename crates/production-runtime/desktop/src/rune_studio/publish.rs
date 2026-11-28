@@ -91,6 +91,19 @@ fn thumbnail(path: &Path) -> Result<rune::Pixels> {
 }
 
 impl Publish {
+    pub(super) fn can_open_composer(&self) -> bool {
+        self.staging.is_none() && self.working.is_none()
+    }
+
+    pub(super) fn can_close_composer(&self) -> bool {
+        self.staging.is_none()
+    }
+
+    pub(super) fn attach_clip(&mut self, path: PathBuf) {
+        self.set_files(vec![path]);
+        self.notice.clear();
+    }
+
     pub(super) fn set_files(&mut self, files: Vec<PathBuf>) {
         self.pasted_images.retain(|image| files.iter().any(|path| path == image.path()));
         self.thumbnails.retain(|path, _| files.contains(path));
@@ -580,6 +593,9 @@ fn start(
     s.publish.working = Some(worker(s, run));
 }
 fn submission_problem(p: &Publish) -> Option<String> {
+    if p.scope.is_none() {
+        return Some("Sign in to Boomin to publish.".into());
+    }
     if p.selected.is_empty() {
         return Some("Choose an account.".into());
     }
@@ -821,6 +837,16 @@ fn finish(p: &mut Publish, ids: Vec<String>, error: Option<String>) -> String {
     p.history_next = None;
     "Post accepted by Boomin".into()
 }
+fn update_scope(s: &mut Studio, scope: Option<(String, String)>) {
+    let popout = s.quick_controls.publish.take();
+    s.publish = Publish { scope, ..Default::default() };
+    if s.publish.scope.is_some() {
+        if let Some(super::quick_controls::PublishPopout::SignIn { clip }) = popout {
+            super::quick_controls::open_publish(s, clip);
+        }
+    }
+}
+
 pub(super) fn poll(s: &mut Studio) -> bool {
     let account = s
         .settings
@@ -834,10 +860,7 @@ pub(super) fn poll(s: &mut Studio) -> bool {
             .as_ref()
             .map(|(brand, email)| (brand.as_str(), email.as_str()))
     {
-        s.publish = Publish {
-            scope: account.map(|(brand, email)| (brand.to_owned(), email.to_owned())),
-            ..Default::default()
-        };
+        update_scope(s, account.map(|(brand, email)| (brand.to_owned(), email.to_owned())));
         changed = true;
     }
     if s.publish.scope.is_none() {
@@ -936,7 +959,10 @@ pub(super) fn poll(s: &mut Studio) -> bool {
             rt.block_on(super::publish_history::History::fetch(&api))
         }));
     }
-    if visible
+    let shortcut_settings = s.quick_controls.publish_settings_open()
+        && s.page == Page::Studio
+        && s.live.as_ref().is_some_and(|live| live.snapshot.project.workspace.visible(PanelId::QuickControls));
+    if (visible || super::quick_controls::publish_open(s) || shortcut_settings)
         && s.publish.working.is_none()
         && s.publish.refreshing.is_none()
         && s.publish.next.is_none_or(|t| Instant::now() >= t)
@@ -1001,6 +1027,8 @@ fn select_default(p: &mut Publish) {
 pub(super) fn new_post(s: &mut Studio) {
     let p = &mut s.publish;
     if p.staging.is_some() { return; }
+    s.quick_controls.publish = None;
+    p.accounts_open = false;
     p.composing = true;
     p.awaiting_default = p.selected.is_empty();
     select_default(p);
@@ -1012,6 +1040,13 @@ fn new_button(s: &Studio) -> El {
         .child(publish_icon("plus", 14., MINT))
         .child(title("New post", 11., 650., MINT))
         .on_press(new_post).disabled(s.publish.scope.is_none() || s.publish.staging.is_some())
+}
+pub(super) fn shortcut_composer(s: &Studio) -> El {
+    if s.publish.accounts_open {
+        col().w_full().h_full().child(accounts(s)).scroll(Default::default())
+    } else {
+        inline_composer(s, false)
+    }
 }
 pub(super) fn inline_composer(s: &Studio, wide: bool) -> El {
     let media = composer_media(s, col().gap(7.).min_w(0.), wide);
@@ -1032,8 +1067,9 @@ pub(super) fn inline_composer(s: &Studio, wide: bool) -> El {
         .gap(5.)
         .child(
             row().h(30.).gap(7.).items_center()
-                .child(panels::tool("publish-close", "back", "Back to posts", false, |s| {
+                .child(panels::tool("publish-close", "back", if s.quick_controls.publish.is_some() { "Close New post" } else { "Back to posts" }, false, |s| {
                     s.publish.composing = false;
+                    s.quick_controls.publish = None;
                 }).size(28., 28.))
                 .child(el().size(27., 27.).radius(6.).center().fill(color(theme::TOOL_SELECTED))
                     .child(publish_icon("edit", 15., MINT)))
@@ -1260,7 +1296,7 @@ fn destinations(s: &Studio, mut b: El) -> El {
         has_accounts = true;
         b = b.child(destination_card(s, channel).disabled(busy));
     }
-    if !has_accounts {
+    if p.scope.is_some() && !has_accounts {
         b = b.child(button("publish-connect-account", "Connect account…", false, open_accounts).disabled(busy));
     }
     if p.pending {
@@ -1388,25 +1424,41 @@ fn delivery(s: &Studio, wide: bool) -> El {
     footer.child(actions)
 }
 fn accounts(s: &Studio) -> El {
+    let header = row().items_center().gap(7.)
+        .child(panels::tool("publish-accounts-back", "back", "Back to Publish", false, |s| {
+            s.publish.accounts_open = false;
+        }).size(28., 28.))
+        .child(title("Publishing accounts", 14., 650., TEXT).grow(1.));
+    account_connections(s, "", header)
+}
+
+pub(super) fn shortcut_settings(s: &Studio) -> El {
+    if s.publish.scope.is_none() {
+        return col().gap(5.)
+            .child(title("Sign in to Boomin to connect publishing accounts.", 11., 450., MUTED).wrap())
+            .child(button("quick-publish-sign-in-action", "Sign in to Boomin", false, |s| {
+                super::quick_controls::open_publish(s, None);
+            }).self_start().disabled(!s.publish.can_open_composer()));
+    }
+    account_connections(s, "quick-", row().items_center().gap(7.)
+        .child(title("Publishing accounts", 11., 600., TEXT).grow(1.)))
+}
+
+fn account_connections(s: &Studio, prefix: &str, header: El) -> El {
     let p = &s.publish;
     let busy = p.working.is_some() || p.refreshing.is_some();
     let mut panel = col().w_full().gap(7.).child(
-        row().items_center().gap(7.)
-            .child(panels::tool("publish-accounts-back", "back", "Back to Publish", false, |s| {
-                s.publish.accounts_open = false;
-            }).size(28., 28.))
-            .child(title("Publishing accounts", 14., 650., TEXT).grow(1.))
-            .child(panels::tool("publish-refresh", "restart", "Refresh accounts", false, |s| {
+        header.child(panels::tool(&format!("{prefix}publish-refresh"), "restart", "Refresh accounts", false, |s| {
                 s.publish.next = None;
             }).size(28., 28.).disabled(busy)),
     );
     for provider in ["threads", "instagram"] {
         let mut channels = p.channels.iter().filter(|channel| channel.platform == provider).peekable();
         if channels.peek().is_none() {
-            panel = panel.child(manage_account(s, provider, None, busy));
+            panel = panel.child(manage_account(s, prefix, provider, None, busy));
         }
         for channel in channels {
-            panel = panel.child(manage_account(s, provider, Some(channel), busy));
+            panel = panel.child(manage_account(s, prefix, provider, Some(channel), busy));
         }
     }
     for message in [&p.notice, &p.sync_error].into_iter().filter(|s| !s.is_empty()) {
@@ -1415,7 +1467,7 @@ fn accounts(s: &Studio) -> El {
     panel
 }
 
-fn manage_account(s: &Studio, provider: &'static str, channel: Option<&Channel>, busy: bool) -> El {
+fn manage_account(s: &Studio, prefix: &str, provider: &'static str, channel: Option<&Channel>, busy: bool) -> El {
     let platform_name = platform(provider);
     let status = match channel.map(|channel| channel.status.as_str()) {
         Some("active") => "Connected",
@@ -1431,7 +1483,7 @@ fn manage_account(s: &Studio, provider: &'static str, channel: Option<&Channel>,
     };
     let action = if let Some(channel) = channel {
         let id = channel.id.clone();
-        let anchor = format!("publish-disconnect-{id}");
+        let anchor = format!("{prefix}publish-disconnect-{id}");
         let menu_anchor = anchor.clone();
         let label = format!("Disconnect {platform_name}");
         button(anchor, "Disconnect…", false, |_| {})
@@ -1452,7 +1504,7 @@ fn manage_account(s: &Studio, provider: &'static str, channel: Option<&Channel>,
                 );
             })
     } else {
-        button(format!("publish-connect-{provider}"), "Connect", true, move |s| connect(s, provider))
+        button(format!("{prefix}publish-connect-{provider}"), "Connect", true, move |s| connect(s, provider))
     };
     row().w_full().min_w(0.).items_center().gap(6.).padding(7.).radius(7.)
         .fill(color(SURFACE)).border(1., color(theme::TRANSPORT_BORDER))
@@ -1469,7 +1521,9 @@ fn manage_account(s: &Studio, provider: &'static str, channel: Option<&Channel>,
 }
 fn open_accounts(s: &mut Studio) {
     s.publish.accounts_open = true;
-    s.publish.composing = false;
+    if s.quick_controls.publish.is_none() {
+        s.publish.composing = false;
+    }
 }
 
 pub(super) fn header_actions(s: &Studio, split: bool) -> Option<El> {
@@ -1618,8 +1672,7 @@ fn local_list(s: &Studio, mut b: El, queued: &[crate::clips::Saved]) -> El {
                     format!("Use {}", file.output.label()),
                     false,
                     move |s| {
-                        s.publish.set_files(vec![path.clone()]);
-                        s.publish.notice.clear();
+                        s.publish.attach_clip(path.clone());
                         new_post(s);
                     },
                 )
@@ -1834,6 +1887,85 @@ mod tests {
         net::TcpListener,
         sync::Mutex,
     };
+
+    #[test]
+    fn quick_publish_prepares_a_clip_in_the_shared_composer() {
+        let scratch = tempfile::tempdir().unwrap();
+        let mut studio = Studio::new(scratch.path().into());
+        studio.publish.scope = Some(("studio".into(), "test".into()));
+        let clip = scratch.path().join("highlight.mp4");
+        super::super::quick_controls::open_publish(&mut studio, Some(clip.clone()));
+        assert!(studio.quick_controls.publish.is_some() && studio.publish.composing);
+        assert_eq!(studio.publish.files, [clip]);
+        assert!(super::super::quick_controls::publish_popout(&studio, Edge::Right, 1100., 720.).is_some());
+        super::super::quick_controls::dismiss_publish(&mut studio);
+        assert!(studio.quick_controls.publish.is_none() && !studio.publish.composing);
+    }
+
+    #[test]
+    fn shortcut_settings_manage_publishing_accounts_inline() {
+        let scratch = tempfile::tempdir().unwrap();
+        let mut studio = Studio::new(scratch.path().into());
+        studio.publish.scope = Some(("studio".into(), "test".into()));
+        studio.publish.channels = serde_json::from_value(json!([
+            {"id":"t","platform":"threads","status":"active"}
+        ])).unwrap();
+        let mut rt = rune::Runtime::new(
+            studio, |s, _| shortcut_settings(s), (224., 460.), rune::Env::default(),
+        );
+        rt.frame(0.);
+        assert!(rt.find("quick-publish-disconnect-t").is_some());
+        assert!(rt.find("quick-publish-connect-instagram").is_some());
+        assert!(rt.find("quick-publish-refresh").is_some());
+        assert!(rt.find("publish-inline-composer").is_none());
+    }
+
+    #[test]
+    fn quick_publish_shows_only_sign_in_and_resumes_after_authentication() {
+        use super::super::quick_controls;
+
+        let scratch = tempfile::tempdir().unwrap();
+        let mut studio = Studio::new(scratch.path().into());
+        let clip = scratch.path().join("highlight.mp4");
+        quick_controls::open_publish(&mut studio, Some(clip.clone()));
+
+        let mut rt = rune::Runtime::new(
+            studio,
+            |s, _| {
+                let body = col().w_full().h_full();
+                match quick_controls::publish_popout(s, Edge::Right, 1100., 720.) {
+                    Some(dialog) => body.child(dialog),
+                    None => body,
+                }
+            },
+            (1100., 720.),
+            rune::Env::default(),
+        );
+        rt.frame(0.);
+        assert!(rt.find("quick-publish-sign-in").is_some());
+        assert!(rt.find("email").is_some());
+        assert!(rt.find("publish-inline-composer").is_none());
+        assert!(rt.state.publish.files.is_empty());
+
+        let (x, y) = rt.find("quick-publish-sign-in-close").unwrap();
+        rt.pointer_down(x, y);
+        rt.pointer_up(x, y);
+        update_scope(&mut rt.state, Some(("studio".into(), "test".into())));
+        rt.invalidate();
+        rt.frame(0.02);
+        assert!(!rt.state.publish.composing);
+        assert!(rt.find("quick-publish-sign-in").is_none());
+
+        update_scope(&mut rt.state, None);
+        quick_controls::open_publish(&mut rt.state, Some(clip.clone()));
+        update_scope(&mut rt.state, Some(("studio".into(), "test".into())));
+        assert!(rt.state.publish.composing);
+        rt.invalidate();
+        rt.frame(0.04);
+        assert!(rt.find("quick-publish-sign-in").is_none());
+        assert!(rt.find("publish-inline-composer").is_some());
+        assert_eq!(rt.state.publish.files, [clip]);
+    }
 
     #[test]
     fn full_dock_draft_selects_accounts_and_previews_images() {
@@ -2104,7 +2236,7 @@ mod tests {
 
     #[test]
     fn instagram_requirements_follow_each_selected_account_and_format() {
-        let mut draft = Publish::default();
+        let mut draft = Publish { scope: Some(("studio".into(), "test".into())), ..Default::default() };
         draft.channels = serde_json::from_value(json!([
             {"id":"t","platform":"threads","status":"active"},
             {"id":"i","platform":"instagram","status":"active","capabilities":{"media":{"kinds":["story"],"max_items":10}}}

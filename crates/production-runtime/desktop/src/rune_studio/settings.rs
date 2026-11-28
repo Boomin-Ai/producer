@@ -199,6 +199,14 @@ fn email_form(s: &Studio) -> El {
     form
 }
 
+pub(super) fn account_form(s: &Studio) -> El {
+    let mut form = account(s);
+    if !s.settings.auth_error.is_empty() {
+        form = form.child(text(s.settings.auth_error.clone()).color(color(TEXT)));
+    }
+    form
+}
+
 pub(super) fn panel_account(s: &Studio, panel: PanelId) -> El {
     if s.settings.login_panel != panel || s.settings.profile_open || s.pending_link.is_some() {
         return button(format!("{}-login", panel.key()), "Sign in or sign up", false, move |s| {
@@ -206,12 +214,8 @@ pub(super) fn panel_account(s: &Studio, panel: PanelId) -> El {
             s.settings.profile_open = false;
         });
     }
-    let mut form = account(s).padding(9.).radius(8.).fill(color(theme::ROW))
-        .border(1., color(theme::TAB_BORDER));
-    if !s.settings.auth_error.is_empty() {
-        form = form.child(text(s.settings.auth_error.clone()).color(color(TEXT)));
-    }
-    form
+    account_form(s).padding(9.).radius(8.).fill(color(theme::ROW))
+        .border(1., color(theme::TAB_BORDER))
 }
 #[derive(Clone, Copy, PartialEq)]
 pub(super) enum StudioSheet {

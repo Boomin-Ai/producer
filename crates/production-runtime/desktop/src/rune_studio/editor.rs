@@ -88,6 +88,76 @@ fn assign_slot(set: &mut Set, layout: &str, path: &[usize], source: &str) {
     }
 }
 
+fn update_set_text(set: &mut Set, pair: &SetLayoutPair, path: &[String], field: Option<&str>, value: &str) {
+    fn update(node: &mut Node, path: Option<&[String]>, field: Option<&str>, value: &str) {
+        let path = path.and_then(|p| p.split_first()).and_then(|(id, rest)| (id == &node.id).then_some(rest));
+        let bound = node.style.as_ref().and_then(|s| s.text.as_ref()).and_then(|s| s.field.as_deref());
+        if (field.is_some() && field == bound) || (field.is_none() && path.is_some_and(|p| p.is_empty())) {
+            if let Content::Text { value: text, .. } = &mut node.content { value.clone_into(text); }
+        }
+        for child in &mut node.children { update(child, path, field, value); }
+    }
+    for (id, output) in &mut set.layouts {
+        if field.is_some() || pair.ids().contains(&id.as_str()) || path.last().is_some_and(|id| id == "classic-title") {
+            update(&mut output.root, Some(path), field, value);
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub(super) struct HeadlineField {
+    path: Vec<String>,
+    field: Option<String>,
+    shader: bool,
+    pub value: String,
+}
+
+impl HeadlineField {
+    pub fn for_pair(set: &Set, pair: &SetLayoutPair) -> Option<Self> {
+        if pair.ids().iter().any(|id| crate::headline::supports(set, id)) {
+            return Some(Self {
+                path: Vec::new(),
+                field: None,
+                shader: true,
+                value: crate::headline::text(set).unwrap_or_default().into(),
+            });
+        }
+
+        let ids = ["headline", "episode-topic", "classic-title", "title"];
+        let mut found = None;
+        for id in pair.ids() {
+            let Some(layout) = set.layouts.get(id) else { continue; };
+            visit_layout(&layout.root, &mut vec![], "", &mut |node, indexes, _| {
+                let Content::Text { value, .. } = &node.content else { return; };
+                let field = node.style.as_ref().and_then(|style| style.text.as_ref())
+                    .and_then(|style| style.field.clone());
+                let rank = if field.as_deref() == Some("headline") { Some(0) } else {
+                    ids.iter().position(|id| *id == node.id)
+                };
+                let Some(rank) = rank else { return; };
+                if found.as_ref().is_some_and(|(current, _)| *current <= rank) { return; }
+                let mut parent = &layout.root;
+                let mut path = vec![parent.id.clone()];
+                for &index in indexes {
+                    parent = &parent.children[index];
+                    path.push(parent.id.clone());
+                }
+                found = Some((rank, Self { path, field, shader: false, value: value.clone() }));
+            });
+        }
+        found.map(|(_, field)| field)
+    }
+
+    pub fn apply(&self, set: &mut Set, pair: &SetLayoutPair, value: &str) -> anyhow::Result<()> {
+        if self.shader {
+            crate::headline::apply(set, Some(value), None, None)?;
+        } else {
+            update_set_text(set, pair, &self.path, self.field.as_deref(), value);
+        }
+        Ok(())
+    }
+}
+
 struct Field {
     path: Vec<usize>,
     label: String,
@@ -187,20 +257,8 @@ impl Editor {
                 edits.push((path, field, f.input.text.clone()));
             }
         }
-        fn update(node: &mut Node, path: Option<&[String]>, field: Option<&str>, value: &str) {
-            let path = path.and_then(|p| p.split_first()).and_then(|(id, rest)| (id == &node.id).then_some(rest));
-            let bound = node.style.as_ref().and_then(|s| s.text.as_ref()).and_then(|s| s.field.as_deref());
-            if (field.is_some() && field == bound) || (field.is_none() && path.is_some_and(|p| p.is_empty())) {
-                if let Content::Text { value: text, .. } = &mut node.content { value.clone_into(text); }
-            }
-            for child in &mut node.children { update(child, path, field, value); }
-        }
         for (path, field, value) in edits {
-            for (id, output) in &mut self.draft.layouts {
-                if field.is_some() || self.pair.ids().contains(&id.as_str()) || path.last().is_some_and(|id| id == "classic-title") {
-                    update(&mut output.root, Some(&path), field.as_deref(), &value);
-                }
-            }
+            update_set_text(&mut self.draft, &self.pair, &path, field.as_deref(), &value);
             changed = true;
         }
         if changed {

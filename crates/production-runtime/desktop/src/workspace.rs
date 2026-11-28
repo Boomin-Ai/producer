@@ -2,6 +2,7 @@
 use anyhow::{bail, Result};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::BTreeMap;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -12,6 +13,7 @@ pub enum PanelId {
     #[serde(rename = "guests")]
     People,
     Controls,
+    QuickControls,
     Assistant,
     Timeline,
     Clips,
@@ -21,7 +23,7 @@ pub enum PanelId {
     Publish,
 }
 impl PanelId {
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::Sources,
         Self::Scenes,
         Self::Mixer,
@@ -34,6 +36,7 @@ impl PanelId {
         Self::Sound,
         Self::Network,
         Self::Publish,
+        Self::QuickControls,
     ];
     pub fn launch_panels() -> impl Iterator<Item = Self> {
         let boomin = crate::boomin_account::STUDIO_PANELS;
@@ -48,6 +51,7 @@ impl PanelId {
             Self::Mixer => "Audio mixer",
             Self::People => "People",
             Self::Controls => "Set Controls",
+            Self::QuickControls => "Shortcuts",
             Self::Timeline => "Timeline",
             Self::Assistant => "Assistant",
             Self::Clips => "Clips",
@@ -64,6 +68,7 @@ impl PanelId {
             Self::Mixer => "mixer",
             Self::People => "guests",
             Self::Controls => "controls",
+            Self::QuickControls => "quickControls",
             Self::Timeline => "timeline",
             Self::Assistant => "assistant",
             Self::Clips => "clips",
@@ -82,6 +87,46 @@ impl PanelId {
     pub fn accepts(self, edge: Edge) -> bool {
         self != Self::Timeline || !edge.side()
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum QuickControl {
+    Camera,
+    Microphone,
+    ScreenShare,
+    Layouts,
+    Headline,
+    SaveClip,
+    Publish,
+    Sound(String),
+}
+
+impl QuickControl {
+    pub const BUILT_INS: [Self; 7] = [
+        Self::Camera, Self::Microphone, Self::ScreenShare, Self::Layouts,
+        Self::Headline, Self::SaveClip, Self::Publish,
+    ];
+
+    fn defaults() -> Vec<Self> {
+        Self::BUILT_INS.to_vec()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ShortcutSection {
+    pub id: Uuid,
+    pub name: String,
+    pub controls: Vec<QuickControl>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ShortcutColumns {
+    #[default]
+    One,
+    Two,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -156,11 +201,21 @@ pub struct Workspace {
     pub docks: BTreeMap<Edge, Dock>,
     pub order: Vec<PanelId>,
     pub selected: Option<String>,
+    pub quick_controls: Vec<QuickControl>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub shortcut_sections: Vec<ShortcutSection>,
+    pub shortcut_columns: ShortcutColumns,
 }
 // The first native prototype wrote visibility flags. Upgrade in memory; do not
 // rewrite a user's project just because it was opened.
 impl<'de> Deserialize<'de> for Workspace {
     fn deserialize<D: Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum SavedShortcut {
+            Action(QuickControl),
+            LegacyPanel { #[serde(rename = "panel")] _panel: PanelId },
+        }
         #[derive(Deserialize)]
         #[serde(deny_unknown_fields, rename_all = "camelCase")]
         struct Wire {
@@ -170,6 +225,11 @@ impl<'de> Deserialize<'de> for Workspace {
             docks: Option<BTreeMap<Edge, Dock>>,
             order: Option<Vec<PanelId>>,
             selected: Option<String>,
+            quick_controls: Option<Vec<SavedShortcut>>,
+            #[serde(default)]
+            shortcut_sections: Vec<ShortcutSection>,
+            #[serde(default)]
+            shortcut_columns: ShortcutColumns,
             sources: Option<bool>,
             controls: Option<bool>,
             timeline: Option<bool>,
@@ -186,7 +246,7 @@ impl<'de> Deserialize<'de> for Workspace {
             {
                 let mut panels = p;
                 let mut order = o;
-                for id in [PanelId::Clips, PanelId::People, PanelId::Assistant, PanelId::Dj, PanelId::Sound, PanelId::Network, PanelId::Publish] {
+                for id in [PanelId::Clips, PanelId::People, PanelId::Assistant, PanelId::Dj, PanelId::Sound, PanelId::Network, PanelId::Publish, PanelId::QuickControls] {
                     if !panels.contains_key(&id) && !order.contains(&id) {
                         panels.insert(id, out.panels[&id].clone());
                         order.push(id);
@@ -220,6 +280,14 @@ impl<'de> Deserialize<'de> for Workspace {
             }
         }
         out.selected = w.selected;
+        out.quick_controls = w.quick_controls.map_or_else(QuickControl::defaults, |shortcuts| {
+            shortcuts.into_iter().filter_map(|saved| match saved {
+                SavedShortcut::Action(control) => Some(control),
+                SavedShortcut::LegacyPanel { .. } => None,
+            }).collect()
+        });
+        out.shortcut_sections = w.shortcut_sections;
+        out.shortcut_columns = w.shortcut_columns;
         out.validate().map_err(serde::de::Error::custom)?;
         Ok(out)
     }
@@ -240,6 +308,7 @@ impl Default for Workspace {
                 (PanelId::Network, Edge::Right, false),
                 (PanelId::Publish, Edge::Right, false),
                 (PanelId::Controls, Edge::Right, true),
+                (PanelId::QuickControls, Edge::Right, false),
                 (PanelId::Timeline, Edge::Bottom, true),
             ]
             .into_iter()
@@ -276,6 +345,9 @@ impl Default for Workspace {
             .collect(),
             order: PanelId::ALL.to_vec(),
             selected: None,
+            quick_controls: QuickControl::defaults(),
+            shortcut_sections: Vec::new(),
+            shortcut_columns: ShortcutColumns::default(),
         }
     }
 }
@@ -284,6 +356,15 @@ impl Default for Workspace {
 pub enum WorkspaceCommand {
     SetTheme { theme: DeskTheme },
     SetHeader { panel: PanelId, mode: HeaderMode },
+    SetShortcutColumns { columns: ShortcutColumns },
+    PinControl { control: QuickControl },
+    UnpinControl { control: QuickControl },
+    MoveControl { control: QuickControl, before: QuickControl },
+    MoveControlToSection { control: QuickControl, section: Option<Uuid> },
+    AddShortcutSection { name: String },
+    RenameShortcutSection { section: Uuid, name: String },
+    ShiftShortcutSection { section: Uuid, up: bool },
+    RemoveShortcutSection { section: Uuid },
     Place {
         panel: PanelId,
         edge: Edge,
@@ -395,6 +476,22 @@ impl Workspace {
     }
     pub fn validate(&self) -> Result<()> {
         self.validate_registry()?;
+        let mut controls = std::collections::HashSet::new();
+        for control in self.shortcuts() {
+            if !controls.insert(control) {
+                bail!("Duplicate shortcuts");
+            }
+            if matches!(control, QuickControl::Sound(id) if id.trim().is_empty()) {
+                bail!("Choose a sound");
+            }
+        }
+        let mut ids = std::collections::HashSet::new();
+        for section in &self.shortcut_sections {
+            self.validate_shortcut_name(&section.name, Some(section.id))?;
+            if !ids.insert(section.id) {
+                bail!("Duplicate shortcut section");
+            }
+        }
         for (p, s) in &self.panels {
             if !s.weight.is_finite() || !(0.0001..=16.).contains(&s.weight) {
                 bail!("Invalid panel size weight");
@@ -532,6 +629,33 @@ impl Workspace {
     pub fn visible(&self, p: PanelId) -> bool {
         self.panels[&p].visible
     }
+
+    pub fn shortcuts(&self) -> impl Iterator<Item = &QuickControl> {
+        self.quick_controls.iter().chain(self.shortcut_sections.iter().flat_map(|section| &section.controls))
+    }
+
+    pub fn validate_shortcut_name(&self, name: &str, section: Option<Uuid>) -> Result<()> {
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > 40 {
+            bail!("Enter a section name up to 40 characters");
+        }
+        if self.shortcut_sections.iter().any(|item| Some(item.id) != section && item.name.eq_ignore_ascii_case(name)) {
+            bail!("Choose a different section name");
+        }
+        Ok(())
+    }
+
+    fn unpin_shortcut(&mut self, control: &QuickControl) {
+        self.quick_controls.retain(|pinned| pinned != control);
+        for section in &mut self.shortcut_sections {
+            section.controls.retain(|pinned| pinned != control);
+        }
+    }
+
+    fn shortcut_section_index(&self, id: Uuid) -> Result<usize> {
+        self.shortcut_sections.iter().position(|section| section.id == id)
+            .ok_or_else(|| anyhow::anyhow!("Shortcut section unavailable"))
+    }
     pub fn apply_studio(&mut self, command: WorkspaceCommand) -> Result<()> {
         use WorkspaceCommand::*;
         if matches!(command,
@@ -564,6 +688,61 @@ impl Workspace {
             WorkspaceCommand::SetTheme { theme } => next.theme = theme,
             WorkspaceCommand::SetHeader { panel, mode } => {
                 next.panels.get_mut(&panel).unwrap().header = mode;
+            }
+            WorkspaceCommand::SetShortcutColumns { columns } => next.shortcut_columns = columns,
+            WorkspaceCommand::PinControl { control } => {
+                if !next.shortcuts().any(|pinned| pinned == &control) {
+                    next.quick_controls.push(control);
+                }
+            }
+            WorkspaceCommand::UnpinControl { control } => {
+                next.unpin_shortcut(&control);
+            }
+            WorkspaceCommand::MoveControl { control, before } => {
+                if control == before || !next.shortcuts().any(|pinned| pinned == &control) {
+                    bail!("Choose two different pinned controls");
+                }
+                next.unpin_shortcut(&control);
+                let mut lists = std::iter::once(&mut next.quick_controls)
+                    .chain(next.shortcut_sections.iter_mut().map(|section| &mut section.controls));
+                let Some((pins, index)) = lists.find_map(|pins| {
+                    let index = pins.iter().position(|pinned| pinned == &before)?;
+                    Some((pins, index))
+                }) else {
+                    bail!("Choose two different pinned controls");
+                };
+                pins.insert(index, control);
+            }
+            WorkspaceCommand::MoveControlToSection { control, section } => {
+                if !next.shortcuts().any(|pinned| pinned == &control) {
+                    bail!("Shortcut unavailable");
+                }
+                let index = section.map(|id| next.shortcut_section_index(id)).transpose()?;
+                next.unpin_shortcut(&control);
+                match index {
+                    Some(index) => next.shortcut_sections[index].controls.push(control),
+                    None => next.quick_controls.push(control),
+                }
+            }
+            WorkspaceCommand::AddShortcutSection { name } => {
+                next.validate_shortcut_name(&name, None)?;
+                next.shortcut_sections.push(ShortcutSection {
+                    id: Uuid::new_v4(), name: name.trim().into(), controls: Vec::new(),
+                });
+            }
+            WorkspaceCommand::RenameShortcutSection { section, name } => {
+                let index = next.shortcut_section_index(section)?;
+                next.validate_shortcut_name(&name, Some(section))?;
+                next.shortcut_sections[index].name = name.trim().into();
+            }
+            WorkspaceCommand::ShiftShortcutSection { section, up } => {
+                let index = next.shortcut_section_index(section)?;
+                let target = if up { index.saturating_sub(1) } else { (index + 1).min(next.shortcut_sections.len() - 1) };
+                next.shortcut_sections.swap(index, target);
+            }
+            WorkspaceCommand::RemoveShortcutSection { section } => {
+                let index = next.shortcut_section_index(section)?;
+                next.quick_controls.extend(next.shortcut_sections.remove(index).controls);
             }
             WorkspaceCommand::Place {
                 panel,
@@ -786,6 +965,61 @@ impl Workspace {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn shortcut_sections_keep_named_sounds_and_moves_durable() {
+        let mut workspace = Workspace::default();
+        let sound = QuickControl::Sound("effect-002".into());
+        workspace.apply(WorkspaceCommand::PinControl { control: sound.clone() }).unwrap();
+        workspace.apply(WorkspaceCommand::AddShortcutSection { name: "Sound effects".into() }).unwrap();
+        workspace.apply(WorkspaceCommand::AddShortcutSection { name: "Studio".into() }).unwrap();
+        let section = workspace.shortcut_sections[0].id;
+        workspace.apply(WorkspaceCommand::MoveControlToSection {
+            control: sound.clone(), section: Some(section),
+        }).unwrap();
+        workspace.apply(WorkspaceCommand::PinControl { control: sound.clone() }).unwrap();
+        workspace.apply(WorkspaceCommand::RenameShortcutSection { section, name: "Cues".into() }).unwrap();
+        workspace.apply(WorkspaceCommand::ShiftShortcutSection { section, up: false }).unwrap();
+        let saved = serde_json::to_value(&workspace).unwrap();
+        let mut restored: Workspace = serde_json::from_value(saved).unwrap();
+        assert_eq!(restored.shortcuts().filter(|control| *control == &sound).count(), 1);
+        assert_eq!(restored.shortcut_sections[1].name, "Cues");
+        assert_eq!(restored.shortcut_sections[1].controls, [sound.clone()]);
+        restored.apply(WorkspaceCommand::RemoveShortcutSection { section }).unwrap();
+        assert_eq!(restored.quick_controls.last(), Some(&sound));
+        assert_eq!(restored.shortcut_sections.len(), 1);
+    }
+
+    #[test]
+    fn quick_controls_upgrade_and_persist_independently_of_panel_visibility() {
+        let mut legacy = serde_json::to_value(Workspace::default()).unwrap();
+        legacy.as_object_mut().unwrap().remove("quickControls");
+        legacy.as_object_mut().unwrap().remove("shortcutColumns");
+        legacy["panels"].as_object_mut().unwrap().remove("quickControls");
+        legacy["order"].as_array_mut().unwrap().retain(|id| id != "quickControls");
+        let mut workspace: Workspace = serde_json::from_value(legacy).unwrap();
+        assert!(!workspace.panels[&PanelId::QuickControls].visible);
+        assert_eq!(workspace.quick_controls, QuickControl::BUILT_INS);
+        assert_eq!(workspace.shortcut_columns, ShortcutColumns::One);
+
+        workspace.apply(WorkspaceCommand::MoveControl { control: QuickControl::Publish, before: QuickControl::Camera }).unwrap();
+        workspace.apply(WorkspaceCommand::UnpinControl { control: QuickControl::Headline }).unwrap();
+        workspace.apply(WorkspaceCommand::SetShortcutColumns { columns: ShortcutColumns::Two }).unwrap();
+        let mut saved = serde_json::to_value(&workspace).unwrap();
+        saved["quickControls"].as_array_mut().unwrap()
+            .insert(0, serde_json::json!({"panel":"mixer"}));
+        let restored: Workspace = serde_json::from_value(saved).unwrap();
+        assert_eq!(restored.quick_controls, workspace.quick_controls);
+        assert_eq!(restored.quick_controls.first(), Some(&QuickControl::Publish));
+        assert!(!restored.quick_controls.contains(&QuickControl::Headline));
+        assert_eq!(restored.shortcut_columns, ShortcutColumns::Two);
+        assert!(!restored.panels[&PanelId::QuickControls].visible);
+        assert!(!restored.panels[&PanelId::Mixer].visible);
+
+        assert!(serde_json::from_value::<WorkspaceCommand>(serde_json::json!({
+            "action":"pinControl", "control":{"panel":"mixer"}
+        })).is_err());
+    }
+
 
     #[test]
     fn launch_layout_hides_restored_timeline_and_reclaims_its_dock() {

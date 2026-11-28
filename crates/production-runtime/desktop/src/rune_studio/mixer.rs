@@ -31,11 +31,7 @@ pub(super) fn channels(s: &Studio, compact: bool) -> El {
 fn channel(snapshot: &Snapshot, lane: &Lane, compact: bool) -> El {
     let peak = snapshot.mixer_peaks.get(&lane.source).copied().unwrap_or(0.);
     let level = meter_level(peak * lane.gain, lane.muted);
-    let db = if lane.gain == 0. {
-        "−∞ dB".to_owned()
-    } else {
-        format!("{:+.1} dB", 20. * lane.gain.log10())
-    };
+    let db = gain_readout(lane.gain);
     let mute = panels::send_tool(
         &format!("mute-{}", lane.source),
         if lane.muted { "mic-off" } else { "mic" },
@@ -49,7 +45,7 @@ fn channel(snapshot: &Snapshot, lane: &Lane, compact: bool) -> El {
     ).size(26., 26.);
     let name = title(&lane.label, 11., 550., TEXT).help(&lane.label);
     let readout = title(&db, 10., 450., MUTED);
-    let fader = fader(lane, level, &db, compact);
+    let fader = fader(lane, level, &db, compact, "");
     if compact {
         row().items_center().gap(6.)
             .child(mute)
@@ -65,14 +61,29 @@ fn channel(snapshot: &Snapshot, lane: &Lane, compact: bool) -> El {
     }
 }
 
-fn meter_level(amplitude: f32, muted: bool) -> f32 {
+pub(super) fn shortcut_mic_gain(snapshot: &Snapshot) -> Option<El> {
+    let lane = snapshot.project.lanes.iter().find(|lane| lane.source == "microphone")?;
+    let peak = snapshot.mixer_peaks.get(&lane.source).copied().unwrap_or(0.);
+    let level = meter_level(peak * lane.gain, lane.muted);
+    let db = gain_readout(lane.gain);
+    Some(row().items_center().gap(4.).flex_wrap()
+        .child(title("Mic gain", 11., 500., MUTED))
+        .child(fader(lane, level, &db, true, "quick-"))
+        .child(title(db, 11., 500., MUTED)))
+}
+
+fn gain_readout(gain: f32) -> String {
+    if gain == 0. { "−∞ dB".into() } else { format!("{:+.1} dB", 20. * gain.log10()) }
+}
+
+pub(super) fn meter_level(amplitude: f32, muted: bool) -> f32 {
     if muted || !amplitude.is_finite() || amplitude <= 0. {
         return 0.;
     }
     ((20. * amplitude.log10() + 60.) / 60.).clamp(0., 1.)
 }
 
-fn fader(lane: &Lane, level: f32, db: &str, compact: bool) -> El {
+fn fader(lane: &Lane, level: f32, db: &str, compact: bool, prefix: &str) -> El {
     let span = if compact { 84. } else { 80. };
     let knob = lane.gain / 2. * span;
     let mut rail = el().size(if compact { span } else { 8. }, if compact { 8. } else { span })
@@ -97,7 +108,7 @@ fn fader(lane: &Lane, level: f32, db: &str, compact: bool) -> El {
     let step_source = source.clone();
     let limit_source = source.clone();
     let accessible_source = source.clone();
-    el().key(format!("gain-{source}"))
+    el().key(format!("{prefix}gain-{source}"))
         .size(if compact { span + 12. } else { 26. }, if compact { 26. } else { span + 12. })
         .role("slider")
         .label(format!("{} gain", lane.label))

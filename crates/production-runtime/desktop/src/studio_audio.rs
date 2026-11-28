@@ -648,6 +648,11 @@ impl Desk {
             .unwrap_or_else(|_| id.to_owned())
     }
 
+    pub fn sound_name(&self, id: &str) -> Option<String> {
+        self.lookup(id).ok().filter(|asset| asset.item.kind == Kind::Effect)
+            .map(|asset| asset.item.name)
+    }
+
     pub fn pad(&self, id: &str) -> Pad {
         self.preferences
             .lock()
