@@ -1,0 +1,31 @@
+name: Verify Duce in Producer Dev
+on:
+  push:
+    branches: [dev/duce-voice-native]
+permissions:
+  contents: read
+jobs:
+  dev:
+    runs-on: blacksmith-6vcpu-macos-15
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '13.0'
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.100.0'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/production-runtime/desktop
+      - name: Test voice delivery in a temporary studio
+        working-directory: crates/production-runtime/desktop
+        run: cargo test --locked voice_publish_is_scoped_and_preserves_the_composer
+      - name: Build native Dev executable
+        working-directory: crates/production-runtime/desktop
+        run: cargo build --locked
+      - uses: actions/upload-artifact@v4
+        with:
+          name: duce-dev
+          path: crates/production-runtime/desktop/target/debug/producer-native-room
+          retention-days: 2
