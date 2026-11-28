@@ -845,10 +845,13 @@ fn finish(p: &mut Publish, ids: Vec<String>, error: Option<String>) -> String {
 fn update_scope(s: &mut Studio, scope: Option<(String, String)>) {
     let popout = s.quick_controls.publish.take();
     s.publish = Publish { scope, ..Default::default() };
-    if s.publish.scope.is_some() {
-        if let Some(super::quick_controls::PublishPopout::SignIn { clip }) = popout {
+    use super::quick_controls::PublishPopout;
+    match popout {
+        Some(PublishPopout::DuceAccounts) => s.quick_controls.publish = popout,
+        Some(PublishPopout::SignIn { clip }) if s.publish.scope.is_some() => {
             super::quick_controls::open_publish(s, clip);
         }
+        _ => {}
     }
 }
 
@@ -967,7 +970,7 @@ pub(super) fn poll(s: &mut Studio) -> bool {
     let shortcut_settings = s.quick_controls.publish_settings_open()
         && s.page == Page::Studio
         && s.live.as_ref().is_some_and(|live| live.snapshot.project.workspace.visible(PanelId::QuickControls));
-    if (visible || super::quick_controls::publish_open(s) || shortcut_settings)
+    if (visible || super::quick_controls::publish_open(s) || shortcut_settings || s.chat.voice.listening())
         && s.publish.working.is_none()
         && s.publish.refreshing.is_none()
         && s.publish.next.is_none_or(|t| Instant::now() >= t)
@@ -1903,9 +1906,10 @@ mod tests {
             {"id":"one","platform":"threads","status":"active","external_handle":"first"},
             {"id":"two","platform":"threads","status":"active","external_handle":"second"}
         ])).unwrap();
-        assert!(voice_draft(&studio,"Hello","",false).is_err());
-        assert!(voice_draft(&studio,"Hello","first",true).is_err());
-        let draft = voice_draft(&studio,"Hello","@second",false).unwrap();
+        let mut draft = VoiceDraft::prepare(&studio, "Hello", "", false).unwrap();
+        assert!(draft.review(&studio, "").is_err());
+        assert!(VoiceDraft::prepare(&studio, "Hello", "first", true).is_err());
+        draft.review(&studio, "@second").unwrap();
         queue_voice(&studio,&draft).unwrap().recv_timeout(Duration::from_secs(5)).unwrap().unwrap();
         let queued = outbox::list(&outbox_dir(&studio)).unwrap();
         assert_eq!(queued.len(),1);
@@ -1914,6 +1918,54 @@ mod tests {
         assert_eq!(studio.publish.caption.text,"Unrelated typed draft");
         studio.publish.scope = None;
         assert!(queue_voice(&studio,&draft).is_err());
+    }
+
+    #[test]
+    fn voice_signed_out_edit_connect_and_review_renders_native_dialogs() {
+        use super::super::{quick_controls, voice};
+
+        let scratch = tempfile::tempdir().unwrap();
+        let mut rt = rune::Runtime::new(
+            Studio::new(scratch.path().into()),
+            |s, _| {
+                let body = col().w_full().h_full();
+                match quick_controls::publish_popout(s, Edge::Right, 1100., 720.) {
+                    Some(dialog) => body.child(dialog),
+                    None => body,
+                }
+            }, (1100., 720.), rune::Env::default(),
+        );
+        let dictate = |s: &mut Studio, text| voice::run(s, "draft_threads",
+            &json!({"text":text,"account":"","latest_clip":false}), "draft").unwrap().unwrap();
+        assert!(dictate(&mut rt.state, "First idea").contains("sign-in form is open"));
+        rt.frame(0.);
+        assert!(rt.find("email").is_some());
+        assert!(rt.find("publish-inline-composer").is_none());
+        assert!(dictate(&mut rt.state, "Revised idea").contains("Revised idea"));
+        quick_controls::dismiss_publish(&mut rt.state);
+        assert!(voice::run(&mut rt.state, "open_surface", &json!({"surface":"boominSignIn"}), "login")
+            .unwrap().unwrap().contains("sign-in form is open"));
+        update_scope(&mut rt.state, Some(("brand".into(), "operator".into())));
+        rt.invalidate();
+        rt.frame(0.02);
+        assert!(rt.find("email").is_none());
+        assert!(rt.find("duce-publishing-accounts").is_some());
+        assert!(rt.find("quick-publish-connect-threads").is_some());
+        assert!(!rt.state.publish.composing);
+
+        rt.state.publish.channels = serde_json::from_value(json!([
+            {"id":"mine","platform":"threads","status":"active","external_handle":"operator"}
+        ])).unwrap();
+        let review = voice::run(&mut rt.state, "review_threads", &json!({"account":""}), "review")
+            .unwrap().unwrap();
+        assert!(review.contains("Revised idea") && review.contains("operator"));
+        assert!(!quick_controls::publish_open(&rt.state));
+        assert!(outbox::list(&outbox_dir(&rt.state)).unwrap().is_empty());
+        let old_revision = review.split_whitespace().nth(1).unwrap();
+        dictate(&mut rt.state, "Final edit");
+        assert!(voice::run(&mut rt.state, "publish_draft",
+            &json!({"revision":old_revision}), "queue").is_err());
+        assert!(outbox::list(&outbox_dir(&rt.state)).unwrap().is_empty());
     }
 
     #[test]
@@ -2453,42 +2505,81 @@ mod tests {
 
 pub(super) struct VoiceDraft {
     pub revision: String,
-    pub account: String,
-    scope: (String,String),
-    channel: String,
     pub text: String,
     files: Vec<PathBuf>,
+    requested_account: String,
+    destination: Option<VoiceDestination>,
 }
 
-pub(super) fn voice_draft(s: &Studio, text: &str, account: &str, latest_clip: bool) -> Result<VoiceDraft> {
-    let p = &s.publish;
-    let scope = p.scope.clone().context("Sign in to Boomin to use Threads")?;
-    let active: Vec<_> = p.channels.iter().filter(|c| c.platform == "threads" && c.status == "active").collect();
-    let mut matches = active.iter().copied().filter(|c| account.is_empty() ||
-        [c.external_handle.as_deref(),c.display_name.as_deref()].into_iter().flatten()
-            .any(|v| v.trim_start_matches('@').eq_ignore_ascii_case(account.trim_start_matches('@'))));
-    let options = active.iter().map(|c| c.label()).collect::<Vec<_>>().join(", ");
-    let channel = matches.next().with_context(|| format!("Choose a connected Threads account. Available: {options}"))?;
-    ensure!(matches.next().is_none(),"Which Threads account? {options}");
-    let files = if latest_clip {
-        let path = s.live.as_ref().and_then(|l| l.clip_view.as_ref())
-            .and_then(|(status,_)| status.recent.iter().find(|c| c.error.is_none()))
-            .and_then(|clip|clip.files.first()).context("There is no saved clip in this studio")?.path.clone();
-        ensure!(path.is_file(),"The clip file is unavailable");
-        vec![path]
-    } else {Vec::new()};
-    Ok(VoiceDraft {revision:Uuid::new_v4().to_string(),account:channel.label(),scope,channel:channel.id.clone(),text:text.into(),files})
+struct VoiceDestination {
+    scope: (String, String),
+    channel: String,
+    label: String,
+}
+
+impl VoiceDraft {
+    pub(super) fn prepare(s: &Studio, text: &str, account: &str, latest_clip: bool) -> Result<Self> {
+        let text = text.trim();
+        ensure!(!text.is_empty() && text.chars().count() <= 500,
+            "Use 1 to 500 characters for a Threads post");
+        let files = if latest_clip {
+            let path = s.live.as_ref().and_then(|live| live.clip_view.as_ref())
+                .and_then(|(status, _)| status.recent.iter().find(|clip| clip.error.is_none()))
+                .and_then(|clip| clip.files.first()).context("There is no saved clip in this studio")?.path.clone();
+            ensure!(path.is_file(), "The clip file is unavailable");
+            vec![path]
+        } else {
+            Vec::new()
+        };
+        Ok(Self { revision: Uuid::new_v4().to_string(), text: text.into(), files,
+            requested_account: account.trim().to_owned(), destination: None })
+    }
+
+    pub(super) fn review(&mut self, s: &Studio, account: &str) -> Result<String> {
+        // A new review invalidates every previous publishing authorization.
+        self.destination = None;
+        self.revision = Uuid::new_v4().to_string();
+        if !account.trim().is_empty() {
+            self.requested_account = account.trim().into();
+        }
+        let p = &s.publish;
+        let scope = p.scope.clone().context("Sign in to Boomin")?;
+        let active: Vec<_> = p.channels.iter()
+            .filter(|c| c.platform == "threads" && c.status == "active").collect();
+        ensure!(!active.is_empty(), "Connect a Threads account or refresh publishing accounts");
+        let requested = self.requested_account.trim_start_matches('@');
+        let mut matches = active.iter().copied().filter(|c| requested.is_empty() ||
+            [c.external_handle.as_deref(), c.display_name.as_deref()].into_iter().flatten()
+                .any(|v| v.trim_start_matches('@').eq_ignore_ascii_case(requested)));
+        let options = active.iter().map(|c| c.label()).collect::<Vec<_>>().join(", ");
+        let channel = matches.next().with_context(|| format!("Choose a connected Threads account: {options}"))?;
+        ensure!(matches.next().is_none(), "Which Threads account? {options}");
+        self.destination = Some(VoiceDestination { scope, channel: channel.id.clone(), label: channel.label() });
+        Ok(format!("Draft {} for {}: {}", self.revision, channel.label(), self.text))
+    }
+
+    pub(super) fn summary(&self) -> String {
+        match &self.destination {
+            Some(d) => format!("Draft for {} · {}", d.label, self.text),
+            None => format!("Threads draft · {}", self.text),
+        }
+    }
+}
+
+pub(super) fn has_threads(s: &Studio) -> bool {
+    s.publish.scope.is_some() && s.publish.channels.iter().any(|c| c.platform == "threads" && c.status == "active")
 }
 
 pub(super) fn queue_voice(s: &Studio, draft: &VoiceDraft) -> Result<mpsc::Receiver<Result<()>>> {
-    ensure!(s.publish.scope.as_ref() == Some(&draft.scope),"Boomin account changed. Review a new draft");
-    ensure!(s.publish.channels.iter().any(|c| c.id == draft.channel && c.platform == "threads" && c.status == "active"),"Reconnect the Threads account");
+    let dest = draft.destination.as_ref().context("Review the saved draft and destination before publishing")?;
+    ensure!(s.publish.scope.as_ref() == Some(&dest.scope),"Boomin account changed. Review the draft again");
+    ensure!(s.publish.channels.iter().any(|c| c.id == dest.channel && c.platform == "threads" && c.status == "active"),"Reconnect the Threads account and review the draft");
     let root = outbox_dir(s);
     let options = Options::default().payload("threads",&draft.text,draft.files.first().map(PathBuf::as_path))?;
     let post = outbox::Post {
         id:draft.revision.clone(),created_ms:std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_millis() as u64,
         text:draft.text.clone(),files:draft.files.clone(),schedule:None,error:None,
-        targets:vec![outbox::Destination{id:draft.channel.clone(),label:draft.account.clone(),key:draft.revision.clone(),overrides:options,format:None,cover:None}]
+        targets:vec![outbox::Destination{id:dest.channel.clone(),label:dest.label.clone(),key:draft.revision.clone(),overrides:options,format:None,cover:None}]
     };
     let (tx,rx) = mpsc::channel();
     std::thread::spawn(move || {let _ = tx.send(post.stage(&root).map(|_|()));});

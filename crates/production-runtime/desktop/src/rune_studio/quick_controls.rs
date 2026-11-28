@@ -41,6 +41,7 @@ impl QuickControls {
 pub(super) enum PublishPopout {
     SignIn { clip: Option<PathBuf> },
     Composer,
+    DuceAccounts,
 }
 
 struct HeadlineDraft {
@@ -508,7 +509,7 @@ pub(super) fn open_publish(s: &mut Studio, file: Option<PathBuf>) {
 
 pub(super) fn publish_open(s: &Studio) -> bool {
     match s.quick_controls.publish {
-        Some(PublishPopout::SignIn { .. }) => true,
+        Some(PublishPopout::SignIn { .. } | PublishPopout::DuceAccounts) => true,
         Some(PublishPopout::Composer) => s.publish.composing,
         None => false,
     }
@@ -518,7 +519,9 @@ pub(super) fn publish_popout(s: &Studio, edge: Edge, w: f32, h: f32) -> Option<E
     if !publish_open(s) {
         return None;
     }
-    let signing_in = matches!(s.quick_controls.publish, Some(PublishPopout::SignIn { .. }));
+    let duce_accounts = matches!(s.quick_controls.publish, Some(PublishPopout::DuceAccounts));
+    let signing_in = matches!(s.quick_controls.publish, Some(PublishPopout::SignIn { .. }))
+        || (duce_accounts && s.publish.scope.is_none());
     let width = (w - 20.).clamp(0., if signing_in { 336. } else { 410. });
     let height = (h - 90.).clamp(0., if signing_in { 360. } else { 570. });
     let x = match edge {
@@ -548,6 +551,10 @@ pub(super) fn publish_popout(s: &Studio, edge: Edge, w: f32, h: f32) -> Option<E
             .gap(5.)
             .child(super::settings::account_form(s).scroll(Default::default()))
             .child(button("quick-publish-sign-in-close", "Close", false, dismiss_publish).self_start())
+    } else if duce_accounts {
+        dialog.key("duce-publishing-accounts").label("Publishing accounts").max_h(height)
+            .child(super::publish::shortcut_settings(s).scroll(Default::default()))
+            .child(button("duce-accounts-close", "Close", false, dismiss_publish).self_start())
     } else {
         dialog
             .key("quick-publish-popout")
