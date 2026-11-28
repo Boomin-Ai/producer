@@ -91,6 +91,11 @@ fn thumbnail(path: &Path) -> Result<rune::Pixels> {
 }
 
 impl Publish {
+    pub(super) fn refresh_voice_queue(&mut self) {
+        self.loading_outbox = None;
+        self.outbox_next = None;
+    }
+
     pub(super) fn can_open_composer(&self) -> bool {
         self.staging.is_none() && self.working.is_none()
     }
@@ -2451,7 +2456,7 @@ pub(super) struct VoiceDraft {
     pub account: String,
     scope: (String,String),
     channel: String,
-    text: String,
+    pub text: String,
     files: Vec<PathBuf>,
 }
 

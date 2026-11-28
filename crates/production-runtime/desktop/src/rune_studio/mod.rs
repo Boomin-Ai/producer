@@ -458,12 +458,12 @@ impl Studio {
         std::thread::spawn(move || { let _ = send.send(task()); });
     }
     fn close_room(&mut self) {
-        self.chat.voice = Default::default();
         if self.room_transition.is_some() { return; }
         if let Some(reason) = self.live.as_ref().and_then(Live::switch_blocker) {
             self.switch_notice = Some(reason);
             return;
         }
+        self.chat.voice = Default::default();
         if let Some(live) = self.live.take() {
             self.transition(false, move || {
                 let handle = live.handle.clone();

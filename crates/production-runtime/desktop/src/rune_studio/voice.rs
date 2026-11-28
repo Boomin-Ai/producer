@@ -54,10 +54,10 @@ fn config() -> Value {
         tool("publish_draft", "Queue the current reviewed draft only after the operator explicitly asks to publish it. Pass the revision returned by draft_threads.",json!({"revision":{"type":"string"}}), &["revision"]),
         tool("studio_request","Send the operator's request to the existing Producer studio assistant.",json!({"prompt":{"type":"string"}}), &["prompt"]),
     ];
-    json!({"model":"gpt-live-1.1","instructions":"You are Duce, the private voice of Producer's Assistant. Speak briefly. Delegate every studio action and every Threads draft, edit or publish. Read back drafts for review. Announce a queue or studio action only from a successful tool result.",
+    json!({"model":"gpt-live-1.1","instructions":include_str!("duce_voice_prompt.txt"),
         "audio":{"format":{"type":"audio/pcm","rate":24000},"output":{"voice":"marin"}},
         "delegation":{"type":"responses","responses":{"model":"gpt-5.6-luna","tools":tools,"parallel_tool_calls":false,
-        "instructions":"Use tools on behalf of the speaking operator. Preserve their wording and tone. Only call publish_draft after an explicit spoken instruction to publish the current draft."}}})
+        "instructions":"Use tools on behalf of the speaking operator. Preserve their wording and tone. For a draft with no account specified, call draft_threads with an empty account so Producer can resolve it. Ask the operator only when the tool returns multiple choices. Treat revision as an opaque identifier and never read it aloud. Only call publish_draft after an explicit spoken instruction to publish the current draft."}}})
 }
 
 #[derive(Default)]
@@ -172,6 +172,7 @@ pub(super) fn poll(s: &mut Studio) -> bool {
             let status = match result {
                 Ok(()) => {
                     s.chat.voice.draft = None;
+                    s.publish.refresh_voice_queue();
                     "Queued for Threads".to_owned()
                 }
                 Err(e) => e.to_string(),
@@ -215,6 +216,12 @@ pub(super) fn poll(s: &mut Studio) -> bool {
                     }
                 }
             }
+            Some("response.event") if event["event"]["type"] == "response.failed" => {
+                s.chat.voice.status = event["event"]["response"]["error"]["message"]
+                    .as_str()
+                    .unwrap_or("Duce could not complete the action")
+                    .to_string();
+            }
             Some("response.event") if event["event"]["type"] == "response.output_item.done" => {
                 let item = &event["event"]["item"];
                 if item["type"] != "function_call" {
@@ -234,7 +241,22 @@ pub(super) fn poll(s: &mut Studio) -> bool {
                         .and_then(|args| run(s, item["name"].as_str().unwrap_or(""), &args, call))
                 };
                 if let Some(reply) = result.unwrap_or_else(|e| Some(e.to_string())) {
-                    s.chat.voice.status = reply.clone();
+                    s.chat.voice.status = if item["name"] == "draft_threads"
+                        && s.chat
+                            .voice
+                            .draft
+                            .as_ref()
+                            .is_some_and(|d| reply.contains(&d.revision))
+                    {
+                        s.chat
+                            .voice
+                            .draft
+                            .as_ref()
+                            .map(|d| format!("Draft for {} · {}", d.account, d.text))
+                            .unwrap_or_default()
+                    } else {
+                        reply.clone()
+                    };
                     if let Some(c) = &s.chat.voice.connection {
                         c.reply(call, reply);
                     }
