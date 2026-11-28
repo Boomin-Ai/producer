@@ -1889,6 +1889,29 @@ mod tests {
     };
 
     #[test]
+    fn voice_publish_is_scoped_and_preserves_the_composer() {
+        let scratch = tempfile::tempdir().unwrap();
+        let mut studio = Studio::new(scratch.path().into());
+        studio.publish.scope = Some(("brand".into(), "operator".into()));
+        studio.publish.caption = TextEdit::new("Unrelated typed draft");
+        studio.publish.channels = serde_json::from_value(json!([
+            {"id":"one","platform":"threads","status":"active","external_handle":"first"},
+            {"id":"two","platform":"threads","status":"active","external_handle":"second"}
+        ])).unwrap();
+        assert!(voice_draft(&studio,"Hello","",false).is_err());
+        assert!(voice_draft(&studio,"Hello","first",true).is_err());
+        let draft = voice_draft(&studio,"Hello","@second",false).unwrap();
+        queue_voice(&studio,&draft).unwrap().recv_timeout(Duration::from_secs(5)).unwrap().unwrap();
+        let queued = outbox::list(&outbox_dir(&studio)).unwrap();
+        assert_eq!(queued.len(),1);
+        assert_eq!(queued[0].targets[0].id,"two");
+        assert_eq!(queued[0].text,"Hello");
+        assert_eq!(studio.publish.caption.text,"Unrelated typed draft");
+        studio.publish.scope = None;
+        assert!(queue_voice(&studio,&draft).is_err());
+    }
+
+    #[test]
     fn quick_publish_prepares_a_clip_in_the_shared_composer() {
         let scratch = tempfile::tempdir().unwrap();
         let mut studio = Studio::new(scratch.path().into());
@@ -2421,4 +2444,48 @@ mod tests {
         assert!(schedule_utc("2020-01-01 12:00").is_err());
         assert!(schedule_utc("not a time").is_err());
     }
+}
+
+pub(super) struct VoiceDraft {
+    pub revision: String,
+    pub account: String,
+    scope: (String,String),
+    channel: String,
+    text: String,
+    files: Vec<PathBuf>,
+}
+
+pub(super) fn voice_draft(s: &Studio, text: &str, account: &str, latest_clip: bool) -> Result<VoiceDraft> {
+    let p = &s.publish;
+    let scope = p.scope.clone().context("Sign in to Boomin to use Threads")?;
+    let active: Vec<_> = p.channels.iter().filter(|c| c.platform == "threads" && c.status == "active").collect();
+    let mut matches = active.iter().copied().filter(|c| account.is_empty() ||
+        [c.external_handle.as_deref(),c.display_name.as_deref()].into_iter().flatten()
+            .any(|v| v.trim_start_matches('@').eq_ignore_ascii_case(account.trim_start_matches('@'))));
+    let options = active.iter().map(|c| c.label()).collect::<Vec<_>>().join(", ");
+    let channel = matches.next().with_context(|| format!("Choose a connected Threads account. Available: {options}"))?;
+    ensure!(matches.next().is_none(),"Which Threads account? {options}");
+    let files = if latest_clip {
+        let path = s.live.as_ref().and_then(|l| l.clip_view.as_ref())
+            .and_then(|(status,_)| status.recent.iter().find(|c| c.error.is_none()))
+            .and_then(|clip|clip.files.first()).context("There is no saved clip in this studio")?.path.clone();
+        ensure!(path.is_file(),"The clip file is unavailable");
+        vec![path]
+    } else {Vec::new()};
+    Ok(VoiceDraft {revision:Uuid::new_v4().to_string(),account:channel.label(),scope,channel:channel.id.clone(),text:text.into(),files})
+}
+
+pub(super) fn queue_voice(s: &Studio, draft: &VoiceDraft) -> Result<mpsc::Receiver<Result<()>>> {
+    ensure!(s.publish.scope.as_ref() == Some(&draft.scope),"Boomin account changed. Review a new draft");
+    ensure!(s.publish.channels.iter().any(|c| c.id == draft.channel && c.platform == "threads" && c.status == "active"),"Reconnect the Threads account");
+    let root = outbox_dir(s);
+    let options = Options::default().payload("threads",&draft.text,draft.files.first().map(PathBuf::as_path))?;
+    let post = outbox::Post {
+        id:draft.revision.clone(),created_ms:std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_millis() as u64,
+        text:draft.text.clone(),files:draft.files.clone(),schedule:None,error:None,
+        targets:vec![outbox::Destination{id:draft.channel.clone(),label:draft.account.clone(),key:draft.revision.clone(),overrides:options,format:None,cover:None}]
+    };
+    let (tx,rx) = mpsc::channel();
+    std::thread::spawn(move || {let _ = tx.send(post.stage(&root).map(|_|()));});
+    Ok(rx)
 }

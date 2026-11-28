@@ -170,7 +170,8 @@ fn receive<T>(job: &mut Option<mpsc::Receiver<Result<T>>>, ended: &str) -> Optio
 #[derive(Default)]
 pub(super) struct Chat {
     pub input: TextEdit,
-    history: Vec<(String, String)>,
+    pub(super) history: Vec<(String, String)>,
+    pub(super) voice: super::voice::Voice,
     proposal: Option<Proposal>,
     chips: Vec<assistant::Chip>,
     receipts: BTreeMap<usize, Arc<Turn>>,
@@ -729,7 +730,7 @@ pub(super) fn target(s: &Studio, p: &crate::model::RoomProject) -> Option<(Strin
     (p.mounted_set.as_ref() == Some(&id)).then(|| (id, p.mounted_layout.clone().unwrap_or(pair)))
 }
 
-fn submit(s: &mut Studio, compact: bool) {
+pub(super) fn submit(s: &mut Studio, compact: bool) {
     if let Some(live) = &s.live {
         let selected = target(s, &live.snapshot.project);
         s.chat.start(live, selected);
@@ -818,6 +819,7 @@ fn composer(s: &Studio, compact: bool) -> El {
         .min_w(0.)
         .grow(1.)
         .child(input)
+        .child(super::voice::control(s, compact))
         .child(send)
 }
 
@@ -1190,6 +1192,7 @@ pub(super) fn panel(s: &Studio, popout: bool) -> El {
         _ => active_set.as_deref(),
     };
     let mut top = col().min_w(0.).px(9.).py(6.).gap(4.);
+    if !chat.voice.status.is_empty() { top = top.child(paragraph(&chat.voice.status, 11., MINT)); }
     if popout { top = top.child(header); }
     top = top.child(
         row()

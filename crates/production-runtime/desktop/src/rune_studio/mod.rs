@@ -2,6 +2,7 @@
 mod catalog;
 mod channels;
 mod chat;
+mod voice;
 mod editor;
 mod glyphs;
 mod mixer;
@@ -457,6 +458,7 @@ impl Studio {
         std::thread::spawn(move || { let _ = send.send(task()); });
     }
     fn close_room(&mut self) {
+        self.chat.voice = Default::default();
         if self.room_transition.is_some() { return; }
         if let Some(reason) = self.live.as_ref().and_then(Live::switch_blocker) {
             self.switch_notice = Some(reason);
@@ -577,6 +579,7 @@ impl Studio {
         let mut accounts =
             update_changed | self.settings.poll(&mut self.error) | self.channels.poll(&mut self.error) | self.people.poll();
         accounts |= publish::poll(self) | network::poll(self) | self.set_library.poll();
+        accounts |= voice::poll(self);
         accounts |= people::poll_direct_invitation(self);
         if self.settings.account.is_some() {
             if let Some((kind, panel, anchor)) = self.pending_link.take() {
